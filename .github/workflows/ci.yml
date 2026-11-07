@@ -1,0 +1,40 @@
+name: CI
+
+# Always-on lightweight gate. Path-filtered suites live in sibling workflows.
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sensitive-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Block internal LAN / brand / creds-in-URL
+        run: |
+          set -euo pipefail
+          # Same rules as scripts/project-config.json → sensitive.contentPatterns
+          # Skip binaries and vendored trees.
+          if git grep -nIE \
+            -e '10\.15\.34\.' \
+            -e 'shiji' \
+            -e '://[^/[:space:]:@]+:[^/[:space:]@]+@' \
+            -- . \
+            ':(exclude)*.png' ':(exclude)*.jpg' ':(exclude)*.jpeg' ':(exclude)*.gif' ':(exclude)*.webp' \
+            ':(exclude)*.jar' ':(exclude)*.dwp' ':(exclude)*.zip' ':(exclude)*.gz' \
+            ':(exclude)*.woff' ':(exclude)*.woff2' ':(exclude)*.ttf' \
+            ':(exclude)**/node_modules/**' ':(exclude)**/vendor/**' ':(exclude)**/target/**' \
+            ':(exclude)scripts/project-config.json' ':(exclude).github/workflows/ci.yml' \
+            ':(exclude)scripts/sop/pre-commit-check.mjs'
+          then
+            echo '::error::Sensitive content found. Desensitize before merge.'
+            exit 1
+          fi
+          echo 'Sensitive content scan clean'

@@ -192,8 +192,9 @@ function main() {
     process.exit(1)
   }
   if (!fs.existsSync(manualDir)) {
-    console.error('[build-docs] manual dir missing:', manualDir)
-    process.exit(1)
+    // user-manual may be gitignored / local-only — marketing site still builds
+    console.warn('[build-docs] manual dir missing, skip docs pages:', manualDir)
+    return
   }
 
   fs.rmSync(outDir, {recursive: true, force: true})

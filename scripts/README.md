@@ -35,10 +35,12 @@ Cursor / VS Code：`Terminal → Run Task…` 也有同名中文任务。
 读取 `scripts/project-config.json`，实现位于 `scripts/sop/pre-commit-check.mjs`。
 
 ```bash
-node scripts/pre-commit-check.mjs        # 默认检查
+node scripts/pre-commit-check.mjs        # 默认检查（含敏感路径 + 敏感内容）
 node scripts/pre-commit-check.mjs --test # 含测试
 node scripts/pre-commit-check.mjs --full # 全量
 ```
+
+敏感内容规则在 `scripts/project-config.json` → `sensitive.contentPatterns`（内网网段、内部品牌词、URL 内嵌账号密码）。`.githooks/pre-commit` 会在提交时自动跑上述检查。
 
 ---
 

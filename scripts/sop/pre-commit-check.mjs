@@ -138,6 +138,79 @@ function checkSensitive(staged, cfg) {
   bumpError()
 }
 
+function isBinarySkipped(filePath, cfg) {
+  const n = norm(filePath).toLowerCase()
+  const exts = cfg.sensitive?.contentSkipExtensions ?? []
+  return exts.some((ext) => n.endsWith(String(ext).toLowerCase()))
+}
+
+function readStagedOrWorktree(filePath) {
+  const n = norm(filePath)
+  // Prefer staged blob when present (what will actually be committed)
+  const staged = git(`show :${n}`)
+  if (staged) return staged
+  const abs = path.join(ROOT, n)
+  if (!existsSync(abs)) return ''
+  try {
+    return readFileSync(abs, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
+function checkSensitiveContent(files, cfg) {
+  section('1b. 敏感内容')
+  const patterns = cfg.sensitive?.contentPatterns ?? []
+  if (!patterns.length) {
+    ok('未配置敏感内容规则')
+    return
+  }
+
+  const selfAllow = new Set(
+    (cfg.sensitive?.contentAllowPaths ?? [
+      'scripts/project-config.json',
+      'scripts/sop/pre-commit-check.mjs',
+      '.github/workflows/ci.yml',
+    ]).map(norm),
+  )
+  const targets = files.filter((f) => !isBinarySkipped(f, cfg) && !selfAllow.has(norm(f)))
+  if (!targets.length) {
+    ok('无可扫描的文本文件')
+    return
+  }
+
+  let hitCount = 0
+  for (const f of targets) {
+    const body = readStagedOrWorktree(f)
+    if (!body) continue
+    for (const rule of patterns) {
+      const flags = rule.flags ?? ''
+      let re
+      try {
+        re = new RegExp(rule.regex, flags.includes('g') ? flags : `${flags}g`)
+      } catch {
+        fail(`敏感内容规则无效: ${rule.id ?? rule.regex}`)
+        bumpError()
+        continue
+      }
+      const matches = body.match(re)
+      if (!matches?.length) continue
+      hitCount += 1
+      const sample = matches[0].length > 48 ? `${matches[0].slice(0, 45)}...` : matches[0]
+      fail(
+        `${f}: 命中「${rule.description ?? rule.id ?? rule.regex}」×${matches.length}（例: ${sample}）`,
+      )
+    }
+  }
+
+  if (hitCount) {
+    bumpError()
+    info('请脱敏后再提交（见 project-config sensitive.contentPatterns）')
+    return
+  }
+  ok('暂存区文本未命中敏感内容规则')
+}
+
 function checkApiAlignment(files, cfg) {
   section('2. API 对齐')
   const clientPat = cfg.apiAlignment?.clientPathPattern
@@ -375,7 +448,9 @@ function main() {
     info(`改动 ${files.length} 个文件`)
   }
 
-  checkSensitive(staged.length ? staged : files, cfg)
+  const scanFiles = staged.length ? staged : files
+  checkSensitive(scanFiles, cfg)
+  checkSensitiveContent(scanFiles, cfg)
   checkApiAlignment(files, cfg)
   checkConnector(files, cfg)
   checkBugFixArchitecture(files, staged, cfg)

@@ -26,6 +26,30 @@
       "^config/api-tokens\\.json$",
       "\\.env$",
       "(^|/)\\.env\\.(?!development\\.example$|production\\.example$|example$)"
+    ],
+    "contentPatterns": [
+      {
+        "id": "internal-lan",
+        "description": "forbidden internal LAN prefix (see regex)",
+        "regex": "10\\.15\\.34\\."
+      },
+      {
+        "id": "internal-brand",
+        "description": "forbidden internal brand token (see regex)",
+        "regex": "shiji",
+        "flags": "i"
+      },
+      {
+        "id": "cred-in-url",
+        "description": "URL embedded user:pass credentials",
+        "regex": "://[^/\\s:@]+:[^/\\s@]+@"
+      }
+    ],
+    "contentSkipExtensions": [
+      ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg",
+      ".jar", ".dwp", ".zip", ".gz", ".tgz", ".7z", ".exe", ".dll", ".so", ".dylib",
+      ".woff", ".woff2", ".ttf", ".otf", ".eot",
+      ".pdf", ".mp4", ".webm"
     ]
   },
   "apiAlignment": {

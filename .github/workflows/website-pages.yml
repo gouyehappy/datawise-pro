@@ -1,8 +1,7 @@
 name: Website Pages
 
-# Build website/ and publish to GitHub Pages:
-#   https://<owner>.github.io/datawise-cli/
-# Set VITE_GITHUB_REPO=owner/datawise-cli in the job env when the owner changes.
+# Marketing site under website/. Docs chapters are optional (docs/user-manual may be local-only).
+# Pages deploy only when repo variable ENABLE_GITHUB_PAGES=true.
 
 on:
   push:
@@ -10,7 +9,7 @@ on:
     paths:
       - 'website/**'
       - 'docs/user-manual/**'
-      - 'docs/assets/screenshots/**'
+      - 'docs/image/**'
       - '.github/workflows/website-pages.yml'
   workflow_dispatch:
 
@@ -38,7 +37,7 @@ jobs:
       - name: Install & build
         working-directory: website
         env:
-          VITE_BASE: /datawise-cli/
+          VITE_BASE: /${{ github.event.repository.name }}/
           VITE_GITHUB_REPO: ${{ github.repository }}
         run: |
           npm ci
@@ -50,8 +49,6 @@ jobs:
           path: website/dist
 
   deploy:
-    # Requires Settings → Pages → Source = GitHub Actions, then set repo variable
-    # ENABLE_GITHUB_PAGES=true. Until then, build+artifact still validates the site.
     if: ${{ vars.ENABLE_GITHUB_PAGES == 'true' }}
     needs: build
     runs-on: ubuntu-latest

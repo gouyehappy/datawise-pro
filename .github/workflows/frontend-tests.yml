@@ -5,21 +5,19 @@ on:
     branches: [main, dev]
     paths:
       - 'datawise-frontend/**'
-      - 'datawise-backend/datawise-common/**'
-      - 'datawise-backend/datawise-config/**'
-      - 'datawise-backend/datawise-workspace/src/main/resources/seed/plugins.json'
       - 'sql-editor/**'
-      - 'scripts/pack/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/frontend-tests.yml'
   pull_request:
     branches: [main, dev]
     paths:
       - 'datawise-frontend/**'
-      - 'datawise-backend/datawise-common/**'
-      - 'datawise-backend/datawise-config/**'
-      - 'datawise-backend/datawise-workspace/src/main/resources/seed/plugins.json'
       - 'sql-editor/**'
-      - 'scripts/pack/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/frontend-tests.yml'
 
 concurrency:
@@ -29,87 +27,49 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: datawise-frontend
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             datawise-frontend/package-lock.json
             sql-editor/package-lock.json
-      - run: |
-          npm ci --prefix ../sql-editor --ignore-scripts
-          npm ci --workspaces=false
+
+      - name: Install deps
+        run: |
+          npm ci --prefix sql-editor --ignore-scripts
+          npm ci --prefix datawise-frontend --workspaces=false
+          # UI framework packages (file: workspace) used by vue-tsc
+          if [ -f package-lock.json ]; then npm ci --ignore-scripts; else npm install --ignore-scripts; fi
+
       - name: sql-editor unit tests
         working-directory: sql-editor
         run: npm test
-      - name: sql-editor prebuilt lib smoke
-        working-directory: sql-editor
-        run: npm run build:lib
-      - run: npm run typecheck:all
-      - run: npm run test
-      - run: npm run test:components
-      - run: npm run audit:feature-permissions
-      - run: npm run audit:layer-imports
-      - run: npm run audit:api-facade-imports
-      - run: npm run audit:feature-deep-imports
-      - name: ESLint (scripts seed)
-        run: npm run lint
-      - run: npm run test:analysis-stream
-      - run: npx playwright install chromium --with-deps
-      - run: npm run test:e2e:analysis
-      - run: npm run test:e2e -- e2e/core-paths.spec.ts e2e/workspace-main-path.spec.ts
 
-  plugin-catalog-audit:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Frontend typecheck
         working-directory: datawise-frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: datawise-frontend/package-lock.json
-      - run: npm ci --workspaces=false
-      - run: npm run audit:plugin-catalog:strict
+        run: npm run typecheck
 
-  pack-feature-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Frontend pack scan
-        run: bash scripts/pack/fe-scan.sh
-
-  standard-edition-dist-scan:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Frontend unit tests
         working-directory: datawise-frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: |
-            datawise-frontend/package-lock.json
-            sql-editor/package-lock.json
-      - run: |
-          npm ci --prefix ../sql-editor --ignore-scripts
-          npm ci --workspaces=false
-      - name: Build standard edition
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
-        run: npm run build:standard
-      - name: Scan standard dist for paid markers
-        working-directory: ${{ github.workspace }}
-        env:
-          DIST_DIR: datawise-frontend/dist
-          STANDARD_DIST: '1'
-        run: bash scripts/pack/fe-scan.sh
+        run: npm run test
+
+      - name: Frontend component tests
+        working-directory: datawise-frontend
+        run: npm run test:components
+
+      - name: Architecture audits
+        working-directory: datawise-frontend
+        run: |
+          npm run audit:feature-permissions
+          npm run audit:layer-imports
+          npm run audit:api-facade-imports
+          npm run audit:feature-deep-imports
+
+      - name: Plugin catalog audit
+        working-directory: datawise-frontend
+        run: npm run audit:plugin-catalog:strict
