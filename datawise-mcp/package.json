@@ -1,0 +1,24 @@
+{
+  "name": "@datawise/mcp-server",
+  "version": "4.1.7",
+  "description": "DataWise MCP server — safe database access for Cursor and Claude Desktop",
+  "type": "module",
+  "bin": {
+    "datawise-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "npm run build && node --test dist/create-server.smoke.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

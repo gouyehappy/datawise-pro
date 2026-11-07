@@ -1,0 +1,37 @@
+/**
+ * Plugin typography — host body size + percentage steps.
+ * Full contract: docs/PLUGIN_TYPOGRAPHY.md
+ *
+ * Bootstrap rewrites --dw-text-* inside the iframe to:
+ *   2xs=0.75×  xs=0.85×  sm=1×  md=1.08×  lg=1.15×  xl=1.25× of --dw-font-size
+ * so plugins only consume vars; Settings changes need no re-pack.
+ */
+:root {
+  --plugin-font-sans:
+    "Segoe UI Variable", "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  --plugin-font-mono:
+    ui-monospace, "Cascadia Mono", "Sarasa Mono SC", "JetBrains Mono",
+    SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --sans: var(--font-sans, var(--plugin-font-sans));
+  --mono: var(--font-mono, var(--plugin-font-mono));
+  --fs: var(--dw-font-size, var(--dw-text-sm, 13.5px));
+  --fs-sm: var(--dw-text-xs, calc(var(--dw-font-size, 13.5px) * 0.85));
+}
+
+html, body, #root, #app {
+  font-family: var(--sans);
+}
+
+body, #root, #app {
+  font-size: var(--fs);
+  line-height: 1.4;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+code, pre, kbd, samp, .mono {
+  font-family: var(--mono);
+}

@@ -1,0 +1,164 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.kafka-ops",
+  "name": "Kafka Ops",
+  "version": "0.1.11",
+  "publisher": "datawise-community",
+  "icon": "assets/plugin.svg",
+  "description": "Kafka ops workbench: bootstrap or multi-cluster fleet, cluster pulse, topics, bounded message explorer, consumer lag & offset reset, brokers, gated mutations.",
+  "license": "Apache-2.0",
+  "tags": ["kafka", "ops", "sre", "streaming", "fleet"],
+  "permissions": ["host.workbench", "host.events", "host.clipboard"],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.2"
+  },
+  "entrypoints": {
+    "backend": {
+      "executable": "bin/kafka-ops-plugin.jar",
+      "transport": "stdio-jsonl"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.kafka-ops.connection",
+      "label": "Kafka Ops workspace",
+      "icon": "assets/plugin.svg",
+      "capabilities": ["test", "connect"],
+      "fields": [
+        {
+          "key": "workspaceKind",
+          "label": "Workspace",
+          "type": "select",
+          "binding": "config",
+          "default": "bootstrap",
+          "options": [
+            { "label": "Bootstrap cluster", "value": "bootstrap" },
+            { "label": "Fleet inventory (many clusters)", "value": "fleet" }
+          ]
+        },
+        {
+          "key": "bootstrapServers",
+          "label": "Bootstrap servers",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "127.0.0.1:9092,127.0.0.1:9093",
+          "description": "Comma-separated host:port list.",
+          "visible_when": { "field": "workspaceKind", "one_of": ["bootstrap"] }
+        },
+        {
+          "key": "securityProtocol",
+          "label": "Security protocol",
+          "type": "select",
+          "binding": "config",
+          "default": "PLAINTEXT",
+          "options": [
+            { "label": "PLAINTEXT", "value": "PLAINTEXT" },
+            { "label": "SSL", "value": "SSL" },
+            { "label": "SASL_PLAINTEXT", "value": "SASL_PLAINTEXT" },
+            { "label": "SASL_SSL", "value": "SASL_SSL" }
+          ],
+          "visible_when": { "field": "workspaceKind", "one_of": ["bootstrap"] }
+        },
+        {
+          "key": "saslMechanism",
+          "label": "SASL mechanism",
+          "type": "select",
+          "binding": "config",
+          "default": "PLAIN",
+          "options": [
+            { "label": "PLAIN", "value": "PLAIN" },
+            { "label": "SCRAM-SHA-256", "value": "SCRAM-SHA-256" },
+            { "label": "SCRAM-SHA-512", "value": "SCRAM-SHA-512" }
+          ],
+          "visible_when": { "field": "workspaceKind", "one_of": ["bootstrap"] }
+        },
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "optional · SASL",
+          "description": "SASL username (from plugin field only).",
+          "visible_when": { "field": "workspaceKind", "one_of": ["bootstrap"] }
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "password",
+          "binding": "password",
+          "visible_when": { "field": "workspaceKind", "one_of": ["bootstrap"] }
+        },
+        {
+          "key": "clientId",
+          "label": "Client ID",
+          "type": "text",
+          "binding": "config",
+          "default": "datawise-kafka-ops",
+          "placeholder": "datawise-kafka-ops",
+          "visible_when": { "field": "workspaceKind", "one_of": ["bootstrap"] }
+        },
+        {
+          "key": "inventoryPath",
+          "label": "Inventory YAML",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "C:\\ops\\kafka-fleet.yml",
+          "description": "Multi-cluster inventory. Use demo action if needed.",
+          "visible_when": { "field": "workspaceKind", "one_of": ["fleet"] }
+        }
+      ],
+      "workbench": "io.datawise.community.kafka-ops.workbench",
+      "actions": [
+        {
+          "id": "use-demo-fleet",
+          "label": "Use bundled demo fleet file",
+          "variant": "outline",
+          "requires_valid_form": false
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.kafka-ops.workbench",
+      "label": "Kafka Ops"
+    },
+    {
+      "type": "context-menu",
+      "id": "io.datawise.community.kafka-ops.open",
+      "label": "Open Kafka Ops",
+      "menu": "connection"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Kafka 运维台",
+      "description": "Kafka 运维台：Bootstrap / 多集群舰队；集群脉搏、Topic、有界消息浏览、消费组 Lag 与 Offset 重置、Broker、受控变更。",
+      "contributions": {
+        "io.datawise.community.kafka-ops.connection": {
+          "label": "Kafka Ops 工作区",
+          "fields": {
+            "workspaceKind": { "label": "工作区类型" },
+            "bootstrapServers": { "label": "Bootstrap 地址" },
+            "securityProtocol": { "label": "安全协议" },
+            "saslMechanism": { "label": "SASL 机制" },
+            "username": { "label": "用户名" },
+            "password": { "label": "密码" },
+            "clientId": { "label": "Client ID" },
+            "inventoryPath": { "label": "集群清单 YAML" }
+          },
+          "actions": {
+            "use-demo-fleet": { "label": "使用自带示例舰队文件" }
+          }
+        },
+        "io.datawise.community.kafka-ops.workbench": { "label": "Kafka 运维台" },
+        "io.datawise.community.kafka-ops.open": { "label": "打开 Kafka 运维台" }
+      }
+    }
+  }
+}

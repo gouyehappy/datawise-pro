@@ -1,0 +1,26 @@
+---
+description: DataWise UI Framework — multi-package design system; prefer @datawise/* for new shared UI
+globs:
+  - packages/**/*
+  - datawise-frontend/src/core/components/**/*
+  - docs/UI_FRAMEWORK.md
+---
+
+# UI Framework
+
+Full plan: [docs/UI_FRAMEWORK.md](docs/UI_FRAMEWORK.md). Packages live under `packages/`.
+
+## Do
+
+- New shared UI → implement in `@datawise/ui` / `@datawise/overlays` / `@datawise/chrome` (or extend existing package)
+- New icons → prefer `DwPhIcon` (Phosphor); keep `DwIcon` (Lucide) for existing shell keys
+- Theme / tokens → `@datawise/tokens` CSS + `@datawise/theme` `applyTheme` / inject symbols
+- Host re-export from `@/core/components` for gradual adoption
+- Run `npm run audit:packages-boundary` before merging package changes
+
+## Don't
+
+- Import `@/features`, `@/shared/api`, `@/shared/connection` from `packages/*`
+- `defineStore` or bare `useI18n()` inside packages (use `useDwI18n` / inject)
+- Put DbType / connector business / pack paywall into framework packages
+- Global-register Phosphor (`app.use`) — tree-shake breaks

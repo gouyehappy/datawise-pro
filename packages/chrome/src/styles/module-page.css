@@ -1,0 +1,139 @@
+/**
+ * Minimal module-page chrome for ModulePageHeader / ModulePageRegions playground.
+ * Host keeps the full module-page.css until cutover.
+ */
+
+.module-page {
+  box-sizing: border-box;
+  height: 100%;
+  overflow: hidden;
+  padding: var(--mp-pad);
+  background: var(--dw-bg-editor);
+  font-size: var(--dw-text-sm);
+  color: var(--dw-text);
+  container-type: inline-size;
+  container-name: module-page;
+}
+
+.module-page--scroll {
+  overflow: auto;
+}
+
+.mp-stack-2,
+.mp-stack-3,
+.mp-stack-4 {
+  display: grid;
+  height: 100%;
+  gap: var(--mp-gap);
+}
+
+.mp-stack-2 {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.mp-stack-3 {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.mp-stack-4 {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+
+.mp-regions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-gap);
+  min-height: 0;
+  height: 100%;
+}
+
+.mp-region--content {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.mp-hero {
+  position: relative;
+  margin-bottom: var(--mp-gap-lg);
+  border: 1px solid var(--dw-panel-border);
+  border-radius: var(--mp-hero-radius);
+  background: var(--dw-bg-editor);
+  box-shadow: var(--dw-panel-shadow), 0 12px 32px color-mix(in srgb, var(--dw-text) 4%, transparent);
+  overflow: hidden;
+}
+
+.mp-hero__inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mp-gap-lg);
+  padding: clamp(18px, 2.2vmin, 28px) clamp(20px, 2.5vmin, 32px);
+}
+
+.mp-hero--compact .mp-hero__inner {
+  align-items: flex-start;
+  padding: clamp(16px, 1.8vmin, 22px) clamp(18px, 2.2vmin, 24px);
+}
+
+.mp-hero__copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.mp-hero__eyebrow {
+  margin: 0 0 var(--dw-space-2);
+  font-size: var(--dw-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dw-primary);
+}
+
+.mp-hero__title {
+  margin: 0;
+  font-size: var(--dw-text-3xl);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.mp-hero__sub {
+  margin: var(--dw-gap) 0 0;
+  font-size: var(--dw-text-md);
+  line-height: var(--dw-leading-loose);
+  color: var(--dw-text-secondary);
+}
+
+.mp-hero__hint {
+  margin: var(--dw-gap) 0 0;
+  font-size: var(--dw-text-xs);
+  color: var(--dw-text-muted);
+  line-height: var(--dw-leading);
+}
+
+.mp-hero__actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--dw-gap);
+}
+
+.mp-hero__aside {
+  display: flex;
+  gap: var(--dw-space-6);
+  flex-shrink: 0;
+}
+
+.mp-hero--with-settings .mp-hero__inner {
+  padding-right: 52px;
+}
+
+.mp-hero__settings {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: var(--dw-z-raised);
+}

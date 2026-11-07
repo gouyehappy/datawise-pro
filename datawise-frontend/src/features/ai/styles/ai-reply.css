@@ -1,0 +1,231 @@
+/* Shared surfaces for AI assistant replies (imported from feature components) */
+
+.ai-code-surface {
+    border-radius: var(--dw-panel-radius);
+    overflow: hidden;
+    border: 1px solid var(--dw-border);
+    background: var(--dw-bg-editor);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--dw-on-accent) 5%, transparent),
+    0 4px 16px color-mix(in srgb, var(--dw-text) 6%, transparent);
+}
+
+.ai-code-surface__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--dw-gap);
+    padding: var(--dw-space-4) var(--dw-space-7);
+    background: color-mix(in srgb, var(--dw-bg-panel) 72%, var(--dw-bg-editor));
+    border-bottom: 1px solid var(--dw-border-light);
+}
+
+.ai-code-surface__label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dw-gap-sm);
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.ai-code-surface__label-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--dw-primary);
+}
+
+.ai-code-surface pre {
+    margin: 0;
+    padding: var(--dw-space-7) var(--dw-space-8);
+    overflow-x: auto;
+}
+
+.ai-code-surface code {
+    color: var(--dw-text);
+    font-family: var(--dw-mono);
+    font-size: var(--dw-text-sm);
+    line-height: var(--dw-leading-loose);
+    white-space: pre-wrap;
+}
+
+.ai-section-card {
+    border: 1px solid var(--dw-border-light);
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg);
+    overflow: hidden;
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--dw-text) 3%, transparent);
+    transition: border-color var(--dw-duration-slow) var(--dw-ease), box-shadow var(--dw-duration-slow) var(--dw-ease);
+}
+
+.ai-section-card:hover {
+    border-color: color-mix(in srgb, var(--dw-primary) 16%, var(--dw-border-light));
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--dw-text) 3%, transparent),
+    0 6px 20px color-mix(in srgb, var(--dw-primary) 6%, transparent);
+}
+
+.ai-section-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--dw-gap-md);
+    padding: 11px 15px;
+    border-bottom: 1px solid var(--dw-border-light);
+    background: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--dw-bg-panel) 80%, var(--dw-bg)),
+            color-mix(in srgb, var(--dw-bg-panel) 40%, var(--dw-bg))
+    );
+}
+
+.ai-section-card__title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dw-gap);
+    margin: 0;
+    font-size: var(--dw-text-sm);
+    font-weight: 600;
+    color: var(--dw-text);
+    letter-spacing: 0.01em;
+}
+
+.ai-section-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: var(--dw-control-h-xs);
+    border-radius: var(--dw-control-radius);
+    background: linear-gradient(
+            145deg,
+            color-mix(in srgb, var(--dw-primary) 18%, var(--dw-primary-soft)),
+            var(--dw-primary-soft)
+    );
+    color: var(--dw-primary);
+    font-size: var(--dw-text-xs);
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: var(--dw-surface-inset-highlight);
+}
+
+/* AI 域文本动作（保留独立样式；间距走 token，不强行 DwButton 以免改密度） */
+.ai-text-action {
+    padding: var(--dw-space-2) var(--dw-space-5);
+    border-radius: var(--dw-control-radius);
+    border: 1px solid var(--dw-border);
+    background: var(--dw-bg-panel);
+    color: var(--dw-primary);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--dw-transition-colors),
+    transform 0.12s ease;
+}
+
+.ai-text-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ai-text-action:hover:not(:disabled) {
+    border-color: var(--dw-primary-border);
+    background: var(--dw-primary-soft);
+    transform: translateY(-1px);
+}
+
+.ai-text-action--muted {
+    color: var(--dw-text-secondary);
+    font-weight: 500;
+}
+
+.ai-text-action--muted:hover:not(:disabled) {
+    color: var(--dw-text);
+    border-color: var(--dw-border);
+    background: var(--dw-bg-panel);
+}
+
+/* Workflow card: collapsible progress header + main panel */
+
+.ai-workflow-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    border-radius: var(--dw-panel-radius);
+    border: 1px solid color-mix(in srgb, var(--dw-primary) 18%, var(--dw-border-light));
+    background: var(--dw-bg-panel);
+    overflow: hidden;
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--dw-on-accent) 40%, transparent) inset,
+    0 1px 0 color-mix(in srgb, var(--dw-text) 4%, transparent),
+    0 12px 32px color-mix(in srgb, var(--dw-primary) 8%, transparent),
+    0 4px 12px color-mix(in srgb, var(--dw-text) 5%, transparent);
+}
+
+.ai-workflow-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--dw-primary) 70%, transparent),
+            var(--dw-primary),
+            color-mix(in srgb, var(--dw-primary) 50%, var(--dw-info))
+    );
+    opacity: 0.85;
+    z-index: 1;
+}
+
+.ai-workflow-card--stacked {
+    max-width: 100%;
+}
+
+.ai-workflow-card--inline {
+    display: inline-flex;
+    width: auto;
+    max-width: 100%;
+}
+
+.ai-workflow-card--live {
+    animation: workflow-card-enter 0.45s ease;
+}
+
+@keyframes workflow-card-enter {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ai-workflow-card__main {
+    flex: 1;
+    min-width: 0;
+    padding: 18px var(--dw-space-9) var(--dw-space-9);
+    background: linear-gradient(180deg, var(--dw-bg) 0%, color-mix(in srgb, var(--dw-bg-panel) 35%, var(--dw-bg)) 100%);
+}
+
+.ai-workflow-card__main--typing {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--dw-gap-md);
+    min-height: 80px;
+    padding: var(--dw-space-10) var(--dw-space-9);
+}
+
+.ai-workflow-card__main--solo {
+    display: inline-flex;
+    width: auto;
+    min-height: auto;
+    padding: var(--dw-space-7) var(--dw-space-9);
+}
+

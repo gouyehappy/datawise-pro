@@ -1,0 +1,128 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.dbt",
+  "name": "dbt Project",
+  "version": "0.3.0",
+  "publisher": "datawise-community",
+  "icon": "assets/plugin.svg",
+  "description": "Bind a local dbt project: list models, compile, run, and copy compiled SQL back into the DataWise console.",
+  "license": "Apache-2.0",
+  "tags": ["dbt", "analytics-engineering", "sql"],
+  "permissions": ["host.workbench", "host.events", "host.clipboard", "host.sql"],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.5"
+  },
+  "entrypoints": {
+    "backend": {
+      "executable": "bin/dbt-plugin.jar",
+      "transport": "stdio-jsonl"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.dbt.connection",
+      "label": "dbt project",
+      "icon": "assets/plugin.svg",
+      "capabilities": ["test", "connect"],
+      "fields": [
+        {
+          "key": "projectPath",
+          "label": "Project path",
+          "type": "text",
+          "binding": "config",
+          "required": true,
+          "placeholder": "C:\\work\\my_dbt_project",
+          "description": "Folder that contains dbt_project.yml. Use the demo button if you do not have a project yet."
+        },
+        {
+          "key": "profilesDir",
+          "label": "Profiles dir (optional)",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "~/.dbt"
+        },
+        {
+          "key": "target",
+          "label": "Target",
+          "type": "text",
+          "binding": "config",
+          "default": "dev"
+        },
+        {
+          "key": "dbtBinary",
+          "label": "dbt binary",
+          "type": "text",
+          "binding": "config",
+          "default": "dbt",
+          "placeholder": "dbt or full path"
+        }
+      ],
+      "workbench": "io.datawise.community.dbt.workbench",
+      "actions": [
+        {
+          "id": "use-demo",
+          "label": "Use bundled demo project",
+          "description": "Fills Project path with the sample dbt project shipped in this plugin.",
+          "variant": "outline",
+          "requires_valid_form": false
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.dbt.workbench",
+      "label": "dbt workbench"
+    },
+    {
+      "type": "context-menu",
+      "id": "io.datawise.community.dbt.open",
+      "label": "Open dbt workbench",
+      "menu": "connection"
+    },
+    {
+      "type": "context-menu",
+      "id": "io.datawise.community.dbt.find-table",
+      "label": "Find dbt model",
+      "menu": "table"
+    },
+    {
+      "type": "context-menu",
+      "id": "io.datawise.community.dbt.find-view",
+      "label": "Find dbt model",
+      "menu": "view"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "dbt 项目",
+      "description": "绑定本机 dbt 项目：列出 model、编译 / 运行，并把编译后的 SQL 复制回 DataWise 控制台。",
+      "contributions": {
+        "io.datawise.community.dbt.connection": {
+          "label": "dbt 项目",
+          "fields": {
+            "projectPath": { "label": "项目路径" },
+            "profilesDir": { "label": "profiles 目录（可选）" },
+            "target": { "label": "Target" },
+            "dbtBinary": { "label": "dbt 可执行文件" }
+          },
+          "actions": {
+            "use-demo": {
+              "label": "使用自带示例项目",
+              "description": "把项目路径填成插件自带的示例 dbt 项目。"
+            }
+          }
+        },
+        "io.datawise.community.dbt.workbench": { "label": "dbt 工作台" },
+        "io.datawise.community.dbt.open": { "label": "打开 dbt 工作台" },
+        "io.datawise.community.dbt.find-table": { "label": "在 dbt 中查找" },
+        "io.datawise.community.dbt.find-view": { "label": "在 dbt 中查找" }
+      }
+    }
+  }
+}

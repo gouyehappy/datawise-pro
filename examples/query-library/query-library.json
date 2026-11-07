@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "queries": [
+    {
+      "id": "health-check",
+      "name": "Health check",
+      "file": "queries/health-check.sql",
+      "connection": "conn-staging",
+      "connectionName": "staging-mysql",
+      "database": "shop",
+      "tags": ["ci", "smoke"],
+      "ci": {
+        "enabled": true,
+        "maxRows": 5,
+        "expectMinRows": 1
+      }
+    }
+  ]
+}

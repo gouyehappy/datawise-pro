@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>dbt Workbench</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: var(--color-background, #131416);
+      --ink-2: var(--color-muted, #2a2a2d);
+      --ink-3: var(--color-popover, #1e1e20);
+      --line: var(--color-border, rgb(110 110 114 / 0.28));
+      --line-strong: color-mix(in srgb, var(--color-foreground, #d7d7db) 22%, transparent);
+      --fg: var(--color-foreground, #d7d7db);
+      --fg-dim: var(--color-muted-foreground, #97989d);
+      --fg-faint: color-mix(in srgb, var(--color-muted-foreground, #97989d) 78%, transparent);
+      --coral: #ff6b4a;
+      --coral-soft: rgba(255, 107, 74, 0.16);
+      --coral-ink: #2a0d06;
+      --mint: var(--color-success, #4ade80);
+      --amber: var(--color-warning, #fbbf24);
+      --glow-1: rgba(255, 107, 74, 0.09);
+      --glow-2: rgba(62, 120, 180, 0.08);
+      --rail-w: 268px;
+      --dock-h: 56px;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      font-family: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+    }
+    :root[data-theme="light"],
+    :root[data-dw-theme="light"] {
+      color-scheme: light;
+      --ink: var(--color-background, #ffffff);
+      --ink-2: var(--color-muted, #f4f4f5);
+      --ink-3: var(--color-popover, #ffffff);
+      --line: var(--color-border, #e4e4e7);
+      --line-strong: color-mix(in srgb, var(--color-foreground, #18181b) 16%, transparent);
+      --fg: var(--color-foreground, #18181b);
+      --fg-dim: var(--color-muted-foreground, #52525b);
+      --coral-ink: #fff7f4;
+      --coral-soft: rgba(255, 107, 74, 0.12);
+      --fg-faint: color-mix(in srgb, var(--color-muted-foreground, #71717a) 88%, transparent);
+      --glow-1: rgba(255, 107, 74, 0.08);
+      --glow-2: rgba(37, 99, 235, 0.06);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      color: var(--fg);
+      background:
+        radial-gradient(1200px 600px at 12% -10%, var(--glow-1), transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, var(--glow-2), transparent 50%),
+        var(--ink);
+      overflow: hidden;
+    }
+
+    .shell {
+      height: 100%;
+      animation: fadeIn 0.45s var(--ease);
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    /* ========== RAIL ========== */
+    .rail {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+      background: color-mix(in srgb, var(--ink-2) 88%, transparent);
+      backdrop-filter: blur(8px);
+      min-height: 0;
+    }
+    .rail-top {
+      padding: 18px 16px 12px;
+      flex-shrink: 0;
+    }
+    .mark {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .mark strong {
+      font-size: var(--dw-text-xl);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .mark em {
+      font-style: normal;
+      font-size: var(--dw-text-xs);
+      color: var(--fg-faint);
+      font-weight: 500;
+    }
+    .pulse {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--dw-text-xs);
+      color: var(--fg-dim);
+      margin-bottom: 12px;
+    }
+    .pulse i {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 0 3px rgba(232, 184, 74, 0.18);
+    }
+    .pulse.ok i {
+      background: var(--mint);
+      box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.18);
+    }
+    .search {
+      position: relative;
+    }
+    .search input {
+      width: 100%;
+      height: 36px;
+      padding: 0 12px 0 34px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: var(--ink);
+      color: var(--fg);
+      font: 500 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .search input:focus {
+      border-color: color-mix(in srgb, var(--coral) 55%, var(--line-strong));
+      background: var(--ink-2);
+    }
+    .search svg {
+      position: absolute;
+      left: 11px; top: 50%;
+      transform: translateY(-50%);
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
+    .catalog {
+      flex: 1;
+      overflow: auto;
+      padding: 4px 8px 12px;
+      min-height: 0;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line-strong) transparent;
+    }
+    .folder {
+      margin-top: 10px;
+    }
+    .folder > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      font-size: var(--dw-text-xs);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--fg-faint);
+      user-select: none;
+    }
+    .folder > summary::-webkit-details-marker { display: none; }
+    .folder > summary .count {
+      margin-left: auto;
+      font-variant-numeric: tabular-nums;
+      opacity: 0.7;
+    }
+    .item {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 8px;
+      align-items: start;
+      text-align: left;
+      padding: 8px 10px;
+      margin: 2px 0;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--fg);
+      cursor: pointer;
+      font: 500 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      transition: background 0.15s, border-color 0.15s, transform 0.15s var(--ease);
+    }
+    .item:hover { background: rgba(255,255,255,0.03); }
+    .item.active {
+      background: var(--coral-soft);
+      border-color: color-mix(in srgb, var(--coral) 45%, transparent);
+      transform: translateX(2px);
+    }
+    .item .dot {
+      width: 8px; height: 8px; margin-top: 5px;
+      border-radius: 2px;
+      background: var(--fg-faint);
+    }
+    .item.active .dot { background: var(--coral); }
+    .item .name { line-height: 1.25; }
+    .item .path {
+      display: block;
+      margin-top: 2px;
+      font-size: var(--dw-text-xs);
+      color: var(--fg-faint);
+      font-weight: 400;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .empty {
+      padding: 28px 16px;
+      text-align: center;
+      color: var(--fg-faint);
+      font-size: var(--dw-font-size);
+      line-height: 1.5;
+    }
+
+    .rail-foot {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px 12px;
+      border-top: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+
+    /* ========== STAGE ========== */
+    .stage {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      position: relative;
+    }
+    .identity {
+      padding: 20px 28px 0;
+      flex-shrink: 0;
+      animation: slideIn 0.4s var(--ease) 0.05s both;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+    .identity.idle h2 { color: var(--fg-faint); font-weight: 500; }
+    .eyebrow {
+      font-size: var(--dw-text-xs);
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--fg-faint);
+      margin-bottom: 6px;
+    }
+    .identity h2 {
+      margin: 0;
+      font-size: var(--dw-text-xl);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+    .identity .file {
+      margin-top: 6px;
+      font-size: var(--dw-font-size);
+      color: var(--fg-dim);
+      font-family: "JetBrains Mono", monospace;
+    }
+
+    .lineage {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 14px;
+      min-height: 28px;
+    }
+    .lineage .lab {
+      font-size: var(--dw-text-xs);
+      color: var(--fg-faint);
+      font-weight: 600;
+      margin-right: 2px;
+    }
+    .node {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--ink-3);
+      color: var(--fg);
+      font: 500 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .node:hover { border-color: var(--coral); color: #ffc4b5; }
+    .node.here {
+      background: var(--coral-soft);
+      border-color: color-mix(in srgb, var(--coral) 50%, transparent);
+      color: #ffb8a6;
+      cursor: default;
+    }
+    .arrow {
+      color: var(--fg-faint);
+      font-size: var(--dw-font-size);
+      opacity: 0.6;
+      user-select: none;
+    }
+
+    .canvas-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 28px 10px;
+      flex-shrink: 0;
+    }
+    .seg {
+      display: inline-flex;
+      padding: 3px;
+      border-radius: 10px;
+      background: var(--ink-3);
+      border: 1px solid var(--line);
+    }
+    .seg button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--fg-dim);
+      font: 600 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      padding: 6px 14px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .seg button.active {
+      background: color-mix(in srgb, var(--fg) 8%, transparent);
+      color: var(--fg);
+    }
+    .seg button:disabled { opacity: 0.35; cursor: not-allowed; }
+    .hint-inline {
+      font-size: var(--dw-font-size);
+      color: var(--amber);
+      max-width: 420px;
+      text-align: right;
+      line-height: 1.35;
+    }
+    .hint-inline[hidden] { display: none; }
+
+    .canvas {
+      flex: 1;
+      min-height: 0;
+      margin: 0 28px 16px;
+      position: relative;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.02), transparent 40%),
+        var(--ink);
+      overflow: visible;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .sql {
+      margin: 0;
+      height: 100%;
+      padding: 18px 20px 80px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font: 400 12.5px/1.55 "JetBrains Mono", Consolas, monospace;
+      color: #d7e2f2;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line-strong) transparent;
+    }
+    .sql.ph {
+      color: var(--fg-faint);
+      font-family: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      font-size: var(--dw-font-size);
+      line-height: 1.65;
+      padding-top: 28px;
+      max-width: 420px;
+    }
+
+    /* ========== DOCK ========== */
+    .dock {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      height: var(--dock-h);
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 0 10px 0 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line-strong);
+      background: color-mix(in srgb, var(--ink-3) 92%, #000);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      z-index: 5;
+      animation: dockUp 0.5s var(--ease) 0.12s both;
+    }
+    @keyframes dockUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: none; }
+    }
+    .dock-fields {
+      display: grid;
+      grid-template-columns: 1fr 110px;
+      gap: 8px;
+      min-width: 0;
+    }
+    .dock label {
+      display: block;
+      font-size: var(--dw-text-2xs);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--fg-faint);
+      margin-bottom: 2px;
+      line-height: 1;
+    }
+    .dock input[type="text"] {
+      width: 100%;
+      height: 30px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: var(--ink);
+      color: var(--fg);
+      font: 500 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      padding: 0 8px;
+      outline: none;
+    }
+    .dock input[type="text"]:focus {
+      border-color: color-mix(in srgb, var(--coral) 50%, var(--line));
+    }
+
+    /* Searchable connection picker */
+    .combo {
+      position: relative;
+      min-width: 0;
+    }
+    .combo-trigger {
+      width: 100%;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 28px 0 8px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: var(--ink);
+      color: var(--fg);
+      font: 500 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      text-align: left;
+      cursor: pointer;
+      outline: none;
+      position: relative;
+    }
+    .combo-trigger:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .combo-trigger:focus,
+    .combo.open .combo-trigger {
+      border-color: color-mix(in srgb, var(--coral) 50%, var(--line));
+    }
+    .combo-trigger .combo-label {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .combo-trigger .combo-label.placeholder { color: var(--fg-faint); }
+    .combo-trigger .combo-meta {
+      flex-shrink: 0;
+      font-size: var(--dw-text-2xs);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--fg-faint);
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+    }
+    .combo-trigger::after {
+      content: "";
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      width: 6px;
+      height: 6px;
+      border-right: 1.5px solid var(--fg-dim);
+      border-bottom: 1.5px solid var(--fg-dim);
+      transform: translateY(-60%) rotate(45deg);
+      transition: transform 0.15s var(--ease);
+    }
+    .combo.open .combo-trigger::after {
+      transform: translateY(-20%) rotate(225deg);
+    }
+    .combo-panel {
+      display: none;
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: calc(100% + 8px);
+      width: max(100%, 320px);
+      max-width: min(420px, 70vw);
+      border-radius: 12px;
+      border: 1px solid var(--line-strong);
+      background: var(--ink-3);
+      box-shadow: 0 -16px 48px color-mix(in srgb, #000 35%, transparent);
+      z-index: 40;
+      overflow: hidden;
+      animation: comboIn 0.18s var(--ease);
+    }
+    .combo.open .combo-panel { display: block; }
+    @keyframes comboIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+    .combo-search-wrap {
+      padding: 10px 10px 8px;
+      border-bottom: 1px solid var(--line);
+      position: relative;
+    }
+    .combo-search-wrap svg {
+      position: absolute;
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      opacity: 0.45;
+      pointer-events: none;
+    }
+    .combo-search {
+      width: 100%;
+      height: 34px;
+      padding: 0 10px 0 32px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--ink);
+      color: var(--fg);
+      font: 500 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      outline: none;
+    }
+    .combo-search:focus {
+      border-color: color-mix(in srgb, var(--coral) 45%, var(--line));
+    }
+    .combo-list {
+      max-height: 260px;
+      overflow: auto;
+      padding: 6px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line-strong) transparent;
+    }
+    .combo-group {
+      padding: 8px 8px 4px;
+      font-size: var(--dw-text-2xs);
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--fg-faint);
+    }
+    .combo-option {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      text-align: left;
+      padding: 9px 10px;
+      margin: 1px 0;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--fg);
+      font: 500 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      cursor: pointer;
+    }
+    .combo-option:hover,
+    .combo-option.active {
+      background: rgba(255,255,255,0.05);
+    }
+    .combo-option.selected {
+      background: var(--coral-soft);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--coral) 40%, transparent);
+    }
+    .combo-option .opt-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .combo-option .opt-type {
+      font-size: var(--dw-text-2xs);
+      color: var(--fg-faint);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .combo-empty {
+      padding: 18px 12px;
+      text-align: center;
+      color: var(--fg-faint);
+      font-size: var(--dw-font-size);
+    }
+
+    .dock-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .btn {
+      appearance: none;
+      height: 34px;
+      padding: 0 14px;
+      border-radius: 9px;
+      border: 0;
+      font: 600 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: transform 0.15s var(--ease), opacity 0.15s, background 0.15s;
+    }
+    .btn:active:not(:disabled) { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.38; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--coral);
+      color: var(--coral-ink);
+    }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
+    .btn-send {
+      background: #fff;
+      color: #111827;
+    }
+    .btn-send:hover:not(:disabled) { filter: brightness(0.96); }
+    .btn-quiet {
+      background: transparent;
+      color: var(--fg-dim);
+      border: 1px solid var(--line);
+      padding: 0 10px;
+    }
+    .btn-quiet:hover:not(:disabled) { color: var(--fg); border-color: var(--line-strong); }
+    .more { position: relative; }
+    .more-menu {
+      position: absolute;
+      right: 0;
+      bottom: calc(100% + 8px);
+      min-width: 140px;
+      padding: 6px;
+      border-radius: 10px;
+      border: 1px solid var(--line-strong);
+      background: var(--ink-3);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+      display: none;
+      z-index: 10;
+    }
+    .more.open .more-menu { display: block; }
+    .more-menu button {
+      width: 100%;
+      text-align: left;
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--fg);
+      font: 500 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      padding: 8px 10px;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+    .more-menu button:hover { background: rgba(255,255,255,0.05); }
+    .more-menu button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .log {
+      flex-shrink: 0;
+      margin-top: 4px;
+      border-top: 1px solid var(--line);
+      background: color-mix(in srgb, var(--ink-2) 90%, transparent);
+    }
+    .log > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 14px 28px 12px;
+      font-size: var(--dw-font-size);
+      font-weight: 600;
+      color: var(--fg-faint);
+      user-select: none;
+    }
+    .log > summary::-webkit-details-marker { display: none; }
+    .log > summary::before { content: "▸ "; opacity: 0.7; }
+    .log[open] > summary::before { content: "▾ "; }
+    .log pre {
+      margin: 0 28px 14px;
+      max-height: 140px;
+      overflow: auto;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--ink);
+      color: var(--fg-dim);
+      font: 400 11px/1.45 "JetBrains Mono", monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 88px;
+      transform: translateX(-50%) translateY(8px);
+      background: var(--ink-3);
+      border: 1px solid var(--line-strong);
+      color: var(--fg);
+      padding: 10px 16px;
+      border-radius: 999px;
+      font: 500 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.25s var(--ease);
+      z-index: 30;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .rail-foot .btn { flex: 1; height: 32px; font-size: var(--dw-font-size); }
+    .rail-foot .btn-quiet { flex: 0 0 auto; width: 64px; }
+
+    @media (max-width: 960px) {
+      .shell { grid-template-columns: 1fr; grid-template-rows: 38vh 1fr; }
+      .rail { border-right: 0; border-bottom: 1px solid var(--line); }
+      .dock {
+        grid-template-columns: 1fr;
+        height: auto;
+        padding: 10px;
+        gap: 8px;
+      }
+      .dock-actions { justify-content: stretch; }
+      .dock-actions .btn { flex: 1; }
+      .identity h2 { font-size: var(--dw-text-xl); }
+      .canvas, .identity, .canvas-head { margin-left: 16px; margin-right: 16px; padding-left: 0; padding-right: 0; }
+      .canvas { margin-bottom: 14px; }
+      .identity { padding: 14px 16px 0; }
+      .canvas-head { padding: 12px 16px 8px; }
+      .dock { left: 10px; right: 10px; }
+      .log > summary, .log pre { padding-left: 16px; padding-right: 16px; margin-left: 16px; margin-right: 16px; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="rail-top">
+      <div class="mark">
+        <strong>dbt</strong>
+        <em id="countLabel">—</em>
+      </div>
+      <div class="pulse" id="pulse"><i></i><span id="pulseText">连接中…</span></div>
+      <div class="search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="filter" type="search" placeholder="搜索 model / 路径 / 表名" disabled autocomplete="off" />
+      </div>
+    </div>
+    <div id="models" class="catalog"><div class="empty">等待宿主…</div></div>
+    <div class="rail-foot">
+      <button type="button" class="btn btn-quiet" id="refresh" disabled>刷新</button>
+      <button type="button" class="btn btn-quiet" id="statusBtn" disabled title="诊断">诊断</button>
+    </div>
+  </aside>
+
+  <section class="stage">
+    <header class="identity idle" id="identity">
+      <div class="eyebrow" id="eyebrow">model</div>
+      <h2 id="selectedTitle">选择一个 model 开始</h2>
+      <div class="file" id="selectedPath"></div>
+      <div class="lineage" id="lineage" hidden></div>
+    </header>
+
+    <div class="canvas-head">
+      <div class="seg" role="tablist">
+        <button type="button" class="active" id="tabSource" data-tab="source">源 SQL</button>
+        <button type="button" id="tabCompiled" data-tab="compiled" disabled>编译结果</button>
+      </div>
+      <div class="hint-inline" id="hint" hidden></div>
+    </div>
+
+    <div class="canvas">
+      <pre class="sql ph" id="out">左侧点选 model → 在此阅读源 SQL。
+
+有 dbt 时：Compile，再「打开控制台」送到已有 DataWise 连接。
+没有 dbt 也能浏览源码与依赖。</pre>
+      <div class="dock">
+        <div class="dock-fields">
+          <div>
+            <label id="warehouseLabel">DataWise 连接</label>
+            <div class="combo" id="warehouseCombo">
+              <button type="button" class="combo-trigger" id="warehouseTrigger" disabled aria-haspopup="listbox" aria-expanded="false" aria-labelledby="warehouseLabel">
+                <span class="combo-label placeholder" id="warehouseLabelText">选择连接…</span>
+              </button>
+              <div class="combo-panel" id="warehousePanel" role="listbox">
+                <div class="combo-search-wrap">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                  <input type="search" class="combo-search" id="warehouseSearch" placeholder="搜索名称 / 环境 / 类型…" autocomplete="off" />
+                </div>
+                <div class="combo-list" id="warehouseList"></div>
+              </div>
+              <input type="hidden" id="warehouse" value="" />
+            </div>
+          </div>
+          <div>
+            <label for="database">库 / Schema</label>
+            <input id="database" type="text" placeholder="可选" disabled />
+          </div>
+        </div>
+        <div class="dock-actions">
+          <button type="button" class="btn btn-primary" id="compile" disabled title="需要本机 dbt">Compile</button>
+          <button type="button" class="btn btn-send" id="openConsole" disabled title="先 Compile">打开控制台</button>
+          <button type="button" class="btn btn-quiet" id="copySql" disabled title="复制当前 SQL">复制</button>
+          <div class="more" id="more">
+            <button type="button" class="btn btn-quiet" id="moreBtn" aria-haspopup="true">···</button>
+            <div class="more-menu" role="menu">
+              <button type="button" id="test" disabled>Test</button>
+              <button type="button" id="build" disabled>Build</button>
+              <button type="button" id="run" disabled>Run…</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <details class="log" id="logDrawer">
+      <summary>命令日志</summary>
+      <pre id="log">(尚无输出)</pre>
+    </details>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+  const countLabel = document.getElementById('countLabel')
+  const pulse = document.getElementById('pulse')
+  const pulseText = document.getElementById('pulseText')
+  const hintEl = document.getElementById('hint')
+  const modelsEl = document.getElementById('models')
+  const outEl = document.getElementById('out')
+  const logEl = document.getElementById('log')
+  const filterEl = document.getElementById('filter')
+  const warehouseEl = document.getElementById('warehouse')
+  const warehouseCombo = document.getElementById('warehouseCombo')
+  const warehouseTrigger = document.getElementById('warehouseTrigger')
+  const warehouseLabelText = document.getElementById('warehouseLabelText')
+  const warehouseSearch = document.getElementById('warehouseSearch')
+  const warehouseList = document.getElementById('warehouseList')
+  const databaseEl = document.getElementById('database')
+  const identity = document.getElementById('identity')
+  const selectedTitle = document.getElementById('selectedTitle')
+  const selectedPath = document.getElementById('selectedPath')
+  const eyebrow = document.getElementById('eyebrow')
+  const lineageEl = document.getElementById('lineage')
+  const tabSource = document.getElementById('tabSource')
+  const tabCompiled = document.getElementById('tabCompiled')
+  const toastEl = document.getElementById('toast')
+  const logDrawer = document.getElementById('logDrawer')
+  const more = document.getElementById('more')
+
+  let connectionId = ''
+  let models = []
+  let selected = null
+  let lastSql = ''
+  let sourceSql = ''
+  let dbtAvailable = false
+  let viewTab = 'source'
+  let toastTimer = null
+  let lastRefs = { upstream: [], downstream: [] }
+  let warehouseOptions = []
+  let warehouseActiveIndex = -1
+
+  function ready() {
+    return window.datawisePlugin && typeof window.datawisePlugin.invoke === 'function'
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+  }
+  function toast(msg) {
+    toastEl.textContent = msg
+    toastEl.classList.add('show')
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200)
+  }
+  function groupKey(path) {
+    const p = (path || '').replace(/\\/g, '/')
+    const m = p.match(/models\/([^/]+)\//)
+    if (m) return m[1]
+    if (/seeds\//.test(p) || /\.csv$/i.test(p)) return 'seeds'
+    return 'models'
+  }
+  function shortPath(path) {
+    return (path || '').replace(/\\/g, '/').replace(/^models\//, '')
+  }
+  function displaySql() {
+    return viewTab === 'compiled' ? lastSql : (sourceSql || lastSql)
+  }
+  function setUi(on) {
+    ;['refresh', 'statusBtn', 'filter', 'database'].forEach(id => {
+      document.getElementById(id).disabled = !on
+    })
+    warehouseTrigger.disabled = !on
+    if (!on) closeWarehouse()
+    const hasModel = on && !!selected
+    document.getElementById('compile').disabled = !hasModel || !dbtAvailable
+    document.getElementById('test').disabled = !hasModel || !dbtAvailable
+    document.getElementById('build').disabled = !hasModel || !dbtAvailable
+    document.getElementById('run').disabled = !hasModel || !dbtAvailable
+    const sql = displaySql()
+    document.getElementById('copySql').disabled = !on || !sql
+    document.getElementById('openConsole').disabled = !on || !lastSql || !warehouseEl.value
+    tabCompiled.disabled = !lastSql
+  }
+
+  function connectionLabel(c) {
+    return ((c.env ? c.env + ' · ' : '') + (c.name || c.id)).trim()
+  }
+  function connectionHaystack(c) {
+    return [c.env, c.name, c.id, c.dbType, c.host].filter(Boolean).join(' ').toLowerCase()
+  }
+  function filteredWarehouses() {
+    const q = (warehouseSearch.value || '').trim().toLowerCase()
+    if (!q) return warehouseOptions.slice()
+    return warehouseOptions.filter(c => connectionHaystack(c).includes(q))
+  }
+  function setWarehouseValue(id, silent) {
+    const c = warehouseOptions.find(x => x.id === id)
+    warehouseEl.value = c ? c.id : ''
+    warehouseLabelText.textContent = c ? connectionLabel(c) : (warehouseOptions.length ? '选择连接…' : '暂无 SQL 连接')
+    warehouseLabelText.classList.toggle('placeholder', !c)
+    let meta = warehouseTrigger.querySelector('.combo-meta')
+    if (c && c.dbType) {
+      if (!meta) {
+        meta = document.createElement('span')
+        meta.className = 'combo-meta'
+        warehouseTrigger.appendChild(meta)
+      }
+      meta.textContent = c.dbType
+    } else if (meta) {
+      meta.remove()
+    }
+    if (!silent) {
+      remember('dbt.warehouseId', warehouseEl.value)
+      setUi(true)
+    }
+  }
+  function renderWarehouseList() {
+    const rows = filteredWarehouses()
+    warehouseList.innerHTML = ''
+    if (!rows.length) {
+      warehouseList.innerHTML = '<div class="combo-empty">无匹配连接</div>'
+      warehouseActiveIndex = -1
+      return
+    }
+    const groups = new Map()
+    for (const c of rows) {
+      const g = (c.env || '其他').trim() || '其他'
+      if (!groups.has(g)) groups.set(g, [])
+      groups.get(g).push(c)
+    }
+    let flatIndex = 0
+    for (const [g, items] of groups) {
+      const head = document.createElement('div')
+      head.className = 'combo-group'
+      head.textContent = g
+      warehouseList.appendChild(head)
+      for (const c of items) {
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        btn.className = 'combo-option'
+          + (c.id === warehouseEl.value ? ' selected' : '')
+          + (flatIndex === warehouseActiveIndex ? ' active' : '')
+        btn.setAttribute('role', 'option')
+        btn.dataset.id = c.id
+        btn.dataset.index = String(flatIndex)
+        btn.innerHTML = '<span class="opt-name">' + esc(connectionLabel(c)) + '</span>'
+          + '<span class="opt-type">' + esc(c.dbType || '') + '</span>'
+        btn.onmousedown = (e) => e.preventDefault()
+        btn.onclick = () => {
+          setWarehouseValue(c.id)
+          closeWarehouse()
+        }
+        warehouseList.appendChild(btn)
+        flatIndex++
+      }
+    }
+  }
+  function openWarehouse() {
+    if (warehouseTrigger.disabled) return
+    warehouseCombo.classList.add('open')
+    warehouseTrigger.setAttribute('aria-expanded', 'true')
+    warehouseSearch.value = ''
+    warehouseActiveIndex = Math.max(0, filteredWarehouses().findIndex(c => c.id === warehouseEl.value))
+    renderWarehouseList()
+    requestAnimationFrame(() => {
+      warehouseSearch.focus()
+      const sel = warehouseList.querySelector('.combo-option.selected')
+      if (sel) sel.scrollIntoView({ block: 'nearest' })
+    })
+  }
+  function closeWarehouse() {
+    warehouseCombo.classList.remove('open')
+    warehouseTrigger.setAttribute('aria-expanded', 'false')
+  }
+  function toggleWarehouse() {
+    if (warehouseCombo.classList.contains('open')) closeWarehouse()
+    else openWarehouse()
+  }
+  function renderOut() {
+    const text = displaySql()
+    if (!text) {
+      outEl.className = 'sql ph'
+      outEl.textContent = selected
+        ? (viewTab === 'compiled'
+          ? '还没有编译结果。点下方 Compile，生成可送到控制台的 SQL。'
+          : '(空 model)')
+        : '左侧点选 model → 在此阅读源 SQL。\n\n有 dbt 时：Compile，再「打开控制台」送到已有 DataWise 连接。\n没有 dbt 也能浏览源码与依赖。'
+      return
+    }
+    outEl.className = 'sql'
+    outEl.textContent = text
+  }
+  function setTab(tab) {
+    viewTab = tab
+    tabSource.classList.toggle('active', tab === 'source')
+    tabCompiled.classList.toggle('active', tab === 'compiled')
+    renderOut()
+    setUi(true)
+  }
+  async function invoke(method, params = {}) {
+    return window.datawisePlugin.invoke(method, Object.assign({ connectionId }, params))
+  }
+  async function remember(key, value) {
+    const storage = window.datawisePlugin && window.datawisePlugin.storage
+    if (!storage || !storage.set) return
+    try { await storage.set(key, value) } catch (e) { /* ignore */ }
+  }
+  async function recall(key) {
+    const storage = window.datawisePlugin && window.datawisePlugin.storage
+    if (!storage || !storage.get) return ''
+    try { return (await storage.get(key)) || '' } catch (e) { return '' }
+  }
+
+  function showHint(res) {
+    const diagnosis = res && res.diagnosis
+    const missing = diagnosis && diagnosis.dbtAvailable === false
+    dbtAvailable = !missing
+    const n = res && res.count != null ? res.count : models.length
+    countLabel.textContent = n + ' models'
+    pulse.classList.toggle('ok', !!dbtAvailable)
+    pulseText.textContent = dbtAvailable
+      ? ((res && res.source) || 'ready')
+      : 'dbt 未安装 · 可浏览源码'
+
+    const hint = res && res.hint
+    const reason = res && res.reason
+    if (hint && reason && reason !== 'ok') {
+      hintEl.hidden = false
+      hintEl.textContent = hint
+    } else if (res && res.dbtLsError) {
+      hintEl.hidden = false
+      hintEl.textContent = res.dbtLsError
+    } else if (missing) {
+      hintEl.hidden = false
+      hintEl.textContent = 'Compile / Test / Run 需要本机 dbt'
+    } else {
+      hintEl.hidden = true
+      hintEl.textContent = ''
+    }
+  }
+
+  function renderLineage(refs) {
+    lastRefs = {
+      upstream: (refs && refs.upstream) || [],
+      downstream: (refs && refs.downstream) || []
+    }
+    const up = lastRefs.upstream
+    const down = lastRefs.downstream
+    if (!selected) {
+      lineageEl.hidden = true
+      lineageEl.innerHTML = ''
+      return
+    }
+    lineageEl.hidden = false
+    lineageEl.innerHTML = ''
+    const frag = document.createDocumentFragment()
+
+    const pushNode = (name, here) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'node' + (here ? ' here' : '')
+      b.textContent = name
+      if (!here) {
+        b.onclick = () => {
+          const hit = models.find(m => m.name === name)
+          if (hit) selectModel(hit)
+          else toast('列表中没有 ' + name)
+        }
+      }
+      frag.appendChild(b)
+    }
+    const arrow = () => {
+      const s = document.createElement('span')
+      s.className = 'arrow'
+      s.textContent = '→'
+      frag.appendChild(s)
+    }
+
+    if (up.length) {
+      up.forEach((n, i) => {
+        if (i) arrow()
+        pushNode(n, false)
+      })
+      arrow()
+    }
+    pushNode(selected.name, true)
+    if (down.length) {
+      down.forEach(n => {
+        arrow()
+        pushNode(n, false)
+      })
+    }
+    lineageEl.appendChild(frag)
+  }
+
+  function renderModels() {
+    const q = (filterEl.value || '').trim().toLowerCase()
+    let list = models
+    if (q) {
+      list = models.filter(m =>
+        (m.name || '').toLowerCase().includes(q)
+        || (m.path || '').toLowerCase().includes(q)
+        || (m.uniqueId || '').toLowerCase().includes(q)
+      )
+    }
+    if (!list.length) {
+      modelsEl.innerHTML = '<div class="empty">' + (models.length ? '无匹配' : '没有 model') + '</div>'
+      return
+    }
+    const groups = new Map()
+    for (const m of list) {
+      const g = groupKey(m.path)
+      if (!groups.has(g)) groups.set(g, [])
+      groups.get(g).push(m)
+    }
+    modelsEl.innerHTML = ''
+    for (const [g, rows] of groups) {
+      const det = document.createElement('details')
+      det.className = 'folder'
+      det.open = true
+      const sum = document.createElement('summary')
+      sum.innerHTML = esc(g) + '<span class="count">' + rows.length + '</span>'
+      det.appendChild(sum)
+      for (const m of rows) {
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        btn.className = 'item' + (selected && selected.name === m.name ? ' active' : '')
+        btn.innerHTML = '<span class="dot"></span><span class="name">' + esc(m.name)
+          + '<span class="path">' + esc(shortPath(m.path) || m.uniqueId || '') + '</span></span>'
+        btn.onclick = () => selectModel(m)
+        det.appendChild(btn)
+      }
+      modelsEl.appendChild(det)
+    }
+  }
+
+  async function selectModel(m) {
+    selected = m
+    identity.classList.remove('idle')
+    eyebrow.textContent = groupKey(m.path)
+    selectedTitle.textContent = m.name
+    selectedPath.textContent = m.path || ''
+    lastSql = ''
+    sourceSql = ''
+    setTab('source')
+    setUi(true)
+    renderModels()
+    try {
+      const src = await invoke('dbt/source-sql', { modelName: m.name })
+      sourceSql = src.sql || src.message || ''
+      const refs = await invoke('dbt/refs', { modelName: m.name })
+      renderLineage(refs)
+      renderOut()
+      setUi(true)
+    } catch (e) {
+      outEl.className = 'sql'
+      outEl.textContent = String(e && e.message ? e.message : e)
+    }
+  }
+
+  async function loadConnections() {
+    const saved = await recall('dbt.warehouseId')
+    const savedDb = await recall('dbt.database')
+    if (savedDb) databaseEl.value = savedDb
+    if (!window.datawisePlugin.sql) {
+      warehouseOptions = []
+      setWarehouseValue('', true)
+      warehouseLabelText.textContent = '宿主未提供 host.sql'
+      warehouseLabelText.classList.add('placeholder')
+      return
+    }
+    try {
+      const list = await window.datawisePlugin.sql.listConnections()
+      warehouseOptions = (Array.isArray(list) ? list : []).filter(c => c && c.id)
+      const pick = (saved && warehouseOptions.some(c => c.id === saved))
+        ? saved
+        : (warehouseOptions[0] && warehouseOptions[0].id) || ''
+      setWarehouseValue(pick, true)
+    } catch (e) {
+      warehouseOptions = []
+      setWarehouseValue('', true)
+      warehouseLabelText.textContent = String(e && e.message ? e.message : e)
+      warehouseLabelText.classList.add('placeholder')
+    }
+  }
+
+  async function refreshModels() {
+    try {
+      const q = filterEl.value.trim()
+      const select = /^(tag:|path:|\+|@)/.test(q) ? q : ''
+      const res = await invoke('dbt/list-models', { select })
+      models = res.models || []
+      showHint(res)
+      renderModels()
+      if (q && !select) {
+        const ql = q.toLowerCase()
+        const hitLocal = models.some(m =>
+          (m.name || '').toLowerCase().includes(ql) || (m.path || '').toLowerCase().includes(ql)
+        )
+        if (!hitLocal) {
+          try {
+            const find = await invoke('dbt/find', { query: q })
+            const hits = find.models || []
+            if (hits.length) {
+              models = hits
+              renderModels()
+              toast('按表名找到 ' + hits.length + ' 个')
+            }
+          } catch (e) { /* ignore */ }
+        }
+      }
+      if (selected) {
+        const still = models.find(m => m.name === selected.name)
+        if (still) selected = still
+        renderLineage(lastRefs)
+      } else {
+        renderOut()
+      }
+    } catch (e) {
+      pulseText.textContent = '加载失败'
+      modelsEl.innerHTML = '<div class="empty">' + esc(String(e && e.message ? e.message : e)) + '</div>'
+    }
+  }
+
+  async function runCommand(command) {
+    if (!selected) return
+    if (command === 'run' && !window.confirm('dbt run 会按 profiles.yml 写入仓库。确认继续？')) return
+    more.classList.remove('open')
+    outEl.className = 'sql'
+    outEl.textContent = '正在执行 dbt ' + command + '…'
+    logDrawer.open = true
+    try {
+      const res = await invoke('dbt/' + command, { select: selected.name })
+      let log = (res.command || '') + '\n' + (res.stdout || '') + (res.stderr ? '\n' + res.stderr : '')
+      if (res.runResults && res.runResults.found) {
+        log += '\n\nrun_results: success=' + res.runResults.successCount
+          + ' failure=' + res.runResults.failureCount
+      }
+      logEl.textContent = log || '(无输出)'
+      if (command === 'compile') {
+        lastSql = res.compiledSql || ''
+        if (lastSql) {
+          setTab('compiled')
+          toast('Compile 完成 · 可打开控制台')
+        } else {
+          outEl.textContent = res.stderr || res.stdout || 'Compile 完成但没有 SQL'
+        }
+      } else {
+        setTab('source')
+        outEl.textContent = res.success
+          ? 'dbt ' + command + ' 完成。详见下方日志。'
+          : (res.stderr || res.stdout || '命令失败')
+        toast(res.success ? command + ' 完成' : command + ' 失败')
+      }
+      setUi(true)
+    } catch (e) {
+      outEl.textContent = String(e && e.message ? e.message : e)
+    }
+  }
+
+  async function boot() {
+    if (!ready()) return
+    try {
+      const ctx = await window.datawisePlugin.context
+      connectionId = (ctx && ctx.connectionId) || (ctx && ctx.connection && ctx.connection.id) || ''
+      setUi(true)
+      await loadConnections()
+      await refreshModels()
+    } catch (e) {
+      pulseText.textContent = '错误'
+      modelsEl.innerHTML = '<div class="empty">' + esc(String(e && e.message ? e.message : e)) + '</div>'
+    }
+  }
+
+  document.getElementById('refresh').onclick = () => refreshModels()
+  document.getElementById('statusBtn').onclick = async () => {
+    logDrawer.open = true
+    logEl.textContent = JSON.stringify(await invoke('dbt/status'), null, 2)
+  }
+  document.getElementById('compile').onclick = () => runCommand('compile')
+  document.getElementById('test').onclick = () => runCommand('test')
+  document.getElementById('build').onclick = () => runCommand('build')
+  document.getElementById('run').onclick = () => runCommand('run')
+  document.getElementById('moreBtn').onclick = (e) => {
+    e.stopPropagation()
+    more.classList.toggle('open')
+  }
+  document.addEventListener('click', () => more.classList.remove('open'))
+  tabSource.onclick = () => setTab('source')
+  tabCompiled.onclick = () => { if (lastSql) setTab('compiled') }
+  warehouseTrigger.onclick = (e) => {
+    e.stopPropagation()
+    toggleWarehouse()
+  }
+  warehouseSearch.oninput = () => {
+    warehouseActiveIndex = 0
+    renderWarehouseList()
+  }
+  warehouseSearch.onkeydown = (e) => {
+    const rows = filteredWarehouses()
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      warehouseActiveIndex = Math.min(rows.length - 1, warehouseActiveIndex + 1)
+      renderWarehouseList()
+      const el = warehouseList.querySelector('[data-index="' + warehouseActiveIndex + '"]')
+      if (el) el.scrollIntoView({ block: 'nearest' })
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      warehouseActiveIndex = Math.max(0, warehouseActiveIndex - 1)
+      renderWarehouseList()
+      const el = warehouseList.querySelector('[data-index="' + warehouseActiveIndex + '"]')
+      if (el) el.scrollIntoView({ block: 'nearest' })
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const pick = rows[warehouseActiveIndex]
+      if (pick) {
+        setWarehouseValue(pick.id)
+        closeWarehouse()
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      closeWarehouse()
+      warehouseTrigger.focus()
+    }
+  }
+  document.addEventListener('click', (e) => {
+    if (!warehouseCombo.contains(e.target)) closeWarehouse()
+  })
+  databaseEl.onchange = () => remember('dbt.database', databaseEl.value.trim())
+  document.getElementById('copySql').onclick = async () => {
+    const text = displaySql()
+    if (!text) return
+    await window.datawisePlugin.clipboard.writeText(text)
+    toast('已复制')
+  }
+  document.getElementById('openConsole').onclick = async () => {
+    if (!lastSql || !warehouseEl.value) {
+      toast(lastSql ? '请先选择连接' : '请先 Compile')
+      return
+    }
+    await window.datawisePlugin.sql.openConsole({
+      connectionId: warehouseEl.value,
+      database: databaseEl.value.trim() || undefined,
+      sql: lastSql,
+      title: selected ? 'dbt · ' + selected.name : 'dbt SQL'
+    })
+    toast('已打开 SQL 控制台')
+  }
+  let filterTimer = null
+  filterEl.oninput = () => {
+    renderModels()
+    clearTimeout(filterTimer)
+    filterTimer = setTimeout(() => {
+      if (/^(tag:|path:|\+|@)/.test(filterEl.value.trim())) refreshModels()
+    }, 400)
+  }
+  filterEl.onkeydown = (e) => { if (e.key === 'Enter') refreshModels() }
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'datawise-plugin-env') boot()
+  })
+  boot()
+</script>
+<script src="dw-split-pane.js"></script>
+<script>
+  DwSplitPane.mount({
+    root: '.shell',
+    start: '.rail',
+    end: '.stage',
+    storageKey: 'dw.split.dbt',
+    defaultRatio: 'sidebar',
+    defaultWidth: 268,
+    minWidth: 200,
+    maxWidth: 420,
+  })
+</script>
+</body>
+</html>

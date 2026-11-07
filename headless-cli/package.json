@@ -1,0 +1,27 @@
+{
+  "name": "@datawise/headless-cli",
+  "version": "4.1.7",
+  "private": true,
+  "type": "module",
+  "description": "DataWise headless CLI — migrate run, sql exec & query-library CI against the backend API",
+  "bin": {
+    "datawise": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/run-unit-tests.mjs"
+  },
+  "dependencies": {
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

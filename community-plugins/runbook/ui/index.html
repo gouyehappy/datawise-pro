@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Runbook</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: var(--color-background, #131416);
+      --ink-2: var(--color-muted, #2a2a2d);
+      --ink-3: var(--color-popover, #1e1e20);
+      --line: var(--color-border, rgb(110 110 114 / 0.28));
+      --fg: var(--color-foreground, #d7d7db);
+      --dim: var(--color-muted-foreground, #97989d);
+      --faint: color-mix(in srgb, var(--color-muted-foreground, #97989d) 78%, transparent);
+      --coral: #ff6b4a; --coral-ink: #2a0d06;
+      --mint: var(--color-success, #4ade80);
+      --glow: rgba(255,107,74,.1);
+      font-family: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+    }
+    :root[data-theme="light"], :root[data-dw-theme="light"] {
+      color-scheme: light;
+      --ink: var(--color-background, #ffffff);
+      --ink-2: var(--color-muted, #f4f4f5);
+      --ink-3: var(--color-popover, #ffffff);
+      --line: var(--color-border, #e4e4e7);
+      --fg: var(--color-foreground, #18181b);
+      --dim: var(--color-muted-foreground, #52525b);
+      --coral-ink: #fff7f4; --glow: rgba(255,107,74,.08);
+      --faint: color-mix(in srgb, var(--color-muted-foreground, #71717a) 88%, transparent);
+    }
+    * { box-sizing:border-box } html,body{height:100%;margin:0} body{background:radial-gradient(800px 400px at 0 -10%,var(--glow),transparent 50%),var(--ink);color:var(--fg);overflow:hidden}
+    .shell{height:100%}
+    .rail{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:color-mix(in srgb,var(--ink-2) 90%,transparent);min-width:0}
+    .pad{padding:16px 14px 8px} strong{font-size:17px}
+    input,textarea,button,select{font: 500 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);color:var(--fg)}
+    input,select,textarea{width:100%;border-radius:8px;border:1px solid var(--line);background:var(--ink);padding:8px 10px}
+    .list{flex:1;overflow:auto;padding:8px}
+    .item{width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:8px;padding:8px 10px;cursor:pointer;margin-bottom:2px}
+    .item.active{background:rgba(255,107,74,.16);border-color:rgba(255,107,74,.4)}
+    .item small{display:block;color:var(--faint);font-size:11px}
+    .stage{display:flex;flex-direction:column;min-height:0;position:relative}
+    .head{padding:16px 22px 0} h2{margin:0;font-size: var(--dw-text-xl);letter-spacing:-.03em}
+    .bar{height:6px;border-radius:99px;background:var(--ink-2);margin:10px 0;overflow:hidden} .bar i{display:block;height:100%;background:var(--coral)}
+    .work{display:grid;grid-template-columns:180px 1fr;gap:12px;margin:8px 22px 72px;min-height:0;flex:1}
+    .steps{overflow:auto} .step{width:100%;text-align:left;background:transparent;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px;cursor:pointer;color:var(--dim)}
+    .step.on{border-color:var(--coral);color:var(--fg)} .step.done{color:var(--mint)}
+    .panel{overflow:auto;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--ink)}
+    pre{white-space:pre-wrap;font:12.5px/1.5 "JetBrains Mono",monospace}
+    .dock{position:absolute;left:22px;right:22px;bottom:12px;height:52px;display:flex;gap:8px;align-items:center;padding:0 10px;border-radius:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--ink-3) 94%,#000)}
+    .btn{height:34px;padding:0 14px;border-radius:9px;border:0;cursor:pointer}
+    .btn-primary{background:var(--coral);color:var(--coral-ink);font-weight:650}
+    .btn-quiet{background:transparent;color:var(--dim);border:1px solid var(--line)}
+    .empty{color:var(--faint);font-size: var(--dw-font-size);padding:12px}
+    label{display:block;font-size: var(--dw-font-size);color:var(--dim);margin:8px 0}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="pad"><strong>Runbooks</strong></div>
+    <div class="pad"><input id="q" type="search" placeholder="搜索标题 / tag" /></div>
+    <div class="list" id="list"><div class="empty">等待剧本库…</div></div>
+  </aside>
+  <section class="stage">
+    <header class="head">
+      <h2 id="title">选择一个剧本</h2>
+      <div class="bar"><i id="prog" style="width:0"></i></div>
+    </header>
+    <div class="work">
+      <div class="steps" id="steps"></div>
+      <div class="panel" id="panel"><div class="empty">左侧点选剧本，一次只做当前这一步。</div></div>
+    </div>
+    <div class="dock" id="dock"></div>
+  </section>
+</div>
+<script>
+  let connectionId = ''
+  let books = []
+  let book = null
+  let index = 0
+  const done = new Set()
+  const notes = {}
+  const checks = {}
+  let connections = []
+
+  const q = document.getElementById('q')
+  function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+  function ready(){return window.datawisePlugin && window.datawisePlugin.invoke}
+  async function invoke(method, params={}){return window.datawisePlugin.invoke(method, Object.assign({connectionId}, params))}
+
+  function steps(){ return (book && book.steps) || [] }
+  function current(){ return steps()[index] }
+
+  function renderList() {
+    const query = q.value.trim().toLowerCase()
+    const rows = books.filter(b => !query || (b.title+' '+b.tags+' '+b.id).toLowerCase().includes(query))
+    const list = document.getElementById('list')
+    list.innerHTML = ''
+    if (!rows.length) { list.innerHTML = '<div class="empty">没有剧本</div>'; return }
+    for (const b of rows) {
+      const btn = document.createElement('button')
+      btn.className = 'item' + (book && book.id === b.id ? ' active' : '')
+      btn.innerHTML = '<span>'+esc(b.title)+'</span><small>'+esc(b.tags||'')+' · '+b.steps+' steps</small>'
+      btn.onclick = () => openBook(b.id)
+      list.appendChild(btn)
+    }
+  }
+
+  function render() {
+    const title = document.getElementById('title')
+    const stepsEl = document.getElementById('steps')
+    const panel = document.getElementById('panel')
+    const dock = document.getElementById('dock')
+    if (!book) return
+    const all = steps()
+    const finished = all.filter(s => done.has(s.id)).length
+    title.textContent = book.title || book.id
+    document.getElementById('prog').style.width = (all.length ? Math.round(finished / all.length * 100) : 0) + '%'
+    stepsEl.innerHTML = ''
+    all.forEach((s, i) => {
+      const b = document.createElement('button')
+      b.className = 'step' + (i === index ? ' on' : '') + (done.has(s.id) ? ' done' : '')
+      b.textContent = (done.has(s.id) ? '✓ ' : (i + 1) + ' ') + (s.id || s.type)
+      b.onclick = () => { index = i; render() }
+      stepsEl.appendChild(b)
+    })
+    const s = current()
+    if (!s) { panel.innerHTML = '<div class="empty">没有步骤</div>'; return }
+    let body = '<div class="empty">'+esc(s.type)+'</div>'
+    if (s.type === 'note') body = '<p>'+esc(s.body||'')+'</p>'
+    if (s.type === 'copy_command') body = '<pre>'+esc(s.command||'')+'</pre>'
+    if (s.type === 'open_sql') body = '<pre>'+esc(s.sql||'')+'</pre><label>DataWise 连接<select id="conn"></select></label>'
+    if (s.type === 'http') body = '<pre>'+esc((s.method||'GET')+' '+(s.url||''))+'</pre><pre id="httpOut"></pre>'
+    if (s.type === 'checklist') {
+      body = (s.items||[]).map((item, i) => {
+        const key = s.id+':'+i
+        return '<label><input type="checkbox" data-k="'+esc(key)+'" '+(checks[key]?'checked':'')+' style="width:auto"/> '+esc(item)+'</label>'
+      }).join('')
+    }
+    body += '<label>本步备注<textarea id="note">'+esc(notes[s.id]||'')+'</textarea></label>'
+    panel.innerHTML = body
+    if (s.type === 'open_sql') {
+      const sel = document.getElementById('conn')
+      sel.innerHTML = connections.map(c => '<option value="'+esc(c.id)+'">'+esc((c.env?c.env+' · ':'')+(c.name||c.id))+'</option>').join('') || '<option value="">暂无 SQL 连接</option>'
+    }
+    panel.querySelectorAll('input[type=checkbox]').forEach(el => {
+      el.onchange = () => { checks[el.dataset.k] = el.checked }
+    })
+    const note = document.getElementById('note')
+    if (note) note.oninput = () => { notes[s.id] = note.value }
+    dock.innerHTML = ''
+    const add = (label, cls, fn) => {
+      const b = document.createElement('button')
+      b.className = 'btn ' + cls
+      b.textContent = label
+      b.onclick = fn
+      dock.appendChild(b)
+    }
+    add('上一步', 'btn-quiet', () => { if (index > 0) { index--; render() } })
+    add(primaryLabel(s), 'btn-primary', () => act(s))
+    add('跳过', 'btn-quiet', () => advance(false))
+    add('导出', 'btn-quiet', exportMd)
+  }
+
+  function primaryLabel(s) {
+    if (s.type === 'copy_command') return '复制命令'
+    if (s.type === 'open_sql') return '打开控制台'
+    if (s.type === 'http') return '发送请求'
+    if (s.type === 'checklist') return '完成本步'
+    return '完成并下一步'
+  }
+
+  async function act(s) {
+    try {
+      if (s.type === 'copy_command') {
+        await window.datawisePlugin.clipboard.writeText(s.command || '')
+      } else if (s.type === 'open_sql') {
+        const id = document.getElementById('conn').value
+        if (!id || !window.datawisePlugin.sql) return
+        await window.datawisePlugin.sql.openConsole({ connectionId: id, sql: s.sql || '', title: book.title })
+      } else if (s.type === 'http') {
+        const res = await invoke('runbook/http', { method: s.method || 'GET', url: s.url })
+        const out = document.getElementById('httpOut')
+        if (out) out.textContent = (res.status || '') + '\n' + (res.body || res.message || '')
+        if (!res.success) return
+      } else if (s.type === 'checklist') {
+        const items = s.items || []
+        if (items.some((_, i) => !checks[s.id+':'+i])) return
+      }
+      advance(true)
+    } catch (e) {
+      document.getElementById('panel').insertAdjacentHTML('beforeend', '<p class="empty">'+esc(e.message||e)+'</p>')
+    }
+  }
+
+  function advance(mark) {
+    const s = current()
+    if (mark && s) done.add(s.id)
+    if (index < steps().length - 1) index++
+    render()
+  }
+
+  async function exportMd() {
+    const lines = ['# ' + (book.title || book.id), '']
+    steps().forEach((s, i) => {
+      lines.push((done.has(s.id) ? '- [x] ' : '- [ ] ') + (i + 1) + '. ' + (s.id || s.type) + ' (' + s.type + ')')
+      if (notes[s.id]) lines.push('  - 备注: ' + notes[s.id])
+    })
+    const text = lines.join('\n')
+    await window.datawisePlugin.clipboard.writeText(text)
+  }
+
+  async function openBook(id) {
+    const res = await invoke('runbook/get', { id })
+    book = res.runbook
+    index = 0
+    done.clear()
+    renderList()
+    render()
+  }
+
+  async function boot() {
+    if (!ready()) return
+    const ctx = await window.datawisePlugin.context
+    connectionId = (ctx && ctx.connectionId) || ''
+    if (window.datawisePlugin.sql) {
+      try { connections = await window.datawisePlugin.sql.listConnections() || [] } catch (e) { connections = [] }
+    }
+    const res = await invoke('runbook/list', { query: '' })
+    books = res.runbooks || []
+    renderList()
+    if (books[0]) await openBook(books[0].id)
+  }
+  q.oninput = () => renderList()
+  window.addEventListener('message', e => { if (e.data && e.data.type === 'datawise-plugin-env') boot() })
+  boot()
+</script>
+<script src="dw-split-pane.js"></script>
+<script>
+  DwSplitPane.mount({
+    root: '.shell',
+    start: '.rail',
+    end: '.stage',
+    storageKey: 'dw.split.runbook',
+    defaultRatio: 'sidebar',
+    defaultWidth: 240,
+    minWidth: 180,
+    maxWidth: 400,
+  })
+  DwSplitPane.mount({
+    root: '.work',
+    start: '.steps',
+    end: '.panel',
+    storageKey: 'dw.split.runbook-steps',
+    defaultRatio: 'sidebar',
+    defaultWidth: 180,
+    minWidth: 140,
+    maxWidth: 320,
+    stackBelow: 640,
+  })
+</script>
+</body>
+</html>

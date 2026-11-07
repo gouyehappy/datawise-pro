@@ -1,0 +1,46 @@
+[
+  {
+    "id": "hook-example",
+    "name": "Example webhook",
+    "enabled": false,
+    "channel": "webhook",
+    "url": "https://example.com/hooks/datawise",
+    "secret": "change-me",
+    "eventTypes": [
+      "scheduled_task.failed",
+      "prod.approval.pending",
+      "schema_drift.detected"
+    ],
+    "timeoutMs": 5000,
+    "includeSql": false
+  },
+  {
+    "id": "hook-feishu-example",
+    "name": "Feishu bot",
+    "enabled": false,
+    "channel": "feishu",
+    "url": "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx",
+    "secret": "",
+    "eventTypes": [
+      "scheduled_task.failed",
+      "data_quality.failed"
+    ],
+    "timeoutMs": 5000,
+    "includeSql": false
+  },
+  {
+    "id": "hook-email-example",
+    "name": "Ops email via mail gateway",
+    "enabled": false,
+    "channel": "email",
+    "url": "mailto:ops@example.com",
+    "secret": "",
+    "eventTypes": [
+      "scheduled_task.failed",
+      "prod.approval.pending",
+      "data_quality.failed"
+    ],
+    "timeoutMs": 5000,
+    "includeSql": false
+  }
+]

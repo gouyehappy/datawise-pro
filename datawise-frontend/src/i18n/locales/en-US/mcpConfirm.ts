@@ -1,0 +1,17 @@
+export default {
+    title: 'MCP confirmations',
+    pendingCount: '{count} pending',
+    empty: 'No pending MCP actions.',
+    confirm: 'Confirm',
+    confirmSubmitApproval: 'Confirm & submit approval',
+    reject: 'Reject',
+    expires: 'Expires {at}',
+    openedConsole: 'Opened SQL console from MCP proposal',
+    submittedApproval: 'Submitted production SQL for approval and opened the console for review',
+    approvalTeamMissing: 'No team shares this production connection — cannot submit approval',
+    rejected: 'MCP proposal rejected',
+    prodApprovalHint: 'Write SQL on a shared production connection: confirming creates a team approval ticket and does not execute.',
+    riskSession: 'session',
+    riskWrite: 'write',
+    riskProdApproval: 'prod approval',
+}

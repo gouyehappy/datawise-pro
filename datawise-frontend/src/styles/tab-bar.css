@@ -1,0 +1,568 @@
+/**
+ * 工作区 / 编辑器 Tab 栏
+ * 外观由 skin token 控制（classic=pill+gap；ide=strip）；见 skins/*.css + tabStyle capability。
+ */
+.dw-tab-bar {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    height: var(--dw-tab-height);
+    padding: 0 var(--dw-space-2);
+    border-bottom: 1px solid var(--dw-tab-bar-border);
+    background: var(--dw-tab-bar-bg);
+}
+
+.dw-tab-scroll {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    gap: var(--dw-tab-gap);
+    overflow: auto hidden;
+    padding: 0 var(--dw-space-1);
+}
+
+.dw-tab-pinned {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: var(--dw-tab-gap);
+    max-width: 40%;
+    padding-right: var(--dw-space-1);
+    border-right: 1px solid color-mix(in srgb, var(--dw-tab-bar-border) 88%, transparent);
+}
+
+.dw-tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dw-gap-xs);
+    max-width: 220px;
+    height: var(--dw-tab-pill-height);
+    padding: 0 var(--dw-space-3) 0 var(--dw-space-2);
+    border: 1px solid transparent;
+    border-radius: var(--dw-tab-pill-radius);
+    background: transparent;
+    color: var(--dw-tab-inactive-text);
+    white-space: nowrap;
+    font-size: var(--dw-tab-title-size);
+    font-weight: 400;
+    flex-shrink: 0;
+    cursor: default;
+    transition: color var(--dw-duration-fast) var(--dw-ease),
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.dw-tab:hover:not(.active) {
+    background: var(--dw-tab-hover-bg);
+    color: var(--dw-tab-inactive-text);
+}
+
+.dw-tab.active,
+.dw-tab.active:hover {
+    background: var(--dw-tab-active-bg);
+    border-color: var(--dw-tab-active-border);
+    color: var(--dw-tab-active-text);
+    box-shadow: none;
+}
+
+.dw-tab__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--dw-icon-size-tab);
+    height: var(--dw-icon-size-tab);
+    opacity: 0.85;
+}
+
+.dw-tab__icon svg,
+.dw-tab__icon img,
+.dw-tab__icon .community-plugin-icon {
+    display: block;
+    width: var(--dw-icon-size-tab);
+    height: var(--dw-icon-size-tab);
+}
+
+.dw-tab.active .dw-tab__icon {
+    opacity: 1;
+}
+
+.dw-tab__dirty {
+    flex-shrink: 0;
+    margin-left: 1px;
+    color: var(--dw-warning);
+    font-size: var(--dw-text-xs);
+    line-height: 1;
+}
+
+.dw-tab.active .dw-tab__dirty {
+    color: var(--mp-tone-amber);
+}
+
+.dw-tab__status {
+    flex-shrink: 0;
+    color: var(--dw-success);
+    font-size: var(--dw-text-xs);
+    font-weight: 700;
+    line-height: 1;
+}
+
+.dw-tab__status--error {
+    color: var(--dw-danger);
+}
+
+.tab-prod-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--dw-danger);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--dw-danger) 28%, transparent);
+    flex-shrink: 0;
+}
+
+.dw-tab__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    font-size: var(--dw-tab-title-size);
+    line-height: var(--dw-tab-title-line);
+    /* 避免下划线在 overflow 裁剪下被切掉 */
+    padding-block: 1px;
+}
+
+.dw-tab.is-renaming {
+    cursor: default;
+    max-width: 200px;
+}
+
+.dw-tab__rename-input--suffix-only {
+    flex: 1;
+    min-width: 56px;
+    max-width: 140px;
+}
+
+.dw-tab__rename-input {
+    flex: 1;
+    min-width: 48px;
+    max-width: 160px;
+    margin: 0;
+    padding: 0 var(--dw-space-2);
+    border: 1px solid var(--dw-link);
+    border-radius: var(--dw-control-radius-sm);
+    background: var(--dw-bg-editor);
+    color: var(--dw-text);
+    font-size: var(--dw-tab-title-size);
+    line-height: var(--dw-tab-title-line);
+    outline: none;
+}
+
+.dw-tab__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--dw-icon-size-xs);
+    height: var(--dw-icon-size-xs);
+    margin-left: 1px;
+    border-radius: var(--dw-control-radius-sm);
+    color: inherit;
+    opacity: 0;
+    transition: opacity var(--dw-duration-fast) var(--dw-ease), background var(--dw-duration-fast) var(--dw-ease);
+}
+
+.dw-tab:hover .dw-tab__close,
+.dw-tab.active .dw-tab__close {
+    opacity: 0.55;
+}
+
+.dw-tab.active .dw-tab__close {
+    opacity: 0.7;
+}
+
+.dw-tab__close:hover {
+    opacity: 1;
+    background: var(--dw-tab-close-hover);
+}
+
+.dw-tab-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--dw-tab-pill-height);
+    height: var(--dw-tab-pill-height);
+    margin: 0 1px 0 3px;
+    border: 1px solid transparent;
+    border-radius: var(--dw-tab-pill-radius);
+    background: transparent;
+    color: var(--dw-tab-inactive-text);
+    transition: background var(--dw-duration-fast) var(--dw-ease), color var(--dw-duration-fast) var(--dw-ease);
+}
+
+.dw-tab-add:hover {
+    background: var(--dw-tab-hover-bg);
+    color: var(--dw-text-secondary);
+}
+
+.dw-tab-overflow {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: var(--dw-space-1);
+    padding-left: var(--dw-space-3);
+    border-left: 1px solid var(--dw-tab-bar-border);
+}
+
+.dw-tab-overflow--visible .dw-tab-overflow__btn {
+    color: var(--dw-text-secondary);
+}
+
+.dw-tab-overflow__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: var(--dw-control-h-sm);
+    border: none;
+    border-radius: var(--dw-control-radius-sm);
+    background: transparent;
+    color: var(--dw-tab-inactive-text);
+    transform: rotate(90deg);
+    transition: background var(--dw-duration-fast) var(--dw-ease), color var(--dw-duration-fast) var(--dw-ease);
+}
+
+.dw-tab-overflow__btn:hover {
+    background: var(--dw-tab-hover-bg);
+    color: var(--dw-text-secondary);
+}
+
+.dw-tab-overflow__menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: var(--dw-z-drawer);
+    width: 220px;
+    max-height: 280px;
+    overflow: auto;
+    padding: var(--dw-space-3);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-control-radius);
+    background: var(--dw-bg);
+    box-shadow: var(--dw-shadow);
+}
+
+.dw-tab-overflow__search {
+    width: 100%;
+    height: var(--dw-btn-height);
+    margin-bottom: var(--dw-space-2);
+    padding: 0 var(--dw-space-4);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-control-radius-sm);
+    font-size: var(--dw-text-sm);
+}
+
+.dw-tab-overflow__item {
+    justify-content: flex-start;
+}
+
+.dw-tab-overflow__item.is-active {
+    color: var(--dw-tab-active-text);
+    font-weight: 500;
+    background: var(--dw-tab-active-bg);
+    border: 1px solid var(--dw-tab-active-border);
+    border-radius: var(--dw-tab-pill-radius);
+}
+
+/* ---- IDEA 风格 Tab：选中态与未选中态的层次区分 ---- */
+
+.dw-ide-tab-strip {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-tab-gap);
+    padding: 0 var(--dw-space-2);
+    background: var(--dw-tab-bar-bg);
+    border-bottom: 1px solid var(--dw-tab-bar-border);
+}
+
+.dw-ide-tab,
+.team-tab,
+.migration-panel__tab,
+.sql-monitor__tab,
+.plugin-dev-tab {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--dw-tab-inactive-text);
+    transition: var(--dw-transition-colors), box-shadow 0.12s ease;
+}
+
+.dw-ide-tab:hover:not(.active):not(.is-active):not(:disabled),
+.team-tab:hover:not(.is-active),
+.migration-panel__tab:hover:not(.is-active),
+.sql-monitor__tab:hover:not(:disabled):not(.sql-monitor__tab--active),
+.plugin-dev-tab:hover:not(.is-active) {
+    background: var(--dw-tab-hover-bg);
+    color: var(--dw-tab-inactive-text);
+}
+
+.dw-ide-tab.active,
+.dw-ide-tab.is-active,
+.team-tab.is-active,
+.migration-panel__tab.is-active,
+.sql-monitor__tab--active,
+.plugin-dev-tab.is-active {
+    background: var(--dw-tab-active-bg);
+    border-color: var(--dw-tab-active-border);
+    color: var(--dw-tab-active-text);
+    box-shadow: none;
+}
+
+/* Workspace tab drag / group (pointer drag keeps default arrow cursor) */
+.dw-tab-bar.is-reordering-tabs,
+.dw-tab-bar.is-reordering-tabs .dw-tab {
+    cursor: default;
+    user-select: none;
+}
+
+.dw-tab.is-tab-dragging {
+    opacity: 0.32;
+    transform: scale(0.97);
+    filter: saturate(0.7);
+    transition: opacity 0.14s ease, transform 0.14s ease, filter 0.14s ease;
+}
+
+.dw-tab.is-tab-floated {
+    opacity: 0.82;
+    box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--dw-accent) 70%, transparent);
+}
+
+.dw-tab-drag-ghost.is-float {
+    border-color: color-mix(in srgb, var(--dw-accent) 55%, transparent);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--dw-accent) 22%, transparent);
+}
+
+.dw-tab.is-tab-drop-before::before,
+.dw-tab.is-tab-drop-after::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--dw-accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--dw-accent) 35%, transparent),
+        0 0 10px color-mix(in srgb, var(--dw-accent) 50%, transparent);
+    pointer-events: none;
+    animation: dw-tab-drop-bar-in 0.14s ease;
+}
+
+.dw-tab.is-tab-drop-before::before {
+    left: -2px;
+}
+
+.dw-tab.is-tab-drop-after::after {
+    right: -2px;
+}
+
+.dw-tab.is-tab-drop-on {
+    outline: 1px dashed var(--dw-accent);
+    outline-offset: -1px;
+    background: color-mix(in srgb, var(--dw-accent) 20%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dw-accent) 28%, transparent);
+    transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.dw-tab.is-tab-drop-on::after {
+    content: '+';
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--dw-accent);
+    color: var(--dw-on-accent);
+    font-size: var(--dw-font-size-badge);
+    line-height: 14px;
+    text-align: center;
+    pointer-events: none;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.dw-tab-group {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 2px;
+    max-width: min(720px, 70vw);
+    min-height: var(--dw-tab-pill-height);
+    padding: 0 2px;
+    border: 1px solid color-mix(in srgb, var(--dw-tab-bar-border) 80%, transparent);
+    border-radius: calc(var(--dw-tab-pill-radius, 4px) + 1px);
+    background: color-mix(in srgb, var(--dw-tab-hover-bg) 55%, transparent);
+    transition: border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+}
+
+.dw-tab-group.is-collapsed {
+    max-width: 260px;
+    padding: 0 4px 0 2px;
+}
+
+.dw-tab-bar-end {
+    flex: 1 1 36px;
+    align-self: stretch;
+    min-width: 36px;
+    min-height: var(--dw-tab-pill-height);
+    position: relative;
+}
+
+.dw-tab-bar-end.is-drop-end::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    bottom: 4px;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--dw-accent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--dw-accent) 50%, transparent);
+}
+
+.dw-tab-group.is-drop-target {
+    border-color: var(--dw-accent);
+    background: color-mix(in srgb, var(--dw-accent) 14%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--dw-accent) 35%, transparent),
+        0 0 12px color-mix(in srgb, var(--dw-accent) 28%, transparent);
+}
+
+.dw-tab-group__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 220px;
+    height: var(--dw-tab-pill-height);
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--dw-tab-pill-radius, 4px);
+    background: transparent;
+    color: var(--dw-tab-inactive-text);
+    font-size: var(--dw-font-size-tab);
+    cursor: default;
+}
+
+.dw-tab-group__chevron {
+    flex-shrink: 0;
+    opacity: 0.7;
+    width: 0.7em;
+}
+
+.dw-tab-group__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 140px;
+}
+
+.dw-tab-group__count {
+    flex-shrink: 0;
+    min-width: 1.1em;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--dw-tab-active-bg) 70%, transparent);
+    opacity: 0.8;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--dw-font-size-badge);
+    line-height: 14px;
+}
+
+.dw-tab-group__rename {
+    display: inline-flex;
+    align-items: center;
+    height: var(--dw-tab-pill-height);
+    padding: 0 4px;
+}
+
+.dw-tab-group__rename-input {
+    width: 120px;
+    max-width: 160px;
+    height: var(--dw-density-xs);
+    padding: 0 var(--dw-space-2);
+    border: 1px solid var(--dw-accent);
+    border-radius: var(--dw-control-radius-sm);
+    background: var(--dw-tab-active-bg);
+    color: var(--dw-tab-active-text);
+    font-size: var(--dw-font-size-tab);
+    outline: none;
+}
+
+.dw-tab-drag-ghost {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 10000;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 240px;
+    padding: 6px 10px;
+    border: 1px solid color-mix(in srgb, var(--dw-accent) 55%, var(--dw-tab-active-border));
+    border-radius: var(--dw-control-radius);
+    background: color-mix(in srgb, var(--dw-tab-active-bg) 94%, var(--dw-accent));
+    color: var(--dw-tab-active-text);
+    font-size: var(--dw-font-size-tab);
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38),
+        0 0 0 1px color-mix(in srgb, var(--dw-accent) 22%, transparent);
+    animation: dw-tab-ghost-in 0.12s ease;
+}
+
+.dw-tab-drag-ghost.is-merge {
+    border-color: var(--dw-accent);
+    background: color-mix(in srgb, var(--dw-accent) 22%, var(--dw-tab-active-bg));
+}
+
+.dw-tab-drag-ghost.is-insert {
+    border-style: solid;
+}
+
+.dw-tab-drag-ghost.is-eject {
+    border-style: dashed;
+    border-color: var(--dw-accent);
+}
+
+.dw-tab-drag-ghost__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+}
+
+.dw-tab-drag-ghost__hint {
+    font-size: var(--dw-font-size-badge);
+    opacity: 0.82;
+    letter-spacing: 0.02em;
+}
+
+@keyframes dw-tab-ghost-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 0.96;
+    }
+}
+
+@keyframes dw-tab-drop-bar-in {
+    from {
+        opacity: 0;
+        transform: scaleY(0.55);
+    }
+    to {
+        opacity: 1;
+        transform: scaleY(1);
+    }
+}

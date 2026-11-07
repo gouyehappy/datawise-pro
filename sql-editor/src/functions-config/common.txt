@@ -1,0 +1,10 @@
+# 通用 SQL 函数补全 — common + 方言文件合并（同名方言覆盖 common）
+# 格式：NAME | signature | returns | insert_snippet(可选)
+# insert_snippet 省略时由 signature 自动生成 Monaco snippet（如 SUM(${1:DISTINCT expr})）
+
+[functions]
+COUNT | (expr) | number
+SUM | ([DISTINCT] expr) | number
+AVG | ([DISTINCT] expr) | number
+MIN | (expr) | any
+MAX | (expr) | any

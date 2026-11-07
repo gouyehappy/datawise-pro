@@ -1,0 +1,49 @@
+---
+description: Shell chrome recipes — soft-card, inset-split, seam-collapse, dock-inplace plugins
+globs: datawise-frontend/**/*.{vue,css,scss}
+alwaysApply: false
+---
+
+# Frontend chrome plugins
+
+壳层圆角 / 分缝 / inset 分栏统一走 `datawise-frontend/src/styles/plugins/`，由 `global.css` 加载。
+完整契约：`datawise-frontend/docs/UI_STYLE_CONTRACT.md`「Radius commanders」+「Chrome plugins」。
+令牌与双皮肤：见 `frontend-design-tokens`。
+
+## Radius commanders（只认这两档）
+
+| 场景 | 用 | 不要 |
+|------|----|------|
+| 面板 / 卡片 / 图节点 / 内嵌壳 | `--dw-panel-radius` 或 `.dw-soft-card` | `--dw-radius-lg`、写死 px |
+| 按钮 / 芯片 / 导航 / 图标块 | `--dw-control-radius` / `-sm` | `--dw-panel-radius`（IDE 会变成直角按钮） |
+
+IDE：`--dw-panel-radius: 0` → 所有 panel 指挥官自动直角。控件仍保留小圆角。
+
+## Plugins
+
+| 场景 | 用 | 不要 |
+|------|----|------|
+| 独立卡片（树、工作区、抽屉） | `.dw-soft-card` 或 `.dw-surface` | 业务里写死 `border-radius` / `box-shadow` |
+| Tab 下左板 + 右卡 | `.dw-inset-pane` / `.dw-inset-card` | 自写 `0 0 R 0` / `0 0 0 R` |
+| 相邻边框合成一条缝 | `.dw-seam-*` 或扩展 `seam-collapse.css` | 功能 CSS 再发明一套 seam |
+| 居中未浮动的 dock 宿主 | 交给 `dock-inplace.css` | 在 `FloatingPanelHost` scoped 里再抄圆角 |
+
+## Tokens
+
+- `--dw-panel-radius` / `--dw-panel-shadow` — soft card
+- `--dw-inset-radius`（默认 = panel）— inset corners
+- IDE：`--dw-panel-radius: 0` → 插件自动直角，无需 `if (ide)`
+
+## Do
+
+- 新壳层配方加到 `styles/plugins/`，并在 `global.css` `@import`
+- Classic/IDE 差异只改 `skins/*.css` 令牌或 seam 选择器名单
+- 历史宿主可暂时留在 soft-card 别名列表；新代码优先加 `.dw-soft-card`
+
+## Don't
+
+- 在 feature `<style>` 复制 workspace 上圆角 / inset 非对称角，或写死 `4/6/8/10/12px`
+- 用 `--dw-radius-lg` 当面板圆角（IDE 下仍 6px，跟直角壳打架）
+- 用 press grip / overlay 盖住 soft-card 上沿却不给 overlay 同样的 `--top` 圆角
+- 把 connector/Java 插件和这套 **CSS 壳层插件**混为一谈
+- 控件圆角不要并进 `--dw-panel-radius`；控件走 `--dw-control-radius`，面板走 soft-card

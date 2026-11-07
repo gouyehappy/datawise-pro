@@ -1,0 +1,402 @@
+/**
+ * Classic card workbench — layered panels, soft radius, readable gutters.
+ * html 未写 data-ui-skin 时与 classic 一致。
+ *
+ * :root 已是 classic 语义默认；本文件显式声明壳层对照，避免被 ide 泄漏/补丁带跑。
+ * 全项目壳层差异（P1）：shell / rail / titlebar / tab / tool-window / menus / modal。
+ */
+
+html[data-ui-skin='classic'],
+html:not([data-ui-skin]) {
+    /* Density — classic defaults (also in :root; kept explicit for audits) */
+    --dw-density-md: clamp(30px, 3.3vmin, 34px);
+    --dw-density-sm: clamp(26px, 2.9vmin, 28px);
+    --dw-density-xs: clamp(22px, 2.5vmin, 24px);
+    --dw-density-lg: clamp(36px, 4vmin, 42px);
+    --dw-density-xl: clamp(48px, 5.5vmin, 56px);
+
+    /* Shell — breathing room (vs ide flush 0); panel radius matches soft cards */
+    --dw-shell-padding: var(--mp-gap);
+    --dw-panel-gap: var(--mp-gap);
+    --dw-panel-radius: var(--dw-radius-lg);
+    --mp-card-gap: var(--dw-space-5);
+    --dw-splitter-size: 6px;
+
+    /* Activity Bar — 图标+短文案可读（vs ide SquareStripe 紧凑） */
+    --dw-tool-stripe-width: 64px;
+    --dw-tool-btn-pad: 8px;
+    --dw-tool-icon-caption-gap: 5px;
+    --dw-tool-caption-leading: 1.2;
+    --dw-tool-caption-size: var(--dw-text-2xs);
+    --dw-tool-pill-radius: var(--dw-control-radius);
+    --dw-icon-size-rail: clamp(20px, 2.4vmin, 22px);
+
+    /* Title bar */
+    --dw-titlebar-height: clamp(40px, 4.5vmin, 44px);
+    --dw-titlebar-chip-radius: 8px;
+
+    /* Tabs — pill capsules (vs ide strip) */
+    --dw-tab-height: var(--dw-density-md);
+    --dw-tab-pill-height: var(--dw-density-xs);
+    --dw-tab-pill-radius: var(--dw-control-radius);
+    --dw-tab-gap: clamp(2px, 0.35vmin, 3px);
+
+    /* Menus M1 — 卡片感（vs ide IDEA New UI） */
+    --dw-menu-radius: 12px;
+    --dw-menu-item-radius: 8px;
+    --dw-menu-gutter: 32px;
+    --dw-menu-item-h: var(--dw-density-md);
+    --dw-menu-pad-y: 8px;
+    --dw-menu-pad-x: 8px;
+    --dw-menu-item-pad-end: 8px;
+    --dw-menu-hover: color-mix(in srgb, var(--dw-text) 6%, transparent);
+    --dw-menu-active: color-mix(in srgb, var(--dw-primary) 16%, transparent);
+    --dw-menu-border: color-mix(in srgb, var(--dw-border) 88%, transparent);
+
+    /* Modal / drawer */
+    --dw-modal-radius: var(--dw-radius-xl);
+}
+
+/* —— Workbench page tokens —— */
+html[data-ui-skin='classic'] .dw-workbench-page,
+html:not([data-ui-skin]) .dw-workbench-page {
+    --dw-wb-head-bg: var(--dw-bg-panel);
+    --dw-wb-head-border: var(--dw-border-light);
+    --dw-wb-head-shadow: none;
+    --dw-wb-head-pad-y: var(--dw-space-4);
+    --dw-wb-head-min-height: clamp(52px, 6vmin, 56px);
+    --dw-wb-split-gap: var(--dw-space-4);
+    --dw-wb-split-divider: color-mix(in srgb, var(--dw-border) 70%, transparent);
+    --dw-wb-col-pad-top: var(--dw-space-4);
+    --dw-wb-col-pad-right: var(--dw-space-4);
+    --dw-wb-col-pad-bottom: var(--dw-space-4);
+    --dw-wb-col-pad-left: var(--dw-space-4);
+    --dw-wb-content-pad-x: var(--dw-space-6);
+    --dw-wb-content-pad-y: var(--dw-space-4);
+    --dw-wb-stack-gap: var(--dw-space-3);
+    --dw-wb-pane-pad: var(--dw-space-3);
+    --dw-wb-card-border: var(--dw-panel-border);
+    --dw-wb-card-radius: var(--dw-radius-lg);
+    --dw-wb-control-radius: var(--dw-radius-sm);
+    --dw-wb-card-shadow: var(--dw-panel-shadow);
+    --dw-wb-card-bg: var(--dw-bg-panel);
+    --dw-wb-placeholder-border: color-mix(in srgb, var(--dw-border) 80%, transparent);
+    --dw-wb-placeholder-style: dashed;
+    --dw-wb-placeholder-shadow: none;
+    --dw-wb-terminal-border: transparent;
+    --dw-wb-terminal-radius: var(--dw-radius-xl);
+    --dw-wb-terminal-shadow: 0 4px 20px color-mix(in srgb, var(--dw-text) 8%, transparent);
+}
+
+html[data-ui-skin='classic'] .lineage-panel__toolbar,
+html:not([data-ui-skin]) .lineage-panel__toolbar {
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--dw-border) 55%, transparent);
+}
+
+/* Module / settings / table / AI / schema soft cards → styles/plugins/soft-card.css */
+
+html[data-ui-skin='classic'] .mp-page-wrap,
+html:not([data-ui-skin]) .mp-page-wrap {
+    max-width: var(--mp-page-max);
+}
+
+html[data-ui-skin='classic'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .community-plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-hero,
+html:not([data-ui-skin]) :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .community-plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-hero {
+    margin-bottom: 0;
+}
+
+/* Status bar — same chrome as titlebar (no seam line) */
+html[data-ui-skin='classic'] .status-bar,
+html:not([data-ui-skin]) .status-bar {
+    background: var(--dw-bg-chrome);
+    border-top: none;
+}
+
+/* —— Shell chrome (P1 全项目) —— */
+
+html[data-ui-skin='classic'] .shell-main,
+html:not([data-ui-skin]) .shell-main {
+    border-left: none;
+    background: transparent;
+}
+
+html[data-ui-skin='classic'] .desktop-titlebar,
+html:not([data-ui-skin]) .desktop-titlebar {
+    border-bottom: none;
+    box-shadow: none;
+}
+
+/* Left/right tool stripes — no vertical seam against workbench cards */
+html[data-ui-skin='classic'] .tool-stripe--left,
+html:not([data-ui-skin]) .tool-stripe--left {
+    border-right: none;
+}
+
+html[data-ui-skin='classic'] .tool-stripe--right,
+html:not([data-ui-skin]) .tool-stripe--right {
+    border-left: none;
+}
+
+/* Tab bar — pill row with padding */
+html[data-ui-skin='classic'] .dw-tab-bar,
+html:not([data-ui-skin]) .dw-tab-bar {
+    padding: var(--dw-space-1) var(--dw-space-3);
+    gap: var(--dw-space-1);
+}
+
+html[data-ui-skin='classic'] .dw-tab.active,
+html[data-ui-skin='classic'] .dw-tab.active:hover,
+html:not([data-ui-skin]) .dw-tab.active,
+html:not([data-ui-skin]) .dw-tab.active:hover {
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--dw-text) 6%, transparent);
+}
+
+/* Soft-card radius/shadow for tool windows etc. → styles/plugins/soft-card.css */
+
+html[data-ui-skin='classic'] .tool-window__head,
+html:not([data-ui-skin]) .tool-window__head {
+    border-bottom: 1px solid var(--dw-border-light);
+}
+
+/* Modal / drawer shells */
+html[data-ui-skin='classic'] :is(
+    .app-modal__panel,
+    .app-drawer__panel,
+    .dw-modal__panel
+),
+html:not([data-ui-skin]) :is(
+    .app-modal__panel,
+    .app-drawer__panel,
+    .dw-modal__panel
+) {
+    border-radius: var(--dw-modal-radius);
+    box-shadow: var(--dw-menu-shadow);
+}
+
+/* Settings / module shell — soft nav */
+html[data-ui-skin='classic'] .module-shell__nav,
+html:not([data-ui-skin]) .module-shell__nav {
+    border-right: 1px solid var(--dw-border-light);
+    background: color-mix(in srgb, var(--dw-bg-chrome) 88%, var(--dw-bg-panel));
+}
+
+html[data-ui-skin='classic'] .module-shell__nav-item.is-active,
+html:not([data-ui-skin]) .module-shell__nav-item.is-active {
+    border-radius: var(--dw-control-radius);
+    background: color-mix(in srgb, var(--dw-primary) 12%, var(--dw-bg-panel));
+    box-shadow: none;
+}
+
+/* Settings cards → styles/plugins/soft-card.css */
+
+html[data-ui-skin='classic'] .terminal-pane,
+html:not([data-ui-skin]) .terminal-pane {
+    border-radius: var(--dw-wb-terminal-radius, var(--dw-radius-xl));
+    box-shadow: var(--dw-wb-terminal-shadow, none);
+}
+
+/* —— 表详情 / 关系：卡片留白（vs ide 贴合扁平） —— */
+html[data-ui-skin='classic'] .table-detail__header,
+html:not([data-ui-skin]) .table-detail__header {
+    background: var(--dw-bg-panel);
+}
+
+/* AI / relation / schema gaps stay here; card radius is in soft-card.css */
+html[data-ui-skin='classic'] .ai-workbench,
+html:not([data-ui-skin]) .ai-workbench,
+html[data-ui-skin='classic'] .relation-graph,
+html:not([data-ui-skin]) .relation-graph,
+html[data-ui-skin='classic'] .schema-compare__body,
+html:not([data-ui-skin]) .schema-compare__body {
+    gap: var(--dw-panel-gap);
+}
+
+/* SQL result split gap stays here; card chrome is in soft-card.css */
+html[data-ui-skin='classic'] .result-pane--split:not(.result-pane--messages-only),
+html:not([data-ui-skin]) .result-pane--split:not(.result-pane--messages-only) {
+    gap: var(--dw-panel-gap);
+}
+
+/* Market / plugin raised cards → styles/plugins/soft-card.css */
+
+html[data-ui-skin='classic'] .dw-workbench-page.connector-workbench .connector-workbench__head,
+html:not([data-ui-skin]) .dw-workbench-page.connector-workbench .connector-workbench__head,
+html[data-ui-skin='classic'] .dw-workbench-page .connector-workbench__head,
+html:not([data-ui-skin]) .dw-workbench-page .connector-workbench__head {
+    box-shadow: none;
+}
+
+/* Jenkins / K8s connector 头：跟 Nacos 一样紧凑单行，不要大页 WorkbenchList 头高 */
+html[data-ui-skin='classic'] .dw-workbench-page.connector-workbench,
+html:not([data-ui-skin]) .dw-workbench-page.connector-workbench {
+    --dw-wb-head-pad-y: 0.45rem;
+    --dw-wb-head-min-height: 2.25rem;
+    --dw-wb-content-pad-x: 0.75rem;
+}
+
+/* SSH / 任意使用 connector-workbench__head 的页：classic 也压成紧凑单行 */
+html[data-ui-skin='classic'] .dw-workbench-page > .connector-workbench__head,
+html:not([data-ui-skin]) .dw-workbench-page > .connector-workbench__head {
+    min-height: 2.25rem;
+    padding: 0.45rem 0.75rem;
+    box-shadow: none;
+}
+
+html[data-ui-skin='classic'] .dw-workbench-page .connector-workbench__badge,
+html:not([data-ui-skin]) .dw-workbench-page .connector-workbench__badge,
+html[data-ui-skin='classic'] .dw-workbench-page .connector-workbench__tabs button,
+html:not([data-ui-skin]) .dw-workbench-page .connector-workbench__tabs button,
+html[data-ui-skin='classic'] .dw-workbench-page .connector-list__filter,
+html:not([data-ui-skin]) .dw-workbench-page .connector-list__filter,
+html[data-ui-skin='classic'] .dw-workbench-page .connector-list__refresh,
+html:not([data-ui-skin]) .dw-workbench-page .connector-list__refresh,
+html[data-ui-skin='classic'] .dw-workbench-page .jenkins-jobs-panel__view,
+html:not([data-ui-skin]) .dw-workbench-page .jenkins-jobs-panel__view,
+html[data-ui-skin='classic'] .dw-workbench-page .jenkins-jobs-panel__badge,
+html:not([data-ui-skin]) .dw-workbench-page .jenkins-jobs-panel__badge,
+html[data-ui-skin='classic'] .dw-workbench-page .jenkins-jobs-panel__folder-tag,
+html:not([data-ui-skin]) .dw-workbench-page .jenkins-jobs-panel__folder-tag,
+html[data-ui-skin='classic'] .dw-workbench-page .jenkins-nodes-panel__chip,
+html:not([data-ui-skin]) .dw-workbench-page .jenkins-nodes-panel__chip,
+html[data-ui-skin='classic'] .dw-workbench-page .yarn-apps-panel__badge,
+html:not([data-ui-skin]) .dw-workbench-page .yarn-apps-panel__badge,
+html[data-ui-skin='classic'] .dw-workbench-page .jenkins-nodes-panel__badge,
+html:not([data-ui-skin]) .dw-workbench-page .jenkins-nodes-panel__badge {
+    border-radius: var(--dw-wb-control-radius);
+}
+
+/* 贴边相连的日志卡不要圆角；有间距的独立卡才走 --dw-wb-card-radius */
+html[data-ui-skin='classic'] .dw-workbench-page .connector-workbench-pane .dw-log-viewer--card,
+html:not([data-ui-skin]) .dw-workbench-page .connector-workbench-pane .dw-log-viewer--card {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* lineage / ER / schema card radius → styles/plugins/soft-card.css */
+
+html[data-ui-skin='classic'] .conn-layout,
+html:not([data-ui-skin]) .conn-layout {
+    gap: var(--dw-panel-gap);
+}
+
+/* Classic control chips — one list, not a per-widget radius */
+html[data-ui-skin='classic'] :is(
+    .table-detail__section-btn.active,
+    .dw-segment__btn.is-active,
+    .status-bar__chip,
+    .dw-tab-add,
+    .dw-tab-overflow__btn,
+    .plugin-page .plugin-center-tabs,
+    .plugin-dev-page .plugin-dev__tabs
+),
+html:not([data-ui-skin]) :is(
+    .table-detail__section-btn.active,
+    .dw-segment__btn.is-active,
+    .status-bar__chip,
+    .dw-tab-add,
+    .dw-tab-overflow__btn,
+    .plugin-page .plugin-center-tabs,
+    .plugin-dev-page .plugin-dev__tabs
+) {
+    border-radius: var(--dw-control-radius);
+}
+
+html[data-ui-skin='classic'] :is(
+    .desktop-titlebar__btn,
+    .dw-tab__close,
+    .plugin-page .plugin-center-tabs__btn,
+    .plugin-dev-page .plugin-dev-tab
+),
+html:not([data-ui-skin]) :is(
+    .desktop-titlebar__btn,
+    .dw-tab__close,
+    .plugin-page .plugin-center-tabs__btn,
+    .plugin-dev-page .plugin-dev-tab
+) {
+    border-radius: var(--dw-control-radius-sm);
+}
+
+/* —— 标题栏 / 状态栏 / Tab 附属控件（对照 ide 直角贴满） —— */
+html[data-ui-skin='classic'] .desktop-titlebar__controls,
+html:not([data-ui-skin]) .desktop-titlebar__controls {
+    gap: var(--dw-space-1);
+    padding: 0 var(--dw-space-2);
+}
+
+html[data-ui-skin='classic'] .status-bar__tools,
+html:not([data-ui-skin]) .status-bar__tools {
+    border-left-color: var(--dw-border-light);
+}
+
+html[data-ui-skin='classic'] .dw-tab-scroll,
+html:not([data-ui-skin]) .dw-tab-scroll {
+    gap: var(--dw-tab-gap);
+    padding: 0 var(--dw-space-1);
+}
+
+html[data-ui-skin='classic'] .dw-tab-overflow,
+html:not([data-ui-skin]) .dw-tab-overflow {
+    margin-left: var(--dw-space-2);
+    padding-left: var(--dw-space-2);
+}
+
+html[data-ui-skin='classic'] .dw-workbench-page__icon,
+html:not([data-ui-skin]) .dw-workbench-page__icon {
+    border-radius: var(--dw-control-radius);
+    box-shadow: var(--dw-panel-shadow);
+}
+
+html[data-ui-skin='classic'] .dw-workbench-split,
+html:not([data-ui-skin]) .dw-workbench-split {
+    column-gap: var(--dw-wb-split-gap);
+}
+
+html[data-ui-skin='classic'] :is(
+    .plugin-page .plugin-card-grid,
+    .community-plugin-page .community-plugin-installed,
+    .pack-store-page .pack-store__grid,
+    .connector-market-page .connector-market-board,
+    .connector-market-page .connector-market-skeleton,
+    .mp-card-grid
+),
+html:not([data-ui-skin]) :is(
+    .plugin-page .plugin-card-grid,
+    .community-plugin-page .community-plugin-installed,
+    .pack-store-page .pack-store__grid,
+    .connector-market-page .connector-market-board,
+    .connector-market-page .connector-market-skeleton,
+    .mp-card-grid
+) {
+    gap: var(--mp-card-gap);
+}
+
+html[data-ui-skin='classic'] .table-detail__hero-icon,
+html:not([data-ui-skin]) .table-detail__hero-icon {
+    border-radius: var(--dw-control-radius);
+}
+
+html[data-ui-skin='classic'] .table-detail__stats,
+html:not([data-ui-skin]) .table-detail__stats {
+    gap: var(--dw-gap);
+}
+
+html[data-ui-skin='classic'] .table-detail__section-badge,
+html[data-ui-skin='classic'] .table-detail__panel-count,
+html:not([data-ui-skin]) .table-detail__section-badge,
+html:not([data-ui-skin]) .table-detail__panel-count {
+    border-radius: var(--dw-radius-pill);
+}

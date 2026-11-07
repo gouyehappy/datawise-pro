@@ -1,0 +1,76 @@
+node_modules/
+dist/
+dist-electron/
+release/
+datawise-frontend/resources/desktop/
+datawise-frontend/.electron-builder-output
+datawise-frontend/release-*/
+target/
+data/**
+*.tsbuildinfo
+*.local
+.DS_Store
+.idea/**
+.vscode/**
+*.log
+test-out.txt
+.tmp-*/
+
+# Backend build artifacts outside Maven target/
+datawise-backend/com/**
+**/dependency-reduced-pom.xml
+
+# Frontend test output
+datawise-frontend/test-results/
+
+# Local runtime config (see config/README.md)
+.codegraph/**
+.cursor/**
+!.cursor/rules/
+!.cursor/rules/**
+# Local vibe-coding run archives (see vibe-coding skill); do not commit
+.vibe/
+.claude/**
+config/**
+!config/README.md
+!config/*.example
+!config/**/*.example
+!config/plugins/README.md
+!config/drivers/
+!config/drivers/README.md
+config/plugins/*.jar
+config/drivers/*
+datawise-backend/config/**
+datawise-backend/data/**
+datawise-backend/datawise-server/config/**
+datawise-frontend/node/**
+
+# SQLFlow local vendor artifacts (keep README.txt tracked)
+datawise-backend/datawise-sqlflow/lib/extracted/**
+datawise-backend/datawise-sqlflow/lib/*.jar
+datawise-backend/datawise-sqlflow/lib/*.zip
+community-plugins/*/dist
+community-plugins/*/.dwp-staging*
+community-plugins/*/.dbx-clone*
+community-plugins/*/.dbx-ref*
+community-plugins/*/backend/target/
+community-plugins/*/frontend/node_modules/
+docs/todolist/*
+
+# Local-only design / requirements / reviews (not for public upload)
+_private/
+
+# Filled GitHub identity (keep repo.meta.example.json tracked)
+repo.meta.json
+
+# Pack signing private keys (never commit)
+dist/certs/*.priv.pem
+**/*.priv.pem
+
+# Root docs kept locally; only docs/image is published
+/docs/*
+!/docs/image/
+!/docs/image/**
+
+# Local screenshot source (published copy lives in docs/image)
+.image/

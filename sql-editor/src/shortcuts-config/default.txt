@@ -1,0 +1,19 @@
+# SQL 编辑器快捷键（默认）
+# 语法：id | monaco_command | 按键组合 | i18n_label_key
+# 按键：Ctrl / Shift / Alt + 字母或 Up Down Slash 等；# 开头为注释
+# 同一 id 多行 = 多个按键绑定同一命令
+# 用户可在 JSON 设置层覆盖 enabled / keys / command（见 SqlEditorShortcutsSettings.keybindings）
+
+[bindings]
+format_selection | sqlEditor.formatSelection | Shift+Alt+F | shortcut.format_selection
+delete_line | editor.action.deleteLines | Ctrl+D | shortcut.delete_line
+delete_line | editor.action.deleteLines | Ctrl+Shift+K | shortcut.delete_line
+copy_line_down | editor.action.copyLinesDownAction | Ctrl+Shift+D | shortcut.copy_line
+copy_line_down | editor.action.copyLinesDownAction | Shift+Alt+Down | shortcut.copy_line
+copy_line_up | editor.action.copyLinesUpAction | Shift+Alt+Up | shortcut.copy_line_up
+move_line_up | editor.action.moveLinesUpAction | Alt+Up | shortcut.move_line_up
+move_line_down | editor.action.moveLinesDownAction | Alt+Down | shortcut.move_line_down
+toggle_comment | editor.action.commentLine | Ctrl+/ | shortcut.toggle_comment
+trigger_suggest | editor.action.triggerSuggest | Ctrl+Space | shortcut.trigger_suggest
+toggle_ai | sqlEditor.toggleAi | Ctrl+Shift+I | shortcut.toggle_ai
+open_settings | sqlEditor.openSettings | Ctrl+Shift+, | shortcut.open_settings

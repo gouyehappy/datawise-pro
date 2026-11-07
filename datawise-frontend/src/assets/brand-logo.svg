@@ -1,0 +1,26 @@
+<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="dw-d-fill" x1="4" y1="4" x2="20" y2="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8b90ff"/>
+      <stop offset="100%" stop-color="#5248e8"/>
+    </linearGradient>
+    <linearGradient id="dw-w-stroke" x1="11" y1="16" x2="29" y2="29" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#a5f3fc"/>
+      <stop offset="45%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+  </defs>
+  <path
+      fill="url(#dw-d-fill)"
+      fill-rule="evenodd"
+      d="M3.6 4.2h10.5c5.75 0 10.2 4.2 10.2 9.45 0 5.25-4.45 9.45-10.2 9.45H3.6V4.2Zm3.65 3.4v12.1h4.05c3.45 0 6-2.6 6-5.85 0-3.25-2.55-5.85-6-5.85H7.25V7.6Z"
+  />
+  <path
+      d="M11.4 16.8c.8.2 2.1 10.8 5.4 9.8 1.8-.6 2.1-4.2 3.2-3.8 1.2.4 2.2 5.8 5.2 6.2 3.2.4 4.6-9.8 5.2-10.2"
+      stroke="url(#dw-w-stroke)"
+      stroke-width="3.85"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+  />
+</svg>

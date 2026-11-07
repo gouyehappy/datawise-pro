@@ -1,0 +1,63 @@
+name: Website Pages
+
+# Build website/ and publish to GitHub Pages:
+#   https://<owner>.github.io/datawise-cli/
+# Set VITE_GITHUB_REPO=owner/datawise-cli in the job env when the owner changes.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'docs/user-manual/**'
+      - 'docs/assets/screenshots/**'
+      - '.github/workflows/website-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install & build
+        working-directory: website
+        env:
+          VITE_BASE: /datawise-cli/
+          VITE_GITHUB_REPO: ${{ github.repository }}
+        run: |
+          npm ci
+          npm run build:pages
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    # Requires Settings → Pages → Source = GitHub Actions, then set repo variable
+    # ENABLE_GITHUB_PAGES=true. Until then, build+artifact still validates the site.
+    if: ${{ vars.ENABLE_GITHUB_PAGES == 'true' }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

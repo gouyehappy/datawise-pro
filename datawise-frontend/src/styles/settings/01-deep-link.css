@@ -1,0 +1,206 @@
+/**
+ * Deep link settings
+ * Split from settings-panel.css — do not import directly; use ../settings-panel.css
+ */
+
+/* ---- Deep Link ---- */
+
+.module-shell__main .deep-link-block {
+    background: var(--dw-bg-panel);
+}
+
+.module-shell__main .deep-link-block__head {
+    display: flex;
+    gap: var(--dw-space-7);
+    align-items: flex-start;
+    margin-bottom: clamp(14px, 1.6vmin, 18px);
+}
+
+.module-shell__main .deep-link-block__icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-density-lg);
+    height: var(--dw-density-lg);
+    border-radius: var(--dw-control-radius);
+    background: color-mix(in srgb, var(--dw-primary) 12%, var(--dw-bg-panel));
+    color: var(--dw-primary);
+}
+
+.module-shell__main .deep-link-block__copy {
+    min-width: 0;
+}
+
+.module-shell__main .deep-link-block__title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--dw-gap-md);
+}
+
+.module-shell__main .deep-link-block__title-row h3 {
+    margin: 0;
+}
+
+.module-shell__main .deep-link-protocol {
+    display: inline-flex;
+    align-items: center;
+    padding: clamp(2px, 0.3vmin, 3px) clamp(7px, 0.8vmin, 8px);
+    border: 1px solid color-mix(in srgb, var(--dw-primary) 24%, var(--dw-border-light));
+    border-radius: var(--dw-radius-pill);
+    background: color-mix(in srgb, var(--dw-primary) 8%, var(--dw-bg-muted));
+    font-family: var(--dw-mono);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    color: var(--dw-primary);
+    letter-spacing: 0.01em;
+}
+
+.module-shell__main .deep-link-params {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+    gap: var(--dw-gap-md);
+    margin: 0 0 var(--dw-space-7);
+}
+
+.module-shell__main .deep-link-param {
+    padding: var(--dw-pad-control-lg);
+    border: 1px solid var(--dw-border-light);
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg-muted);
+}
+
+.module-shell__main .deep-link-param__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--dw-gap);
+    margin-bottom: clamp(6px, 0.7vmin, 8px);
+}
+
+.module-shell__main .deep-link-param__key {
+    font-family: var(--dw-mono);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    color: var(--dw-text);
+}
+
+.module-shell__main .deep-link-param__badge {
+    padding: clamp(1px, 0.2vmin, 2px) clamp(6px, 0.7vmin, 7px);
+    border-radius: var(--dw-radius-pill);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    line-height: var(--dw-leading-snug);
+}
+
+.module-shell__main .deep-link-param__badge--required {
+    border: 1px solid color-mix(in srgb, var(--dw-primary) 28%, var(--dw-border-light));
+    background: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg-editor));
+    color: var(--dw-primary);
+}
+
+.module-shell__main .deep-link-param__badge--optional {
+    border: 1px solid var(--dw-border-light);
+    background: var(--dw-bg-editor);
+    color: var(--dw-text-muted);
+}
+
+.module-shell__main .deep-link-param p {
+    margin: 0;
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-secondary);
+    line-height: var(--dw-leading-relaxed);
+}
+
+.module-shell__main .deep-link-example-wrap {
+    margin-bottom: 0;
+}
+
+.module-shell__main .deep-link-example__label {
+    margin: 0 0 var(--dw-gap);
+    font-size: var(--dw-text-xs);
+    font-weight: 500;
+    color: var(--dw-text-secondary);
+}
+
+.module-shell__main .deep-link-example {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--dw-gap);
+    padding: var(--dw-space-5) clamp(8px, 1vmin, 10px) clamp(8px, 1vmin, 10px) clamp(10px, 1.2vmin, 12px);
+    border: 1px solid color-mix(in srgb, var(--dw-primary) 18%, var(--dw-border-light));
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg-muted);
+}
+
+.module-shell__main .deep-link-example__code {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--dw-mono);
+    font-size: var(--dw-text-xs);
+    line-height: var(--dw-leading-loose);
+    word-break: break-all;
+    white-space: pre-wrap;
+}
+
+.module-shell__main .deep-link-example .tok-scheme,
+.module-shell__main .deep-link-example .tok-host {
+    color: var(--dw-primary);
+    font-weight: 600;
+}
+
+.module-shell__main .deep-link-example .tok-punct {
+    color: var(--dw-text-muted);
+}
+
+.module-shell__main .deep-link-example .tok-key {
+    color: var(--dw-warning-fg);
+}
+
+[data-theme='dark'] .module-shell__main .deep-link-example .tok-key {
+    color: var(--dw-warning);
+}
+
+.module-shell__main .deep-link-example .tok-value {
+    color: var(--dw-success-fg);
+}
+
+[data-theme='dark'] .module-shell__main .deep-link-example .tok-value {
+    color: var(--dw-success);
+}
+
+.module-shell__main .deep-link-footnote {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--dw-gap);
+    margin: 0;
+    padding-top: clamp(10px, 1.2vmin, 12px);
+    border-top: 1px solid var(--dw-border-light);
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-muted);
+    line-height: var(--dw-leading-relaxed);
+}
+
+.module-shell__main .deep-link-footnote svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: var(--dw-text-muted);
+}
+
+.module-shell__main .config-dir-row,
+.module-shell__main .scripts-dir-row,
+.module-shell__main .config-dir-actions,
+.module-shell__main .config-snapshot__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dw-gap);
+    align-items: center;
+}
+
+.module-shell__main .config-dir-row .config-dir-input,
+.module-shell__main .config-dir-row .dw-input,
+.module-shell__main .scripts-dir-row .dw-input {
+    flex: 1 1 240px;
+    min-width: 0;
+}

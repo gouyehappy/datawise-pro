@@ -1,0 +1,21 @@
+/**
+ * Dock-inplace plugin — centered (non-floating) dock host keeps soft-card corners.
+ *
+ * Press grip and body must share the same top radius, or the grip paints square
+ * over Classic rounded corners (workspace card next to explorer).
+ *
+ * Hosts: FloatingPanelHost with teleport=false and floating=false.
+ * Classes: .dock-float-host--inplace:not(.is-floating)
+ */
+
+.dock-float-host--inplace:not(.is-floating) {
+    border-radius: var(--dw-panel-radius);
+}
+
+.dock-float-host--inplace:not(.is-floating) .dock-float-host__press {
+    border-radius: var(--dw-panel-radius) var(--dw-panel-radius) 0 0;
+}
+
+.dock-float-host--inplace:not(.is-floating) .dock-float-host__body {
+    border-radius: var(--dw-panel-radius);
+}

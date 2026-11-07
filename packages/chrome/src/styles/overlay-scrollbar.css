@@ -1,0 +1,150 @@
+/**
+ * Monaco-style overlay scrollbar (painted rails + thumbs, default 5px thin rail).
+ * Shared by DwOverlayScroll and attachOverlayScrollbar.
+ */
+
+.dw-overlay-scroll,
+.dw-overlay-scroll-target {
+  --dw-overlay-sb-size: var(--dw-scrollbar-size, 4px);
+  --dw-overlay-sb-inset: 0px;
+  --dw-overlay-sb-thumb: var(--dw-scrollbar-thumb, color-mix(in srgb, #94a3b8 50%, transparent));
+  --dw-overlay-sb-thumb-hover: var(--dw-scrollbar-thumb-hover, color-mix(in srgb, #94a3b8 72%, transparent));
+  --dw-overlay-sb-track: var(--dw-scrollbar-track, transparent);
+  --dw-overlay-sb-fade-ms: 180ms;
+}
+
+.dw-overlay-scroll {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dw-overlay-scroll__viewport {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none;
+}
+
+.dw-overlay-scroll__viewport::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+.dw-overlay-scroll__rail {
+  position: absolute;
+  z-index: 6;
+  background: var(--dw-overlay-sb-track);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dw-overlay-sb-fade-ms) ease;
+}
+
+.dw-overlay-scroll__rail.is-visible,
+.dw-overlay-scroll__rail.is-active,
+.dw-overlay-scroll:hover .dw-overlay-scroll__rail.is-needed {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dw-overlay-scroll__rail--v {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--dw-overlay-sb-size);
+}
+
+.dw-overlay-scroll__rail--h {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--dw-overlay-sb-size);
+}
+
+.dw-overlay-scroll__rail--h.is-corner {
+  right: var(--dw-overlay-sb-size);
+}
+
+.dw-overlay-scroll__slider {
+  position: absolute;
+  border-radius: 999px;
+  background: var(--dw-overlay-sb-thumb);
+  transition: background var(--dw-overlay-sb-fade-ms) ease;
+  cursor: default;
+}
+
+.dw-overlay-scroll__rail:hover .dw-overlay-scroll__slider,
+.dw-overlay-scroll__rail.is-active .dw-overlay-scroll__slider {
+  background: var(--dw-overlay-sb-thumb-hover);
+}
+
+.dw-overlay-scroll__rail--v .dw-overlay-scroll__slider {
+  left: var(--dw-overlay-sb-inset);
+  right: var(--dw-overlay-sb-inset);
+  width: auto;
+  min-height: 16px;
+}
+
+.dw-overlay-scroll__rail--h .dw-overlay-scroll__slider {
+  top: var(--dw-overlay-sb-inset);
+  bottom: var(--dw-overlay-sb-inset);
+  height: auto;
+  min-width: 16px;
+}
+
+/**
+ * In-place attach (attachOverlayScrollbar)
+ * --armed: hide native bars only after scrollability is confirmed.
+ */
+.dw-overlay-scroll-target {
+  position: relative;
+}
+
+.dw-overlay-scroll-target--armed {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none;
+}
+
+.dw-overlay-scroll-target--armed::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+.dw-overlay-scroll__rail--attached {
+  position: absolute !important;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  left: auto;
+  bottom: auto !important;
+  margin: 0;
+  will-change: transform;
+  contain: layout style;
+  backface-visibility: hidden;
+}
+
+.dw-overlay-scroll__rail--attached.dw-overlay-scroll__rail--h {
+  left: 0;
+  right: auto;
+  height: var(--dw-overlay-sb-size);
+}
+
+.dw-overlay-scroll__rail--attached[hidden] {
+  display: none !important;
+}
+
+.dw-overlay-scroll-target:hover > .dw-overlay-scroll__rail.is-needed,
+.dw-overlay-scroll-target > .dw-overlay-scroll__rail.is-visible,
+.dw-overlay-scroll-target > .dw-overlay-scroll__rail.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}

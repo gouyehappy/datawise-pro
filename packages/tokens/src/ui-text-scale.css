@@ -1,0 +1,59 @@
+/**
+ * Shell UI text scale — loaded AFTER skins + ui-density so sm/lg text wins.
+ *
+ * Contract:
+ * - Preference: ThemePreferences.uiTextScale → html[data-ui-text-scale]
+ * - Body: --dw-font-size (preset CSS or custom via theme.service inline)
+ * - Ladder: --dw-text-* / --mp-* typography as % of --dw-font-size
+ * - Density lives in ui-density.css (orthogonal control)
+ * - TS helpers: @/shared/config/ui-text-scale.ts
+ *
+ * Keep in sync with workbench-bridge-bootstrap.js plugin ladder ratios.
+ */
+
+:root {
+    --dw-ui-text-scale: 1;
+    /* Body default = md (13.5px). Presets / JS override. */
+    --dw-font-size: 13.5px;
+
+    /* Type ladder relative to body (host + plugins share ratios). */
+    --dw-text-2xs: calc(var(--dw-font-size) * 0.75);
+    --dw-text-xs: calc(var(--dw-font-size) * 0.85);
+    --dw-text-sm: var(--dw-font-size);
+    --dw-text-md: calc(var(--dw-font-size) * 1.08);
+    --dw-text-lg: calc(var(--dw-font-size) * 1.15);
+    --dw-text-xl: calc(var(--dw-font-size) * 1.25);
+    --dw-text-2xl: calc(var(--dw-font-size) * 1.35);
+    --dw-text-3xl: calc(var(--dw-font-size) * 1.55);
+    --dw-text-display-sm: calc(var(--dw-font-size) * 1.65);
+    --dw-text-display: calc(var(--dw-font-size) * 1.85);
+
+    /* Marketing / page typography aliases → ladder */
+    --mp-caption: var(--dw-text-xs);
+    --mp-body: var(--dw-text-sm);
+    --mp-sub: var(--dw-text-md);
+    --mp-section: var(--dw-text-lg);
+    --mp-title-sm: var(--dw-text-xl);
+    --mp-title: var(--dw-text-3xl);
+    --mp-stat-num: var(--dw-text-display);
+}
+
+html[data-ui-text-scale='sm'] {
+    --dw-ui-text-scale: 0.889;
+    --dw-font-size: 12px;
+}
+
+html[data-ui-text-scale='md'] {
+    --dw-ui-text-scale: 1;
+    --dw-font-size: 13.5px;
+}
+
+html[data-ui-text-scale='lg'] {
+    --dw-ui-text-scale: 1.111;
+    --dw-font-size: 15px;
+}
+
+/* custom: --dw-font-size / --dw-ui-text-scale set by theme.service / theme-boot */
+html[data-ui-text-scale='custom'] {
+    /* intentional: body size comes from inline style */
+}

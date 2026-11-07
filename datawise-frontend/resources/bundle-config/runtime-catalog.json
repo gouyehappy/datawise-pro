@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "channel": "stable",
+  "updatedAt": "2026-11-03T06:08:40.603Z",
+  "releaseVersion": "5.0.0",
+  "baseUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/v5.0.0/",
+  "connectors": []
+}

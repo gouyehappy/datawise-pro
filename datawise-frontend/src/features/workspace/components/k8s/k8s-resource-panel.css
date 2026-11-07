@@ -1,0 +1,124 @@
+/* Dense K8s resource browse chrome (Nacos/DBX-aligned). */
+.k8s-resource-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.k8s-resource-panel__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  padding: 0.4rem 0.65rem;
+  border-bottom: 1px solid var(--dw-border);
+  background: var(--dw-bg-panel);
+}
+
+.k8s-resource-panel__ns {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  flex: 0 1 14rem;
+  max-width: 16rem;
+  font-size: var(--dw-text-sm);
+}
+
+.k8s-resource-panel__ns > span:first-child {
+  display: none;
+}
+
+.k8s-resource-panel__ns :deep(.dw-select-host),
+.k8s-resource-panel__ns :deep(.dw-select) {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.k8s-resource-panel__status {
+  margin-left: auto;
+  color: var(--dw-text-muted);
+  font-size: var(--dw-text-xs);
+  white-space: nowrap;
+}
+
+.k8s-resource-panel__list {
+  min-height: 0;
+  overflow: auto;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.k8s-resource-panel__list--fill {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.k8s-resource-panel__list--fill > * {
+  min-height: 0;
+  flex: 1;
+}
+
+.k8s-resource-panel__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--dw-text-sm);
+}
+
+.k8s-resource-panel__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--dw-bg-muted);
+  font-size: var(--dw-font-size-menu-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dw-text-muted);
+}
+
+.k8s-resource-panel__table th,
+.k8s-resource-panel__table td {
+  padding: 0.4rem 0.65rem;
+  border-bottom: 1px solid var(--dw-border-light);
+  text-align: left;
+  vertical-align: top;
+}
+
+.k8s-resource-panel__table tbody tr:hover {
+  background: var(--dw-bg-hover);
+}
+
+.k8s-resource-panel__msg {
+  max-width: 420px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.k8s-resource-panel__editor {
+  flex: 1;
+  min-height: 280px;
+  width: 100%;
+  resize: vertical;
+  font-family: var(--dw-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: var(--dw-text-sm);
+}
+
+.k8s-resource-panel__result {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--dw-space-3);
+  background: var(--dw-bg);
+  border-radius: var(--dw-panel-radius);
+  font-size: var(--dw-text-sm);
+  white-space: pre-wrap;
+}

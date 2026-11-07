@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-demo
+demo/dist
+*.local
+.DS_Store
+*.log
+tsconfig.tsbuildinfo
+.vscode/*
+!.vscode/extensions.json
+.githooks/

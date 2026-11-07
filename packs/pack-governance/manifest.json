@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "packId": "pack.governance",
+  "version": "1.0.0-dev",
+  "minCoreVersion": "4.1.0",
+  "maxCoreVersion": "4.99.99",
+  "capabilities": ["gov.schema.compare","gov.cross.env","gov.result.diff"],
+  "plugins": ["p-schema-compare","p-cross-env-compare","p-result-diff"],
+  "extensionPoints": ["plugin.schemaCompare","plugin.resultDiff"],
+  "requiresRestart": false,
+  "channel": "stable"
+}

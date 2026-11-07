@@ -1,0 +1,20 @@
+{
+  "name": "@datawise/community-copilot-kit",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Portable session-copilot engine for DataWise community plugins (Ask/Agent, BYOK+host.ai, cards, thinking/refs).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}

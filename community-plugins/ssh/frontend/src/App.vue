@@ -1,0 +1,13013 @@
+<script setup lang="ts">
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import { ImageAddon } from "@xterm/addon-image";
+import { WebglAddon } from "@xterm/addon-webgl";
+import { SearchAddon, type ISearchOptions } from "@xterm/addon-search";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import {
+  Archive,
+  Disc,
+  Eye,
+  EyeOff,
+  Film,
+  Pause,
+  Play,
+  Plus,
+  Link2,
+  CircleStop,
+  ArrowDown,
+  ArrowLeft,
+  ArrowLeftRight,
+  ArrowUp,
+  ArrowUpDown,
+  Bot,
+  Braces,
+  ClipboardPaste,
+  Columns3,
+  Container,
+  Copy,
+  Download,
+  Eraser,
+  FilePlus,
+  FileText,
+  FileUp,
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  Gauge,
+  ImagePlay,
+  HardDrive,
+  History,
+  Home,
+  Info,
+  KeyRound,
+  ListChecks,
+  Loader2,
+  Lock,
+  Monitor,
+  Cable,
+  AppWindow,
+  Timer,
+  Network,
+  PackageOpen,
+  Palette,
+  PanelRightClose,
+  Pencil,
+  Pin,
+  PlugZap,
+  RefreshCw,
+  RotateCw,
+  Save,
+  Scissors,
+  ScrollText,
+  Search,
+  Server,
+  Send,
+  Settings,
+  FolderInput,
+  ShieldCheck,
+  Siren,
+  Sparkles,
+  Square,
+  SquarePlus,
+  SquareTerminal,
+  Star,
+  TextSelect,
+  Trash2,
+  TriangleAlert,
+  X,
+  Zap,
+  Check,
+  ExternalLink,
+} from "@lucide/vue";
+import type { Detection as ZmodemDetection, Session as ZmodemSession, Sentry as ZmodemSentry } from "zmodem.js";
+import { TrzszFilter } from "trzsz";
+import {
+  canStartTrzszTransfer,
+  detectTrzszAnnounceFromBytes,
+  initialTrzszProgressState,
+  installTrzszHandlers,
+  isTrzszStopMessage,
+  reduceTrzszProgress,
+  resolveTerminalInputRoute,
+  trzszProgressPercent,
+  type TrzszAnnounce,
+  type TrzszDownloadFile,
+  type TrzszProgressEvent,
+  type TrzszProgressState,
+} from "./lib/terminalTrzsz";
+import { Osc7DirectoryParser } from "./lib/terminalDirectoryTracking";
+import { handleOsc52ClipboardWrite, handleTerminalColorQuery } from "./lib/terminalOsc";
+import {
+  resolveTerminalKeyAction,
+  resolveTerminalRightClickAction,
+  sanitizeSearchOptions,
+  sanitizeSelectCopyEnabled,
+  sanitizeClickCursorEnabled,
+  isApplePlatform,
+  isTerminalSelectAllShortcut,
+  TERMINAL_SEARCH_OPTIONS_KEY,
+  terminalSearchSeedFromSelection,
+  canAcceptTerminalDrop,
+  normalizeDropTargetDir,
+  type TerminalSearchOptions,
+} from "./lib/terminalInteraction";
+import { extractHttpUrl } from "./lib/terminalContextMenu";
+import { createTerminalWriteThrottle, type TerminalWriteThrottle } from "./lib/terminalWriteThrottle";
+import { uiStorage } from "./lib/uiStorage";
+import { findForwardConflict, forwardStartParams, parseForwards, type PortForward } from "./lib/portForward";
+import {
+  forwardsStorageKey,
+  sanitizePersistedForwards,
+  type PersistedForward,
+} from "./lib/portForwardPersist";
+import { createTerminalInputQueue } from "./lib/terminalInputQueue";
+import { describeReconnectCountdown, describeReconnectRestoredNotice, isConnectionInactiveError, isSessionGoneError, shouldReattachTerminal, terminalReconnectDelay, TERMINAL_RECONNECT_DELAYS, type ReconnectCountdown } from "./lib/terminalReconnect";
+import { classifyConnectError, connectErrorKey } from "./lib/connectError";
+import { decideConnectRetry, isDuplicatedTransportUnavailableError } from "./lib/connectRetry";
+import {
+  createSessionTransportReuseState,
+  fallbackToFreshTransport,
+  markSessionTransportOpenSucceeded,
+  sessionTransportOpenParams,
+} from "./lib/sessionTransportReuse";
+import { createConnectLog } from "./lib/connectLog";
+import { pickModalFocusTarget } from "./lib/modalFocus";
+import {
+  createZmodemSentry,
+  decideZmodemDetection,
+  receiveZmodemSession,
+  sanitizeZmodemFileName,
+  sendZmodemFiles,
+  type ZmodemDownloadProgress,
+  type ZmodemOffer,
+  type ZmodemUploadProgress,
+} from "./lib/terminalZmodem";
+import { planFolderDrop, parentDirsOf, type FolderDropFile } from "./lib/folderDrop";
+import { clampHistoryIndex, filterHistory, isHistoryOverlayShortcut, mergeRemoteHistory, resolveHistoryPanelKey } from "./lib/historyPanel";
+import {
+  applyInputToToken,
+  catalogSuggestItems,
+  COMMON_COMMANDS,
+  cursorLineTextBeforeCursor,
+  extractShellInput,
+  fillSuggestPayload,
+  filterRedundantExactSuggest,
+  figArgsHandoffItem,
+  ghostRemainder,
+  ghostWordRemainder,
+  isSafePathPrefix,
+  matchesGhostFullAccept,
+  matchesGhostWordAccept,
+  mergeSuggestItems,
+  normalizePathCandidate,
+  overlayOffsetForCell,
+  overlayPlacement,
+  parseCommandNames,
+  parseSuggestQuery,
+  pathSegment,
+  pathSuggestItems,
+  resolveCommandSuggestKey,
+  resolveSuggestionTabKey,
+  searchLineSuggestions,
+  shouldSuppressSuggest,
+  type SuggestItem,
+} from "./lib/commandSuggest";
+import { resolveCompletionOwner } from "./lib/completionArbitration";
+import {
+  filterQuickPaletteItems,
+  isQuickPaletteShortcut,
+  resolveQuickPaletteKey,
+  type QuickPaletteItem,
+} from "./lib/quickCommandPalette";
+import { resolveBatchTargetKey } from "./lib/batchTargetKeys";
+import { sampleTransferSpeed, type TransferSpeedSample } from "./lib/transferSpeed";
+import { sanitizeContainerRef, type DockerContainer } from "./lib/dockerContainers";
+import { buildPasteConfirmation, type PasteConfirmation } from "./lib/dangerousCommands";
+import { readClipboardText, writeClipboardText, type ClipboardDeps } from "./lib/clipboardBridge";
+import { filesFromClipboard } from "./lib/clipboardFiles";
+import { friendlySftpError } from "./lib/sftpErrors";
+import { filterDiskMounts, filterNetworkInterfaces } from "./lib/metricsView";
+import ResourceStrip from "./components/ResourceStrip.vue";
+import CopilotDock from "./components/CopilotDock.vue";
+import {
+  buildModelOptions,
+  cancelResolvedChat,
+  chatWithResolvedModel,
+  createHostAiFromPlugin,
+  normalizeModelPreference,
+  probeModels,
+  resolveModel,
+  type ModelOption,
+} from "./lib/copilot/modelResolver";
+import {
+  canRunCopilotCard,
+  cardsForChatMode,
+  isEmptyLlmResponseError,
+  normalizeCopilotChatMode,
+  shouldEnsureAgentPresets,
+} from "./lib/copilot/chatMode";
+import { runToolCard } from "./lib/copilot/toolRunner";
+import {
+  appendAssistantStreamDelta,
+  clampCopilotDockWidth,
+  composeUserPrompt,
+  finalizeAssistantMessage,
+  formatCardUserTurn,
+  normalizeCopilotReplyLanguage,
+  resolveDockWidthBounds,
+  resolveReplyLocale,
+  type CopilotReplyLanguage,
+} from "@datawise/community-copilot-kit";
+import { sshCopilotAdapter, sshSystemPrompt } from "./copilot/adapter";
+import type {
+  ActionCard,
+  CopilotChatMode,
+  CopilotIntent,
+  CopilotMessage,
+  ModelPreference,
+  ModelSource,
+  SessionContext,
+} from "./lib/copilot/types";
+import { isCountdownActive, nextCountdownValue, RECORD_COUNTDOWN_START } from "./lib/recordingCountdown";
+import { expandSelection, filterSftpEntries, type SftpTypeFilter } from "./lib/sftpFileFilters";
+import { pushPathHistory, sanitizePathHistories } from "./lib/sftpPathHistory";
+import {
+  defaultBookmarkLabel,
+  deleteBookmark,
+  listBookmarks,
+  SFTP_BOOKMARKS_LIMIT,
+  SFTP_BOOKMARK_LABEL_MAX_LENGTH,
+  saveBookmark,
+  sortBookmarksByLabel,
+  validateBookmarkInput,
+  type SftpBookmark,
+} from "./lib/sftpBookmarks";
+import {
+  applyPtyInputLine,
+  browseCommandHistory,
+  commandInputAction,
+  formatHistoryAge,
+  historyCommands,
+  isNoiseHistoryLine,
+  isPersistableEntry,
+  normalizeHistoryCommand,
+  historyForScope,
+  markHistoryExit,
+  pushCommandHistory,
+  removeHistoryEntry,
+  resolvePtySubmitCommand,
+  sanitizeCommandHistory,
+  togglePinHistory,
+  truncateHistoryCommand,
+  type HistoryEntry,
+} from "./lib/commandHistory";
+import { isBastionMenuContext } from "./lib/bastionContext";
+import { sanitizeInteractionPrefs, type InteractionPrefs } from "./lib/interactionPrefs";
+import {
+  canAddQuickCommandInScope,
+  countQuickCommandsInScope,
+  filterQuickCommands,
+  groupQuickCommands,
+  groupQuickCommandsByConnection,
+  normalizeQuickCommands,
+  otherScopedQuickCommands,
+  QUICK_COMMAND_GROUP_MAX_LENGTH,
+  QUICK_COMMANDS_LIMIT,
+  quickCommandGroupCount,
+  quickCommandText,
+  shortenConnectionId,
+  visibleQuickCommands,
+  type QuickCommand,
+  type QuickCommandGroupView,
+} from "./lib/quickCommands";
+import { batchTargetLabel, batchTargetsNeedDisambiguation, deriveBatchCommandName, liveBatchTargets, normalizeBatchTargets, orphanBatchSessionIds, quickPickCommandById, restoreBatchSelection, selectBatchTargets, summarizeBatchResults, toggleBatchTarget, type BatchSendSummary, type BatchSendTarget } from "./lib/batchSend";
+import {
+  BATCH_BAR_SUGGEST_LIMIT,
+  buildBatchSuggestItems,
+  highlightBatchSuggestText,
+  type BatchSuggestItem,
+} from "./lib/batchBarSuggest";
+import { formatLatency, formatAuthMethodLabel, normalizeConnectionPort, normalizeConnectionText, type KnownAuthMethod } from "./lib/connectionInfo";
+import { clampFontSize } from "./lib/terminalZoom";
+import { loadTerminalFontOverride, persistTerminalFontFamily, persistTerminalFontSize, resolveTerminalFont, type TerminalFontOverride } from "./lib/terminalFont";
+import { MIB, settingsErrorOf } from "./lib/settingsModel";
+import { sanitizeCompressionStrategy, type CompressionStrategy, type DownloadConflictPolicy } from "./lib/downloadPrefs";
+import { commandMarkerTooltip, formatCommandDuration, Osc633CommandParser, runningCommandElapsedMs, type Osc633StreamUpdates } from "./lib/terminalCommandMarkers";
+import { advanceBatchProgress, batchProgressPercent, createBatchProgress, type BatchProgressState } from "./lib/sftpBatchProgress";
+import { describeWorkbenchSessionStatus, type WorkbenchSessionStatus } from "./lib/sessionStatus";
+import { sanitizeCommandOutput } from "./lib/terminalOutputText";
+import { normalizeTerminalInputBytes } from "./lib/terminalInput";
+import { formatBytes, formatRate } from "./lib/format";
+import { mergeTransferProgress, transferCancelReason, type TransferPhase } from "./lib/transferProgress";
+import { HOST_POPOVER, resolveAppearance, TERMINAL_ANSI, type DatawisePluginAppearanceInput } from "./lib/appearance";
+import { isHostPluginTheme, onHostThemeChange, themeToAppearance } from "./lib/hostTheme";
+import { AGENT_MODES, approvalRemainingSecs, buildAgentResolveBody, dropAgentPrompt, enqueueAgentPrompt, type AgentFinishPayload, type AgentNoticePayload, type AgentPromptPayload, type AgentTerminalMode } from "./lib/agentTerminal";
+import { purposeKeyLabel, sanitizeTriagePayload, severityClass, type TriageResult } from "./lib/alertTriage";
+import {
+  compileRules,
+  highlightFillStyle,
+  matchesInLine,
+  normalizeHighlightRules,
+  sanitizeHighlightRuleInput,
+  shouldRebuildHighlightRow,
+  toAbsoluteRowRange,
+  HIGHLIGHT_COLOR_DEFAULT,
+  HIGHLIGHT_RULES_LIMIT,
+  type HighlightRuleView,
+} from "./lib/keywordHighlight";
+import { pushSample, sparklinePath, METRICS_SAMPLE_CAPACITY } from "./lib/metricsSparkline";
+import { transferPausable, matchResumableUpload, canResumeUpload, type ResumableUploadTask } from "./lib/transferResume";
+import { isLiveTransferStatus, sortTransferTasks } from "./lib/transferOrder";
+import { buildTimeline, eventIndexAtTime, gifFramePlan, mergeEventPages, replayDuration, type RecordingSummary, type ReplayEvent, type ReplayEventPage } from "./lib/replayScheduler";
+import { encodeGif } from "./lib/gifEncoder";
+import { canKillProcess, sortProcessRows, type ProcessSortKey } from "./lib/processActions";
+import { distroBadge, type DistroBadge } from "./lib/distroBadge";
+import { auditKindLabel, auditKindOptions, auditOutcomeLabel, sanitizeAuditEntries, type AuditEntry } from "./lib/auditLog";
+import { resolveSftpPaneOpen, sanitizeSftpPaneDefaultOpen, type SshWorkbenchPaneOrder } from "./lib/workbenchLayout";
+import { pickLiveSessionForReattach, type SessionSummary } from "./lib/sessionRestore";
+import { toolbarTintStyle } from "./lib/toolbarTint";
+import { createGhostClickGuard } from "./lib/ghostClickGuard";
+import { createRequestEpoch } from "./lib/requestEpoch";
+import {
+  COLUMN_MIN_WIDTHS,
+  COLUMN_WIDTH_MAX,
+  DEFAULT_COLUMN_WIDTHS,
+  DEFAULT_VISIBLE_COLUMNS,
+  NAME_COLUMN_MAX,
+  NAME_COLUMN_MIN,
+  sanitizeSftpEntries,
+  sanitizeVisibleColumns,
+  sftpEntryIconKind,
+  type SftpColumn,
+} from "./lib/sftpEntries";
+import { resolveRemotePath, splitRemotePathSegments } from "./lib/remotePathInput";
+import { shouldCommitRename } from "./lib/sftpRename";
+import { folderDownloadOutcome, type FolderDownloadFinish } from "./lib/sftpFolderDownload";
+import { decideFileRowAction } from "./lib/fileRowKeydown";
+import { attachWebglRenderer, loadWebglEnabled, persistWebglEnabled, syncWebglRenderer, type WebglRendererLike } from "./lib/terminalWebgl";
+import { cellFromMouseEvent, clickCursorArrows, resolveClickCursorMove } from "./lib/terminalClickCursor";
+import { bridgeBinaryBytes } from "../../shared/frontend/binaryEvent";
+import { applyTreeChildren, createTreeRoot, findTreeNode, markTreeStale, type DirTreeNode } from "./lib/sftpDirTree";
+import { workbenchMessage } from "./lib/i18n";
+import { randomUUID } from "./lib/uuid";
+import TextPreview from "./components/TextPreview.vue";
+import TerminalSearchPanel from "./components/TerminalSearchPanel.vue";
+import ConnectingCard from "./components/ConnectingCard.vue";
+import FolderPickerDialog from "./components/FolderPickerDialog.vue";
+import SideNavPanel, { type SftpSideQuickPath } from "./components/SideNavPanel.vue";
+import { Switch } from "./components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "./components/ui/toggle-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "./components/ui/context-menu";
+import { Popover, PopoverAnchor, PopoverContent } from "./components/ui/popover";
+import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog";
+import FileOpenWithMenu from "./components/FileOpenWithMenu.vue";
+import { useExternalEdits } from "./composables/useExternalEdits";
+import { useFilePreview } from "./composables/useFilePreview";
+import { fileIcon, fileIconClass } from "./lib/fileIcons";
+import {
+  defaultPatternFor,
+  newCustomEditorId,
+  resolveEditorForFile,
+  sanitizeEditorConfig,
+  type CustomEditor,
+  type EditorConfig,
+  type KnownEditor,
+  type ResolvedEditor,
+} from "./lib/editorRules";
+import {
+  applySchemeToTerminalTheme,
+  loadTerminalAppearance,
+  persistTerminalAppearance,
+  sanitizeAppearanceSettings,
+  terminalOptionPatch,
+  type TerminalAppearanceState,
+} from "./lib/terminalAppearance";
+import { ensureBuiltinSchemeCatalog } from "./lib/terminalScheme";
+
+// Defer settings / multi-format preview modules off the first-paint import graph
+// (single-file pack still inlines them, but factories run only when opened).
+const SettingsDialog = defineAsyncComponent(() => import("./components/SettingsDialog.vue"));
+const PreviewPane = defineAsyncComponent(() => import("./components/PreviewPane.vue"));
+import ImportWizard from "./components/ImportWizard.vue";
+import OtpPanel from "./components/OtpPanel.vue";
+import JumpServerAssetsPanel from "./components/JumpServerAssetsPanel.vue";
+import TelnetConnectDialog from "./components/TelnetConnectDialog.vue";
+import SerialConnectDialog from "./components/SerialConnectDialog.vue";
+import SerialUploadDialog from "./components/SerialUploadDialog.vue";
+import VncConnectDialog from "./components/VncConnectDialog.vue";
+import VncSurface from "./components/VncSurface.vue";
+import RdpConnectDialog from "./rdp/RdpConnectDialog.vue";
+import RdpSurface from "./rdp/RdpSurface.vue";
+import TaskRunnerDialog from "./components/TaskRunnerDialog.vue";
+import PortForwardDialog from "./components/PortForwardDialog.vue";
+import {
+  startLocalTerminal,
+  startTelnet,
+  startSerial,
+  startVnc,
+  startRdp,
+  type ProtocolSessionRef,
+} from "./lib/protocolSessions";
+import { encodeSerialInputFrame } from "./lib/serialTerminalFrames";
+import {
+  initialSerialUploadState,
+  reduceSerialUpload,
+  serialUploadActive,
+  serialUploadPercent,
+  streamSerialUploadFile,
+  type SerialUploadProgress,
+  type SerialUploadProtocol,
+  type SerialUploadUiState,
+} from "./lib/serialUpload";
+import type { TelnetConnectOptions } from "./components/TelnetConnectDialog.vue";
+import type { SerialConnectOptions } from "./components/SerialConnectDialog.vue";
+import type { VncConnectOptions } from "./components/VncConnectDialog.vue";
+import type { RdpConnectOptions } from "./rdp/RdpConnectDialog.vue";
+import CompletionMenu from "./components/CompletionMenu.vue";
+import { ToastAction, ToastClose, ToastProvider, ToastRoot, ToastViewport } from "./components/ui/toast";
+import { CompletionController } from "./lib/completion/CompletionController";
+import { applyEditToText } from "./lib/completion/core/edit";
+import { rankItems } from "./lib/completion/core/ranking";
+import type { CompletionItem } from "./lib/completion/core/types";
+import { resolveCompletionKey } from "./lib/completion/keyboard";
+import { createStaticFigSource } from "./lib/completion/fig/staticSpecSource";
+import { WAVE1_FIG_MANIFEST } from "./lib/completion/fig/wave1Manifest";
+import { cwdFromShellPrompt, pathCompletionSlots, resolvePathCompletionCwd, runPathCompletion } from "./lib/completion/fig/pathGenerator";
+import { hasFigCommandSpec } from "./lib/completion/fig/optionArgPhase";
+import { isPendingOptionArgPhase, shouldSuppressSoftHistoryUnderFig } from "./lib/completion/fig/staticSpecSource";
+import LocalBrowsePanel from "./components/LocalBrowsePanel.vue";
+import type { SuggestionAnchor } from "./lib/overlayPlacement";
+
+interface SessionInfo {
+  sessionId: string;
+  connectionId: string;
+  workbenchId?: string;
+  connected: boolean;
+  sequence: number;
+  chunkSize: number;
+  directoryTrackingSupported?: boolean;
+  bastionMode?: string;
+  replay?: ReplayResult;
+}
+
+interface ReplayResult {
+  frameCount: number;
+  firstAvailableSequence: number;
+  tailSequence: number;
+  complete: boolean;
+}
+
+interface SftpEntry {
+  name: string;
+  uri: string;
+  kind: "file" | "directory" | "symlink" | "other";
+  size?: number;
+  modifiedAt?: number;
+  permissions?: string;
+  contentType?: string;
+  /** 属主用户/属组（includeOwner 时由 sidecar 返回；缺失显示 "-"）。 */
+  owner?: string;
+  group?: string;
+}
+
+interface SftpStatInfo {
+  path: string;
+  kind: SftpEntry["kind"];
+  size?: number;
+  modifiedAt?: number;
+  mode?: string;
+  owner?: string;
+  group?: string;
+  ownerName?: string | null;
+  ownerUid?: number | null;
+  groupName?: string | null;
+  groupGid?: number | null;
+}
+
+// 服务器内复制/剪切/粘贴的剪贴板：仅当前连接内有效。
+interface SftpClipboard {
+  mode: "copy" | "cut";
+  paths: string[];
+  connectionId: string;
+}
+
+interface HostKeyPrompt {
+  challengeId: string;
+  operationId: string;
+  host: string;
+  port: number;
+  keyType: string;
+  fingerprint: string;
+}
+
+interface TransferTask {
+  taskId: string;
+  sessionId?: string;
+  direction: "upload" | "download";
+  fileName: string;
+  size: number;
+  transferred: number;
+  status: "queued" | "running" | "completed" | "cancelled" | "failed";
+  error?: string;
+  // saveToLocal 下载完成后的本机落盘路径（用于展示与在文件管理器中定位）。
+  localPath?: string;
+  // 上传分两阶段计数（issue #60）：staging=字节缓存进本地 spool（快），
+  // uploading=字节真正推到 SFTP 服务器（慢）。transferred 只反映 uploading，
+  // staged 单独记录 staging 字节，面板不再出现"3G→100M"回跳与假速度。
+  phase?: TransferPhase;
+  staged?: number;
+  compression?: string;
+  // 本工作台首次见到该任务的时间（issue #18 排序：live 行缺 startedAt 时
+  // 用它兜底，保证活跃区顺序稳定可解释）。
+  joinedAt?: number;
+  // 目录下载（sftp/download/tree/start）扩展：整树文件数、在传相对路径与
+  // 失败汇总（完成但部分文件失败时面板提示）。（issue #46）
+  fileCount?: number;
+  currentFile?: string;
+  failedCount?: number;
+  failureSample?: string;
+}
+
+// sftp/transfer/history 行（落盘历史 + 内存 live 合并视图）：status 沿用现有枚举、无 queued。
+interface TransferHistoryEntry {
+  taskId: string;
+  sessionId?: string;
+  connectionId?: string;
+  direction: "upload" | "download";
+  fileName: string;
+  size: number;
+  transferred: number;
+  status: "running" | "completed" | "cancelled" | "failed";
+  startedAt?: number;
+  finishedAt?: number;
+  error?: string;
+  localPath?: string;
+}
+
+interface WorkbenchState {
+  sessionId?: string;
+  terminalSequence?: number;
+  sftpPath?: string;
+  followDirectory?: boolean;
+  sudoMode?: boolean;
+  splitRatio?: number;
+  paneOrder?: SshWorkbenchPaneOrder;
+  sftpPaneOpen?: boolean;
+  visibleColumns?: SftpColumn[];
+  sftpColumnWidths?: Partial<Record<SftpColumn, number>>;
+  sftpNameWidth?: number | null;
+  /** 列配置版本标记：六列默认（issue #35）上线后的一次性迁移，老偏好重置为全开。 */
+  columnsV2?: boolean;
+}
+
+interface ConnectionSummary {
+  name?: string;
+  host?: string;
+  port?: number;
+  username?: string;
+  color?: string;
+  readOnly?: boolean;
+}
+
+interface DownloadInfo {
+  taskId: string;
+  fileName: string;
+  size: number;
+  chunkSize: number;
+  // 断点续传：start 带 offset 时回显的恢复起点。
+  resumeOffset?: number;
+  compression?: string;
+  // 目录下载（tree/start）扩展：扫描得到的整树规模。
+  fileCount?: number;
+  dirCount?: number;
+  skippedCount?: number;
+}
+
+interface ExecResult {
+  output: string;
+  exitCode: number;
+}
+
+interface ServerMetrics {
+  hostname?: string | null;
+  kernel?: string | null;
+  uptimeSeconds?: number | null;
+  cpu?: { cores?: number | null; percent?: number | null; load1?: number | null; load5?: number | null; load15?: number | null };
+  memory?: { totalBytes?: number; availableBytes?: number; usedBytes?: number; swapTotalBytes?: number; swapUsedBytes?: number };
+  disks?: Array<{ filesystem: string; mount: string; totalBytes: number; usedBytes: number; availableBytes: number; percentUsed: number }>;
+  // Extensions reported by newer sidecars; when absent the network and
+  // process sections simply stay hidden instead of erroring.
+  network?: Array<{ name: string; rxRate: number; txRate: number; rxTotal: number; txTotal: number }>;
+  processes?: Array<{ pid: number; user: string; cpuPercent: number; memPercent: number; command: string }>;
+  // §1.5 发行版识别（/etc/os-release）：读不到时两字段整体缺省，
+  // 旧 sidecar 自然缺失，前端不渲染徽标（optional 降级）。
+  osId?: string;
+  osPretty?: string;
+  gpus?: Array<{ name: string; utilPercent: number; memoryUsedMiB: number; memoryTotalMiB: number }>;
+  npu?: string;
+}
+
+interface DiskUsage {
+  filesystem: string;
+  mount: string;
+  totalBytes: number;
+  usedBytes: number;
+  availableBytes: number;
+  percentUsed: number;
+}
+
+// 列类型移到 lib/sftpEntries（issue #34：owner/group 属主/属组列，默认关）。
+type SftpSortColumn = "name" | "size" | "modified";
+
+// Above this size the browser download path buffers the whole file in memory, so ask first.
+const WEB_DOWNLOAD_WARNING_BYTES = 512 * MIB;
+const ZMODEM_DETECTION_TIMEOUT_MS = 5000;
+// 粘贴防护：内容含换行或达到该字符数时先确认（对齐 tiny-rdm TerminalPane 阈值）。
+const PASTE_CONFIRM_CHAR_THRESHOLD = 200;
+// SFTP 路径历史：每连接最多保留 10 条，存 localStorage（对齐 tiny-rdm pathHistory）。
+const SFTP_PATH_HISTORY_KEY = "sftp-path-history";
+const SFTP_PATH_HISTORY_LIMIT = 10;
+// 传输历史查询上限（sftp/transfer/history，后端环形 200，面板一次取 50）。
+const TRANSFER_HISTORY_LIMIT = 50;
+// Upper bound for out-of-order terminal frames held while waiting for the
+// missing sequence; the replay path re-delivers anything dropped beyond it.
+const TERMINAL_PENDING_FRAME_LIMIT = 1024;
+const SFTP_QUICK_PATHS = ["/", "/home", "/tmp", "/etc", "/var", "/root"];
+// 命令历史 / 快速命令 / 终端字号：localStorage 持久化（敏感命令不入持久层）。
+const COMMAND_HISTORY_KEY = "ssh-command-history";
+// 快速命令旧键：迁移到 sidecar 全局存储后仅作一次性迁移种子（见 hydrateQuickCommands）。
+const QUICK_COMMANDS_KEY = "ssh-quick-commands";
+// 终端字号/字体族键移入 lib/terminalFont.ts（issue #31 字体单独设置）统一管理。
+// SFTP 面板默认打开偏好：localStorage 全局持久化（"false" = 新工作台仅终端）。
+const SFTP_PANE_OPEN_KEY = "ssh-sftp-pane-open";
+// 会话顶栏常驻资源条（OpenOcta 式一眼态势）：默认开，"false" 关闭。
+const RESOURCE_STRIP_KEY = "ssh-resource-strip";
+// 侧栏形态偏好：tree/quick tab（默认 tree）与收起状态，localStorage 全局持久化。
+const SFTP_SIDE_TAB_KEY = "ssh-sftp-side-tab";
+const SFTP_SIDE_COLLAPSED_KEY = "ssh-sftp-side-collapsed";
+const DOWNLOAD_DIR_KEY = "ssh-download-directory";
+// 是否默认下载到「下载保存目录」（默认开）；关闭则每次下载打开目录选择窗口。
+const DOWNLOAD_USE_DEFAULT_KEY = "ssh-download-use-default-dir";
+// 文件已存在时的处理策略：rename（自动重命名，默认）/ ask（询问我）/ overwrite（覆盖）。
+const DOWNLOAD_CONFLICT_KEY = "ssh-download-conflict-policy";
+// 下载偏好的内存权威态：setup 早期（downloadUseDefaultDraft 初始化）就会被读，
+// 必须声明在所有读取点之前（存储语义见下方 loadDownloadDir 一带的注释）。
+const downloadDirState = ref("");
+const downloadUseDefaultState = ref(true);
+const downloadConflictState = ref<DownloadConflictPolicy>("rename");
+const compressionStrategyState = ref<CompressionStrategy>("smart");
+const compressionThresholdMibState = ref(64);
+
+function sanitizeConflictPolicy(value: unknown): DownloadConflictPolicy {
+  return value === "ask" || value === "overwrite" ? value : "rename";
+}
+// 终端交互：选中复制 + 右键粘贴（localStorage 全局偏好，默认开，"false" 关闭）。
+const SELECT_COPY_KEY = "ssh-terminal-select-copy";
+// 点击定位光标：把原地点击换算成左右方向键；非 readline 应用可能回显 [C[C…，可关。
+const CLICK_CURSOR_KEY = "ssh-terminal-click-cursor";
+// 关键词高亮总开关（IMPL_PLAN_NETCATTY_PARITY §3-B1）：localStorage 全局持久化，
+// 默认开、仅显式 "false" 关（对齐 sanitizeSelectCopyEnabled 模式）；关闭时零挂钩子。
+const HIGHLIGHT_ENABLED_KEY = "ssh-keyword-highlight";
+// decoration 引擎护栏：全局在档 decoration 上限（超限停止本帧注册）。
+const HIGHLIGHT_DECORATION_LIMIT = 400;
+// rAF 节流目标：≤30fps（约 33ms 一帧）。
+const HIGHLIGHT_SCAN_MIN_INTERVAL_MS = 33;
+// Skip highlight scans while the write throttle is flooded — decoration work
+// otherwise fights xterm under `tail -f` and makes streaming stutter.
+const HIGHLIGHT_FLOOD_PENDING_BYTES = 48 * 1024;
+/** Any in-flight coalesced paint: skip highlight until the queue drains. */
+const HIGHLIGHT_BUSY_RETRY_MS = 80;
+const HIGHLIGHT_FLOOD_RETRY_MS = 120;
+// 8 色板（新增规则默认色板；自定义 hex 输入并行提供）。
+const HIGHLIGHT_PALETTE = ["#ef4444", "#f59e0b", "#facc15", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#6b7280"];
+
+type TerminalSearchMatchState = "idle" | "match" | "no-match";
+
+const terminalHost = ref<HTMLElement>();
+const sftpPane = ref<HTMLElement>();
+const paneContainer = ref<HTMLElement>();
+const uploadInput = ref<HTMLInputElement>();
+const lzpackUploadInput = ref<HTMLInputElement>();
+const zmodemInput = ref<HTMLInputElement>();
+const trzszInput = ref<HTMLInputElement>();
+const hostContext = ref<Record<string, unknown>>({});
+/** One-shot duplicate / spawn intent from the opening workbench context. */
+let transportReuseState = createSessionTransportReuseState({});
+// 宿主未下发 appearance 前的兜底：host `.dark` 规范令牌。
+const appearance = ref(resolveAppearance());
+const terminalState = ref<"connecting" | "connected" | "disconnected" | "error">("connecting");
+const terminalError = ref("");
+// 连接卡片：用户取消（在途 open 无法中止，仅切换 UI 态并在 promise 落地后回收
+// 孤儿会话）、Show logs 展开态与连接尝试日志（环形 200 条，跨尝试保留历史）。
+const connectCancelled = ref(false);
+// 成功过渡动画：open 成功后先切 success 卡片（进度到顶 + 对号），hold 播完再进终端。
+const connectSucceeded = ref(false);
+// 手动重连撞上 "Connection is not active"（sidecar 注册表丢凭据）：卡片保持
+// connecting 态并提示用户在连接列表重开连接，插件在有界窗口内自动轮等待宿主重放凭据。
+const inactiveWaiting = ref(false);
+const CONNECT_SUCCESS_HOLD_MS = 750;
+const connectLogsOpen = ref(false);
+const connectLog = createConnectLog();
+const sftpError = ref("");
+const sftpErrorRetry = ref<(() => void) | null>(null);
+const sftpErrorOpen = ref(false);
+const sftpErrorKey = ref(0);
+const notice = ref("");
+const noticeActions = ref<Array<{ label: string; run: () => void }>>([]);
+const noticeOpen = ref(false);
+const noticeKey = ref(0);
+const session = ref<SessionInfo>();
+const currentPath = ref("/");
+const entries = ref<SftpEntry[]>([]);
+const selectedPath = ref("");
+const loadingFiles = ref(false);
+const hostKeyPrompt = ref<HostKeyPrompt>();
+const rememberHostKey = ref(true);
+// AI 终端同步执行：审批挑战队列 / 执行横幅状态（ssh/agent/* 事件仅当前会话生效）。
+// 跨会话并发审批按 challengeId 排队，弹窗一次只渲染队首（后端同会话已串行化）。
+const agentPromptQueue = ref<AgentPromptPayload[]>([]);
+const agentPromptCommand = ref("");
+const agentPromptRemaining = ref(0);
+const agentPromptExpired = ref(false);
+// 「记住此命令」勾选态：批准时随 resolve 提交，把命令写入连接级免审批清单
+// （后端 D2 兜底：破坏性命令自动忽略记住标记）。
+const agentPromptRemember = ref(false);
+const agentRunning = ref<AgentNoticePayload>();
+const splitRatio = ref(58);
+const paneOrder = ref<SshWorkbenchPaneOrder>("terminal-left");
+// SFTP 面板可见性：每个工作台即时开关（写入 workbenchState）；
+// 新工作台的初始值取全局"默认打开"偏好（localStorage）。
+const sftpPaneOpen = ref(loadSftpPaneDefaultOpen());
+const sftpPaneDefaultOpen = ref(loadSftpPaneDefaultOpen());
+const resourceStripEnabled = ref(loadResourceStripEnabled());
+// 侧栏导航形态偏好：tree（目录树，默认）/ quick（快捷路径）+ 收起状态。
+const sftpSideTab = ref<"tree" | "quick">(loadSftpSideTab());
+const sftpSideCollapsed = ref(loadSftpSideCollapsed());
+// 侧栏目录树：根 = 连接根 "/"，展开时经 sftp/list 懒加载子目录（仅目录）。
+const sftpTree = ref<DirTreeNode>(createTreeRoot("/", "/"));
+// sftp/home 探测结果：quick tab 置顶展示（获取失败时该项隐藏）。
+const sftpHomePath = ref("");
+// 选中复制 + 右键粘贴（终端交互偏好，全局生效，切换即持久化）。
+const termSelectCopy = ref(loadSelectCopyEnabled());
+const termClickCursor = ref(loadClickCursorEnabled());
+const followDirectory = ref(false);
+const directoryTrackingSupported = ref<boolean | undefined>();
+const visibleColumns = ref<SftpColumn[]>([...DEFAULT_VISIBLE_COLUMNS]);
+/** 每列当前宽度（px）。 */
+const sftpColumnWidths = reactive<Record<SftpColumn, number>>({ ...DEFAULT_COLUMN_WIDTHS });
+/** 名称列宽度（px）；null = 未拖过，弹性填充剩余空间。 */
+const sftpNameWidth = ref<number | null>(null);
+/** 正在拖拽的列（含 name）；null 表示没在拖。 */
+let sftpResizing: { column: SftpColumn | "name"; startX: number; startWidth: number } | null = null;
+const sort = ref<{ column: SftpSortColumn; direction: "asc" | "desc" }>({ column: "name", direction: "asc" });
+const transferTasks = reactive<Record<string, TransferTask>>({});
+// 断点续传（F1）：暂停中的任务（两分片之间生效）；等待恢复的回调登记表。
+const pausedTaskIds = reactive(new Set<string>());
+const pauseWaiters = new Map<string, Array<() => void>>();
+// 后端扫描出的可续传上传任务（spool 前缀仍在磁盘上）。
+const transferPanelOpen = ref(false);
+// 传输历史（sftp/transfer/history，落盘+内存合并）：面板打开或活动任务清零时刷新；
+// 历史区与活跃任务并列展示，后端未升级/读取失败仅提示加载失败（optional 特性降级）。
+const transferHistory = ref<TransferHistoryEntry[]>([]);
+const transferHistoryLoading = ref(false);
+const transferHistoryFailed = ref(false);
+const resumableTasks = ref<ResumableUploadTask[]>([]);
+const resumableLoading = ref(false);
+const resumeInput = ref<HTMLInputElement | null>(null);
+const resumeTargetTaskId = ref("");
+const columnsOpen = ref(false);
+const transferSpeeds = reactive<Record<string, number>>({});
+const sudoMode = ref(false);
+const archiveBusy = ref(false);
+const operationDialog = ref<"mkdir" | null>(null);
+const operationDraft = ref("");
+const deleteTarget = ref<SftpEntry>();
+const deleteSubmitting = ref(false);
+const renamingPath = ref("");
+const renameDraft = ref("");
+const renameSubmitting = ref(false);
+const dragActive = ref(false);
+// Terminal-local drag overlay: true only while files are dragged over the
+// terminal pane and the drop can actually be accepted (writable session).
+const terminalDragActive = ref(false);
+// 右键菜单由 reka ContextMenu 承载（定位/碰撞/Esc/外点关闭均交给 reka）；
+// 这里只保留受控 open 状态与负载数据，坐标由 trigger 从原生事件捕获。
+const terminalMenuOpen = ref(false);
+// 行右键菜单：selection 为打开菜单瞬间的多选快照（>1 时切换为批量区）。
+const fileMenu = ref<{ entry: SftpEntry; selection: string[] }>();
+// 文件列表空白处右键：新建文件夹 / 新建文件 / 刷新（拦截浏览器默认菜单）。
+const blankMenu = ref(false);
+// 侧栏（目录树/快捷路径）行右键：打开 / 复制路径 / 复制文件名 / 压缩。
+const sideMenu = ref<{ path: string }>();
+// 下载历史项右键：只为已有本机落盘路径提供定位/打开操作；taskId 用于按卡受控打开。
+const transferHistoryMenu = ref<{ taskId: string }>();
+const zmodemState = ref<"idle" | "waiting" | "uploading" | "downloading">("idle");
+const zmodemFileName = ref("");
+const zmodemTransferred = ref(0);
+const zmodemTotalSize = ref(0);
+const zmodemSpeed = ref(0);
+const zmodemFileIndex = ref(0);
+const zmodemFileCount = ref(0);
+// trzsz (trz/tsz)：进度 overlay 状态镜像（真实状态机在 lib/terminalTrzsz.ts）。
+const trzszPhase = ref<TrzszProgressState["phase"]>("idle");
+const trzszDirection = ref<TrzszProgressState["direction"]>("");
+const trzszFileName = ref("");
+const trzszFileIndex = ref(0);
+const trzszFileCount = ref(0);
+const trzszPercent = ref(0);
+const trzszSpeed = ref(0);
+const trzszMessage = ref("");
+const commandOpen = ref(false);
+const commandDraft = ref("");
+const commandUseSudo = ref(true);
+const commandRunning = ref(false);
+const commandExecId = ref("");
+const commandResult = ref<ExecResult>();
+const commandError = ref("");
+// 命令历史：结构化条目 + localStorage 非敏感持久化；index 为 -1 表示未在浏览历史。
+const commandHistory = ref<HistoryEntry[]>(loadCommandHistory());
+const commandHistoryIndex = ref(-1);
+const commandHistoryBackup = ref("");
+/** Dialog list: printable one-line commands only (drops noise / control junk). */
+const commandDialogHistory = computed(() =>
+  commandHistory.value.filter((entry) => {
+    const command = entry?.command;
+    if (typeof command !== "string") return false;
+    const trimmed = command.trim();
+    if (!trimmed || trimmed.length > 400) return false;
+    if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(trimmed)) return false;
+    return !isNoiseHistoryLine(trimmed);
+  }).slice(0, 40),
+);
+const INTERACTION_PREFS_KEY = "ssh-interaction-prefs";
+const interactionPrefs = ref<InteractionPrefs>(loadInteractionPrefs());
+const historyNow = ref(Date.now());
+// 快速命令：用户自定义片段，sidecar 持久化；可全局或绑定 connectionId。
+// 单作用域 ≤20 条；工作台展示「全局 + 当前连接」，工具栏下拉一键发送到 PTY。
+const quickCommands = ref<QuickCommand[]>(loadQuickCommands());
+const quickMenuOpen = ref(false);
+const quickSaving = ref(false);
+const quickDraft = reactive<{ id?: string; name: string; command: string; group: string; scope: "global" | "connection" }>({
+  name: "",
+  command: "",
+  group: "",
+  scope: "connection",
+});
+// Termius Snippets 式面板状态：搜索过滤 / 卡片展开 / 编辑器子视图。
+const quickSearch = ref("");
+const quickExpandedId = ref<string | null>(null);
+const quickEditorOpen = ref(false);
+const quickCollapsedGroups = ref<string[]>([]);
+const visibleQuickCommandList = computed(() => visibleQuickCommands(quickCommands.value, connectionId.value));
+const filteredQuickCommands = computed(() => filterQuickCommands(visibleQuickCommandList.value, quickSearch.value));
+const groupedQuickCommands = computed<QuickCommandGroupView[]>(() => groupQuickCommands(filteredQuickCommands.value));
+const quickHasRealGroups = computed(() => quickCommandGroupCount(visibleQuickCommandList.value) > 0);
+const otherQuickCommandGroups = computed(() =>
+  groupQuickCommandsByConnection(otherScopedQuickCommands(quickCommands.value, connectionId.value)),
+);
+const otherQuickCommandCount = computed(() =>
+  otherQuickCommandGroups.value.reduce((sum, group) => sum + group.commands.length, 0),
+);
+const quickOtherOpen = ref(false);
+const quickDraftScopeId = computed(() => (quickDraft.scope === "connection" ? connectionId.value : ""));
+const quickDraftScopeCount = computed(() => countQuickCommandsInScope(quickCommands.value, quickDraftScopeId.value || null));
+const quickDraftCanAdd = computed(() => {
+  if (quickDraft.id) {
+    const existing = quickCommands.value.find((item) => item.id === quickDraft.id);
+    const sameScope =
+      (existing?.connectionId?.trim() ?? "") === (quickDraftScopeId.value || "");
+    if (sameScope) return true;
+  }
+  return canAddQuickCommandInScope(quickCommands.value, quickDraftScopeId.value || null);
+});
+const batchSaveScope = ref<"global" | "connection">("connection");
+const batchSaveScopeId = computed(() => (batchSaveScope.value === "connection" ? connectionId.value : ""));
+const batchScopeCanAdd = computed(() => canAddQuickCommandInScope(quickCommands.value, batchSaveScopeId.value || null));
+
+function openQuickEditor(item?: QuickCommand) {
+  quickDraft.id = item?.id;
+  quickDraft.name = item?.name ?? "";
+  quickDraft.command = item?.command ?? "";
+  quickDraft.group = item?.group ?? "";
+  // 新建默认「当前连接」；编辑沿用原条目 scope。
+  if (item) {
+    quickDraft.scope = item.connectionId?.trim() ? "connection" : "global";
+  } else {
+    quickDraft.scope = connectionId.value ? "connection" : "global";
+  }
+  quickEditorOpen.value = true;
+}
+
+function closeQuickEditor() {
+  quickEditorOpen.value = false;
+  quickDraft.id = undefined;
+  quickDraft.name = "";
+  quickDraft.command = "";
+  quickDraft.group = "";
+  quickDraft.scope = connectionId.value ? "connection" : "global";
+}
+
+function toggleQuickGroupCollapse(groupId: string) {
+  const index = quickCollapsedGroups.value.indexOf(groupId);
+  if (index >= 0) quickCollapsedGroups.value.splice(index, 1);
+  else quickCollapsedGroups.value.push(groupId);
+}
+
+function quickGroupName(group: QuickCommandGroupView): string {
+  return group.id ? group.name : t("quickCommands.ungrouped");
+}
+
+function setQuickDraftBoundToConnection(bound: boolean | undefined) {
+  quickDraft.scope = bound === true && connectionId.value ? "connection" : "global";
+}
+
+function setBatchSaveBoundToConnection(bound: boolean | undefined) {
+  batchSaveScope.value = bound === true && connectionId.value ? "connection" : "global";
+}
+
+function toggleQuickExpand(id: string) {
+  quickExpandedId.value = quickExpandedId.value === id ? null : id;
+}
+// 批量发送命令条（Electerm quick-command bar 风格）：常驻贴在终端底部，回车
+// 即发送。目标来自 ssh/sessions/list（跨连接全部活跃会话），命令写入各会话
+// 交互终端（PTY 键盘语义，输出回显在各自终端，对齐 tiny-rdm batch send）。
+const BATCH_BAR_OPEN_KEY = "ssh-batch-bar-open";
+const BATCH_SELECTED_KEY = "ssh-batch-selected";
+
+function loadBatchBarOpen(): boolean {
+  try {
+    return uiStorage.getItem(BATCH_BAR_OPEN_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function loadBatchSelected(): string[] {
+  try {
+    const raw = uiStorage.getItem(BATCH_SELECTED_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id): id is string => typeof id === "string" && !!id);
+  } catch {
+    return [];
+  }
+}
+
+function persistBatchSelected(ids: string[]) {
+  try {
+    uiStorage.setItem(BATCH_SELECTED_KEY, JSON.stringify(ids));
+  } catch {
+    // 存储不可用只失去跨 tab 记忆。
+  }
+}
+
+const batchBarOpen = ref(loadBatchBarOpen());
+const batchTargetsOpen = ref(false);
+const batchTargetFocusIndex = ref(0);
+const batchLoading = ref(false);
+const batchSending = ref(false);
+const batchTargets = ref<BatchSendTarget[]>([]);
+const batchSelected = ref<string[]>(loadBatchSelected());
+const batchDraft = ref("");
+const batchError = ref("");
+const batchSummary = ref<BatchSendSummary>();
+const batchLabelsAmbiguous = computed(() => batchTargetsNeedDisambiguation(batchTargets.value));
+const batchQuickPickId = ref("");
+const batchQuickPickOpen = ref(false);
+/** 联想列表高亮项；弹层打开时 ↑↓ 在此移动，关闭后恢复命令历史浏览。 */
+const batchQuickActiveIndex = ref(0);
+const batchComposeInput = ref<HTMLInputElement | null>(null);
+/** 快捷命令 + 最近历史合并联想（空草稿 = 全量，供左侧按钮 / Ctrl+Space 浏览）。 */
+const batchSuggestItems = computed(() =>
+  buildBatchSuggestItems({
+    quick: visibleQuickCommandList.value,
+    historyCommands: commandHistory.value.map((entry) => entry.command),
+    query: batchDraft.value,
+    limit: BATCH_BAR_SUGGEST_LIMIT,
+  }),
+);
+const batchSuggestAvailable = computed(
+  () => visibleQuickCommandList.value.length > 0 || commandHistory.value.length > 0,
+);
+// 保存为快速命令的内联名称态（保存走 ssh/quickCommands/save，默认绑当前连接）。
+const batchSaveMode = ref(false);
+const batchSaveName = ref("");
+const batchSaving = ref(false);
+// 命令条 ↑↓ 浏览历史（与命令弹窗共用 commandHistory 一份存储）。
+const batchHistoryIndex = ref(-1);
+const batchHistoryBackup = ref("");
+// 跨工作台同步源标识：sidecar 把本端状态广播给所有 webview，各端按 source
+// 过滤回声；sidecar 缺该方法（旧版二进制）时静默降级，只影响同步。
+const batchBarSourceId = randomUUID();
+let batchBroadcastTimer: number | undefined;
+// 连接信息面板（只读摘要 + echo 往返延迟）。
+const connectionInfoOpen = ref(false);
+const connectionLatency = ref<number | null>(null);
+const connectionLatencyBusy = ref(false);
+const connectionLatencyFailed = ref(false);
+// 认证方式只读名称（来自 ssh/sessions/list 的 authMethod；仅方法名，无凭据）。
+const connectionAuthMethod = ref("");
+// 生效只读门禁（来自 ssh/sessions/list 行的 readOnly：表单 read_only ∥
+// 宿主标准 read_only）。后端门禁为权威来源，前端据此禁用写操作。
+const connectionReadOnly = ref(false);
+const metricsOpen = ref(false);
+const dockerOpen = ref(false);
+const assetsOpen = ref(false);
+const bastionMode = ref("direct");
+const isJumpServerMode = computed(() => bastionMode.value === "jumpserver");
+const dockerLoading = ref(false);
+const dockerError = ref("");
+const dockerRows = ref<DockerContainer[]>([]);
+const dockerQuery = ref("");
+const dockerLogs = ref("");
+const dockerLogsFor = ref("");
+const dockerBusyId = ref("");
+const dockerConfirm = ref<{ row: DockerContainer; action: "start" | "stop" | "restart" } | null>(null);
+const DOCKER_PANEL_SIZE_KEY = "ssh-docker-panel-size";
+const DOCKER_LOGS_PANEL_SIZE_KEY = "ssh-docker-logs-panel-size";
+const DOCKER_LIST_SIZE_DEFAULT = { w: 680, h: 420 };
+const DOCKER_LOGS_SIZE_DEFAULT = { w: 440, h: 420 };
+const DOCKER_LIST_SIZE_MIN = { w: 420, h: 240 };
+const DOCKER_LOGS_SIZE_MIN = { w: 280, h: 200 };
+type DockerPanelSize = { w: number; h: number };
+function loadDockerPanelSize(key: string, fallback: DockerPanelSize, min: DockerPanelSize): DockerPanelSize {
+  try {
+    const raw = JSON.parse(uiStorage.getItem(key) || "null") as Partial<DockerPanelSize> | null;
+    if (!raw || typeof raw !== "object") return { ...fallback };
+    const w = typeof raw.w === "number" ? raw.w : fallback.w;
+    const h = typeof raw.h === "number" ? raw.h : fallback.h;
+    return {
+      w: Math.max(min.w, Math.min(1600, Math.round(w))),
+      h: Math.max(min.h, Math.min(1200, Math.round(h))),
+    };
+  } catch {
+    return { ...fallback };
+  }
+}
+function persistDockerPanelSize(key: string, size: DockerPanelSize) {
+  try {
+    uiStorage.setItem(key, JSON.stringify({ w: size.w, h: size.h }));
+  } catch {
+    /* ignore */
+  }
+}
+const dockerPanelSize = reactive(loadDockerPanelSize(DOCKER_PANEL_SIZE_KEY, DOCKER_LIST_SIZE_DEFAULT, DOCKER_LIST_SIZE_MIN));
+const dockerLogsPanelSize = reactive(loadDockerPanelSize(DOCKER_LOGS_PANEL_SIZE_KEY, DOCKER_LOGS_SIZE_DEFAULT, DOCKER_LOGS_SIZE_MIN));
+const dockerListStyle = computed(() => ({
+  width: `${dockerPanelSize.w}px`,
+  height: `${dockerPanelSize.h}px`,
+}));
+const dockerLogsFloatStyle = computed(() => ({
+  width: `${dockerLogsPanelSize.w}px`,
+  height: `${dockerLogsPanelSize.h}px`,
+  left: `${8 + dockerPanelSize.w + 8}px`,
+}));
+let dockerResizing: {
+  which: "list" | "logs";
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startW: number;
+  startH: number;
+  maxW: number;
+  maxH: number;
+} | null = null;
+function startDockerPanelResize(which: "list" | "logs", event: PointerEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+  const target = event.currentTarget as HTMLElement | null;
+  const host = target?.closest(".terminal-pane") as HTMLElement | null;
+  const hostRect = host?.getBoundingClientRect();
+  const size = which === "list" ? dockerPanelSize : dockerLogsPanelSize;
+  const min = which === "list" ? DOCKER_LIST_SIZE_MIN : DOCKER_LOGS_SIZE_MIN;
+  const leftOffset = which === "list" ? 8 : 8 + dockerPanelSize.w + 8;
+  const maxW = hostRect ? Math.max(min.w, Math.floor(hostRect.width - leftOffset - 8)) : 1600;
+  const maxH = hostRect ? Math.max(min.h, Math.floor(hostRect.height - 16)) : 1200;
+  dockerResizing = {
+    which,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    startW: size.w,
+    startH: size.h,
+    maxW,
+    maxH,
+  };
+  document.body.classList.add("resizing-docker");
+  target?.setPointerCapture?.(event.pointerId);
+  document.addEventListener("pointermove", onDockerPanelResizeMove);
+  document.addEventListener("pointerup", onDockerPanelResizeEnd);
+  document.addEventListener("pointercancel", onDockerPanelResizeEnd);
+}
+function onDockerPanelResizeMove(event: PointerEvent) {
+  if (!dockerResizing || event.pointerId !== dockerResizing.pointerId) return;
+  const min = dockerResizing.which === "list" ? DOCKER_LIST_SIZE_MIN : DOCKER_LOGS_SIZE_MIN;
+  const size = dockerResizing.which === "list" ? dockerPanelSize : dockerLogsPanelSize;
+  size.w = Math.max(min.w, Math.min(dockerResizing.maxW, Math.round(dockerResizing.startW + event.clientX - dockerResizing.startX)));
+  size.h = Math.max(min.h, Math.min(dockerResizing.maxH, Math.round(dockerResizing.startH + event.clientY - dockerResizing.startY)));
+}
+function onDockerPanelResizeEnd(event: PointerEvent) {
+  if (!dockerResizing || event.pointerId !== dockerResizing.pointerId) return;
+  const which = dockerResizing.which;
+  dockerResizing = null;
+  document.body.classList.remove("resizing-docker");
+  document.removeEventListener("pointermove", onDockerPanelResizeMove);
+  document.removeEventListener("pointerup", onDockerPanelResizeEnd);
+  document.removeEventListener("pointercancel", onDockerPanelResizeEnd);
+  persistDockerPanelSize(
+    which === "list" ? DOCKER_PANEL_SIZE_KEY : DOCKER_LOGS_PANEL_SIZE_KEY,
+    which === "list" ? dockerPanelSize : dockerLogsPanelSize,
+  );
+}
+const filteredDockerRows = computed(() => {
+  const q = dockerQuery.value.trim().toLowerCase();
+  if (!q) return dockerRows.value;
+  return dockerRows.value.filter((row) => {
+    const haystack = [row.name, row.id, row.image, row.status, row.running ? "running" : "stopped"]
+      .join("\n")
+      .toLowerCase();
+    return haystack.includes(q);
+  });
+});
+const historyPanelOpen = ref(false);
+const historyPanelQuery = ref("");
+const historyPanelIndex = ref(-1);
+const historyPanelBackup = ref("");
+const historyPanelQueryInput = ref<HTMLInputElement | null>(null);
+const quickPaletteOpen = ref(false);
+const quickPaletteQuery = ref("");
+const quickPaletteIndex = ref(0);
+const quickPaletteQueryInput = ref<HTMLInputElement | null>(null);
+const commandCatalog = ref<string[]>([...COMMON_COMMANDS]);
+const commandSuggestOpen = ref(false);
+const commandSuggestItems = ref<SuggestItem[]>([]);
+const commandSuggestIndex = ref(0);
+const commandSuggestPrefix = ref("");
+const commandSuggestLine = ref("");
+const commandSuggestPos = ref({ left: 24, top: 48 });
+const commandSuggestGhostPos = ref({ left: 24, top: 48 });
+const commandSuggestPlacement = ref<"above" | "below">("below");
+const commandSuggestTabArmed = ref(false);
+const commandSuggestGhost = computed(() => {
+  if (!commandSuggestOpen.value) return "";
+  const item = commandSuggestItems.value[commandSuggestIndex.value];
+  const pathPrefix = item?.source === "path" ? commandSuggestPrefix.value : undefined;
+  return ghostRemainder(commandSuggestLine.value, item, pathPrefix);
+});
+/** Compact mode: list only after ↓ / Tab arm; ghost still works. */
+const commandSuggestListVisible = computed(() => {
+  if (!commandSuggestOpen.value) return false;
+  if (!interactionPrefs.value.suggestCompactMode) return true;
+  return commandSuggestTabArmed.value;
+});
+function suggestSourceLabel(source: SuggestItem["source"]): string {
+  if (source === "history") return t("suggest.sourceHistory");
+  if (source === "quick") return t("suggest.sourceQuick");
+  if (source === "path") return t("suggest.sourcePath");
+  return t("suggest.sourceCommand");
+}
+
+/** 联想框底部快捷键芯片（按 locale 分隔符切开，避免一整行挤在一起）。 */
+const commandSuggestHintChips = computed(() =>
+  t("suggest.kbdHint")
+    .split(/\s*·\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean),
+);
+function armCommandSuggest(index: number) {
+  commandSuggestIndex.value = index;
+  commandSuggestTabArmed.value = true;
+}
+
+const completionOpen = ref(false);
+const completionItems = ref<CompletionItem[]>([]);
+const completionActiveIndex = ref(0);
+const completionAnchor = ref<SuggestionAnchor | null>(null);
+const completionViewport = ref({ height: 0 });
+const completionLoading = ref(false);
+
+function closeCompletionMenu() {
+  completionOpen.value = false;
+  completionItems.value = [];
+  completionActiveIndex.value = 0;
+  completionLoading.value = false;
+}
+
+function readCompletionAnchor(): SuggestionAnchor | null {
+  if (!terminal || !terminalHost.value) return null;
+  const host = terminalHost.value;
+  const screen = host.querySelector<HTMLElement>(".xterm-screen") ?? host;
+  const hostRect = host.getBoundingClientRect();
+  const screenRect = screen.getBoundingClientRect();
+  if (!screenRect.width || !screenRect.height || terminal.cols <= 0 || terminal.rows <= 0) return null;
+  const cellWidth = screenRect.width / terminal.cols;
+  const cellHeight = screenRect.height / terminal.rows;
+  const buffer = terminal.buffer.active;
+  completionViewport.value = { height: host.clientHeight };
+  return {
+    x: Math.round(screenRect.left - hostRect.left + buffer.cursorX * cellWidth),
+    y: Math.round(screenRect.top - hostRect.top + buffer.cursorY * cellHeight),
+    cellWidth,
+    cellHeight,
+  };
+}
+
+const completionController = new CompletionController({
+  source: createStaticFigSource(WAVE1_FIG_MANIFEST),
+  sessionId: () => session.value?.sessionId ?? "",
+  readLine: () => pendingTerminalInput,
+  // Phase ownership (not mutual open flags): first token → line suggest; args → fig.
+  enabled: () => {
+    if (!connected.value || historyPanelOpen.value || quickPaletteOpen.value || zmodemBusy.value || trzszBusy.value) return false;
+    return resolveCompletionOwner({
+      typedLine: pendingTerminalInput,
+      figEnabled: interactionPrefs.value.figCompletionEnabled,
+      lineEnabled: interactionPrefs.value.lineSuggestEnabled,
+    }) === "fig";
+  },
+  generators: {
+    slots: (request) => {
+      // Prefer OSC cwd; if missing, scrape classic PS1 path so relative
+      // completion does not fall through to SFTP `/` (bin/boot noise).
+      const fromPrompt = terminal
+        ? cwdFromShellPrompt(cursorLineTextBeforeCursor(terminal.buffer.active))
+        : "";
+      return pathCompletionSlots(
+        request,
+        resolvePathCompletionCwd(terminalCwd.value || fromPrompt, currentPath.value),
+        WAVE1_FIG_MANIFEST,
+      );
+    },
+    run: (slot) => runPathCompletion(slot, async (path) => {
+      if (!session.value) return null;
+      try {
+        const result = await window.datawisePlugin.invoke<{ entries?: Array<{ name: string; kind?: string }> }>(
+          sudoMode.value ? "sudo/listDir" : "sftp/list",
+          { sessionId: session.value.sessionId, path },
+        );
+        return Array.isArray(result.entries) ? result.entries : [];
+      } catch {
+        return null;
+      }
+    }),
+  },
+  onResponse: (response) => {
+    if (response.state === "ready" && response.items.length) {
+      if (historyPanelOpen.value || quickPaletteOpen.value || !interactionPrefs.value.figCompletionEnabled) {
+        closeCompletionMenu();
+        return;
+      }
+      const owner = resolveCompletionOwner({
+        typedLine: pendingTerminalInput,
+        figEnabled: true,
+        lineEnabled: interactionPrefs.value.lineSuggestEnabled,
+      });
+      if (owner !== "fig") {
+        closeCompletionMenu();
+        return;
+      }
+      completionItems.value = rankItems(response.items);
+      completionActiveIndex.value = 0;
+      completionAnchor.value = readCompletionAnchor();
+      completionOpen.value = true;
+      completionLoading.value = false;
+      hideCommandSuggest();
+      return;
+    }
+    if (response.state === "loading" && completionOpen.value) {
+      completionLoading.value = true;
+      completionItems.value = [];
+      return;
+    }
+    if (response.state !== "loading") closeCompletionMenu();
+  },
+  onAcceptEdit: (edit) => {
+    const applied = applyEditToText(pendingTerminalInput, edit);
+    const erase = "\u007f".repeat(pendingTerminalInput.length);
+    pendingTerminalInput = applied.text;
+    sendTerminalBytes(new TextEncoder().encode(`${erase}${applied.text}`));
+    completionController.lineChanged();
+  },
+});
+
+function acceptCompletionItem(item: CompletionItem) {
+  if (item.kind === "hint") {
+    closeCompletionMenu();
+    terminal?.focus();
+    return;
+  }
+  completionController.accept(item);
+  terminal?.focus();
+}
+const otpOpen = ref(false);
+let otpRefreshTimer = 0;
+const telnetDialogOpen = ref(false);
+const serialDialogOpen = ref(false);
+const serialUploadDialogOpen = ref(false);
+const serialUploadState = ref<SerialUploadUiState>(initialSerialUploadState());
+let serialUploadAbort = false;
+const vncDialogOpen = ref(false);
+const rdpDialogOpen = ref(false);
+const taskDialogOpen = ref(false);
+const protocolMenuOpen = ref(false);
+const protocolSession = ref<ProtocolSessionRef | null>(null);
+const vncSessionId = ref("");
+const rdpSessionId = ref("");
+const vncScaleMode = ref<"fit" | "stretch" | "actual">("fit");
+const rdpScaleMode = ref<"fit" | "stretch" | "actual">("fit");
+const vncSurfaceRef = ref<{ acceptFrame: (frame: Uint8Array) => boolean; reset: () => void } | null>(null);
+const rdpSurfaceRef = ref<{ acceptFrame: (frame: Uint8Array) => boolean; reset: () => void } | null>(null);
+// F2：进程管理面板 + 排序键；F3：录制/回放状态。
+interface ProcessRow {
+  pid: number;
+  ppid: number;
+  user: string;
+  cpuPercent: number;
+  memPercent: number;
+  etime: string;
+  state: string;
+  command: string;
+}
+const processesOpen = ref(false);
+const processRows = ref<ProcessRow[]>([]);
+const processLoading = ref(false);
+const processSortKey = ref<ProcessSortKey>("cpu");
+const recordingActive = ref(false);
+const recordingsOpen = ref(false);
+const recordings = ref<RecordingSummary[]>([]);
+const recordingsLoading = ref(false);
+// 删除确认走应用内弹窗：工作台 iframe 是 sandbox="allow-scripts"（无
+// allow-modals），window.confirm 恒返回 false——曾让删除按钮看起来完全失效。
+const recordingDeleteTarget = ref<RecordingSummary | null>(null);
+const recordingDeleteSubmitting = ref(false);
+// 行内导出进行中的 recordingId：多条记录共用全局导出锁（replayExporting），
+// 只有发起行显示 Encoding…，其余行仅禁用。
+const recordingExportingId = ref<string | null>(null);
+const replayState = ref<{ summary: RecordingSummary; events: ReplayEvent[] } | null>(null);
+const replayPlaying = ref(false);
+const replaySpeed = ref(1);
+const replayPlayheadMs = ref(0);
+const replayExporting = ref(false);
+const replayHost = ref<HTMLDivElement | null>(null);
+const metrics = ref<ServerMetrics>();
+const metricsLoading = ref(false);
+const metricsError = ref("");
+const settingsOpen = ref(false);
+const settingsFocusCategory = ref<"sudo" | "agent" | "transfer" | "terminal" | "security" | "mcp" | null>(null);
+const settingsFocusAddModel = ref(false);
+const importOpen = ref(false);
+// reka Select 不接受空串 option value（空串 = 未选中占位）；空值选项用哨兵值双向映射。
+const SELECT_EMPTY_SENTINEL = "__empty__";
+const auditOpen = ref(false);
+// 终端 MCP 模式快速开关（工具栏弹出层）：连接级 agentTerminalMode 的就地入口，
+// 与设置弹窗共用 ssh/settings/set，值语义见 lib/agentTerminal.ts。
+const agentModeOpen = ref(false);
+const agentMode = ref<AgentTerminalMode>("off");
+const agentModeBusy = ref(false);
+const profilesOpen = ref(false);
+const chmodTarget = ref<SftpEntry>();
+const chmodDraft = ref("");
+const chmodSubmitting = ref(false);
+const diskUsage = ref<DiskUsage>();
+const searchOpen = ref(false);
+// 打开搜索面板时的种子状态：选区首行预填 + 持久化的选项开关（见 openTerminalSearch）。
+const searchSeedQuery = ref("");
+const searchSeedOptions = ref<TerminalSearchOptions>(sanitizeSearchOptions(null));
+const searchMatchState = ref<TerminalSearchMatchState>("idle");
+const searchResultIndex = ref(0);
+const searchResultCount = ref(0);
+const pasteConfirm = ref<PasteConfirmation>();
+// 终端拖入文件的落点询问：null 表示取消；"cwd" 用 SFTP 当前目录（目录跟随
+// 开启时即 shell cwd）；{ dir } 是用户输入的目标目录（文件原名落其下）。
+const dropUploadPrompt = ref<{ files: File[] }>();
+const dropUploadTarget = ref<"cwd" | "custom">("cwd");
+const dropUploadPathInput = ref("");
+const dropUploadPathInputEl = ref<HTMLInputElement>();
+const terminalFontSize = ref(appearance.value.terminal.fontSize);
+// 终端字体单独设置（issue #31）：字体族/字号的用户覆盖，null 字段 = 跟随宿主。
+// setup 期读取安全：loadTerminalFontOverride 在函数体内 try（沙箱 opaque origin
+// 下「访问 window.localStorage 属性」本身抛错，见 lib/terminalFont.ts 说明）。
+const terminalFontOverride = ref<TerminalFontOverride>(loadTerminalFontOverride());
+/** 终端配色方案偏好（默认跟随宿主；启用后叠加 Tabby 迁移的 192 套方案）。 */
+const terminalAppearance = ref<TerminalAppearanceState>(loadTerminalAppearance());
+// 设置弹窗（独立组件 SettingsDialog）：实例 ref 用于 Esc 内联分层消费与
+// 下载草稿回填；下载偏好权威态在本组件，经适配器交给组件读写。
+const settingsDialog = ref<{
+  consumeInlineEsc?: () => boolean;
+  flushSettings?: () => Promise<void>;
+  setDownloadDirDraft?: (path: string) => void;
+  setDownloadUseDefaultDraft?: (value: boolean) => void;
+} | null>(null);
+const downloadPrefsAdapter = {
+  loadDir: loadDownloadDir,
+  loadUseDefault: loadDownloadUseDefaultDir,
+  loadConflict: loadDownloadConflictPolicy,
+  persistDir: persistDownloadDir,
+  persistUseDefault: persistDownloadUseDefaultDir,
+  persistConflict: persistDownloadConflictPolicy,
+  loadCompression: loadCompressionStrategy,
+  loadCompressionThreshold: loadCompressionThresholdMib,
+  persistCompression,
+};
+// 终端 WebGL 渲染加速（对标 iShell GPU 加速）：localStorage 全局偏好，
+// 默认开；WebGL 不可用（headless/无 context）时静默回退 DOM 渲染。只有主
+// 终端长期挂 renderer；回放弹窗保持 DOM 渲染，GIF 导出在导出期间给离屏
+// 终端临时挂载（取像素依赖 canvas），导出完随终端 dispose 释放 context。
+const webglEnabled = ref(loadWebglEnabled());
+const webglRenderer = ref<WebglRendererLike | null>(null);
+// True while attachSession sits inside its bounded backoff loop; turns the
+// status pill and overlay into the dedicated "reconnecting" phase.
+const reconnectPending = ref(false);
+// Pure-display reconnect countdown for the status pill: seconds until the
+// next retry plus the progress through the current backoff delay.
+const reconnectCountdown = ref<ReconnectCountdown | null>(null);
+let reconnectNextAt = 0;
+let reconnectDelayMs = 0;
+let reconnectCountdownTimer = 0;
+// Set the moment a backoff loop starts; consumed by afterSessionConnected to
+// show the "connection restored" notice (with cwd context) only after a real
+// reconnect, not on the initial connect.
+let reconnectWasPending = false;
+const commandMarker = reactive({
+  installed: false,
+  active: false,
+  command: "",
+  exitCode: null as number | null,
+  durationMs: null as number | null,
+  cwd: "",
+  // Start timestamp of the currently running command; drives the 1s tick that
+  // keeps the marker strip duration live while a command is in flight.
+  startedAt: null as number | null,
+});
+/** Terminal shell cwd from OSC 7 / OSC 633; used by Fig path completion. */
+const terminalCwd = ref("");
+// Live elapsed milliseconds for the running marker (null when idle or finished).
+const commandMarkerElapsed = ref<number | null>(null);
+const sftpSearch = ref("");
+const sftpTypeFilter = ref<SftpTypeFilter>("all");
+/** 默认隐藏以 "." 开头的 Unix 隐藏文件、__pycache__ 等系统缓存条目；
+ *  用户可通过过滤栏眼睛图标切换。 */
+const sftpShowHidden = ref(false);
+const selectedUris = ref<string[]>([]);
+const lastClickedUri = ref("");
+const sftpClipboard = ref<SftpClipboard>();
+const pasteBusy = ref(false);
+const pathHistoryOpen = ref(false);
+const pathHistories = reactive<Record<string, string[]>>(loadPathHistories());
+// SFTP 路径书签（全局清单，sftp-bookmarks.json）：路径栏星标收藏 + 路径弹层内跳转/删除。
+const sftpBookmarks = ref<SftpBookmark[]>([]);
+const bookmarkSaveOpen = ref(false);
+const bookmarkSaving = ref(false);
+const bookmarkLabelDraft = ref("");
+const newFileDialog = ref(false);
+const newFileDraft = ref("");
+const newFileSubmitting = ref(false);
+const attrsTarget = ref<SftpEntry>();
+const attrsInfo = ref<SftpStatInfo>();
+/** WindTerm 风格属主显示：用户名:组名（uid:gid），名字 = uid 数字时只显示一次。 */
+const attrsOwnerDisplay = computed(() => {
+  const ai = attrsInfo.value;
+  if (!ai) return "–";
+  const name = ai.ownerName || ai.owner || "–";
+  const gname = ai.groupName || ai.group || "–";
+  const label = `${name}:${gname}`;
+  if (ai.ownerUid == null || ai.groupGid == null) return label;
+  // 如果 ownerName 为 null 且 owner 就是 uid 数字字符串，不重复括号
+  const ownerIsUid = ai.ownerName == null && ai.owner === String(ai.ownerUid);
+  const groupIsGid = ai.groupName == null && ai.group === String(ai.groupGid);
+  if (ownerIsUid && groupIsGid) return label;
+  return `${label} (${ai.ownerUid}:${ai.groupGid})`;
+});
+const attrsLoading = ref(false);
+const attrsMode = ref("");
+const attrsSubmitting = ref(false);
+const batchDeleteOpen = ref(false);
+const batchDeleteSubmitting = ref(false);
+// Aggregated progress for multi-item batch operations (delete / archive);
+// null while no batch is in flight.
+const batchProgress = ref<BatchProgressState | null>(null);
+
+let terminal: Terminal | undefined;
+let fitAddon: FitAddon | undefined;
+let searchAddon: SearchAddon | undefined;
+// OSC 10/11 颜色查询应答 handler（registerOscHandler 的 disposable）：主题切换
+// 时重挂，终端销毁时统一释放；OSC 52 只在 createTerminal 挂一次。
+let oscColorQueryDisposables: { dispose(): void }[] = [];
+let osc52Disposable: { dispose(): void } | undefined;
+// 主题色解析失败时颜色查询的兜底应答（深色系常规值，仅在宿主下发非法颜色时触达）。
+const OSC_COLOR_FALLBACK = { foreground: "#c9d1d9", background: "#0d1117" };
+let terminalPasteHandler: ((event: ClipboardEvent) => void) | undefined;
+let terminalWheelHandler: ((event: WheelEvent) => void) | undefined;
+// 点击定位光标（iTerm2 风格）：按下位置记忆 + 松开时判定“原地点击”。
+let terminalMouseDownHandler: ((event: MouseEvent) => void) | undefined;
+let terminalMouseUpHandler: ((event: MouseEvent) => void) | undefined;
+let terminalMouseDownAt: { clientX: number; clientY: number } | undefined;
+let pasteConfirmResolver: ((accepted: boolean) => void) | undefined;
+let dropUploadResolver: ((choice: "cancel" | "cwd" | { dir: string }) => void) | undefined;
+let zoomNoticeTimer = 0;
+let resizeObserver: ResizeObserver | undefined;
+let disposeInput: { dispose(): void } | undefined;
+let disposeWriteParsed: { dispose(): void } | undefined;
+let disposeSelectionCopy: { dispose(): void } | undefined;
+let unsubscribeEvent: (() => void) | undefined;
+let unsubscribeBinary: (() => void) | undefined;
+let unsubscribeAppearance: (() => void) | undefined;
+let unsubscribeTheme: (() => void) | undefined;
+let unsubscribeLocale: (() => void) | undefined;
+let unsubscribeContext: (() => void) | undefined;
+let unsubscribeFocus: (() => void) | undefined;
+let unsubscribeActive: (() => void) | undefined;
+let unsubscribeFileDrag: (() => void) | undefined;
+let unsubscribeFileDrop: (() => void) | undefined;
+/** KeepAlive: false while another workspace tab is focused. */
+let workbenchActive = true;
+/** PTY bytes accepted while inactive — painted on activate (bounded). */
+const deferredTerminalChunks: Uint8Array[] = [];
+let deferredTerminalBytes = 0;
+const DEFERRED_TERMINAL_CAP = 512 * 1024;
+let persistTimer = 0;
+let commandSuggestTimer = 0;
+let commandSuggestToken = "";
+let pathSuggestGen = 0;
+let catalogRefreshTimer = 0;
+const commandCatalogCache = new Map<string, string[]>();
+let resizeTimer = 0;
+let reconnectTimer = 0;
+let reconnectAttempt = 0;
+let disposed = false;
+  const OPEN_RETRY_MAX = 3;
+  let openRetryAttempt = 0;
+  /** Connect-card log ordinal: increments across auto-retries and manual reconnects until success / fresh Connect. */
+  let connectAttemptSerial = 0;
+let lastSequence = 0;
+let replayInFlight = false;
+// Consecutive replays that returned complete without filling the detected
+// sequence hole. A sidecar that keeps reporting complete on a gap that never
+// closes cannot self-heal by retrying — after a few attempts the drain must
+// resync past the hole instead of spinning the replay loop forever.
+let replayNoProgress = 0;
+let commandMarkerTimer = 0;
+let agentPromptTimer = 0;
+let zmodemSentry: ZmodemSentry | null = null;
+let zmodemSession: ZmodemSession | null = null;
+let pendingZmodemFiles: File[] = [];
+let zmodemDetectionTimer = 0;
+let zmodemSampledAt = 0;
+let zmodemSampledBytes = 0;
+let zmodemDownloadCount = 0;
+let zmodemLastSavedPath = "";
+let zmodemUserCancelled = false;
+// trzsz：filter 常驻（与 zmodem sentry 同一条下行流），进度状态机与速度采样。
+let trzszFilter: TrzszFilter | null = null;
+let trzszProgress: TrzszProgressState = initialTrzszProgressState();
+let trzszSpeedSample: TransferSpeedSample | undefined;
+let trzszDetectionTimer = 0;
+let trzszWatchdogTimer = 0;
+let trzszOverlayTimer = 0;
+let trzszPickResolver: ((files: File[] | undefined) => void) | undefined;
+let pendingTerminalInput = "";
+let activeTerminalSessionId = "";
+const pendingTerminalFrames = new Map<number, { stream: number; data: Uint8Array }>();
+const uploadAckWaiters = new Map<string, { nextOffset: number; resolve: () => void; reject: (error: Error) => void; timer: number }>();
+// 上传收尾等待器（issue #60）：finish RPC 只负责把远端推送交给 sidecar
+// 后台任务，真正的完成/失败经终态 progress 事件回传，这里据此结算。
+const transferCompletionWaiters = new Map<string, { resolve: () => void; reject: (error: Error) => void }>();
+const downloadChunkWaiters = new Map<string, { offset: number; resolve: (bytes: Uint8Array) => void; reject: (error: Error) => void; timer: number }>();
+const transferSamples = new Map<string, TransferSpeedSample>();
+// Download task ids the user cancelled from the transfer panel; lets the download
+// loop distinguish a user cancel (notice) from a real failure (error banner).
+const cancelledTransferTasks = new Set<string>();
+const directoryParser = new Osc7DirectoryParser();
+// OSC 633 shell-integration markers (pure frontend parse; no-op streams pass through).
+const commandMarkerParser = new Osc633CommandParser();
+
+// Large-output rendering throttle: coalesce consecutive PTY frames into one
+// merged xterm write per animation frame (capped, order preserving). Dual
+// rAF+timeout scheduling keeps JCEF flushing when animation frames stall
+// (otherwise `tail -f` waits for a keypress). Sink uses write-completion
+// backpressure so paints cannot stack unboundedly.
+const terminalWriteThrottle: TerminalWriteThrottle = createTerminalWriteThrottle({
+  sink: (data, done) => {
+    if (!terminal) {
+      done();
+      return;
+    }
+    terminal.write(data, done);
+  },
+});
+
+function flushTerminalOutputNow() {
+  if (disposed) return;
+  flushDeferredTerminalOutput();
+  terminalWriteThrottle.flush();
+}
+
+function flushDeferredTerminalOutput() {
+  if (!deferredTerminalChunks.length) return;
+  const chunks = deferredTerminalChunks.splice(0);
+  deferredTerminalBytes = 0;
+  for (const chunk of chunks) {
+    terminalWriteThrottle.write(chunk);
+  }
+}
+
+function setWorkbenchActive(active: boolean) {
+  if (workbenchActive === active) {
+    if (active) flushTerminalOutputNow();
+    return;
+  }
+  workbenchActive = active;
+  if (active) {
+    flushDeferredTerminalOutput();
+    flushTerminalOutputNow();
+  }
+}
+const terminalInputQueue = createTerminalInputQueue({
+  send: (sessionId, payload) => {
+    const proto = protocolSession.value;
+    if (proto && proto.sessionId === sessionId) {
+      if (proto.kind === "local") {
+        return window.datawisePlugin.sendBinary(`local/terminal/in/${sessionId}`, payload);
+      }
+      if (proto.kind === "telnet") {
+        return window.datawisePlugin.sendBinary(`telnet/terminal/in/${sessionId}`, payload);
+      }
+      if (proto.kind === "serial") {
+        // Queue wraps 8-byte BE sequence + bytes; serial B1 wants 9-byte Stdin frame.
+        const sequence = Number(new DataView(payload.buffer, payload.byteOffset, 8).getBigUint64(0, false));
+        return window.datawisePlugin.sendBinary(
+          `serial/terminal/in/${sessionId}`,
+          encodeSerialInputFrame(sequence, payload.slice(8)),
+        );
+      }
+    }
+    return window.datawisePlugin.sendBinary(`ssh/terminal/in/${sessionId}`, payload);
+  },
+  onError: (cause) => {
+    showError(cause, "terminal");
+    // 会话被外部杀掉（宿主重推连接的 disconnect、sidecar 重启）时本 tab 无
+    // 事件感知，终端看似活着实则打不进字。输入撞上死会话时按传输断开的
+    // 同款有界梯子自动重连。错误串契约见 backend ssh.rs session()。
+    const proto = protocolSession.value;
+    if (proto && (proto.kind === "local" || proto.kind === "telnet" || proto.kind === "serial")) {
+      return;
+    }
+    if (terminalState.value === "connected" && !reconnectPending.value && isSessionGoneError(cause)) scheduleSessionReconnect();
+  },
+});
+
+const locale = ref("zh-CN");
+const t = (key: string, values: Record<string, string | number> = {}) => workbenchMessage(locale.value, key, values);
+const connectionId = computed(() => normalizeConnectionText(hostContext.value.connectionId));
+// Host API 1.1 provides a stable workbenchId in the host context; on 1.0 a
+// locally generated id keeps session scoping per workbench instance.
+const fallbackWorkbenchId = randomUUID();
+const workbenchId = computed(() => normalizeConnectionText(hostContext.value.workbenchId) || fallbackWorkbenchId);
+const restored = computed(() => hostContext.value.restored === true);
+const connection = computed<ConnectionSummary>(() => {
+  const value = hostContext.value.connection;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const raw = value as Record<string, unknown>;
+  return {
+    name: normalizeConnectionText(raw.name),
+    host: normalizeConnectionText(raw.host),
+    port: normalizeConnectionPort(raw.port),
+    // Host sends canonical `user`; accept legacy `username` from older contexts.
+    username: normalizeConnectionText(raw.user) || normalizeConnectionText(raw.username),
+    color: normalizeConnectionText(raw.color),
+    readOnly: raw.readOnly === true,
+  };
+});
+const canWrite = computed(() => !connection.value.readOnly && !connectionReadOnly.value);
+const selectedEntry = computed(() => entries.value.find((entry) => entry.uri === selectedPath.value));
+const connected = computed(() => terminalState.value === "connected" && !!session.value);
+/** Record button: SSH session or a live local protocol shell. */
+const canRecord = computed(() => {
+  if (protocolSession.value?.kind === "local" && terminalState.value === "connected") return true;
+  return connected.value;
+});
+const sessionStatus = computed<WorkbenchSessionStatus>(() => describeWorkbenchSessionStatus(terminalState.value, { reattaching: reconnectPending.value }));
+// 连接卡片四态：用户取消优先于底层 terminalState（在途 open 仍是 connecting）；
+// open 成功后的短暂 success 态优先于 connecting；其余（error/disconnected）
+// 统一呈现错误行 + Reconnect。
+const connectCardState = computed<"connecting" | "error" | "cancelled" | "success">(() => {
+  if (connectCancelled.value) return "cancelled";
+  if (connectSucceeded.value) return "success";
+  return terminalState.value === "connecting" ? "connecting" : "error";
+});
+const connectLogEntries = computed(() => connectLog.entries.value);
+// Connect-error friendlification: raw sidecar/russh error strings stay as the
+// tooltip detail while the primary line renders a localized per-category hint
+// (auth / refused / DNS / timeout / host key). Non-connect errors pass through.
+const terminalErrorDetail = computed(() => terminalError.value);
+const terminalErrorFriendly = computed(() => {
+  const kind = classifyConnectError(terminalError.value);
+  return kind ? t(connectErrorKey(kind)) : "";
+});
+// Reconnect countdown lifecycle: while the backoff loop is pending a 250ms
+// tick recomputes the pure countdown; any exit from "reconnecting" stops it.
+watch(reconnectPending, (pending) => {
+  if (pending) reconnectWasPending = true;
+  if (reconnectCountdownTimer) {
+    window.clearInterval(reconnectCountdownTimer);
+    reconnectCountdownTimer = 0;
+  }
+  if (!pending) {
+    reconnectCountdown.value = null;
+    return;
+  }
+  const update = () => {
+    reconnectCountdown.value = describeReconnectCountdown({
+      pending: true,
+      attempt: reconnectAttempt,
+      nextAt: reconnectNextAt,
+      now: Date.now(),
+      delayMs: reconnectDelayMs,
+    });
+  };
+  update();
+  reconnectCountdownTimer = window.setInterval(update, 250);
+});
+const commandOutputText = computed(() => (commandResult.value ? sanitizeCommandOutput(commandResult.value.output) : ""));
+// Hover tooltip for the terminal command marker strip: full command, exit
+// code, duration and working directory (localized, multi-line).
+const commandMarkerDetails = computed(() => commandMarkerTooltip(
+  {
+    command: commandMarker.command,
+    exitCode: commandMarker.exitCode,
+    durationMs: commandMarker.durationMs,
+    elapsedMs: commandMarkerElapsed.value,
+    cwd: commandMarker.cwd,
+  },
+  {
+    command: t("terminalCommand.tooltipCommand"),
+    exitCode: t("terminalCommand.tooltipExitCode"),
+    duration: t("terminalCommand.tooltipDuration"),
+    directory: t("terminalCommand.tooltipDirectory"),
+  },
+));
+const connectionIdentity = computed(() => {
+  const host = connection.value.host || connection.value.name || connectionId.value || "–";
+  const identity = connection.value.username ? `${connection.value.username}@${host}` : host;
+  const port = connection.value.port && connection.value.port !== 22 ? `:${connection.value.port}` : "";
+  return `${identity}${port}`;
+});
+// 认证方式的本地化标签：已知方法名走 i18n，未知值原样展示（只读信息）。
+const connectionAuthMethodLabel = computed(() => formatAuthMethodLabel(connectionAuthMethod.value, (method) => {
+  const labels: Record<KnownAuthMethod, string> = {
+    password: t("authMethodPassword"),
+    "private-key": t("authMethodPrivateKey"),
+    "private-key-password": t("authMethodPrivateKeyPassword"),
+    agent: t("authMethodAgent"),
+    none: t("authMethodNone"),
+  };
+  return labels[method];
+}));
+// 连接色染色按主题分级（light 压低 alpha 保 muted 文字 AA 对比度，P2-4）。
+const toolbarStyle = computed(() => toolbarTintStyle(connection.value.color, appearance.value.colorScheme));
+const terminalBasis = computed(() => ({ flexBasis: sftpPaneOpen.value ? `${splitRatio.value}%` : "100%" }));
+const orderedPaneClass = computed(() => [
+  paneOrder.value === "sftp-left" ? "panes panes--reversed" : "panes",
+  sftpPaneOpen.value ? "" : "panes--solo",
+].filter(Boolean).join(" "));
+const sortedEntries = computed(() => {
+  const direction = sort.value.direction === "asc" ? 1 : -1;
+  return [...entries.value].sort((left, right) => {
+    if (left.kind === "directory" && right.kind !== "directory") return -1;
+    if (left.kind !== "directory" && right.kind === "directory") return 1;
+    let result = 0;
+    if (sort.value.column === "size") result = (left.size ?? -1) - (right.size ?? -1);
+    else if (sort.value.column === "modified") result = (left.modifiedAt ?? 0) - (right.modifiedAt ?? 0);
+    else result = left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" });
+    return result * direction;
+  });
+});
+// 活跃区只显示进行中的任务（queued/running），按 transferOrder 的稳定规则
+// 排序：先开始/先加入的排最上，同键用 taskId 兜底（issue #18）。此前这里
+// 按对象插入序渲染全部任务：插入序来自后端 HashMap 迭代序 + 事件到达序，
+// 终态行还永久堆积，同一张卡就会在面板里"一会儿在上、一会儿在中间、一会儿
+// 在下"。终态行由历史区承接（落盘 + 内存合并视图），转终态的同一拍刷新。
+const transferList = computed(() =>
+  sortTransferTasks(Object.values(transferTasks).filter((task) => isLiveTransferStatus(task.status))),
+);
+const activeTransfers = computed(() => transferList.value.filter((task) => task.status === "queued" || task.status === "running").length);
+const zmodemBusy = computed(() => zmodemState.value !== "idle");
+const zmodemPercent = computed(() => zmodemTotalSize.value > 0 ? Math.min(100, Math.round((zmodemTransferred.value / zmodemTotalSize.value) * 100)) : 0);
+const zmodemStatusLabel = computed(() => {
+  if (zmodemState.value === "waiting") return t("zmodemWaiting");
+  if (zmodemState.value === "downloading") {
+    return t("zmodemDownloading", { name: zmodemFileName.value || "…", percent: zmodemPercent.value });
+  }
+  return t("zmodemUploading", { name: zmodemFileName.value || "…", percent: zmodemPercent.value });
+});
+const serialUploadBusy = computed(() => serialUploadActive(serialUploadState.value));
+const serialUploadPct = computed(() => serialUploadPercent(serialUploadState.value));
+const serialSessionActive = computed(() => protocolSession.value?.kind === "serial" && terminalState.value === "connected");
+// 文件传输占用统一语义：ZMODEM、trzsz 或串口协议上传任一持有终端流即视为 busy。
+const terminalTransferBusy = computed(() => zmodemBusy.value || trzszBusy.value || serialUploadBusy.value);
+const trzszBusy = computed(() => trzszPhase.value === "waiting" || trzszPhase.value === "transferring");
+const trzszOverlayVisible = computed(() => trzszPhase.value !== "idle");
+const sftpGridStyle = computed(() => {
+  // 名称列：未拖过 = 弹性填充剩余空间；拖动后锁定为固定宽度。
+  const nameTrack = sftpNameWidth.value != null ? `${sftpNameWidth.value}px` : `minmax(${NAME_COLUMN_MIN}px, 1fr)`;
+  const cols: string[] = [nameTrack];
+  const nameMin = sftpNameWidth.value ?? NAME_COLUMN_MIN;
+  const list: SftpColumn[] = ["size", "modified", "owner", "group", "permissions"];
+  for (const col of list) {
+    if (visibleColumns.value.includes(col)) {
+      cols.push(`${sftpColumnWidths[col]}px`);
+    }
+  }
+  // 总宽超出容器时靠 .file-rows 的 overflow:auto 出横向滚动条。
+  let minWidth = nameMin + 16; // + 左右 padding
+  for (const col of list) if (visibleColumns.value.includes(col)) minWidth += sftpColumnWidths[col] + 6; // 6px column-gap
+  return {
+    gridTemplateColumns: cols.join(" "),
+    minWidth: `${minWidth}px`,
+  };
+});
+const sftpFiltersActive = computed(() => sftpSearch.value.trim() !== "" || sftpTypeFilter.value !== "all" || sftpShowHidden.value);
+const visibleEntries = computed(() => filterSftpEntries(sortedEntries.value, sftpSearch.value, sftpTypeFilter.value, sftpShowHidden.value));
+const selectedEntries = computed(() => entries.value.filter((entry) => selectedUris.value.includes(entry.uri)));
+const currentPathHistory = computed(() => pathHistories[connectionId.value] || []);
+function initialState(): WorkbenchState {
+  const value = hostContext.value.workbenchState;
+  return value && typeof value === "object" ? (value as WorkbenchState) : {};
+}
+
+function restoreUiState() {
+  const state = initialState();
+  currentPath.value = typeof state.sftpPath === "string" ? normalizeRemotePath(state.sftpPath) : "/";
+  splitRatio.value = typeof state.splitRatio === "number" && state.splitRatio >= 35 && state.splitRatio <= 80 ? state.splitRatio : 58;
+  paneOrder.value = state.paneOrder === "sftp-left" ? "sftp-left" : "terminal-left";
+  sftpPaneOpen.value = resolveSftpPaneOpen(state, sftpPaneDefaultOpen.value);
+  followDirectory.value = state.followDirectory === true;
+  sudoMode.value = state.sudoMode === true && canWrite.value;
+  // 一次性迁移：六列默认上线前的旧偏好重置为全开（之后用户自定义照常持久化）。
+  const legacyColumns = state.visibleColumns != null && state.columnsV2 !== true;
+  visibleColumns.value = legacyColumns ? [...DEFAULT_VISIBLE_COLUMNS] : sanitizeVisibleColumns(state.visibleColumns);
+  // 恢复列宽，未知列或越界用默认值兜底
+  const saved = state.sftpColumnWidths || {};
+  const allCols: SftpColumn[] = ["size", "modified", "owner", "group", "permissions"];
+  for (const col of allCols) {
+    const raw = saved[col];
+    const num = typeof raw === "number" ? raw : DEFAULT_COLUMN_WIDTHS[col];
+    sftpColumnWidths[col] = Math.max(COLUMN_MIN_WIDTHS[col], Math.min(COLUMN_WIDTH_MAX, num));
+  }
+  sftpNameWidth.value = typeof state.sftpNameWidth === "number" ? Math.max(NAME_COLUMN_MIN, Math.min(NAME_COLUMN_MAX, state.sftpNameWidth)) : null;
+  lastSequence = typeof state.terminalSequence === "number" ? state.terminalSequence : 0;
+}
+
+function writeWorkbenchState() {
+  return window.datawisePlugin.workbenchState?.set({
+    sessionId: session.value?.sessionId,
+    terminalSequence: lastSequence,
+    sftpPath: currentPath.value,
+    followDirectory: followDirectory.value,
+    sudoMode: sudoMode.value,
+    splitRatio: splitRatio.value,
+    paneOrder: paneOrder.value,
+    sftpPaneOpen: sftpPaneOpen.value,
+    visibleColumns: visibleColumns.value,
+    columnsV2: true,
+    sftpColumnWidths: { ...sftpColumnWidths },
+    sftpNameWidth: sftpNameWidth.value,
+  }).catch(() => undefined);
+}
+
+function persistState() {
+  window.clearTimeout(persistTimer);
+  persistTimer = window.setTimeout(() => {
+    void writeWorkbenchState();
+  }, 150);
+}
+
+// —— 自定义 tooltip（对齐宿主的气泡提示）——
+// 全局接管 title 属性：悬停或键盘聚焦时把值挪到 data-tooltip（抑制原生慢速
+// 灰框），350ms 后显示主题化气泡；下方空间不足翻到上方。模板无需改动，所有
+// 现有和未来的 title 自动生效。
+const tooltip = ref<{ text: string; x: number; y: number; above: boolean; arrowOffset: number } | null>(null);
+const tooltipBubble = ref<HTMLElement>();
+let tooltipEl: HTMLElement | null = null;
+let tooltipTimer = 0;
+
+function hideTooltip() {
+  window.clearTimeout(tooltipTimer);
+  tooltipTimer = 0;
+  tooltip.value = null;
+  tooltipEl = null;
+}
+
+function scheduleTooltip(target: HTMLElement) {
+  // title → data-tooltip：Vue 绑定只在值变化时重写 title，下次触发再挪一次。
+  const title = target.getAttribute("title");
+  if (title !== null) {
+    target.setAttribute("data-tooltip", title);
+    target.removeAttribute("title");
+  }
+  const text = target.getAttribute("data-tooltip")?.trim();
+  if (!text) return;
+  tooltipEl = target;
+  tooltipTimer = window.setTimeout(() => {
+    tooltipTimer = 0;
+    if (!target.isConnected) return;
+    const rect = target.getBoundingClientRect();
+    const above = rect.bottom + 34 > window.innerHeight && rect.top > 34;
+    const center = rect.left + rect.width / 2;
+    tooltip.value = { text, x: center, y: above ? rect.top - 6 : rect.bottom + 6, above, arrowOffset: 0 };
+    // 量出气泡实际宽度后重新钳位，保证整框（而非仅中心点）落在视口内；
+    // 小三角按钳位偏差反向偏移，继续对准触发元素。
+    void nextTick(() => {
+      const bubble = tooltipBubble.value;
+      const current = tooltip.value;
+      if (!bubble || !current) return;
+      const half = bubble.offsetWidth / 2;
+      const clamped = Math.max(half + 8, Math.min(current.x, window.innerWidth - half - 8));
+      if (clamped !== current.x) {
+        tooltip.value = { ...current, x: clamped, arrowOffset: center - clamped };
+      }
+    });
+  }, 350);
+}
+
+function onTooltipOver(event: MouseEvent) {
+  const target = (event.target as HTMLElement | null)?.closest?.("[title], [data-tooltip]") as HTMLElement | null;
+  if (target === tooltipEl) return;
+  hideTooltip();
+  if (!target) return;
+  scheduleTooltip(target);
+}
+
+function onTooltipOut(event: MouseEvent) {
+  if (!tooltipEl) return;
+  const related = event.relatedTarget as HTMLElement | null;
+  if (related && tooltipEl.contains(related)) return;
+  hideTooltip();
+}
+
+// 键盘可达性：focusin/focusout 走同一套气泡（focus 锚定元素本身，
+// 不依赖指针位置），blur 时收起。
+function onTooltipFocusIn(event: FocusEvent) {
+  const target = (event.target as HTMLElement | null)?.closest?.("[title], [data-tooltip]") as HTMLElement | null;
+  if (target === tooltipEl) return;
+  hideTooltip();
+  if (!target) return;
+  scheduleTooltip(target);
+}
+
+function onTooltipFocusOut(event: FocusEvent) {
+  if (!tooltipEl) return;
+  const related = event.relatedTarget as HTMLElement | null;
+  if (related && tooltipEl.contains(related)) return;
+  hideTooltip();
+}
+
+// 通知/错误横幅的动作按钮（下载完成的「打开文件/打开目录」、失败的「重试」）。
+interface BannerAction {
+  label: string;
+  run: () => void;
+}
+// reka Toast 承载展示与计时（悬停暂停/滑动关闭为内建行为）；通知为单实例替换
+// 语义——每次 show 递增 key 重挂 ToastRoot，时长重置（3500ms，带动作放宽到 8000ms）。
+function showNotice(message: string, actions: BannerAction[] = []) {
+  notice.value = message;
+  noticeActions.value = actions;
+  noticeKey.value += 1;
+  noticeOpen.value = true;
+}
+
+function onNoticeOpenChange(open: boolean) {
+  if (open) return;
+  noticeOpen.value = false;
+  notice.value = "";
+  noticeActions.value = [];
+}
+
+function onSftpErrorOpenChange(open: boolean) {
+  if (open) return;
+  sftpErrorOpen.value = false;
+  sftpError.value = "";
+  sftpErrorRetry.value = null;
+}
+
+function showError(cause: unknown, target: "terminal" | "sftp" = "sftp", retry?: () => void) {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  // 常见错误（权限不足/文件不存在）翻成友好文案；其余原样透出。
+  const display = friendlySftpError(message, (key) => t(key)) ?? message;
+  if (target === "terminal") terminalError.value = display;
+  else {
+    sftpError.value = display;
+    sftpErrorRetry.value = retry ?? null;
+    // 错误横幅与通知同款自动消失（保留手动关闭），时限放宽到 8s：
+    // 错误信息通常更长，需要读完的时间。
+    sftpErrorKey.value += 1;
+    sftpErrorOpen.value = true;
+  }
+}
+
+function hostTerminalTheme() {
+  const colors = appearance.value.colors;
+  return {
+    background: colors.background,
+    foreground: colors.foreground,
+    cursor: colors.foreground,
+    cursorAccent: colors.background,
+    selectionBackground: appearance.value.colorScheme === "dark" ? "#5f6f8a88" : "#93b4e088",
+    ...TERMINAL_ANSI[appearance.value.colorScheme],
+  };
+}
+
+/** 宿主基底 + 用户选定配色方案（未启用方案时原样返回宿主主题）。 */
+function terminalTheme() {
+  return applySchemeToTerminalTheme(
+    hostTerminalTheme(),
+    terminalAppearance.value.settings,
+    terminalAppearance.value.customSchemes,
+    appearance.value.colorScheme,
+  );
+}
+
+function applyTerminalAppearance() {
+  const theme = terminalTheme();
+  document.documentElement.style.setProperty("--ssh-terminal-background", theme.background);
+  if (!terminal) return;
+  const options = terminalOptionPatch(terminalAppearance.value.settings);
+  terminal.options.theme = theme;
+  terminal.options.fontWeight = options.fontWeight;
+  terminal.options.fontWeightBold = options.fontWeightBold;
+  terminal.options.lineHeight = options.lineHeight;
+  terminal.options.letterSpacing = options.letterSpacing;
+  terminal.options.cursorStyle = options.cursorStyle;
+  terminal.options.cursorBlink = options.cursorBlink;
+  terminal.options.cursorInactiveStyle = options.cursorInactiveStyle;
+  terminal.options.drawBoldTextInBrightColors = options.drawBoldTextInBrightColors;
+  terminal.options.minimumContrastRatio = options.minimumContrastRatio;
+  registerOscColorQueryHandlers();
+  // Theme changes do not repaint the scrollback by themselves — force a full
+  // redraw so background / ANSI swaps are visible immediately.
+  window.requestAnimationFrame(() => {
+    if (!terminal) return;
+    terminal.refresh(0, terminal.rows - 1);
+    scheduleFit();
+  });
+}
+
+function updateTerminalAppearanceState(next: TerminalAppearanceState) {
+  terminalAppearance.value = {
+    ...next,
+    settings: sanitizeAppearanceSettings(next.settings),
+  };
+  persistTerminalAppearance(terminalAppearance.value);
+  // Resolve custom scheme ids against the full catalog (or the minimal preset set)
+  // before painting, so first-click presets never no-op.
+  void ensureBuiltinSchemeCatalog().finally(() => {
+    applyTerminalAppearance();
+    showNotice(t("terminalAppearance.schemeApplied"));
+  });
+}
+
+function applyAppearance(next: DatawisePluginAppearanceInput) {
+  // 宿主可能缺字段（1.0 或部分下发、1.1 theme 通道只带颜色令牌），按宿主规范色板补齐。
+  const resolved = resolveAppearance(next);
+  appearance.value = resolved;
+  const root = document.documentElement;
+  root.dataset.theme = resolved.colorScheme;
+  root.style.colorScheme = resolved.colorScheme;
+  root.style.setProperty("--background", resolved.colors.background);
+  root.style.setProperty("--foreground", resolved.colors.foreground);
+  root.style.setProperty("--muted", resolved.colors.muted);
+  root.style.setProperty("--muted-foreground", resolved.colors.mutedForeground);
+  root.style.setProperty("--accent", resolved.colors.accent);
+  root.style.setProperty("--accent-foreground", resolved.colors.accentForeground);
+  root.style.setProperty("--border", resolved.colors.border);
+  root.style.setProperty("--destructive", resolved.colors.destructive);
+  root.style.setProperty("--popover", HOST_POPOVER[resolved.colorScheme]);
+  // 终端底色：启用配色方案时可能覆盖宿主面板色。
+  root.style.setProperty("--ssh-terminal-background", terminalTheme().background);
+  // Follow host Settings → 界面文字大小 (chrome CSS uses --dw-ui-text-scale).
+  const textScale = resolved.ui?.textScale
+    || getComputedStyle(root).getPropertyValue("--dw-ui-text-scale").trim()
+    || "1";
+  root.style.setProperty("--dw-ui-text-scale", textScale);
+  // Follow host Settings → 界面疏密 (chrome CSS uses --dw-density-* / data-ui-density).
+  const density = resolved.ui?.density === "sm" || resolved.ui?.density === "lg"
+    ? resolved.ui.density
+    : (root.getAttribute("data-ui-density") === "sm" || root.getAttribute("data-ui-density") === "lg"
+      ? root.getAttribute("data-ui-density")!
+      : "md");
+  root.setAttribute("data-ui-density", density);
+  root.style.setProperty("--dw-ui-density", density);
+  // Rem-safe: shell body token → CSS vars; html rem root = body / 0.875 (≈ Tailwind text-sm).
+  if (resolved.ui?.fontSize) {
+    root.style.setProperty('--dw-font-size', resolved.ui.fontSize);
+    root.style.setProperty('--font-size', resolved.ui.fontSize);
+    root.style.fontSize = 'calc(var(--dw-font-size, 14px) / 0.875)';
+  }
+  followHostFonts(resolved);
+  applyTerminalAppearance();
+  if (terminal) {
+    // 宿主下发的字体大小即缩放基准；外观切换后回到基准值，
+    // 但用户单独调过的字号（issue #31 持久化覆盖）优先于宿主基准。
+    terminalFontSize.value = terminalFontOverride.value.fontSize ?? resolved.terminal.fontSize;
+    terminal.options.fontSize = terminalFontSize.value;
+    scheduleFit();
+  }
+}
+
+// vim/tmux/neovim 等启动时用 OSC 10/11 查询终端前景/背景色定调色板；xterm 内核
+// 不应答，这里按当前主题补答（对标 electerm）。颜色"设置"分支交回内核处理。
+function registerOscColorQueryHandlers() {
+  for (const disposable of oscColorQueryDisposables) {
+    if (disposable.dispose) disposable.dispose();
+  }
+  oscColorQueryDisposables = [];
+  if (!terminal) return;
+  const term = terminal;
+  // 应答当前生效主题（宿主基底可能已被配色方案覆盖）。
+  const theme = terminalTheme();
+  oscColorQueryDisposables.push(
+    term.parser.registerOscHandler(10, (data) =>
+      handleTerminalColorQuery(term, 10, theme.foreground, OSC_COLOR_FALLBACK.foreground, data),
+    ),
+    term.parser.registerOscHandler(11, (data) =>
+      handleTerminalColorQuery(term, 11, theme.background, OSC_COLOR_FALLBACK.background, data),
+    ),
+  );
+}
+
+// 字体始终跟随宿主：不写内联字体变量——内联样式会压过 themeSync 桥样式表里的
+// var(--font-sans)/var(--font-mono) 引用（这正是宿主全局字体此前不生效的根因），
+// 撤出内联后桥引用直接命中宿主令牌，宿主改字体经 SDK 令牌推送自动跟随。
+function followHostFonts(resolved: ReturnType<typeof resolveAppearance>) {
+  const root = document.documentElement;
+  root.style.removeProperty("--ui-font-family");
+  root.style.removeProperty("--terminal-font-family");
+  if (terminal) {
+    // 用户单独设置过字体族时保持用户值（issue #31），否则跟随宿主。
+    terminal.options.fontFamily = terminalFontOverride.value.fontFamily ?? hostTerminalFontFamily(resolved);
+    scheduleFit();
+  }
+}
+
+// xterm 需要具体字体串（不认 CSS 变量）：取 --terminal-font-family 的计算值
+// （桥已把宿主令牌/回退解析好），计算值为空时回退 appearance 解析值。
+function hostTerminalFontFamily(resolved: ReturnType<typeof resolveAppearance>): string {
+  const computed = getComputedStyle(document.documentElement).getPropertyValue("--terminal-font-family").trim();
+  return computed || resolved.terminal.fontFamily;
+}
+
+// 宿主字体令牌经 SDK applyTheme 写 :root 内联样式推送（无事件通道）：观察
+// style 属性变化，终端字体随之更新；插件自身写颜色令牌也会触发，
+// 计算值未变时为空操作。
+const hostFontObserver = new MutationObserver(() => {
+  if (!terminal) return;
+  // 用户单独设置过字体族时不跟随宿主字体变化（issue #31）。
+  if (terminalFontOverride.value.fontFamily) return;
+  const family = hostTerminalFontFamily(appearance.value);
+  if (family !== terminal.options.fontFamily) {
+    terminal.options.fontFamily = family;
+    scheduleFit();
+  }
+});
+
+function createTerminal() {
+  if (!terminalHost.value || terminal) return;
+  // 用户设置优先、未设置跟随宿主（issue #31）：合成一次，字号/字体族同步生效；
+  // 重连/新开终端都经此路径拿到最终值。
+  const font = resolveTerminalFont(terminalFontOverride.value, {
+    fontFamily: hostTerminalFontFamily(appearance.value),
+    fontSize: appearance.value.terminal.fontSize,
+  });
+  terminalFontSize.value = font.fontSize;
+  terminal = new Terminal({
+    convertEol: false,
+    cursorBlink: true,
+    // 细竖线光标（bar）：块状光标在宽字距下显得笨重，竖线更接近常规输入框观感。
+    cursorStyle: "bar",
+    fontFamily: font.fontFamily,
+    fontSize: font.fontSize,
+    lineHeight: 1.15,
+    // Cap scrollback so sustained floods (`tail -f`, build logs) do not pay
+    // for an unbounded buffer during every paint. 15k lines is still deep.
+    scrollback: 15_000,
+    // SearchAddon 的 highlight decorations 走 proposed API，缺这一项会在
+    // findNext/registerDecoration 时直接抛 "allowProposedApi option"。
+    allowProposedApi: true,
+    theme: terminalTheme(),
+  });
+  fitAddon = new FitAddon();
+  searchAddon = new SearchAddon();
+  terminal.loadAddon(fitAddon);
+  terminal.loadAddon(searchAddon);
+  terminal.loadAddon(new WebLinksAddon());
+  terminal.open(terminalHost.value);
+  // 对标 electerm 的终端体验增强（须在 open 之后挂载）：
+  // - Unicode 11 宽度表：emoji/新版 CJK 符号按两列计宽，旧宽度表会错位对齐；
+  // - 内联图像（sixel + iTerm2 OSC 1337）：imgcat/chafa/htop 图表可渲染，
+  //   像素上限与 electerm 同款 32MiB。
+  // 连字 addon（@xterm/addon-ligatures）暂不引入：其 opentype.js 依赖走 Node
+  // 内置模块，Electron（electerm）可用，本插件的沙箱 iframe 模块求值即崩，
+  // 上游尚无浏览器安全构建。
+  terminal.loadAddon(new Unicode11Addon());
+  terminal.unicode.activeVersion = "11";
+  // Keep sixel/iTerm images, but cap pixels hard for JCEF flood paints.
+  // Background KeepAlive already defers terminal.write (ImageAddon never sees
+  // those bytes until activate).
+  terminal.loadAddon(new ImageAddon({
+    pixelLimit: 4_194_304,
+    sixelSupport: true,
+    iipSupport: true,
+  }));
+  registerOscColorQueryHandlers();
+  osc52Disposable = terminal.parser.registerOscHandler(52, (data) =>
+    handleOsc52ClipboardWrite(data, (text) => writeClipboardText(text, clipboardDeps())),
+  );
+  terminal.attachCustomKeyEventHandler(handleTerminalKey);
+  searchAddon.onDidChangeResults(({ resultCount, resultIndex }) => {
+    if (!searchOpen.value) return;
+    searchResultCount.value = resultCount;
+    searchResultIndex.value = resultCount > 0 && resultIndex >= 0 ? resultIndex + 1 : 0;
+    searchMatchState.value = resultCount > 0 ? "match" : "no-match";
+  });
+  disposeInput = terminal.onData((data) => {
+    if (!session.value && !protocolSession.value) return;
+    // 文件传输占用路由：trzsz 持有流时，传输中的输入进 filter（Ctrl+C 停传输、
+    // 其余吞掉），等待协商期直接吞掉（防止杂散键入干扰 trz 握手）；zmodem /
+    // 串口协议上传持有流时输入保持阻塞，否则走普通 PTY 键盘写入（8 字节序号前缀已封装）。
+    const route = resolveTerminalInputRoute({
+      zmodemBusy: zmodemBusy.value || serialUploadBusy.value,
+      trzszBusy: trzszBusy.value,
+    });
+    if (route === "trzsz") {
+      if (trzszPhase.value === "transferring") trzszFilter?.processTerminalInput(data);
+      return;
+    }
+    if (route === "blocked") return;
+    trackPendingInput(data);
+    sendTerminalBytes(new TextEncoder().encode(data));
+    commandSuggestToken = applyInputToToken(commandSuggestToken, data);
+    if (data === "\u0003") {
+      hideCommandSuggest();
+      closeCompletionMenu();
+      completionController.dismiss();
+    } else if (data.includes("\r") || data.includes("\n")) {
+      closeCompletionMenu();
+      completionController.dismiss();
+    } else {
+      completionController.lineChanged();
+    }
+    scheduleCommandSuggest();
+  });
+  disposeWriteParsed = terminal.onWriteParsed(() => {
+    scheduleCommandSuggest();
+    if (completionOpen.value) completionAnchor.value = readCompletionAnchor();
+  });
+  // 选中复制（可在设置里关闭）：选择一变化即静默写入剪贴板，不弹提示。
+  disposeSelectionCopy = terminal.onSelectionChange(() => {
+    if (!termSelectCopy.value || !terminal?.hasSelection()) return;
+    void writeClipboardText(terminal.getSelection(), clipboardDeps()).catch(() => undefined);
+  });
+  // 捕获阶段的 paste 监听：拦截 Ctrl+V 之外的所有粘贴路径（浏览器右键菜单等），
+  // 统一走风险确认后再写入终端。
+  terminalPasteHandler = (event) => interceptTerminalPaste(event);
+  terminalHost.value.addEventListener("paste", terminalPasteHandler, true);
+  terminalWheelHandler = (event) => handleTerminalWheel(event);
+  terminalHost.value.addEventListener("wheel", terminalWheelHandler, { passive: false, capture: true });
+  terminalMouseDownHandler = (event) => handleTerminalMouseDown(event);
+  terminalHost.value.addEventListener("mousedown", terminalMouseDownHandler);
+  terminalMouseUpHandler = (event) => handleTerminalMouseUp(event);
+  terminalHost.value.addEventListener("mouseup", terminalMouseUpHandler);
+  resizeObserver = new ResizeObserver(scheduleFit);
+  resizeObserver.observe(terminalHost.value);
+  if (webglEnabled.value) {
+    webglRenderer.value = attachWebglRenderer(terminal, () => new WebglAddon());
+  }
+  if (highlightEnabled.value) attachHighlightRender();
+  scheduleFit();
+}
+
+// 设置开关即时生效：开=挂 renderer（失败静默回退 DOM），关=dispose。
+function setWebglEnabled(next: boolean) {
+  webglEnabled.value = next;
+  persistWebglEnabled(next);
+  if (!terminal) return;
+  webglRenderer.value = syncWebglRenderer(terminal, next, webglRenderer.value, () => new WebglAddon());
+}
+
+// Apple 平台用 Cmd+A 直选全选，其余平台 Ctrl+Shift+A（isTerminalSelectAllShortcut）。
+const applePlatform = isApplePlatform();
+
+function handleTerminalKey(event: KeyboardEvent) {
+  const mod = event.ctrlKey || event.metaKey;
+  if (event.type !== "keydown") return true;
+  // xterm 的 false 只跳过终端处理，不会取消浏览器默认动作或冒泡。
+  const consume = () => {
+    event.preventDefault();
+    event.stopPropagation();
+    return false;
+  };
+  // Find: Ctrl/Cmd+Shift+F always. Ctrl/Cmd+F opens Find when no ghost;
+  // Ctrl+F with ghost accepts the fish-style remainder (Cmd+F stays Find on Apple).
+  if (mod && (event.key === "f" || event.key === "F")) {
+    if (event.shiftKey) {
+      openTerminalSearch();
+      return consume();
+    }
+    if (commandSuggestGhost.value && matchesGhostFullAccept(event)) {
+      acceptCommandSuggest();
+      return consume();
+    }
+    openTerminalSearch();
+    return consume();
+  }
+  if (isHistoryOverlayShortcut(event) && connected.value) {
+    toggleHistoryPanel();
+    return consume();
+  }
+  if (isQuickPaletteShortcut(event) && connected.value) {
+    toggleQuickPalette();
+    return consume();
+  }
+  if (mod && event.key === "0") {
+    resetTerminalZoom();
+    return consume();
+  }
+  // 全选（electerm/iTerm2 同款）：Apple 平台 Cmd+A、其余 Ctrl+Shift+A；
+  // 裸 Ctrl+A 不拦截，保持发给远端 readline 跳行首。
+  if (isTerminalSelectAllShortcut({ mod, shiftKey: event.shiftKey, metaKey: event.metaKey, key: event.key, applePlatform })) {
+    selectAllTerminal();
+    terminal?.focus();
+    return consume();
+  }
+  // Esc closes the topmost terminal overlay only — never forward Esc to the PTY
+  // while a panel is open (would clear the readline line / confuse TUI apps).
+  if (event.key === "Escape") {
+    if (searchOpen.value) {
+      closeTerminalSearch();
+      return consume();
+    }
+    if (quickPaletteOpen.value) {
+      closeQuickPalette();
+      return consume();
+    }
+    if (historyPanelOpen.value) {
+      closeHistoryPanel(true);
+      return consume();
+    }
+    if (completionOpen.value) {
+      closeCompletionMenu();
+      return consume();
+    }
+    if (commandSuggestOpen.value) {
+      hideCommandSuggest();
+      return consume();
+    }
+  }
+  if (completionOpen.value) {
+    if (event.key.toLowerCase() === "c" && event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+      closeCompletionMenu();
+      return true;
+    }
+    const items = completionItems.value;
+    const action = resolveCompletionKey({
+      menuOpen: true,
+      hasItems: items.length > 0,
+      activeItemKind: items[completionActiveIndex.value]?.kind ?? null,
+      loading: completionLoading.value && items.length === 0,
+    }, event.key);
+    if (action === "accept") {
+      const item = items[completionActiveIndex.value];
+      if (item) acceptCompletionItem(item);
+      return consume();
+    }
+    if (action === "next") {
+      completionActiveIndex.value = (completionActiveIndex.value + 1) % Math.max(1, items.length);
+      return consume();
+    }
+    if (action === "prev") {
+      completionActiveIndex.value = (completionActiveIndex.value - 1 + items.length) % Math.max(1, items.length);
+      return consume();
+    }
+    if (action === "close" || action === "passthrough") {
+      closeCompletionMenu();
+      return true;
+    }
+  }
+  if (commandSuggestOpen.value) {
+    if (event.key.toLowerCase() === "c" && event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+      hideCommandSuggest();
+      return true;
+    }
+    // Warp-like: → / Ctrl+F / Ctrl+E full ghost; Alt/Ctrl+→ one word.
+    if (commandSuggestGhost.value && matchesGhostFullAccept(event)) {
+      acceptCommandSuggest();
+      return consume();
+    }
+    if (commandSuggestGhost.value && matchesGhostWordAccept(event)) {
+      acceptCommandSuggestWord();
+      return consume();
+    }
+    const resolved = resolveCommandSuggestKey({
+      key: event.key,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      altKey: event.altKey,
+      shiftKey: event.shiftKey,
+      menuArmed: commandSuggestTabArmed.value,
+    });
+    if (resolved.action === "dismiss") {
+      hideCommandSuggest();
+      return consume();
+    }
+    // Unarmed ↑: close the fuzzy panel and let readline browse shell history.
+    if (resolved.action === "passthrough") {
+      hideCommandSuggest();
+      return true;
+    }
+    if (resolved.action === "move") {
+      commandSuggestIndex.value = clampHistoryIndex(commandSuggestItems.value.length, commandSuggestIndex.value, resolved.delta);
+      commandSuggestTabArmed.value = true;
+      return consume();
+    }
+    if (resolved.action === "accept") {
+      // Tab fill rule: Tab fills only prefix extension or ↑↓-armed selection; else shell Tab.
+      const item = commandSuggestItems.value[commandSuggestIndex.value];
+      const line = commandSuggestLine.value;
+      if (item && resolveSuggestionTabKey(item.command, line, commandSuggestTabArmed.value) === "fill") {
+        acceptCommandSuggest();
+        return consume();
+      }
+      hideCommandSuggest();
+      return true;
+    }
+  }
+  // Windows Terminal/iTerm2 风格组合键：Ctrl/Cmd+V 与 Ctrl/Cmd+Shift+V 粘贴，
+  // Ctrl/Cmd+C 有选区时复制、无选区时保持发给远端（SIGINT）。
+  const keyAction = resolveTerminalKeyAction({ mod, shiftKey: event.shiftKey, key: event.key, hasSelection: terminal?.hasSelection() ?? false });
+  if (keyAction === "paste") {
+    // JCEF/sandbox: native paste events often never fire for Ctrl+V. Paste via
+    // host clipboard bridge (desktop Toolkit → app-clipboard) instead.
+    event.preventDefault();
+    event.stopPropagation();
+    void pasteTerminal();
+    return false;
+  }
+  if (keyAction === "copy") {
+    void copyTerminalSelection();
+    return consume();
+  }
+  return true;
+}
+
+function handleTerminalWheel(event: WheelEvent) {
+  if (!(event.ctrlKey || event.metaKey)) return;
+  event.preventDefault();
+  adjustTerminalZoom(event.deltaY < 0 ? 1 : -1);
+}
+
+// 点击定位光标（iTerm2/kitty 风格）：readline 只认按键，所以在光标所在逻辑行内
+// 的“原地点击”（无拖拽成选区）换算成 N 次左右方向键发给远端；行外点击不动作，
+// 避免方向键把 shell 翻进历史命令。鼠标上报（vim/htop）与备用屏（TUI 全屏应用）
+// 时点击属于应用自身语义，一律不代发。命令运行中、设置关闭时也不代发。
+function handleTerminalMouseDown(event: MouseEvent) {
+  terminalMouseDownAt = event.button === 0 ? { clientX: event.clientX, clientY: event.clientY } : undefined;
+}
+
+function handleTerminalMouseUp(event: MouseEvent) {
+  const down = terminalMouseDownAt;
+  terminalMouseDownAt = undefined;
+  if (!termClickCursor.value) return;
+  if (!down || !terminal || !terminalHost.value || !session.value) return;
+  if (terminal.hasSelection()) return;
+  if (Math.abs(event.clientX - down.clientX) > 2 || Math.abs(event.clientY - down.clientY) > 2) return;
+  if (terminal.modes.mouseTrackingMode !== "none") return;
+  if (commandMarker.active) return;
+  const buffer = terminal.buffer.active;
+  if (buffer.type !== "normal") return;
+  const click = cellFromMouseEvent(terminalHost.value, { cols: terminal.cols, rows: terminal.rows }, event.clientX, event.clientY);
+  if (!click) return;
+  const move = resolveClickCursorMove({ buffer, cols: terminal.cols, click });
+  if (!move) return;
+  const route = resolveTerminalInputRoute({
+    zmodemBusy: zmodemBusy.value || serialUploadBusy.value,
+    trzszBusy: trzszBusy.value,
+  });
+  if (route !== "pty") return;
+  sendTerminalBytes(new TextEncoder().encode(clickCursorArrows(move)));
+}
+
+function adjustTerminalZoom(delta: number) {
+  const current = terminalFontSize.value;
+  const next = clampFontSize(current, delta);
+  if (next === current) return;
+  applyTerminalFontSize(next);
+}
+
+function resetTerminalZoom() {
+  const base = appearance.value.terminal.fontSize;
+  if (terminalFontSize.value === base) return;
+  applyTerminalFontSize(base);
+}
+
+// 缩放只动字号：同步内存覆盖态并经 lib 持久化（键与解析逻辑集中在 terminalFont.ts）。
+function applyTerminalFontSize(size: number) {
+  terminalFontSize.value = size;
+  terminalFontOverride.value = { ...terminalFontOverride.value, fontSize: size };
+  if (terminal) {
+    terminal.options.fontSize = size;
+    scheduleFit();
+  }
+  persistTerminalFontSize(size);
+  window.clearTimeout(zoomNoticeTimer);
+  zoomNoticeTimer = window.setTimeout(() => showNotice(t("terminalZoom.fontSize", { size })), 500);
+}
+
+// 应用用户字体设置并持久化：family null = 恢复跟随宿主。立即生效并 toast 反馈。
+function applyTerminalFontSettings(family: string | null, size: number) {
+  const followHost = family == null;
+  terminalFontOverride.value = { fontFamily: family, fontSize: size };
+  persistTerminalFontFamily(family);
+  persistTerminalFontSize(size);
+  terminalFontSize.value = size;
+  if (terminal) {
+    terminal.options.fontFamily = family ?? hostTerminalFontFamily(appearance.value);
+    terminal.options.fontSize = size;
+    scheduleFit();
+  }
+  showNotice(followHost ? t("terminalFont.resetDone") : t("terminalFont.applied", { size }));
+}
+
+function openTerminalSearch() {
+  if (!terminal) return;
+  terminalMenuOpen.value = false;
+  // iTerm2 风格：打开搜索时用当前选区首行预填查询，并带入持久化的选项开关。
+  searchSeedQuery.value = terminalSearchSeedFromSelection(terminal.getSelection() || "");
+  searchSeedOptions.value = sanitizeSearchOptions(uiStorage.getItem(TERMINAL_SEARCH_OPTIONS_KEY));
+  searchOpen.value = true;
+}
+
+function closeTerminalSearch() {
+  searchOpen.value = false;
+  resetSearchResults();
+  searchAddon?.clearDecorations();
+  terminal?.focus();
+}
+
+function clearTerminalSearch() {
+  resetSearchResults();
+  searchAddon?.clearDecorations();
+}
+
+function resetSearchResults() {
+  searchMatchState.value = "idle";
+  searchResultCount.value = 0;
+  searchResultIndex.value = 0;
+}
+
+function runTerminalSearch(query: string, options: { caseSensitive: boolean; regex: boolean; wholeWord: boolean }, direction: "next" | "prev") {
+  if (!searchAddon || !query) return;
+  const searchOptions: ISearchOptions = {
+    caseSensitive: options.caseSensitive,
+    regex: options.regex,
+    wholeWord: options.wholeWord,
+    decorations: {
+      matchBackground: "#64748b55",
+      matchOverviewRuler: "#64748b",
+      activeMatchBackground: "#3b82f655",
+      activeMatchColorOverviewRuler: "#3b82f6",
+    },
+  };
+  if (direction === "prev") searchAddon.findPrevious(query, searchOptions);
+  else searchAddon.findNext(query, searchOptions);
+}
+
+function recordSubmittedCommands(submitted: string[]) {
+  if (!submitted.length || !interactionPrefs.value.historyEnabled) return;
+  let next = commandHistory.value;
+  for (const command of submitted) {
+    next = pushCommandHistory(next, command, interactionPrefs.value.historyLimit, { connectionId: connectionId.value });
+  }
+  commandHistory.value = next;
+  persistCommandHistory();
+}
+
+/** Raw text on the active cursor line (includes prompt markers). */
+function readVisibleShellLine(): string {
+  if (!terminal) return "";
+  const buffer = terminal.buffer.active;
+  return cursorLineTextBeforeCursor({
+    viewportY: buffer.viewportY,
+    cursorY: buffer.cursorY,
+    cursorX: buffer.cursorX,
+    getLine: (y) => buffer.getLine(y),
+  });
+}
+
+/** Visible prompt input (after remote Tab completion), stripped of shell prompt. */
+function readVisibleShellInput(): string {
+  return extractShellInput(readVisibleShellLine());
+}
+
+/** Track the in-progress PTY line and append Enter-submitted commands to history. */
+function trackPendingInput(data: string) {
+  const result = applyPtyInputLine(pendingTerminalInput, data, (pending) =>
+    resolvePtySubmitCommand(pending, readVisibleShellInput()),
+  );
+  pendingTerminalInput = result.line;
+  recordSubmittedCommands(result.submitted);
+}
+
+function sendTerminalBytes(data: Uint8Array) {
+  const proto = protocolSession.value;
+  if (proto && (proto.kind === "local" || proto.kind === "telnet" || proto.kind === "serial")) {
+    terminalInputQueue.enqueue(proto.sessionId, normalizeTerminalInputBytes(data));
+    return;
+  }
+  const sessionId = session.value?.sessionId;
+  if (!sessionId) return;
+  terminalInputQueue.enqueue(sessionId, normalizeTerminalInputBytes(data));
+}
+
+function scheduleFit() {
+  window.clearTimeout(resizeTimer);
+  resizeTimer = window.setTimeout(() => {
+    if (!terminal || !fitAddon || !terminalHost.value?.clientWidth || !terminalHost.value.clientHeight) return;
+    try {
+      fitAddon.fit();
+      // trzsz 进度条按终端列宽渲染（filter 内部文本进度条虽未启用，列宽保持同步）。
+      trzszFilter?.setTerminalColumns(terminal.cols);
+      const proto = protocolSession.value;
+      if (proto?.kind === "local") {
+        void window.datawisePlugin
+          .notify("local/terminal/resize", { sessionId: proto.sessionId, cols: terminal.cols, rows: terminal.rows })
+          .catch(() => undefined);
+      } else if (proto?.kind === "telnet") {
+        void window.datawisePlugin
+          .notify("telnet/resize", { sessionId: proto.sessionId, cols: terminal.cols, rows: terminal.rows })
+          .catch(() => undefined);
+      } else if (session.value) {
+        void window.datawisePlugin.notify("ssh/terminal/resize", { sessionId: session.value.sessionId, cols: terminal.cols, rows: terminal.rows }).catch(() => undefined);
+      }
+    } catch {
+      // The iframe can briefly be detached while the host switches tabs.
+    }
+  }, 20);
+}
+
+function stopCommandMarkerTick() {
+  if (commandMarkerTimer) {
+    window.clearInterval(commandMarkerTimer);
+    commandMarkerTimer = 0;
+  }
+  commandMarkerElapsed.value = null;
+}
+
+function startCommandMarkerTick(startedAt: number) {
+  stopCommandMarkerTick();
+  commandMarkerTimer = window.setInterval(() => {
+    commandMarkerElapsed.value = runningCommandElapsedMs(startedAt, Date.now());
+  }, 1000);
+  commandMarkerElapsed.value = runningCommandElapsedMs(startedAt, Date.now());
+}
+
+function resetCommandMarker() {
+  commandMarkerParser.reset();
+  stopCommandMarkerTick();
+  commandMarker.installed = false;
+  commandMarker.active = false;
+  commandMarker.command = "";
+  commandMarker.exitCode = null;
+  commandMarker.durationMs = null;
+  commandMarker.cwd = "";
+  commandMarker.startedAt = null;
+  terminalCwd.value = "";
+}
+
+function applyCommandMarker(updates: Osc633StreamUpdates) {
+  if (updates.shellIntegrationInstalled !== undefined) commandMarker.installed = updates.shellIntegrationInstalled;
+  if (updates.commandActive !== undefined) commandMarker.active = updates.commandActive;
+  if (updates.command !== undefined) commandMarker.command = updates.command;
+  // A fresh "E" frame starts a new command: clear the previous result so the
+  // strip flips to the running state. The "A" frame's lastExitCode=null reset
+  // is ignored on purpose — the finished result stays visible at the prompt
+  // until the next command starts.
+  if (updates.commandActive === true) {
+    commandMarker.exitCode = null;
+    commandMarker.durationMs = null;
+    // A fresh "E" frame also starts the 1s tick so the marker strip shows a
+    // live duration while the command runs; the final durationMs from the
+    // "D" frame takes over once the tick stops.
+    commandMarker.startedAt = Date.now();
+    startCommandMarkerTick(commandMarker.startedAt);
+    // Shell-integration command text is authoritative when present (deduped
+    // against the local Enter capture via pushCommandHistory).
+    const fromMarker = normalizeHistoryCommand(updates.command || updates.currentCommand || "");
+    if (fromMarker) recordSubmittedCommands([fromMarker]);
+  } else if (updates.commandActive === false) {
+    stopCommandMarkerTick();
+  }
+  if (updates.lastExitCode !== undefined && updates.lastExitCode !== null) {
+    commandMarker.exitCode = updates.lastExitCode;
+    const finished = normalizeHistoryCommand(commandMarker.command || updates.command || "");
+    if (finished && interactionPrefs.value.historyEnabled) {
+      commandHistory.value = markHistoryExit(commandHistory.value, finished, updates.lastExitCode, connectionId.value);
+      persistCommandHistory();
+    }
+  }
+  if (updates.lastCommandDuration !== undefined) commandMarker.durationMs = updates.lastCommandDuration;
+  if (updates.cwd !== undefined) {
+    commandMarker.cwd = updates.cwd;
+    if (updates.cwd) terminalCwd.value = updates.cwd;
+    // OSC 633 Cwd doubles as a directory-follow fallback when the backend could
+    // not install OSC 7 tracking but the remote shell integration emits 633 frames.
+    if (followDirectory.value && directoryTrackingSupported.value === false && updates.cwd) {
+      void loadDirectory(updates.cwd, true);
+    }
+  }
+}
+
+function writeTerminalOutput(data: Uint8Array) {
+  for (const path of directoryParser.push(data)) {
+    terminalCwd.value = path;
+    // SFTP pane sync only while SSH owns the PTY (protocol local cwd ≠ remote FS).
+    const proto = protocolSession.value;
+    const sshOwnsTerminal = !!session.value && (!proto || (proto.kind !== "local" && proto.kind !== "telnet" && proto.kind !== "serial"));
+    if (followDirectory.value && sshOwnsTerminal) void loadDirectory(path, true);
+  }
+  applyCommandMarker(commandMarkerParser.push(data));
+  // Background KeepAlive tabs still drain sequences, but skip xterm paints so
+  // many idle SSH sessions do not burn CPU; latest bytes flush on activate.
+  if (!workbenchActive) {
+    deferredTerminalChunks.push(data);
+    deferredTerminalBytes += data.byteLength;
+    while (deferredTerminalBytes > DEFERRED_TERMINAL_CAP && deferredTerminalChunks.length > 1) {
+      const dropped = deferredTerminalChunks.shift()!;
+      deferredTerminalBytes = Math.max(0, deferredTerminalBytes - dropped.byteLength);
+    }
+    return;
+  }
+  terminalWriteThrottle.write(data);
+}
+
+/**
+ * Terminal output dispatch: ZMODEM owns the stream while busy; otherwise the
+ * frame feeds the trzsz filter, which passes it through to the terminal and
+ * watches for the remote `::TRZSZ:TRANSFER:` announce to take over exactly
+ * one transfer. Plain frames thus reach the terminal untouched.
+ */
+function dispatchTerminalOutput(data: Uint8Array) {
+  if (zmodemBusy.value) {
+    writeTerminalOutput(data);
+    return;
+  }
+  const announce = detectTrzszAnnounceFromBytes(data);
+  if (announce) handleTrzszAnnounce(announce);
+  ensureTrzszFilter().processServerOutput(data);
+}
+
+function resetZmodemSentry() {
+  zmodemSentry = createZmodemSentry({
+    send: sendTerminalBytes,
+    toTerminal: dispatchTerminalOutput,
+    onDetect: handleZmodemDetection,
+    onRetract() {},
+  });
+}
+
+function handleZmodemDetection(detection: ZmodemDetection) {
+  const decision = decideZmodemDetection(
+    detection,
+    pendingZmodemFiles.length > 0,
+    !trzszBusy.value,
+  );
+  if (decision.action === "deny") {
+    detection.deny();
+    if (decision.reason === "uploadPending" && pendingZmodemFiles.length) {
+      finishZmodemTransfer(new Error(t("zmodemBusyConflict")));
+    }
+    return;
+  }
+  try {
+    zmodemSession = detection.confirm();
+  } catch (cause) {
+    if (decision.role === "send") finishZmodemTransfer(cause);
+    else {
+      resetZmodemSentry();
+      showError(cause instanceof Error ? cause : new Error(String(cause)), "terminal");
+    }
+    return;
+  }
+  window.clearTimeout(zmodemDetectionTimer);
+  zmodemSampledAt = performance.now();
+  zmodemSampledBytes = 0;
+  zmodemUserCancelled = false;
+  if (decision.role === "send") {
+    zmodemState.value = "uploading";
+    const files = pendingZmodemFiles;
+    void sendZmodemFiles(zmodemSession, files, updateZmodemUploadProgress)
+      .then(() => {
+        showNotice(t("zmodemUploadComplete", { count: files.length }));
+        finishZmodemTransfer();
+        void loadDirectory();
+      })
+      .catch(finishZmodemTransfer);
+    return;
+  }
+  // sz auto-receive: confirm + start() ZRINIT, then spool offers to disk.
+  zmodemState.value = "downloading";
+  zmodemDownloadCount = 0;
+  zmodemLastSavedPath = "";
+  zmodemFileIndex.value = 0;
+  zmodemFileCount.value = 0;
+  zmodemFileName.value = "";
+  zmodemTransferred.value = 0;
+  zmodemTotalSize.value = 0;
+  const session = zmodemSession;
+  void receiveZmodemSession(session, (offer) => handleZmodemOffer(offer))
+    .then((outcome) => {
+      if (zmodemUserCancelled) {
+        finishZmodemTransfer();
+        showNotice(t("zmodemCancelled"));
+        return;
+      }
+      if (outcome.error) {
+        finishZmodemTransfer(outcome.error);
+        return;
+      }
+      if (zmodemDownloadCount > 0) {
+        const savedPath = zmodemLastSavedPath;
+        showNotice(t("zmodemDownloadComplete", { count: zmodemDownloadCount }), savedPath
+          ? [{ label: t("revealInFolder"), run: () => void revealTransferTarget(savedPath) }]
+          : undefined);
+        // Auto-reveal download folder after sz; silent skip when local/reveal
+        // is unavailable (web/docker) or the path fails ownership checks.
+        if (savedPath) void silentRevealTransferTarget(savedPath);
+      }
+      finishZmodemTransfer();
+    });
+}
+
+async function handleZmodemOffer(offer: ZmodemOffer) {
+  const details = offer.get_details();
+  const fileName = sanitizeZmodemFileName(details.name || "");
+  const remaining = typeof details.files_remaining === "number" && details.files_remaining > 0
+    ? details.files_remaining
+    : 1;
+  zmodemFileIndex.value += 1;
+  if (zmodemFileCount.value < zmodemFileIndex.value + remaining - 1) {
+    zmodemFileCount.value = zmodemFileIndex.value + remaining - 1;
+  }
+  if (zmodemFileCount.value < 1) zmodemFileCount.value = 1;
+  zmodemFileName.value = fileName;
+  const declaredSize = typeof details.size === "number" && details.size >= 0 ? details.size : 0;
+  zmodemTotalSize.value = declaredSize;
+  const chunks: Uint8Array[] = [];
+  let fileTransferred = 0;
+  const baseTransferred = zmodemTransferred.value;
+  await offer.accept({
+    on_input: (payload) => {
+      const chunk = Uint8Array.from(payload);
+      chunks.push(chunk);
+      fileTransferred += chunk.byteLength;
+      updateZmodemDownloadProgress({
+        fileName,
+        fileIndex: zmodemFileIndex.value,
+        fileCount: zmodemFileCount.value,
+        fileTransferred,
+        totalTransferred: baseTransferred + fileTransferred,
+        totalSize: declaredSize > 0 ? baseTransferred + declaredSize : baseTransferred + fileTransferred,
+      });
+    },
+  });
+  zmodemTransferred.value = baseTransferred + fileTransferred;
+  if (!chunks.length && fileTransferred === 0) return;
+  const savedPath = await saveTrzszDownloadedFiles([{
+    fileName,
+    isDirectory: false,
+    chunks,
+    byteLength: fileTransferred,
+  }], { autoReveal: false });
+  if (savedPath) zmodemLastSavedPath = savedPath;
+  zmodemDownloadCount += 1;
+}
+
+function updateZmodemUploadProgress(progress: ZmodemUploadProgress) {
+  zmodemFileName.value = progress.file.name;
+  zmodemFileIndex.value = progress.fileIndex + 1;
+  zmodemFileCount.value = progress.fileCount;
+  sampleZmodemSpeed(progress.totalTransferred, progress.totalSize);
+}
+
+function updateZmodemDownloadProgress(progress: ZmodemDownloadProgress) {
+  zmodemFileName.value = progress.fileName;
+  zmodemFileIndex.value = progress.fileIndex;
+  zmodemFileCount.value = progress.fileCount;
+  sampleZmodemSpeed(progress.totalTransferred, progress.totalSize);
+}
+
+function sampleZmodemSpeed(totalTransferred: number, totalSize: number) {
+  zmodemTransferred.value = totalTransferred;
+  zmodemTotalSize.value = totalSize;
+  const now = performance.now();
+  const elapsed = now - zmodemSampledAt;
+  if (elapsed >= 250 || (totalSize > 0 && totalTransferred === totalSize)) {
+    const speed = elapsed > 0 ? ((totalTransferred - zmodemSampledBytes) * 1000) / elapsed : 0;
+    zmodemSpeed.value = zmodemSpeed.value ? zmodemSpeed.value * 0.65 + speed * 0.35 : speed;
+    zmodemSampledAt = now;
+    zmodemSampledBytes = totalTransferred;
+  }
+}
+
+function finishZmodemTransfer(cause?: unknown) {
+  const wasActive = zmodemState.value !== "idle";
+  const wasDownload = zmodemState.value === "downloading";
+  const cancelled = zmodemUserCancelled;
+  cancelZmodemUpload();
+  if (!wasActive) return;
+  if (cause && !cancelled) {
+    const key = wasDownload ? "zmodemDownloadFailed" : "zmodemUploadFailed";
+    showError(new Error(t(key, { error: cause instanceof Error ? cause.message : String(cause) })), "terminal");
+  }
+  terminal?.focus();
+}
+
+/** @deprecated alias kept for call sites that still name the upload path */
+function finishZmodemUpload(cause?: unknown) {
+  finishZmodemTransfer(cause);
+}
+
+/**
+ * Silently tears the ZMODEM state down (abort the wire session, drop pending
+ * files, reset the overlay, rebuild the sentry). Used both after a completed
+ * or failed transfer and when the SSH session is closed mid-transfer — without
+ * it a closed session would leave zmodemBusy stuck true and terminal input
+ * routed into a dead sentry.
+ */
+function cancelZmodemUpload() {
+  window.clearTimeout(zmodemDetectionTimer);
+  if (zmodemSession && !zmodemSession.has_ended()) {
+    try { zmodemSession.abort(); } catch {}
+  }
+  pendingZmodemFiles = [];
+  zmodemSession = null;
+  zmodemState.value = "idle";
+  zmodemFileName.value = "";
+  zmodemTransferred.value = 0;
+  zmodemTotalSize.value = 0;
+  zmodemSpeed.value = 0;
+  zmodemFileIndex.value = 0;
+  zmodemFileCount.value = 0;
+  zmodemDownloadCount = 0;
+  zmodemUserCancelled = false;
+  resetZmodemSentry();
+}
+
+function cancelZmodemTransfer() {
+  if (!zmodemBusy.value) return;
+  zmodemUserCancelled = true;
+  cancelZmodemUpload();
+  showNotice(t("zmodemCancelled"));
+  terminal?.focus();
+}
+
+// ---------------------------------------------------------------------------
+// trzsz (trz / tsz)：官方 trzsz.js TrzszFilter 常驻下行流，announce 自动接管。
+// 传输的协议协商/收发全在 filter 内，插件只负责：选文件（浏览器 File API）、
+// 下载落盘（宿主 fileTransfer 优先、浏览器 <a download> 兜底）、进度 overlay。
+// ---------------------------------------------------------------------------
+
+const TRZSZ_DETECTION_TIMEOUT_MS = 5000;
+const TRZSZ_WATCHDOG_TIMEOUT_MS = 15000;
+const TRZSZ_SUCCESS_OVERLAY_MS = 2500;
+
+/** Lazily wires the filter onto the terminal streams (keyboard input + output). */
+function ensureTrzszFilter(): TrzszFilter {
+  if (trzszFilter) return trzszFilter;
+  const filter = new TrzszFilter({
+    writeToTerminal: (output) => {
+      if (typeof output === "string") writeTerminalOutput(new TextEncoder().encode(output));
+      else if (output instanceof Uint8Array) writeTerminalOutput(output);
+      else if (output instanceof ArrayBuffer) writeTerminalOutput(new Uint8Array(output));
+    },
+    // sendToServer 必须走现有 PTY 输入路径（8 字节 BE 序号前缀在 sendTerminalBytes 内封装）。
+    sendToServer: (input) => sendTerminalBytes(typeof input === "string" ? new TextEncoder().encode(input) : Uint8Array.from(input)),
+    terminalColumns: terminal?.cols || 80,
+  });
+  installTrzszHandlers(filter, {
+    pickUploadFiles: pickTrzszUploadFiles,
+    saveDownloadedFiles: saveTrzszDownloadedFiles,
+    emit: applyTrzszEvent,
+  });
+  trzszFilter = filter;
+  return filter;
+}
+
+function handleTrzszAnnounce(announce: TrzszAnnounce) {
+  // Announce 已到：无论等待态由谁进入（菜单触发或远端自行 trz/tsz），
+  // 「等待远端响应」的检测定时器使命完成，必须先解除再判断占用。
+  window.clearTimeout(trzszDetectionTimer);
+  trzszDetectionTimer = 0;
+  if (!canStartTrzszTransfer({ zmodemBusy: zmodemBusy.value, trzszBusy: trzszBusy.value })) return;
+  // 看门狗：announce 后 filter 一直未发起传输（如去重拦截等边缘）时不让
+  // waiting 态永久占用终端输入；filter 打开选文件框时即视为已接管并解除。
+  window.clearTimeout(trzszWatchdogTimer);
+  trzszWatchdogTimer = window.setTimeout(() => {
+    trzszWatchdogTimer = 0;
+    if (trzszPhase.value === "waiting") applyTrzszEvent({ type: "reset" });
+  }, TRZSZ_WATCHDOG_TIMEOUT_MS);
+  applyTrzszEvent({ type: "waiting", direction: announce.direction });
+}
+
+function applyTrzszEvent(event: TrzszProgressEvent) {
+  trzszProgress = reduceTrzszProgress(trzszProgress, event);
+  const state = trzszProgress;
+  trzszPhase.value = state.phase;
+  trzszDirection.value = state.direction;
+  trzszFileName.value = state.fileName;
+  trzszFileIndex.value = state.fileIndex;
+  trzszFileCount.value = state.fileCount;
+  trzszMessage.value = state.message;
+  trzszPercent.value = trzszProgressPercent(state);
+  if (event.type === "step") {
+    trzszSpeedSample = sampleTransferSpeed(trzszSpeedSample, state.totalTransferred, performance.now());
+    trzszSpeed.value = trzszSpeedSample.speed;
+  } else {
+    trzszSpeedSample = undefined;
+    trzszSpeed.value = 0;
+  }
+  switch (event.type) {
+    case "success":
+      showNotice(t("trzszComplete", { count: Math.max(1, state.fileCount) }));
+      window.clearTimeout(trzszOverlayTimer);
+      // 成功态短暂可见后自动收起（失败态常驻，直到下一次传输或会话切换）。
+      trzszOverlayTimer = window.setTimeout(resetTrzszOverlay, TRZSZ_SUCCESS_OVERLAY_MS);
+      break;
+    case "failure":
+      window.clearTimeout(trzszOverlayTimer);
+      // Ctrl+C 主动停止是用户意图，按提示呈现而非错误横幅。
+      if (isTrzszStopMessage(event.message)) {
+        resetTrzszOverlay();
+        showNotice(t("trzszCancelled"));
+      } else {
+        showError(new Error(t("trzszFailed", { error: event.message })), "terminal");
+      }
+      break;
+    case "cancelled":
+      resetTrzszOverlay();
+      break;
+  }
+}
+
+function resetTrzszOverlay() {
+  window.clearTimeout(trzszOverlayTimer);
+  trzszOverlayTimer = 0;
+  applyTrzszEvent({ type: "reset" });
+}
+
+/** Ctrl+C 等价：让 filter 停掉当前传输（协议侧走 stop/清理，随后报 cancelled）。 */
+function cancelTrzszTransfer() {
+  trzszFilter?.stopTransferringFiles();
+}
+
+/**
+ * 会话切换 / 关闭时的静默收尾：停掉在途传输并复位 overlay，避免 busy 态
+ * 卡住终端输入（与 cancelZmodemUpload 同语义）。
+ */
+function teardownTrzsz() {
+  window.clearTimeout(trzszDetectionTimer);
+  trzszDetectionTimer = 0;
+  window.clearTimeout(trzszWatchdogTimer);
+  trzszWatchdogTimer = 0;
+  window.clearTimeout(trzszOverlayTimer);
+  trzszOverlayTimer = 0;
+  trzszFilter?.stopTransferringFiles();
+  trzszProgress = initialTrzszProgressState();
+  trzszSpeedSample = undefined;
+  trzszPhase.value = "idle";
+  trzszDirection.value = "";
+  trzszFileName.value = "";
+  trzszFileIndex.value = 0;
+  trzszFileCount.value = 0;
+  trzszPercent.value = 0;
+  trzszSpeed.value = 0;
+  trzszMessage.value = "";
+}
+
+const trzszStatusLabel = computed(() => {
+  const name = trzszFileName.value;
+  const percent = trzszPercent.value;
+  switch (trzszPhase.value) {
+    case "waiting":
+      return t("trzszWaiting");
+    case "transferring":
+      return trzszDirection.value === "download" ? t("trzszDownloading", { name, percent }) : t("trzszUploading", { name, percent });
+    case "success":
+      return t("trzszComplete", { count: Math.max(1, trzszFileCount.value) });
+    case "failed":
+      return t("trzszFailed", { error: trzszMessage.value });
+    default:
+      return "";
+  }
+});
+
+/** 右键菜单「Upload (trz)」：向 PTY 发送 trz 触发远端，announce 回来后接管。 */
+function chooseTrzszUpload() {
+  terminalMenuOpen.value = false;
+  if (!session.value || !canWrite.value || !canStartTrzszTransfer({ zmodemBusy: zmodemBusy.value, trzszBusy: trzszBusy.value })) return;
+  applyTrzszEvent({ type: "waiting", direction: "upload" });
+  trzszDetectionTimer = window.setTimeout(() => {
+    if (trzszPhase.value === "waiting") applyTrzszEvent({ type: "failure", message: t("trzszNotAvailable") });
+  }, TRZSZ_DETECTION_TIMEOUT_MS);
+  sendTerminalBytes(new TextEncoder().encode("trz\r"));
+  terminal?.focus();
+}
+
+/** filter 回调：浏览器 File API 多选（宿主沙箱内不可用 File System Access API）。 */
+function pickTrzszUploadFiles(_directory: boolean): Promise<File[] | undefined> {
+  // filter 已接管（走到选文件这一步），等待态看门狗使命完成。
+  window.clearTimeout(trzszWatchdogTimer);
+  trzszWatchdogTimer = 0;
+  // 上一次未完成的选文件请求按取消处理，避免悬挂的 resolver。
+  const previous = trzszPickResolver;
+  trzszPickResolver = undefined;
+  previous?.(undefined);
+  // WKWebView/旧内核不派发 input 的 cancel 事件：窗口重新拿到焦点后一小段
+  // 时间内 change 仍未触发（resolver 还挂着）即视为用户取消。
+  const onFocus = () => {
+    window.setTimeout(() => {
+      if (trzszPickResolver) onTrzszPickCancel();
+    }, 800);
+  };
+  window.addEventListener("focus", onFocus, { once: true });
+  return new Promise((resolve) => {
+    trzszPickResolver = resolve;
+    trzszInput.value?.click();
+  });
+}
+
+function onTrzszPickInput(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  input.value = "";
+  const resolve = trzszPickResolver;
+  trzszPickResolver = undefined;
+  resolve?.(files.length ? files : undefined);
+}
+
+function onTrzszPickCancel() {
+  const resolve = trzszPickResolver;
+  trzszPickResolver = undefined;
+  resolve?.(undefined);
+}
+
+/**
+ * 下载落盘：优先宿主 fileTransfer API（optional 1.1 特性，逐文件 beginSave/
+ * write/finish）；沙箱 iframe（fileTransfer 缺失）走 sidecar 落盘——与 GIF
+ * 导出同路，支持下载目录设置与「每次询问」；web/docker（sidecar 不在本机）
+ * 回退浏览器 <a download>（与 SFTP 下载链路同一兜底写法）。
+ * Returns the last saved local path when sidecar save succeeded (for sz
+ * auto-reveal). `autoReveal` (default true) opens the folder after trzsz
+ * receive; ZMODEM passes false and reveals once at session end.
+ */
+async function saveTrzszDownloadedFiles(
+  files: readonly TrzszDownloadFile[],
+  options: { autoReveal?: boolean } = {},
+): Promise<string | undefined> {
+  const autoReveal = options.autoReveal !== false;
+  const fileTransfer = window.datawisePlugin.fileTransfer;
+  const saving = files.filter((file) => !file.isDirectory && file.byteLength > 0);
+  if (!saving.length) return undefined;
+  if (!fileTransfer) {
+    const local = await probeLocalCapabilities();
+    if (!local?.canSaveLocal) {
+      for (const file of saving) saveBrowserDownload(file.chunks, file.fileName);
+      return undefined;
+    }
+    // 「使用默认地址」关闭时按批次只问一次，整批落同一目录；取消则整批不保存。
+    let targetDir = "";
+    let setDefaultAfter = false;
+    if (!loadDownloadUseDefaultDir()) {
+      const chosen = await askDownloadTarget(saving[0].fileName);
+      if (chosen === undefined) return undefined;
+      targetDir = chosen.dir.trim();
+      setDefaultAfter = chosen.setDefault;
+    }
+    const dir = targetDir || loadDownloadDir() || undefined;
+    let lastSaved: { localPath: string; name: string } | undefined;
+    for (const file of saving) {
+      // 冲突策略逐文件生效：ask 撞名逐个询问，取消只跳过该文件。
+      const conflict = await resolveDownloadConflictFor(dir || "", file.fileName);
+      if (conflict === undefined) continue;
+      const merged = new Uint8Array(file.byteLength);
+      let offset = 0;
+      for (const chunk of file.chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+      lastSaved = await window.datawisePlugin.invoke<{ localPath: string; name: string }>("local/saveFile", {
+        name: file.fileName,
+        dataBase64: window.datawisePlugin.encodeBase64(merged),
+        targetDir: dir,
+        conflict: conflict === "overwrite" ? "overwrite" : undefined,
+      });
+    }
+    if (lastSaved) {
+      const savedPath = lastSaved.localPath;
+      showNotice(saving.length === 1
+        ? t("downloadedTo", { name: lastSaved.name, path: savedPath })
+        : t("downloadedToDir", { count: saving.length, path: dir || savedPath.replace(/[\\/][^\\/]+$/, "") }), [
+        { label: t("revealInFolder"), run: () => void revealTransferTarget(savedPath) },
+      ]);
+      if (autoReveal) void silentRevealTransferTarget(savedPath);
+      if (setDefaultAfter) applyChosenDirAsDefault(targetDir);
+      return savedPath;
+    }
+    if (setDefaultAfter) applyChosenDirAsDefault(targetDir);
+    return undefined;
+  }
+  for (const file of saving) {
+    const target = await fileTransfer.beginSave({ name: file.fileName, size: file.byteLength });
+    try {
+      let offset = 0;
+      for (const chunk of file.chunks) {
+        const write = await fileTransfer.write(target.handleId, offset, chunk);
+        offset = write.nextOffset;
+      }
+      await fileTransfer.finish(target.handleId);
+    } catch (cause) {
+      await fileTransfer.cancel(target.handleId).catch(() => undefined);
+      throw cause;
+    }
+  }
+  return undefined;
+}
+
+function handleBinary(event: DatawisePluginBinaryEvent) {
+  const sessionId = activeTerminalSessionId || session.value?.sessionId;
+  const proto = protocolSession.value;
+  const terminalOutChannel =
+    sessionId &&
+    (event.channel === `ssh/terminal/out/${sessionId}`
+      || (proto?.kind === "local" && event.channel === `local/terminal/out/${proto.sessionId}`)
+      || (proto?.kind === "telnet" && event.channel === `telnet/terminal/out/${proto.sessionId}`)
+      || (proto?.kind === "serial" && event.channel === `serial/terminal/out/${proto.sessionId}`));
+  if (terminalOutChannel) {
+    const payload = bridgeBinaryBytes(event, window.datawisePlugin.decodeBase64);
+    if (payload.length < 9) return;
+    const sequence = readU64(payload, 1);
+    if (sequence <= lastSequence) return;
+    pendingTerminalFrames.set(sequence, { stream: payload[0], data: payload.slice(9) });
+    drainTerminalFrames();
+    return;
+  }
+  if (vncSessionId.value && event.channel === `vnc/frame/${vncSessionId.value}`) {
+    const payload = bridgeBinaryBytes(event, window.datawisePlugin.decodeBase64);
+    vncSurfaceRef.value?.acceptFrame(payload);
+    return;
+  }
+  if (rdpSessionId.value && event.channel === `rdp/frame/${rdpSessionId.value}`) {
+    const payload = bridgeBinaryBytes(event, window.datawisePlugin.decodeBase64);
+    rdpSurfaceRef.value?.acceptFrame(payload);
+    return;
+  }
+  const taskId = event.channel.startsWith("sftp/download/") ? event.channel.slice("sftp/download/".length) : "";
+  const waiter = downloadChunkWaiters.get(taskId);
+  if (!waiter) return;
+  const payload = bridgeBinaryBytes(event, window.datawisePlugin.decodeBase64);
+  if (payload.length < 8 || readU64(payload, 0) !== waiter.offset) return;
+  window.clearTimeout(waiter.timer);
+  downloadChunkWaiters.delete(taskId);
+  waiter.resolve(payload.slice(8));
+}
+
+function drainTerminalFrames() {
+  let frame = pendingTerminalFrames.get(lastSequence + 1);
+  while (frame) {
+    pendingTerminalFrames.delete(lastSequence + 1);
+    lastSequence += 1;
+    if (frame.stream === 2) {
+      const state = new TextDecoder().decode(frame.data);
+      if (state === "directory-tracking-unavailable") {
+        followDirectory.value = false;
+        directoryTrackingSupported.value = false;
+        showNotice(t("directoryTrackingUnavailable"));
+      } else {
+        terminalState.value = "disconnected";
+        terminalError.value = state === "ssh-transport-disconnected" ? t("transportDisconnected") : state || t("disconnected");
+      }
+    } else {
+      try {
+        if (!zmodemSentry) resetZmodemSentry();
+        zmodemSentry?.consume(frame.data.slice().buffer);
+      } catch (cause) {
+        if (zmodemBusy.value) finishZmodemUpload(cause);
+        else {
+          resetZmodemSentry();
+          dispatchTerminalOutput(frame.data);
+        }
+      }
+    }
+    frame = pendingTerminalFrames.get(lastSequence + 1);
+  }
+  persistState();
+  // A stalled gap must not grow the pending map without bound: once the
+  // buffer overshoots, drop it and let the replay re-deliver everything
+  // after the last in-order sequence.
+  if (pendingTerminalFrames.size > TERMINAL_PENDING_FRAME_LIMIT) {
+    pendingTerminalFrames.clear();
+  }
+  const firstPending = Math.min(...pendingTerminalFrames.keys());
+  if (Number.isFinite(firstPending) && firstPending > lastSequence + 1 && !replayInFlight && session.value) {
+    const holeAt = lastSequence;
+    replayInFlight = true;
+    // A session-gone replay failure must resync and reconnect: the hole can
+    // never be filled (the session object is gone server-side), so the
+    // ssh-transport-disconnected state frame stuck behind it would otherwise
+    // freeze the drain forever and the tab keeps claiming "connected".
+    let sessionGone = false;
+    void window.datawisePlugin.invoke<ReplayResult>("ssh/terminal/replay", { sessionId: session.value.sessionId, afterSequence: lastSequence })
+      .then((result) => {
+        if (!result.complete) {
+          terminalState.value = "error";
+          terminalError.value = t("sessionUnrecoverable");
+          return;
+        }
+        // The replay returned healthy but the hole below firstPending is still
+        // there: those frames are gone for good (e.g. sequence numbering
+        // restarted across a reconnect). Retry once more, then resync the
+        // cursor past the hole — dropping the missing prefix beats spinning
+        // this replay loop forever and freezing the workbench.
+        if (lastSequence === holeAt) {
+          replayNoProgress += 1;
+          if (replayNoProgress >= 3) {
+            lastSequence = firstPending - 1;
+            replayNoProgress = 0;
+          }
+        } else {
+          replayNoProgress = 0;
+        }
+      })
+      .catch((cause) => {
+        if (isSessionGoneError(cause) && firstPending > lastSequence) {
+          sessionGone = true;
+          lastSequence = firstPending - 1;
+          replayNoProgress = 0;
+          return;
+        }
+        showError(cause, "terminal");
+      })
+      .finally(() => {
+        replayInFlight = false;
+        drainTerminalFrames();
+        // Run after the resync drain above delivered the buffered disconnect
+        // state frame (it flips the state off "connected"); the ladder then
+        // picks the reconnect up unless one is already pending.
+        if (sessionGone && !reconnectPending.value && !disposed) scheduleSessionReconnect();
+      });
+  }
+}
+
+// 传输断开/会话被杀的统一入口：有界退避自动重连，梯子耗尽才落到
+// disconnected 终态等待手动重连。
+function scheduleSessionReconnect() {
+  if (!disposed && reconnectAttempt < TERMINAL_RECONNECT_DELAYS.length) {
+    const delay = terminalReconnectDelay(reconnectAttempt++);
+    terminalState.value = "connecting";
+    reconnectPending.value = true;
+    reconnectTimer = window.setTimeout(() => {
+      if (disposed) return;
+      // 梯子第一级重试前先请宿主按最新配置重开连接（与手动 reconnect 同路径）：
+      // 侧边栏编辑连接（改密码等）会让 sidecar 凭据过期，缺这步自动重连必撞
+      // 旧凭据、落到红色错误态等手动自救——凭据已是新的时这是一次假错误。
+      if (reconnectAttempt === 1) void requestHostReopenConnection().finally(() => { if (!disposed) void openSession(); });
+      else void openSession();
+    }, delay);
+    return;
+  }
+  terminalState.value = "disconnected";
+  reconnectPending.value = false;
+  terminalError.value = t("transportDisconnected");
+}
+
+function handleEvent(event: DatawisePluginEvent) {
+  if (event.method === "ssh/batchBar/state") {
+    const params = event.params as {
+      source?: string;
+      draft?: string;
+      quickPickId?: string;
+      open?: boolean;
+      sessionIds?: string[];
+    };
+    if (params.source && params.source !== batchBarSourceId) applyRemoteBatchBarState(params);
+    return;
+  }
+  if (event.method === "connection/challenge") {
+    hostKeyPrompt.value = event.params as unknown as HostKeyPrompt;
+    connectLog.push("info", t("connectCard.log.hostKeyPrompt"));
+    return;
+  }
+  if (event.method === "ssh/host-key/notice") {
+    showError(String(event.params.message || "SSH host-key warning"), "terminal");
+    return;
+  }
+  if (event.method === "ssh/session/state" && event.params.sessionId === session.value?.sessionId) {
+    if (event.params.state === "disconnected") {
+      // Transport dropped (network flap, server restart): auto-reconnect with
+      // a bounded backoff ladder instead of parking on a dead terminal.
+      scheduleSessionReconnect();
+    }
+    return;
+  }
+  // Input hit a session the sidecar no longer has (host-pushed disconnect the
+  // tab missed, sidecar restart): the terminal still looks alive but every
+  // keystroke is swallowed. The sidecar mirrors binary-handler failures as
+  // this event; treat it as the same transport-drop ladder. Guarded so a
+  // reconnect already in flight is not double-scheduled.
+  if (event.method === "ssh/terminal/error" && event.params.sessionId === session.value?.sessionId) {
+    if (terminalState.value === "connected" && !reconnectPending.value) {
+      scheduleSessionReconnect();
+    }
+    return;
+  }
+  const pluginDelta = sshCopilotAdapter.pluginDeltaEvent || "ssh/copilot/chat/delta";
+  const hostDelta = sshCopilotAdapter.hostDeltaEvent || "host.ai.chat.delta";
+  if (event.method === pluginDelta || event.method === hostDelta) {
+    const requestId = typeof event.params.requestId === "string" ? event.params.requestId : "";
+    const delta = typeof event.params.delta === "string" ? event.params.delta : "";
+    const thinkingDelta =
+      typeof event.params.thinkingDelta === "string" ? event.params.thinkingDelta : "";
+    const source: ModelSource = event.method === hostDelta ? "host" : "plugin";
+    appendCopilotStreamDelta(requestId, { delta, thinkingDelta }, source);
+    return;
+  }
+  if (event.method === "ssh/agent/prompt" && event.params.sessionId === session.value?.sessionId) {
+    agentPromptQueue.value = enqueueAgentPrompt(agentPromptQueue.value, event.params as unknown as AgentPromptPayload);
+    return;
+  }
+  if (event.method === "ssh/agent/notice" && event.params.sessionId === session.value?.sessionId) {
+    agentRunning.value = event.params as unknown as AgentNoticePayload;
+    return;
+  }
+  if (event.method === "ssh/agent/finish" && event.params.sessionId === session.value?.sessionId) {
+    const payload = event.params as unknown as AgentFinishPayload;
+    agentRunning.value = undefined;
+    showNotice(t(payload.status === "denied" ? "agentDenied" : "agentFinished"));
+    return;
+  }
+  // Trigger engine feedback (expect-style auto interaction): the payload never
+  // carries the answered content (sidecar contract), only stage/kind. Events
+  // for sessions other than the open one are dropped silently.
+  if (event.method === "ssh/trigger" && event.params.sessionId === session.value?.sessionId) {
+    const payload = event.params as { sessionId?: string; stage?: number; kind?: string };
+    const stage = Math.max(1, Number(payload.stage) || 1);
+    showNotice(t(payload.kind === "timeout" ? "triggerTimeout" : "triggerAnswered", { stage }));
+    return;
+  }
+  if (event.method === "sftp/upload/ack") {
+    const taskId = String(event.params.taskId || "");
+    const waiter = uploadAckWaiters.get(taskId);
+    if (waiter && Number(event.params.nextOffset) === waiter.nextOffset) {
+      window.clearTimeout(waiter.timer);
+      uploadAckWaiters.delete(taskId);
+      waiter.resolve();
+    }
+    return;
+  }
+  // sidecar 拒收上传分片（offset 失配/任务丢失/spool 写失败）时立即失败在途
+  // ack 等待器，不再等满 30s 超时后才用一个含糊的 ack-timeout 收场（issue #60）。
+  if (event.method === "sftp/upload/error") {
+    const taskId = String(event.params.taskId || "");
+    const waiter = uploadAckWaiters.get(taskId);
+    if (waiter) {
+      window.clearTimeout(waiter.timer);
+      uploadAckWaiters.delete(taskId);
+      waiter.reject(Object.assign(new Error(String(event.params.error || "upload rejected")), { code: "upload-append-failed" }));
+    }
+    return;
+  }
+  if (event.method === "sftp/transfer/progress") updateTransfer(event.params);
+  if (event.method === "serial/upload/progress") {
+    const progress = event.params as unknown as SerialUploadProgress;
+    if (protocolSession.value?.kind === "serial" && progress.sessionId === protocolSession.value.sessionId) {
+      serialUploadState.value = reduceSerialUpload(serialUploadState.value, progress);
+      if (progress.state === "complete") {
+        showNotice(t("serial.upload.complete", { name: progress.fileName || serialUploadState.value.fileName || "…" }));
+        window.setTimeout(() => {
+          if (serialUploadState.value.phase === "complete") serialUploadState.value = initialSerialUploadState();
+        }, 2500);
+      } else if (progress.state === "failed") {
+        showError(progress.reason || t("serial.upload.failed"), "terminal");
+        window.setTimeout(() => {
+          if (serialUploadState.value.phase === "failed") serialUploadState.value = initialSerialUploadState();
+        }, 4000);
+      }
+    }
+    return;
+  }
+  if (event.method === "watch/file-modified") {
+    const watchId = String(event.params.watchId || "");
+    if (watchId) handleWatchModified(watchId);
+  }
+}
+
+function updateTransfer(params: Record<string, unknown>) {
+  const taskId = String(params.taskId || "");
+  if (!taskId) return;
+  const existing = transferTasks[taskId];
+  const status = normalizeTransferStatus(params.status, existing?.status);
+  const progress = mergeTransferProgress(existing, params);
+  // 速度只采样真实网络推送（uploading 阶段）：staging 字节走本机内存/磁盘，
+  // 计入会显示 20MB/s 级别的假速度（issue #60）。阶段切换时重置采样窗口。
+  const phaseChanged = progress.phase !== existing?.phase;
+  if (progress.phase === "staging") {
+    transferSamples.delete(taskId);
+    transferSpeeds[taskId] = 0;
+  } else {
+    const sample = sampleTransferSpeed(phaseChanged ? undefined : transferSamples.get(taskId), progress.transferred, performance.now());
+    transferSamples.set(taskId, sample);
+    transferSpeeds[taskId] = sample.speed;
+  }
+  // 目录下载事件附带的树内字段（fileCount/currentFile）有则透传；
+  // 文件下载事件不带这些键，保持原有行为。（issue #46）
+  const fileCount = params.fileCount !== undefined ? Number(params.fileCount) : existing?.fileCount;
+  const currentFile = typeof params.currentFile === "string" ? params.currentFile : existing?.currentFile;
+  transferTasks[taskId] = {
+    taskId,
+    sessionId: String(params.sessionId || existing?.sessionId || ""),
+    direction: params.direction === "download" ? "download" : existing?.direction || "upload",
+    fileName: String(params.fileName || existing?.fileName || ""),
+    size: progress.size,
+    transferred: progress.transferred,
+    staged: progress.staged,
+    phase: progress.phase,
+    status,
+    error: typeof params.error === "string" ? params.error : existing?.error,
+    joinedAt: existing?.joinedAt ?? Date.now(),
+    compression: typeof params.compression === "string" ? params.compression : existing?.compression,
+    fileCount: Number.isFinite(fileCount) && fileCount! > 0 ? fileCount : undefined,
+    currentFile: currentFile || undefined,
+  };
+  settleTransferCompletion(taskId, status);
+  if (!existing && isLiveTransferStatus(transferTasks[taskId].status)) {
+    // 面板已开时不得重开：openTransferPanel 的"先收口再开"会卸载弹层、
+    // 复位滚动位置，用户正往下看历史时会被弹回顶部（issue #18）。互斥族
+    // 保证面板开着时没有其他弹层，直接置 open 即可。
+    if (!transferPanelOpen.value) transferPanelOpen.value = true;
+  }
+}
+
+function normalizeTransferStatus(value: unknown, fallback: TransferTask["status"] = "running"): TransferTask["status"] {
+  return ["queued", "running", "completed", "cancelled", "failed"].includes(String(value)) ? String(value) as TransferTask["status"] : fallback;
+}
+
+/** 终态事件结算 finish 之后的收尾等待器：completed 兑现，cancelled/failed 拒绝。 */
+function settleTransferCompletion(taskId: string, status: TransferTask["status"]) {
+  const waiter = transferCompletionWaiters.get(taskId);
+  if (!waiter || (status !== "completed" && status !== "cancelled" && status !== "failed")) return;
+  transferCompletionWaiters.delete(taskId);
+  if (status === "completed") waiter.resolve();
+  else waiter.reject(Object.assign(new Error(transferTasks[taskId]?.error || t(`transferStatus.${status}`)), { code: "transfer-terminal" }));
+}
+
+/** 挂起直到该任务收到终态 progress 事件（完成/取消/失败）；注册前已终态则立即结算。 */
+function waitForTransferCompletion(taskId: string) {
+  const existing = transferTasks[taskId];
+  const status = existing?.status;
+  if (status === "completed" || status === "cancelled" || status === "failed") {
+    return status === "completed" ? Promise.resolve() : Promise.reject(Object.assign(new Error(existing?.error || t(`transferStatus.${status}`)), { code: "transfer-terminal" }));
+  }
+  return new Promise<void>((resolve, reject) => {
+    transferCompletionWaiters.set(taskId, { resolve, reject });
+  });
+}
+
+async function openSession(forceNew = false, bootRestore = false, isRetry = false) {
+  if (!connectionId.value || !workbenchId.value) return;
+  window.clearTimeout(reconnectTimer);
+  reconnectAttempt = 0;
+  // Boot-time tab restore can race the host's plugin activation and fail the
+  // very first ssh/session/open; a bounded retry self-heals the restored
+  // terminal instead of parking it on a manual reconnect button.
+  // P1-1：重试计数只在"新入口"（用户动作 / 断线重连 / 初次打开）归零；
+  // 重试定时器重入时必须保留计数，否则 OPEN_RETRY_MAX 永远打不满，
+  // 认证失败等秒级永久错误会无限重试、错误文案永不呈现。
+  if (!isRetry) openRetryAttempt = 0;
+  // 重试重入保留等待提示；新入口（用户动作 / 断线重连 / 初次打开）重置。
+  if (!isRetry) inactiveWaiting.value = false;
+  // A session opened over a stale one must not inherit a stuck ZMODEM
+  // overlay (zmodemBusy would keep swallowing terminal input).
+  cancelZmodemUpload();
+  // 同理不继承上一个会话的 trzsz 传输占用（在途传输一并停掉）。
+  teardownTrzsz();
+  // 同理不继承上一个会话的 AI 审批队列 / 执行横幅（切换会话清空全部排队挑战）。
+  clearAgentPrompts();
+  agentRunning.value = undefined;
+  terminalState.value = "connecting";
+  terminalError.value = "";
+  reconnectPending.value = false;
+  resetCommandMarker();
+  connectCancelled.value = false;
+  connectSucceeded.value = false;
+  // Log ordinal survives manual Reconnect after auth/host-key failure so the
+  // panel shows 第 2 / 3 次… instead of resetting to 第 1 次 every click.
+  connectAttemptSerial += 1;
+  connectLog.push("info", t("connectCard.log.attempt", { attempt: connectAttemptSerial }));
+  if (forceNew && session.value) await closeSession(false);
+  createTerminal();
+  // A retry is only worth it for fast failures (boot-restore races with
+  // plugin activation). A real dial failure takes tens of seconds — retrying
+  // those just turns one error into minutes of spinner.
+  const attemptStarted = Date.now();
+  const attemptTimeoutMs = openRetryAttempt === 0 ? 120_000 : 30_000;
+  try {
+    const info = await window.datawisePlugin.invoke<SessionInfo>("ssh/session/open", {
+      connectionId: connectionId.value,
+      workbenchId: workbenchId.value,
+      cols: terminal?.cols || 120,
+      rows: terminal?.rows || 32,
+      ...sessionTransportOpenParams(transportReuseState),
+    }, { timeoutMs: attemptTimeoutMs });
+    // 用户取消后在途 open 仍可能成功（invoke 无法中止）：立即关闭这个孤儿
+    // 会话并提前返回——不置 connected、不补发 replay，卡片停在已取消态。
+    if (connectCancelled.value) {
+      void window.datawisePlugin.invoke("ssh/session/close", { sessionId: info.sessionId }).catch(() => undefined);
+      connectLog.push("warn", t("connectCard.log.orphanClosed"));
+      return;
+    }
+    markSessionTransportOpenSucceeded(transportReuseState, info.sessionId);
+    activeTerminalSessionId = info.sessionId;
+    lastSequence = 0;
+    // A fresh session restarts sequence numbering: buffered frames from the
+    // dead session belong to a different stream and must not poison the
+    // in-order drain (a stale higher sequence would fake a permanent hole).
+    pendingTerminalFrames.clear();
+    replayNoProgress = 0;
+    // 成功过渡（Termius 式）：先切 success 卡片——进度线填满到顶、终端图标变
+    // 对号；replay 在动画期间并行拉取，hold 播完才置 connected 进终端，避免
+    // 连接成功瞬间生硬跳变。reduced-motion 下不 hold，立即进终端。
+    // 注意 session/directoryTrackingSupported 等响应式状态在 hold 结束后才写入：
+    // 提前写入会让 SFTP/工具栏等 watcher 在动画播放期间就开始渲染（画面抖动）。
+    connectSucceeded.value = true;
+    inactiveWaiting.value = false;
+    connectAttemptSerial = 0;
+    const successShownAt = Date.now();
+    connectLog.push("info", t("connectCard.log.connected", { seconds: ((Date.now() - attemptStarted) / 1000).toFixed(1) }));
+    const replay = await window.datawisePlugin.invoke<ReplayResult>("ssh/terminal/replay", {
+      sessionId: info.sessionId,
+      afterSequence: 0,
+    });
+    if (!replay.complete) throw new Error(t("sessionUnrecoverable"));
+    const holdMs = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : CONNECT_SUCCESS_HOLD_MS;
+    const remainMs = holdMs - (Date.now() - successShownAt);
+    if (remainMs > 0) await new Promise((resolve) => window.setTimeout(resolve, remainMs));
+    connectSucceeded.value = false;
+    session.value = info;
+    directoryTrackingSupported.value = info.directoryTrackingSupported ?? true;
+    bastionMode.value = info.bastionMode === "jumpserver" ? "jumpserver" : "direct";
+    if (bastionMode.value === "jumpserver") assetsOpen.value = true;
+    terminalState.value = "connected";
+    await afterSessionConnected();
+    // WKWebView（macOS 宿主）在"卡片遮盖 → 终端显示"过渡后可能漏一帧重绘，
+    // 高亮装饰停留在过渡前状态直到首次交互（Mac 用户反馈"连接成功后 IP 高亮
+    // 闪烁、点一下就好"）。状态落定为 connected 后下一帧主动全量刷新并重扫
+    // 高亮，等价于那次点击；对 Chromium 是无害的一次多余重绘。
+    window.requestAnimationFrame(() => {
+      if (disposed || !terminal || terminalState.value !== "connected") return;
+      terminal.refresh(0, terminal.rows - 1);
+      rescanHighlightViewport();
+    });
+  } catch (cause) {
+    if (disposed) return;
+    connectSucceeded.value = false;
+    // 用户已取消：不重试、不呈现错误，卡片停在已取消态等 Connect 重新发起。
+    if (connectCancelled.value) return;
+    // The selected source may close between opening the child workbench and
+    // its first sidecar call. Downgrade once, explicitly, to a normal login;
+    // subsequent failures follow the ordinary permanent-error policy.
+    if (
+      isDuplicatedTransportUnavailableError(cause)
+      && fallbackToFreshTransport(transportReuseState)
+    ) {
+      connectLog.push("warn", t("connectCard.log.duplicateFallback"));
+      await openSession(false, bootRestore, true);
+      return;
+    }
+    const attemptMs = Date.now() - attemptStarted;
+    // "Connection is not active"：sidecar 连接注册表还没有该连接。boot 恢复
+    // 场景（宿主启动时为恢复的插件 tab 重放 connect 生命周期）这是暂时态，
+    // 与其它快失败一起在窗口内重试即可自愈；非 boot 路径（手动重连等）宿主只在
+    // 用户从侧边栏重开连接时才重放凭据，因此在有界窗口内轮询等待自愈（卡片
+    // 显示等待文案），窗口耗尽再落错误态并指引从左侧连接重新打开。认证 /
+    // host-key 拒绝是秒级永久错误，重试不可能自愈——跳过重试直接进 error 态，
+    // 呈现 friendly 文案 + Reconnect 出口（P1-1）。决策细节见 connectRetry.ts。
+    const inactive = isConnectionInactiveError(cause);
+    const decision = decideConnectRetry({
+      cause,
+      attempt: openRetryAttempt,
+      maxAttempts: OPEN_RETRY_MAX,
+      attemptMs,
+      inactive,
+      bootRestore,
+    });
+    if (decision.kind === "retry") {
+      openRetryAttempt = decision.attempt;
+      // 只有手动入口的 inactive 轮询需要"请在侧边栏重开"提示；boot 恢复由宿主自动重放。
+      inactiveWaiting.value = inactive && !bootRestore;
+      terminalState.value = "connecting";
+      connectLog.push("warn", t("connectCard.log.retry", { seconds: decision.delayMs / 1000 }));
+      reconnectTimer = window.setTimeout(() => {
+        if (!disposed) void openSession(false, bootRestore, true);
+      }, decision.delayMs);
+      return;
+    }
+    inactiveWaiting.value = false;
+    terminalState.value = "error";
+    activeTerminalSessionId = "";
+    // 日志记录分类后的友好原因（与卡片错误行同源），未分类时保留原始错误串。
+    const rawReason = cause instanceof Error ? cause.message : String(cause ?? "");
+    const reasonKind = classifyConnectError(rawReason);
+    connectLog.push("error", t("connectCard.log.failed", { reason: inactive ? t("connectionInactive") : reasonKind ? t(connectErrorKey(reasonKind)) : rawReason }));
+    showError(inactive ? new Error(t("connectionInactive")) : cause, "terminal");
+  }
+}
+
+async function attachSession(sessionId: string, retryReference: string = initialState().sessionId || "") {
+  terminalState.value = "connecting";
+  connectCancelled.value = false;
+  // attach（tab 恢复）不播成功过渡动画，直接进终端。
+  connectSucceeded.value = false;
+  activeTerminalSessionId = sessionId;
+  try {
+    const info = await window.datawisePlugin.invoke<SessionInfo>("ssh/session/attach", {
+      connectionId: connectionId.value,
+      workbenchId: workbenchId.value,
+      afterSequence: lastSequence,
+    }, { timeoutMs: 15_000 });
+    if (info.sessionId !== sessionId) throw new Error(t("errors.sessionChanged"));
+    session.value = info;
+    bastionMode.value = info.bastionMode === "jumpserver" ? "jumpserver" : "direct";
+    terminalState.value = "connected";
+    reconnectPending.value = false;
+    if (info.replay && !info.replay.complete) {
+      terminalState.value = "error";
+      terminalError.value = t("sessionUnrecoverable");
+      return;
+    }
+    reconnectAttempt = 0;
+    await afterSessionConnected();
+  } catch (cause) {
+    if (!shouldReattachTerminal({ disposed, state: terminalState.value, expectedSessionId: sessionId, currentSessionId: retryReference })) {
+      terminalState.value = "error";
+      reconnectPending.value = false;
+      activeTerminalSessionId = "";
+      showError(cause, "terminal");
+      return;
+    }
+    const delay = terminalReconnectDelay(reconnectAttempt++);
+    // Once the backoff ladder is exhausted, the stored session is gone for
+    // good (e.g. the app was killed while the tab was open): re-attaching a
+    // dead session id can never succeed, so fall back to a fresh open.
+    if (reconnectAttempt > TERMINAL_RECONNECT_DELAYS.length) {
+      reconnectAttempt = 0;
+      reconnectPending.value = false;
+      reconnectTimer = window.setTimeout(() => void openSession(true), delay);
+      terminalError.value = t("reattachingTerminal");
+      return;
+    }
+    reconnectNextAt = Date.now() + delay;
+    reconnectDelayMs = delay;
+    reconnectPending.value = true;
+    reconnectTimer = window.setTimeout(() => void attachSession(sessionId), delay);
+    terminalError.value = t("reattachingTerminal");
+  }
+}
+
+async function afterSessionConnected() {
+  terminalError.value = "";
+  terminal?.focus();
+  scheduleFit();
+  await writeWorkbenchState();
+  if (followDirectory.value) await setDirectoryTracking(true);
+  // Auto-start remembered port forwards for this connection (incl. reconnect).
+  void autoStartPersistedForwards();
+  void refreshSftpHomePath();
+  await Promise.all([loadDirectory(currentPath.value), restoreTransfers()]);
+  // 侧栏 tree tab 可见时补拉根节点（首连/重连后缓存仍为空的场景）。
+  ensureSideTreeRoot();
+  // After an auto-reconnect succeeds, tell the user the session is back and
+  // which working directory context it resumed with (pure-function chosen).
+  if (reconnectWasPending) {
+    reconnectWasPending = false;
+    const restored = describeReconnectRestoredNotice({ wasReconnecting: true, path: currentPath.value });
+    if (restored) showNotice(t(restored.key, restored.values));
+  }
+}
+
+/** Same skip semantics as PortForwardDialog restore: already-running or
+ * conflicting listen endpoints are left alone; notice only when something
+ * newly started; no presets → silent. */
+function matchingRunningForward(profile: PersistedForward, forwards: PortForward[]) {
+  return forwards.find(
+    (row) =>
+      row.state !== "stopped"
+      && row.state !== "error"
+      && row.kind === profile.kind
+      && (row.listenHost || "127.0.0.1") === (profile.listenHost || "127.0.0.1")
+      && row.listenPort === Number(profile.listenPort)
+      && (profile.kind === "dynamic"
+        || (row.targetHost === profile.targetHost && row.targetPort === Number(profile.targetPort))),
+  );
+}
+
+async function autoStartPersistedForwards() {
+  const cid = connectionId.value;
+  const sid = session.value?.sessionId;
+  if (!cid || !sid) return;
+  let profiles: PersistedForward[] = [];
+  try {
+    profiles = sanitizePersistedForwards(JSON.parse(uiStorage.getItem(forwardsStorageKey(cid)) || "null"));
+  } catch {
+    return;
+  }
+  if (!profiles.length) return;
+  try {
+    const payload = await window.datawisePlugin.invoke<unknown>("ssh/forward/list", { connectionId: cid });
+    const running = parseForwards(payload);
+    let started = 0;
+    let firstFailure = "";
+    for (const profile of profiles) {
+      if (matchingRunningForward(profile, running) || findForwardConflict(running, profile)) continue;
+      try {
+        await window.datawisePlugin.invoke("ssh/forward/start", forwardStartParams(profile, sid));
+        started += 1;
+      } catch (cause) {
+        firstFailure ||= cause instanceof Error ? cause.message : String(cause);
+      }
+    }
+    if (started) showNotice(t("forwards.profilesStarted", { count: started }));
+    else if (firstFailure) showNotice(firstFailure);
+  } catch {
+    // forward/list unavailable: stay silent (dialog restore remains as fallback).
+  }
+}
+
+async function closeSession(updateStatus = true) {
+  const sessionId = session.value?.sessionId;
+  session.value = undefined;
+  activeTerminalSessionId = "";
+  clearAgentPrompts();
+  agentRunning.value = undefined;
+  // Closing mid-ZMODEM aborts the transfer silently instead of leaving the
+  // busy overlay and the dead sentry attached to the workbench.
+  cancelZmodemUpload();
+  // trzsz 在途传输同样静默停止（死会话上的 sendToServer 会因无 sessionId 空转）。
+  teardownTrzsz();
+  pendingTerminalFrames.clear();
+  lastSequence = 0;
+  terminalInputQueue.reset();
+  reconnectPending.value = false;
+  resetCommandMarker();
+  if (sessionId) await window.datawisePlugin.invoke("ssh/session/close", { sessionId }).catch(() => undefined);
+  if (updateStatus) {
+    terminalState.value = "disconnected";
+    terminalError.value = t("disconnected");
+  }
+  persistState();
+}
+
+// 手动重连前请宿主按当前最新配置重开连接：连接在侧边栏被编辑（如改密码）后，
+// 宿主会摘掉 connected 标记且不回推插件，sidecar 里存的凭据就此过期——不先
+// 重开的话 openSession 只会拿旧凭据反复失败。宿主以打开连接的同款流程重新
+// 下发配置（含 vault 里的最新凭据）。旧宿主无 host.reopenConnection：请求
+// 报错静默忽略，行为退化为原样。
+async function requestHostReopenConnection() {
+  if (!connectionId.value) return;
+  try {
+    const api = window.datawisePlugin;
+    if (api.reopenConnection) await api.reopenConnection(connectionId.value);
+    else await api.request("host.reopenConnection", { connectionId: connectionId.value });
+  } catch {
+    // 旧宿主无此方法。
+  }
+}
+
+async function reconnect() {
+  terminal?.clear();
+  await closeSession(false);
+  await requestHostReopenConnection();
+  await openSession();
+}
+
+/**
+ * 连接卡片 Cancel：在途 ssh/session/open 无法中止，仅清掉待触发的重试定时器
+ * 并把卡片切到已取消态；promise 落地后由 openSession 内的 connectCancelled
+ * 分支负责回收孤儿会话 / 跳过重试与错误呈现。
+ */
+function cancelConnect() {
+  window.clearTimeout(reconnectTimer);
+  connectCancelled.value = true;
+  connectLog.push("warn", t("connectCard.log.cancelled"));
+}
+
+/** 已取消态的 Connect 出口：与错误态 reconnect 同路径——先请宿主按最新配置
+ * 重开连接（侧边栏改密码/连接信息后 sidecar 凭据已过期，缺这步会拿旧凭据
+ * 反复失败、把 inactive 重试梯子耗尽才落错误态），再走完整 openSession
+ * 流程（入口会重置取消标记）。 */
+async function startConnect() {
+  connectCancelled.value = false;
+  // Cancelled → Connect is a fresh cycle (not a continuation of the failed ladder).
+  connectAttemptSerial = 0;
+  await requestHostReopenConnection();
+  void openSession();
+}
+
+/**
+ * Manual "reconnect now" entry: while the auto-reconnect backoff ladder is
+ * pending, cancel the scheduled retry and reconnect immediately instead of
+ * waiting out the current delay; otherwise behave like the plain reconnect.
+ */
+async function reconnectNow() {
+  if (!reconnectPending.value) {
+    await reconnect();
+    return;
+  }
+  window.clearTimeout(reconnectTimer);
+  reconnectPending.value = false;
+  reconnectAttempt = 0;
+  await openSession();
+}
+
+// 新建 / 复制会话共用 context 装配：换发新 workbenchId，摘掉旧 sessionId，
+// 并按需带上 reuseAuthenticatedTransport（复制会话免 MFA）。
+function sessionTabContext(reuseAuthenticatedTransport: boolean, spawnCommand?: string): Record<string, unknown> {
+  let context: Record<string, unknown>;
+  try {
+    context = JSON.parse(JSON.stringify(hostContext.value || {})) as Record<string, unknown>;
+  } catch {
+    context = { ...(hostContext.value || {}) };
+  }
+  context.connectionId = connectionId.value;
+  context.workbenchId = randomUUID();
+  context.reuseAuthenticatedTransport = reuseAuthenticatedTransport;
+  context.reuseAuthenticatedSessionId = reuseAuthenticatedTransport ? session.value?.sessionId : undefined;
+  context.spawnCommand = spawnCommand?.trim() || undefined;
+  const rawConn = context.connection;
+  if (rawConn && typeof rawConn === "object" && !Array.isArray(rawConn)) {
+    const conn = rawConn as Record<string, unknown>;
+    const user = String(conn.user || conn.username || "").trim();
+    if (user) {
+      conn.user = user;
+      conn.username = user;
+    }
+  }
+  const persisted = context.workbenchState;
+  if (persisted && typeof persisted === "object") {
+    const { sessionId: _sessionId, terminalSequence: _terminalSequence, ...rest } = persisted as Record<string, unknown>;
+    context.workbenchState = rest;
+  }
+  return context;
+}
+
+async function openSessionTab(reuseAuthenticatedTransport: boolean) {
+  const api = window.datawisePlugin;
+  if (!connectionId.value) {
+    showError(t("errors.hostBridgeMissing"), "terminal");
+    return;
+  }
+  if (reuseAuthenticatedTransport && !connected.value) return;
+  if (typeof api.openWorkbench !== "function") {
+    showError(t("errors.openWorkbenchUnavailable"), "terminal");
+    return;
+  }
+  try {
+    await api.openWorkbench(
+      "io.datawise.community.ssh.workbench",
+      sessionTabContext(reuseAuthenticatedTransport),
+      { forceNew: true },
+    );
+  } catch (error) {
+    showError(error, "terminal");
+  }
+}
+
+/** 新建会话：独立 transport，可能再次要求堡垒机 MFA。 */
+async function openNewSessionTab() {
+  await openSessionTab(false);
+}
+
+/** 复制会话：复用当前已认证 transport，免再次 MFA。 */
+async function openCopiedSessionTab() {
+  await openSessionTab(true);
+}
+
+async function restoreTransfers() {
+  if (!session.value) return;
+  const result = await window.datawisePlugin.invoke<{ tasks: TransferTask[] }>("sftp/transfer/list", { sessionId: session.value.sessionId }).catch(() => ({ tasks: [] }));
+  for (const task of result.tasks) {
+    // 后端 list 的 staging 行把 spool 字节放在 transferred 里；恢复到本地
+    // 状态时归位到 staged，避免重挂后进度条展示阶段计数（issue #60）。
+    if (task.phase === "staging") {
+      task.staged = task.transferred;
+      task.transferred = 0;
+    }
+    const existing = transferTasks[task.taskId];
+    // joinedAt 只在首次见到时落一次：后端返回序（HashMap 迭代序）不再影响
+    // 活跃区排序（issue #18）。
+    transferTasks[task.taskId] = { ...task, joinedAt: existing?.joinedAt ?? Date.now() };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 传输历史（sftp/transfer/history，落盘+内存合并视图，只读）
+// ---------------------------------------------------------------------------
+
+async function refreshTransferHistory() {
+  transferHistoryLoading.value = true;
+  try {
+    const result = await window.datawisePlugin.invoke<{ tasks: unknown }>("sftp/transfer/history", { limit: TRANSFER_HISTORY_LIMIT });
+    transferHistory.value = sanitizeTransferHistoryTasks(result?.tasks);
+    transferHistoryFailed.value = false;
+  } catch {
+    // 历史是 best-effort UX 数据：后端未升级/读取失败仅提示加载失败，
+    // 保留上一次快照——一次瞬时错误不能把用户可见的记录清空。
+    transferHistoryFailed.value = true;
+  } finally {
+    transferHistoryLoading.value = false;
+  }
+}
+
+/**
+ * 面板打开时对账活跃任务：逐个向后端查询 `sftp/transfer/status`，后端已不
+ * 认识的任务（sidecar 重启、页面重载后错过终态事件的“僵尸行”）标记为失败，
+ * 终态以服务端为准。查询失败视为任务已死——存活任务的状态查询总会成功。
+ * 不在每次历史刷新时做：新任务可能在快照之后才登记，避免误判。
+ */
+async function reconcileActiveTransfers() {
+  for (const task of Object.values(transferTasks)) {
+    if (task.status !== "queued" && task.status !== "running") continue;
+    try {
+      const status = await window.datawisePlugin.invoke<{ transferred?: number; status: string; phase?: string }>("sftp/transfer/status", { taskId: task.taskId });
+      const normalized = normalizeTransferStatus(status.status, "running");
+      // task.status 此处必为 queued/running（上方守卫），终态即差异。
+      if (normalized !== "queued" && normalized !== "running") {
+        task.status = normalized;
+        if (status.transferred != null) {
+          // staging 阶段的 transferred 字段是 spool 字节数，不能覆盖真实推送计数。
+          if (status.phase === "staging") task.staged = status.transferred;
+          else task.transferred = status.transferred;
+        }
+      }
+    } catch {
+      task.status = "failed";
+      task.error = t("transfersHistory.interrupted");
+    }
+  }
+}
+
+/** 收敛 sftp/transfer/history 响应：丢畸形行，方向/状态收敛到已知枚举（镜像 normalizeTransferStatus）。 */
+function sanitizeTransferHistoryTasks(raw: unknown): TransferHistoryEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: TransferHistoryEntry[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const taskId = typeof record.taskId === "string" ? record.taskId : "";
+    if (!taskId) continue;
+    // 历史枚举无 queued；异常遗留 queued 行按 running 展示（保守降级，不丢条目）。
+    const status = normalizeTransferStatus(record.status, "completed");
+    out.push({
+      taskId,
+      sessionId: typeof record.sessionId === "string" ? record.sessionId : undefined,
+      connectionId: typeof record.connectionId === "string" ? record.connectionId : undefined,
+      direction: record.direction === "download" ? "download" : "upload",
+      fileName: typeof record.fileName === "string" ? record.fileName : "",
+      size: Number(record.size ?? 0) || 0,
+      transferred: Number(record.transferred ?? 0) || 0,
+      status: status === "queued" ? "running" : status,
+      startedAt: typeof record.startedAt === "number" ? record.startedAt : undefined,
+      finishedAt: typeof record.finishedAt === "number" ? record.finishedAt : undefined,
+      error: typeof record.error === "string" && record.error ? record.error : undefined,
+      localPath: typeof record.localPath === "string" && record.localPath ? record.localPath : undefined,
+    });
+  }
+  return out;
+}
+
+// 应用内弹窗确认：宿主沙箱 iframe 无 allow-modals，window.confirm 恒 false
+const transferHistoryClearOpen = ref(false);
+async function confirmTransferHistoryClear() {
+  try {
+    await window.datawisePlugin.invoke("sftp/transfer/history/clear", {});
+    transferHistory.value = [];
+    transferHistoryFailed.value = false;
+    transferHistoryClearOpen.value = false;
+    showNotice(t("transfersHistory.cleared"));
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+/** Refresh every data source rendered by the transfer popover. */
+async function refreshTransferPanel() {
+  await Promise.all([
+    refreshTransferHistory(),
+    refreshResumableUploads(),
+    restoreTransfers(),
+  ]);
+  await reconcileActiveTransfers();
+}
+
+// 打开传输面板或任一任务转为终态时拉取历史：终态卡从活跃区消失的同一拍
+// 进入历史区，不等最后一个任务结束（issue #18：有传输任务时历史也要可查）。
+// 打开面板的同时对账活跃任务，防止错过终态事件的行永远卡在 running。
+watch(transferPanelOpen, (open) => {
+  if (open) {
+    void refreshTransferPanel();
+  }
+});
+const liveTransferIds = computed(() =>
+  transferList.value.map((task) => task.taskId).join("|"),
+);
+watch(liveTransferIds, (current, previous) => {
+  if (!transferPanelOpen.value) return;
+  const before = new Set((previous ?? "").split("|").filter(Boolean));
+  const after = new Set(current.split("|").filter(Boolean));
+  // 只有任务离开活跃集合（转终态）才刷新；新任务加入由面板打开路径负责。
+  const departed = [...before].some((taskId) => !after.has(taskId));
+  if (departed) void refreshTransferHistory();
+});
+
+async function refreshResumableUploads() {
+  resumableLoading.value = true;
+  try {
+    const result = await window.datawisePlugin.invoke<{ tasks: ResumableUploadTask[] }>("sftp/transfer/resumable", {});
+    resumableTasks.value = (result.tasks ?? []).filter(canResumeUpload);
+  } catch {
+    resumableTasks.value = [];
+  } finally {
+    resumableLoading.value = false;
+  }
+}
+
+function beginResumeUpload(task: ResumableUploadTask) {
+  resumeTargetTaskId.value = task.taskId;
+  resumeInput.value?.click();
+}
+
+async function onResumeFilePicked(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  const task = resumableTasks.value.find((item) => item.taskId === resumeTargetTaskId.value);
+  resumeTargetTaskId.value = "";
+  if (!file || !task) return;
+  if (!matchResumableUpload(task, [{ name: file.name, size: file.size }])) {
+    showError(new Error(t("resumableMismatch")));
+    return;
+  }
+  try {
+    await uploadSource(file.name, file.size, async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()), { taskId: task.taskId, remotePath: task.remotePath });
+    await loadDirectory();
+    showNotice(t("resumableResumed", { name: file.name }));
+    void refreshTransferHistory();
+    void refreshResumableUploads();
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+async function resolveHostKey(accept: boolean) {
+  const prompt = hostKeyPrompt.value;
+  if (!prompt) return;
+  hostKeyPrompt.value = undefined;
+  try {
+    await window.datawisePlugin.invoke("connection/challenge/resolve", {
+      challengeId: prompt.challengeId,
+      operationId: prompt.operationId,
+      accept,
+      remember: accept && rememberHostKey.value,
+    });
+    connectLog.push("info", t("connectCard.log.hostKeyResolved"));
+  } catch (cause) {
+    showError(cause, "terminal");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AI 终端同步执行（agent terminal mode）：审批挑战 + 执行横幅
+// ---------------------------------------------------------------------------
+
+// 审批队列：弹窗只渲染队首；队首变化（入队到空队列、出队露出下一个）时经 watch
+// 重置可编辑命令与 250ms tick 倒计时。倒计时基于队首 requestedAt + timeoutSecs
+// 绝对期限，到 0 仅出队队首并标记 expired（后端超时同样拒绝）；排队中已到期的
+// 挑战会在露出为队首的首次 tick 即被跳过出队。
+const agentPromptHead = computed(() => agentPromptQueue.value[0]);
+
+watch(agentPromptHead, (head) => {
+  stopAgentPromptTimer();
+  if (!head) {
+    agentPromptCommand.value = "";
+    agentPromptRemaining.value = 0;
+    return;
+  }
+  agentPromptCommand.value = head.command;
+  agentPromptExpired.value = false;
+  agentPromptRemember.value = false;
+  const tick = () => {
+    const current = agentPromptHead.value;
+    if (!current) return;
+    agentPromptRemaining.value = approvalRemainingSecs(current, Date.now());
+    if (agentPromptRemaining.value <= 0) {
+      agentPromptExpired.value = true;
+      dismissAgentPrompt();
+    }
+  };
+  tick();
+  agentPromptTimer = window.setInterval(tick, 250);
+});
+
+function stopAgentPromptTimer() {
+  if (agentPromptTimer) {
+    window.clearInterval(agentPromptTimer);
+    agentPromptTimer = 0;
+  }
+}
+
+// 出队队首（超时 / 审批后调用）：队列自动露出下一个，watch 重启其倒计时。
+function dismissAgentPrompt() {
+  const head = agentPromptHead.value;
+  if (!head) return;
+  agentPromptQueue.value = dropAgentPrompt(agentPromptQueue.value, head.challengeId);
+}
+
+// 清空整个审批队列（会话切换 / 关闭时不继承旧会话的排队挑战）。
+function clearAgentPrompts() {
+  stopAgentPromptTimer();
+  agentPromptQueue.value = [];
+  agentPromptCommand.value = "";
+  agentPromptRemaining.value = 0;
+}
+
+// 审批语义对齐 host-key 挑战：先出队再 resolve（挑战一次性，重复 resolve 报错）；
+// 批准时提交编辑后的命令（所见即所执行）；勾选「记住」时携带 remember 标记。
+async function resolveAgentPrompt(decision: "approve" | "deny") {
+  const prompt = agentPromptHead.value;
+  if (!prompt) return;
+  const command = agentPromptCommand.value;
+  const remember = agentPromptRemember.value;
+  dismissAgentPrompt();
+  try {
+    const payload = buildAgentResolveBody({ challengeId: prompt.challengeId, decision, command, remember });
+    await window.datawisePlugin.invoke("ssh/agent/resolve", payload);
+  } catch (cause) {
+    showError(cause, "terminal");
+  }
+}
+
+// 中断 AI 正在终端执行的命令：复用 PTY 输入通道发送 Ctrl+C（0x03，对齐快速命令写入语义）。
+function interruptAgentRun() {
+  sendTerminalBytes(new Uint8Array([3]));
+}
+
+// ---------------------------------------------------------------------------
+// 告警排查（IMPL_PLAN_SSH_APPROVAL_AUDIT_ALERT §2.4）：粘贴异构告警 → 后端
+// ssh/alert/triage 分诊（结构化 + 分类 + 只读命令清单）；建议命令一键发送到
+// 当前终端（复用 PTY 键盘写入链路），分诊本身不需要活动连接。
+const alertTriageOpen = ref(false);
+const alertTriageBusy = ref(false);
+const alertTriageError = ref("");
+const alertTriagePayload = ref("");
+const alertTriageResult = ref<TriageResult>();
+
+watch(alertTriagePayload, () => {
+  alertTriageResult.value = undefined;
+  alertTriageError.value = "";
+});
+
+function openAlertTriage() {
+  alertTriageOpen.value = true;
+  alertTriageError.value = "";
+}
+
+// 端口映射（-L/-R）管理弹窗：全部逻辑在 components/PortForwardDialog.vue，
+// 这里只保留工具栏入口的开关状态。
+const forwardsOpen = ref(false);
+
+async function runAlertTriage() {
+  if (alertTriageBusy.value) return;
+  const payload = sanitizeTriagePayload(alertTriagePayload.value);
+  if (!payload) {
+    alertTriageError.value = t("alertTriage.invalidPayload");
+    return;
+  }
+  alertTriageBusy.value = true;
+  alertTriageError.value = "";
+  alertTriageResult.value = undefined;
+  try {
+    alertTriageResult.value = await window.datawisePlugin.invoke<TriageResult>("ssh/alert/triage", { payload });
+  } catch (cause) {
+    alertTriageError.value = t("alertTriageLoadFailed", { error: settingsErrorOf(cause) });
+  } finally {
+    alertTriageBusy.value = false;
+  }
+}
+
+function sendSuggestionToTerminal(command: string) {
+  if (!session.value) return;
+  trackPendingInput(`${command}\r`);
+  sendTerminalBytes(new TextEncoder().encode(`${command}\r`));
+  terminal?.focus();
+}
+
+async function copySuggestions() {
+  const result = alertTriageResult.value;
+  if (!result?.suggestions?.length) return;
+  try {
+    await writeClipboardText(result.suggestions.map((item) => item.command).join("\n"), clipboardDeps());
+    showNotice(t("terminalCopied"));
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Session copilot: context publish + Dock + model fallback + tool cards.
+// ---------------------------------------------------------------------------
+const copilotDockOpen = ref(false);
+const copilotDockBounds = resolveDockWidthBounds(sshCopilotAdapter);
+const copilotDockWidth = ref(copilotDockBounds.default);
+const copilotEnabled = ref(false);
+/** Ask = explain only; Agent = propose/run action cards (OpenOcta-style). */
+const copilotChatMode = ref<CopilotChatMode>("agent");
+const isCopilotAskMode = computed(() => copilotChatMode.value === "ask");
+/** auto = follow workbench locale; zh-CN / en = force reply language. */
+const copilotReplyLanguage = ref<CopilotReplyLanguage>("auto");
+/** auto | plugin BYOK | host default — user pick from merged list. */
+const copilotModelPreference = ref<ModelPreference>("auto");
+const copilotModelOptions = ref<ModelOption[]>([]);
+const copilotBusy = ref(false);
+const copilotMessages = ref<CopilotMessage[]>([]);
+const copilotModelSource = ref<ModelSource>("none");
+const copilotContext = ref<SessionContext>({});
+const copilotStreamRequestId = ref("");
+const hostAiApi = createHostAiFromPlugin(window.datawisePlugin);
+
+function coercePrefNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function metricsDigestText(): string {
+  const m = metrics.value as {
+    cpu?: { percent?: number; load1?: number };
+    memory?: { usedBytes?: number; totalBytes?: number };
+    disks?: Array<{ mount?: string; percentUsed?: number }>;
+  } | null | undefined;
+  if (!m) return "";
+  const parts: string[] = [];
+  if (m.cpu?.percent != null) parts.push(`CPU ${Math.round(m.cpu.percent)}%`);
+  if (m.cpu?.load1 != null) parts.push(`load1 ${m.cpu.load1}`);
+  if (m.memory?.totalBytes && m.memory.totalBytes > 0) {
+    parts.push(`MEM ${Math.round(((m.memory.usedBytes ?? 0) / m.memory.totalBytes) * 100)}%`);
+  }
+  const disk = m.disks?.[0];
+  if (disk?.percentUsed != null) parts.push(`DISK ${Math.round(disk.percentUsed)}%`);
+  return parts.join(" · ");
+}
+
+async function publishCopilotContext() {
+  const sessionId = session.value?.sessionId;
+  if (!sessionId || !connected.value) return;
+  const selectedPaths = selectedUris.value
+    .map((uri) => pathFromUri(uri))
+    .filter((path) => !!path)
+    .slice(0, 50);
+  try {
+    const ctx = await window.datawisePlugin.invoke<SessionContext>("ssh/session/context/publish", {
+      sessionId,
+      shellCwd: terminalCwd.value || null,
+      sftpPath: currentPath.value || null,
+      selectedPaths,
+      metricsDigest: metricsDigestText() || null,
+    });
+    copilotContext.value = {
+      ...ctx,
+      connectionId: connectionId.value,
+      sessionId,
+      host: connection.value.host || ctx.host,
+      user: connection.value.username || ctx.user,
+      shellCwd: terminalCwd.value || ctx.shellCwd,
+      sftpPath: currentPath.value || ctx.sftpPath,
+      selectedPaths,
+      metricsDigest: metricsDigestText() || ctx.metricsDigest,
+    };
+  } catch {
+    copilotContext.value = {
+      connectionId: connectionId.value,
+      sessionId,
+      host: connection.value.host,
+      user: connection.value.username,
+      readOnly: !!(connection.value.readOnly || connectionReadOnly.value),
+      agentMode: agentMode.value,
+      shellCwd: terminalCwd.value || null,
+      sftpPath: currentPath.value || null,
+      selectedPaths,
+      metricsDigest: metricsDigestText() || null,
+    };
+  }
+}
+
+async function refreshCopilotModelSource() {
+  try {
+    const rpc = (method: string, params?: unknown) =>
+      window.datawisePlugin.invoke(method, params ?? {});
+    const probe = await probeModels(rpc, hostAiApi);
+    copilotModelOptions.value = buildModelOptions(probe);
+    // If user forced an unavailable model, fall back to auto for display resolve.
+    let prefer = copilotModelPreference.value;
+    if (prefer.startsWith("plugin:")) {
+      const id = prefer.slice("plugin:".length);
+      const alive = probe.plugin.profiles.some((p) => p.id === id && p.configured);
+      if (!alive) prefer = "auto";
+    }
+    if (prefer === "plugin" && !probe.plugin.configured) prefer = "auto";
+    if (prefer === "host" && !probe.host.configured) prefer = "auto";
+    if (prefer !== copilotModelPreference.value) {
+      copilotModelPreference.value = prefer;
+      try {
+        await window.datawisePlugin.invoke("local/preferences/set", { copilotModelPreference: prefer });
+      } catch {
+        // Memory-only for this session.
+      }
+    }
+    const resolved = await resolveModel(rpc, hostAiApi, prefer);
+    // Kill-switch off must not fake "no model" — keep real availability for the badge.
+    copilotModelSource.value = resolved.source;
+  } catch {
+    copilotModelSource.value = "none";
+  }
+}
+
+async function setCopilotModelPreference(value: ModelPreference) {
+  const next = normalizeModelPreference(value) ?? "auto";
+  copilotModelPreference.value = next;
+  try {
+    await window.datawisePlugin.invoke("local/preferences/set", { copilotModelPreference: next });
+  } catch {
+    // Memory-only for this session.
+  }
+  await refreshCopilotModelSource();
+}
+
+async function ensureCopilotAgentPresets() {
+  // Ask mode is explain-only — never bump agentTerminalMode / MCP exec presets.
+  if (!shouldEnsureAgentPresets(copilotChatMode.value, copilotEnabled.value)) return;
+  const sessionId = session.value?.sessionId;
+  if (!sessionId) return;
+  try {
+    if (agentMode.value === "off") {
+      await applyAgentMode("auto");
+    }
+  } catch {
+    // Non-fatal: cards that need terminal routing still try ensureAgentMode.
+  }
+  try {
+    const mcp = await window.datawisePlugin.invoke<{ execPermissionMode?: string }>("mcp/settings/get", {});
+    if (mcp?.execPermissionMode !== "confirm") {
+      await window.datawisePlugin.invoke("mcp/settings/set", { execPermissionMode: "confirm" });
+    }
+  } catch {
+    // Older sidecars may reject unknown fields.
+  }
+}
+
+async function setCopilotEnabled(value: boolean) {
+  copilotEnabled.value = value;
+  try {
+    await window.datawisePlugin.invoke("local/preferences/set", { copilotEnabled: value });
+  } catch {
+    // Memory-only for this session.
+  }
+  if (value) {
+    await ensureCopilotAgentPresets();
+    await refreshCopilotModelSource();
+    await publishCopilotContext();
+  } else {
+    copilotModelSource.value = "none";
+  }
+}
+
+async function setCopilotDockOpen(open: boolean) {
+  copilotDockOpen.value = open;
+  try {
+    await window.datawisePlugin.invoke("local/preferences/set", { copilotDockOpen: open });
+  } catch {
+    // ignore
+  }
+  if (open) {
+    await publishCopilotContext();
+    await refreshCopilotModelSource();
+  }
+}
+
+async function setCopilotDockWidth(width: number) {
+  const next = clampCopilotDockWidth(width, copilotDockBounds);
+  copilotDockWidth.value = next;
+  try {
+    await window.datawisePlugin.invoke("local/preferences/set", { copilotDockWidth: next });
+  } catch {
+    // ignore
+  }
+}
+
+async function openCopilotDock(intent?: CopilotIntent, seedPrompt?: string) {
+  await setCopilotDockOpen(true);
+  // Kill-switch stays user-controlled: opening the dock must not auto-enable tools/LLM.
+  if (!copilotEnabled.value) {
+    if (intent || seedPrompt) {
+      const hint = t("copilot.enableFirst");
+      const last = copilotMessages.value[copilotMessages.value.length - 1];
+      if (!(last?.role === "assistant" && last.content === hint)) {
+        copilotMessages.value = [
+          ...copilotMessages.value,
+          { role: "assistant", content: hint, source: "none" },
+        ];
+      }
+    }
+    return;
+  }
+  if (intent) await runCopilotIntent(intent, seedPrompt);
+  else if (seedPrompt) await sendCopilotPrompt(seedPrompt);
+}
+
+function openCopilotFromStrip() {
+  void openCopilotDock("analyze_load");
+}
+
+function handAlertToCopilot() {
+  const payload = sanitizeTriagePayload(alertTriagePayload.value);
+  alertTriageOpen.value = false;
+  void openCopilotDock(
+    "alert_triage",
+    payload ? `Triage this alert and propose diagnostic commands:\n${payload}` : undefined,
+  );
+}
+
+function askCopilotAboutSelection() {
+  const paths = selectedUris.value.map((uri) => pathFromUri(uri)).filter(Boolean);
+  void openCopilotDock(
+    "explain_selection",
+    paths.length ? `Explain these selected paths and suggest safe next steps:\n${paths.join("\n")}` : undefined,
+  );
+}
+
+function askCopilotAboutTerminalSelection() {
+  const text = (terminal?.getSelection() || "").trim();
+  void openCopilotDock(
+    "explain_output",
+    text ? `Explain this terminal output and suggest next diagnostic steps:\n${text.slice(0, 6000)}` : undefined,
+  );
+}
+
+function openCopilotSettings() {
+  settingsFocusCategory.value = "agent";
+  settingsFocusAddModel.value = true;
+  settingsOpen.value = true;
+}
+
+function onSettingsOpenChange(open: boolean) {
+  settingsOpen.value = open;
+  if (!open) {
+    settingsFocusCategory.value = null;
+    settingsFocusAddModel.value = false;
+  }
+}
+
+function copilotSystemPrompt(): string {
+  const replyLocale = resolveReplyLocale(copilotReplyLanguage.value, locale.value);
+  return sshSystemPrompt(isCopilotAskMode.value ? "ask" : "agent", replyLocale);
+}
+
+async function setCopilotReplyLanguage(value: CopilotReplyLanguage) {
+  const next = normalizeCopilotReplyLanguage(value);
+  if (!next) return;
+  copilotReplyLanguage.value = next;
+  try {
+    await window.datawisePlugin.invoke("local/preferences/set", { copilotReplyLanguage: next });
+  } catch {
+    // Memory-only for this session.
+  }
+}
+
+function resolveCopilotCards(content: string, fallbackCards: ActionCard[] = []): ActionCard[] {
+  return cardsForChatMode(copilotChatMode.value, content, fallbackCards);
+}
+
+async function setCopilotChatMode(mode: CopilotChatMode) {
+  const next = normalizeCopilotChatMode(mode);
+  if (!next) return;
+  copilotChatMode.value = next;
+  try {
+    await window.datawisePlugin.invoke("local/preferences/set", { copilotChatMode: next });
+  } catch {
+    // Memory-only for this session.
+  }
+  if (shouldEnsureAgentPresets(next, copilotEnabled.value)) {
+    await ensureCopilotAgentPresets();
+  }
+}
+
+function appendCopilotStreamDelta(
+  requestId: string,
+  chunk: { delta?: string; thinkingDelta?: string },
+  source: ModelSource = "plugin",
+) {
+  if (!requestId || requestId !== copilotStreamRequestId.value) return;
+  copilotMessages.value = appendAssistantStreamDelta(copilotMessages.value, chunk, source);
+}
+
+function finalizeCopilotAssistantMessage(msg: CopilotMessage, rawContent: string): void {
+  finalizeAssistantMessage(msg, rawContent);
+}
+
+async function askCopilotLlm(userText: string, fallbackCards: ActionCard[] = []) {
+  if (!copilotEnabled.value) return;
+  const askMode = isCopilotAskMode.value;
+  const safeFallback = askMode ? [] : fallbackCards;
+  if (copilotModelSource.value === "none") await refreshCopilotModelSource();
+  if (copilotModelSource.value === "none") {
+    copilotMessages.value = [
+      ...copilotMessages.value,
+      {
+        role: "assistant",
+        content: t("copilot.configureHint"),
+        cards: safeFallback,
+        source: "none",
+      },
+    ];
+    return;
+  }
+  const requestId = `copilot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  copilotStreamRequestId.value = requestId;
+  copilotBusy.value = true;
+  // Placeholder for plugin BYOK stream and host turns (host paints when reply lands).
+  if (copilotModelSource.value === "plugin" || copilotModelSource.value === "host") {
+    copilotMessages.value = [
+      ...copilotMessages.value,
+      { role: "assistant", content: "", source: copilotModelSource.value, cards: [] },
+    ];
+  }
+  try {
+    const result = await chatWithResolvedModel(
+      (method, params) => window.datawisePlugin.invoke(method, params ?? {}),
+      hostAiApi,
+      {
+        system: copilotSystemPrompt(),
+        prompt: composeUserPrompt({
+          userText,
+          context: copilotContext.value,
+          mode: askMode ? "ask" : "agent",
+        }),
+        requestId,
+        stream: true,
+        prefer: copilotModelPreference.value,
+        // Deltas arrive via adapter plugin/host delta events.
+      },
+    );
+    const messages = [...copilotMessages.value];
+    const last = messages[messages.length - 1];
+    if (last?.role === "assistant" && (last.source === "plugin" || last.source === "host" || result.source === "host")) {
+      // Prefer streamed buffer when RPC content is empty (reasoning-only models).
+      const raw = result.content.trim() ? result.content : last.content || "";
+      finalizeCopilotAssistantMessage(last, raw);
+      if (!last.content?.trim() && !last.thinking?.trim()) {
+        last.content = t("copilot.emptyReply");
+        last.cards = safeFallback;
+      } else {
+        last.cards = resolveCopilotCards(last.content, safeFallback);
+      }
+      last.source = result.source;
+      copilotMessages.value = messages;
+    } else {
+      const created: CopilotMessage = {
+        role: "assistant",
+        content: result.content,
+        cards: [],
+        source: result.source,
+      };
+      finalizeCopilotAssistantMessage(created, result.content);
+      if (!created.content?.trim() && !created.thinking?.trim()) {
+        created.content = t("copilot.emptyReply");
+        created.cards = safeFallback;
+      } else {
+        created.cards = resolveCopilotCards(created.content, safeFallback);
+      }
+      copilotMessages.value = [...messages, created];
+    }
+    copilotModelSource.value = result.source;
+  } catch (cause) {
+    const messages = [...copilotMessages.value];
+    const last = messages[messages.length - 1];
+    const errText = isEmptyLlmResponseError(cause)
+      ? t("copilot.emptyReply")
+      : cause instanceof Error
+        ? cause.message
+        : String(cause);
+    const cancelled = /cancel/i.test(String(cause instanceof Error ? cause.message : cause));
+    if (cancelled && last?.role === "assistant") {
+      if (!last.content?.trim() && !last.thinking?.trim()) last.content = t("copilot.stopped");
+      finalizeCopilotAssistantMessage(last, last.content);
+      last.cards = resolveCopilotCards(last.content, safeFallback);
+      copilotMessages.value = messages;
+    } else if (last?.role === "assistant" && !last.content?.trim() && last.thinking?.trim()) {
+      // Thinking already painted; keep it and avoid overlaying the error text.
+      finalizeCopilotAssistantMessage(last, "");
+      last.cards = resolveCopilotCards(last.content, safeFallback);
+      copilotMessages.value = messages;
+    } else if (last?.role === "assistant" && !last.content) {
+      last.content = errText;
+      last.cards = safeFallback;
+      copilotMessages.value = messages;
+    } else {
+      copilotMessages.value = [
+        ...messages,
+        {
+          role: "assistant",
+          content: errText,
+          cards: safeFallback,
+          source: copilotModelSource.value,
+        },
+      ];
+    }
+  } finally {
+    if (copilotStreamRequestId.value === requestId) copilotStreamRequestId.value = "";
+    copilotBusy.value = false;
+  }
+}
+
+async function runCopilotIntent(intent: CopilotIntent, seedPrompt?: string) {
+  await publishCopilotContext();
+  const cards =
+    isCopilotAskMode.value || !sshCopilotAdapter.buildDefaultCards
+      ? []
+      : sshCopilotAdapter.buildDefaultCards(intent, copilotContext.value);
+  const label = t(`copilot.intent.${intent}`);
+  const userText = seedPrompt?.trim() || label;
+  copilotMessages.value = [...copilotMessages.value, { role: "user", content: userText }];
+  if (!copilotEnabled.value) return;
+  await askCopilotLlm(userText, cards);
+}
+
+async function sendCopilotPrompt(prompt: string) {
+  const text = prompt.trim();
+  if (!text || !copilotEnabled.value) return;
+  await publishCopilotContext();
+  copilotMessages.value = [...copilotMessages.value, { role: "user", content: text }];
+  await askCopilotLlm(text);
+}
+
+async function requestCopilotCardConfirm(card: ActionCard): Promise<boolean> {
+  if (card.risk !== "confirm") return true;
+  // Shared MCP/agent approval UI (ssh/agent/prompt) — no parallel dock dialog.
+  const command = String(
+    card.args?.command ?? card.args?.path ?? card.args?.text ?? card.title ?? "",
+  );
+  try {
+    const result = await window.datawisePlugin.invoke<{
+      approved?: boolean;
+      command?: string;
+    }>(sshCopilotAdapter.confirmRpc || "ssh/copilot/confirm", {
+      tool: card.tool,
+      command,
+      connectionId: connectionId.value,
+    });
+    const edited = typeof result?.command === "string" ? result.command.trim() : "";
+    if (edited && card.args && ("command" in card.args || card.tool === "ssh_exec" || card.tool === "ssh_exec_sudo" || card.tool === "ssh_run_bg" || card.tool === "ssh_terminal_input")) {
+      card.args = { ...card.args, command: edited, text: edited };
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function stopCopilotGeneration() {
+  const requestId = copilotStreamRequestId.value;
+  if (!requestId || !copilotBusy.value) return;
+  const source =
+    copilotModelSource.value === "host" || copilotModelSource.value === "plugin"
+      ? copilotModelSource.value
+      : "none";
+  await cancelResolvedChat(
+    (method, params) => window.datawisePlugin.invoke(method, params ?? {}),
+    hostAiApi,
+    requestId,
+    source,
+  );
+}
+
+/** Cap auto follow-up depth so tool→LLM cannot loop unboundedly. */
+let copilotFollowUpDepth = 0;
+const COPILOT_FOLLOW_UP_MAX = Math.max(0, sshCopilotAdapter.followUpMaxDepth ?? 1);
+
+async function runCopilotCard(card: ActionCard, opts?: { skipFollowUp?: boolean }) {
+  // Kill-switch + Ask mode: Off / Ask means zero tool execution from the dock.
+  if (!canRunCopilotCard(copilotChatMode.value, copilotEnabled.value, copilotBusy.value)) return;
+  if (card.risk === "confirm") {
+    const approved = await requestCopilotCardConfirm(card);
+    if (!approved) return;
+  }
+  // Tool steps stay out of the Q&A bubble stream (Cursor-style).
+  copilotMessages.value = [
+    ...copilotMessages.value,
+    { role: "user", variant: "tool", content: formatCardUserTurn(card) },
+  ];
+  copilotBusy.value = true;
+  let followUpPrompt: string | null = null;
+  const followUpCards: ActionCard[] = [];
+  try {
+    const result = await runToolCard(card, {
+      connectionId: connectionId.value,
+      sessionId: session.value?.sessionId,
+      rpc: (method, params) => window.datawisePlugin.invoke(method, params ?? {}),
+      ensureAgentMode: ensureCopilotAgentPresets,
+      sendToTerminal: (command) => sendSuggestionToTerminal(command),
+      downloadPath: async (path) => {
+        const uri = path.startsWith("sftp:") ? path : `sftp:${path.startsWith("/") ? path : `/${path}`}`;
+        const name = remoteBasename(pathFromUri(uri));
+        await downloadEntry({ uri, name, kind: "file" });
+      },
+    });
+    if (card.tool === "ssh_run_bg" && result.ok && result.raw && typeof result.raw === "object") {
+      const logPath = (result.raw as { logPath?: string }).logPath;
+      if (logPath) {
+        followUpCards.push({
+          id: `poll-${logPath}`,
+          title: t("copilot.pollBgTask"),
+          tool: "ssh_task_status",
+          args: { logPath },
+          risk: "read",
+          description: logPath,
+        });
+      }
+    }
+    const summary = result.ok
+      ? result.summary
+      : t("copilot.toolFailed", { error: result.summary });
+    copilotMessages.value = [
+      ...copilotMessages.value,
+      {
+        role: "assistant",
+        content: summary,
+        cards: followUpCards,
+        source: copilotModelSource.value,
+      },
+    ];
+    // One automatic tool→LLM turn so the model can interpret output + propose next cards.
+    if (
+      result.ok &&
+      !opts?.skipFollowUp &&
+      !isCopilotAskMode.value &&
+      copilotFollowUpDepth < COPILOT_FOLLOW_UP_MAX &&
+      copilotModelSource.value !== "none"
+    ) {
+      const clipped = summary.slice(0, 4000);
+      followUpPrompt = [
+        `Tool \`${card.tool}\` finished on the current SSH session.`,
+        card.args?.command ? `Command: ${String(card.args.command)}` : "",
+        "Output:",
+        "```",
+        clipped,
+        "```",
+        "Briefly interpret the result and propose safe next action cards if useful.",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+  } finally {
+    copilotBusy.value = false;
+  }
+  if (followUpPrompt) {
+    copilotFollowUpDepth += 1;
+    try {
+      await askCopilotLlm(followUpPrompt, followUpCards);
+    } finally {
+      copilotFollowUpDepth = Math.max(0, copilotFollowUpDepth - 1);
+    }
+  }
+}
+
+watch(
+  [terminalCwd, currentPath, selectedUris, () => metrics.value],
+  () => {
+    if (!copilotDockOpen.value || !connected.value) return;
+    void publishCopilotContext();
+  },
+  { deep: true },
+);
+
+// ---------------------------------------------------------------------------
+// 关键词高亮（IMPL_PLAN_NETCATTY_PARITY §3-B1）：规则管理 + xterm decorations。
+// 数据面走 ssh/highlightRules/*（后端不可用静默空表）；渲染面用 onRender 触发
+// rAF 节流（≤30fps）视口行扫描，per-row Map 维护 decoration，全局上限 400。
+// ---------------------------------------------------------------------------
+const highlightRules = ref<HighlightRuleView[]>([]);
+const highlightMenuOpen = ref(false);
+const highlightSaving = ref(false);
+const highlightDraftError = ref("");
+const highlightDraft = reactive({ id: undefined as string | undefined, pattern: "", color: HIGHLIGHT_COLOR_DEFAULT, isRegex: false, caseSensitive: false });
+// ToggleGroup（multiple）以字符串数组建模；这里桥接到 draft 的两个布尔标志位。
+const highlightFlagValues = computed<string[]>({
+  get: () => [highlightDraft.isRegex ? "regex" : "", highlightDraft.caseSensitive ? "case" : ""].filter(Boolean),
+  set: (values) => {
+    highlightDraft.isRegex = values.includes("regex");
+    highlightDraft.caseSensitive = values.includes("case");
+  },
+});
+const compiledHighlightRules = computed(() => compileRules(highlightRules.value));
+
+function loadHighlightEnabled(): boolean {
+  try {
+    return uiStorage.getItem(HIGHLIGHT_ENABLED_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+// 总开关：关闭时摘掉 onRender 挂子并全量清理 decoration（零挂钩子语义）。
+const highlightEnabled = ref(loadHighlightEnabled());
+
+function toggleHighlightEnabled() {
+  highlightEnabled.value = !highlightEnabled.value;
+  try {
+    uiStorage.setItem(HIGHLIGHT_ENABLED_KEY, highlightEnabled.value ? "true" : "false");
+  } catch {
+    // 存储不可用时仅当前会话生效。
+  }
+  if (highlightEnabled.value) {
+    attachHighlightRender();
+    rescanHighlightViewport();
+  } else {
+    detachHighlightRender();
+  }
+}
+
+async function hydrateHighlightRules() {
+  try {
+    const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/list", {});
+    highlightRules.value = normalizeHighlightRules(response.rules);
+  } catch {
+    // 后端不可用（如旧版 sidecar）：静默降级空表，高亮功能整体退场。
+    highlightRules.value = [];
+  }
+}
+
+function resetHighlightDraft() {
+  highlightDraft.id = undefined;
+  highlightDraft.pattern = "";
+  highlightDraft.color = HIGHLIGHT_COLOR_DEFAULT;
+  highlightDraft.isRegex = false;
+  highlightDraft.caseSensitive = false;
+  highlightDraftError.value = "";
+}
+
+async function saveHighlightRule() {
+  if (highlightSaving.value) return;
+  const sanitized = sanitizeHighlightRuleInput({ pattern: highlightDraft.pattern, color: highlightDraft.color, isRegex: highlightDraft.isRegex, caseSensitive: highlightDraft.caseSensitive });
+  if (sanitized.error || !sanitized.value) {
+    highlightDraftError.value = t(sanitized.error ?? "highlightRules.invalidPattern");
+    return;
+  }
+  if (!highlightDraft.id && highlightRules.value.length >= HIGHLIGHT_RULES_LIMIT) return;
+  highlightSaving.value = true;
+  highlightDraftError.value = "";
+  try {
+    const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/save", {
+      id: highlightDraft.id ?? "",
+      pattern: sanitized.value.pattern,
+      isRegex: sanitized.value.isRegex,
+      color: sanitized.value.color,
+      caseSensitive: sanitized.value.caseSensitive,
+    });
+    highlightRules.value = normalizeHighlightRules(response.rules);
+    resetHighlightDraft();
+  } catch (cause) {
+    highlightDraftError.value = settingsErrorOf(cause);
+  } finally {
+    highlightSaving.value = false;
+  }
+}
+
+function editHighlightRule(item: HighlightRuleView) {
+  highlightDraft.id = item.id;
+  highlightDraft.pattern = item.pattern;
+  highlightDraft.color = item.color;
+  highlightDraft.isRegex = item.isRegex;
+  highlightDraft.caseSensitive = item.caseSensitive;
+  highlightDraftError.value = "";
+}
+
+async function toggleHighlightRule(item: HighlightRuleView) {
+  try {
+    const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/save", {
+      id: item.id,
+      pattern: item.pattern,
+      isRegex: item.isRegex,
+      color: item.color,
+      caseSensitive: item.caseSensitive,
+      enabled: !item.enabled,
+    });
+    highlightRules.value = normalizeHighlightRules(response.rules);
+  } catch (cause) {
+    showError(cause, "terminal");
+  }
+}
+
+async function deleteHighlightRule(id: string) {
+  try {
+    const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/delete", { id });
+    highlightRules.value = normalizeHighlightRules(response.rules);
+    if (highlightDraft.id === id) resetHighlightDraft();
+  } catch (cause) {
+    showError(cause, "terminal");
+  }
+}
+
+// 规则弹层开关（互斥族统一走 closeToolbarPopovers 收口）。
+function toggleHighlightMenu() {
+  const next = !highlightMenuOpen.value;
+  closeToolbarPopovers();
+  highlightMenuOpen.value = next;
+  if (next) resetHighlightDraft();
+}
+
+// ---- decoration 引擎 ----
+// onRender({start,end}) 给的是"本帧实际重绘的行区间"（输入时常常只有光标一行），
+// 不是整个视口：合并进 pending 区间，经 setTimeout 节流（≤30fps）后统一扫描；
+// 扫描时装饰去留按 buffer.viewportY 的真实视口判定（见 scanHighlightRange）。
+// alt buffer 与 normal buffer 走同一路径（buffer.active 直接扫描）。
+let highlightRenderDisposable: { dispose(): void } | undefined;
+// 每行一个组（marker + decorations + 该行登记时的文本）；行滚出视口整组 dispose。
+// text 用于"文本未变则整组保留"：xterm 在装饰 dispose/注册后自身会再触发整幅
+// 重绘（实测 30fps 持续循环），无脑拆建会让空闲终端陷入"重绘→扫描→拆建→重绘"
+// 的自激回路，高亮层反复摘挂即是用户看到的闪烁。
+const highlightDecorationsByRow = new Map<number, { text: string; dispose(): void }>();
+let highlightDecorationCount = 0;
+let highlightScanScheduled = false;
+let highlightLastScanAt = 0;
+let highlightPendingRange: { start: number; end: number } | undefined;
+
+function clearHighlightDecorations() {
+  for (const entry of highlightDecorationsByRow.values()) entry.dispose();
+  highlightDecorationsByRow.clear();
+  highlightDecorationCount = 0;
+}
+
+function attachHighlightRender() {
+  if (!terminal || highlightRenderDisposable || !highlightEnabled.value) return;
+  highlightRenderDisposable = terminal.onRender(({ start, end }) => scheduleHighlightScan(start, end));
+  rescanHighlightViewport();
+}
+
+function detachHighlightRender() {
+  highlightRenderDisposable?.dispose();
+  highlightRenderDisposable = undefined;
+  clearHighlightDecorations();
+}
+
+function rescanHighlightViewport() {
+  if (!terminal || !highlightEnabled.value) return;
+  scheduleHighlightScan(0, terminal.rows - 1);
+}
+
+function scheduleHighlightScan(start: number, end: number) {
+  if (!workbenchActive) return;
+  if (!terminal || !highlightEnabled.value || !compiledHighlightRules.value.length) return;
+  highlightPendingRange = highlightPendingRange
+    ? { start: Math.min(highlightPendingRange.start, start), end: Math.max(highlightPendingRange.end, end) }
+    : { start, end };
+  if (highlightScanScheduled) return;
+  highlightScanScheduled = true;
+  const wait = Math.max(0, HIGHLIGHT_SCAN_MIN_INTERVAL_MS - (performance.now() - highlightLastScanAt));
+  window.setTimeout(runHighlightScan, wait);
+}
+
+function runHighlightScan() {
+  highlightScanScheduled = false;
+  if (!terminal || !highlightEnabled.value) {
+    highlightPendingRange = undefined;
+    return;
+  }
+  // Defer while PTY bytes are still coalescing into xterm — scanning mid-flood
+  // rebuilds decorations every frame and amplifies jank.
+  if (terminalWriteThrottle.pendingBytes > 0 || terminalWriteThrottle.pending) {
+    if (!highlightScanScheduled) {
+      highlightScanScheduled = true;
+      const wait = terminalWriteThrottle.pendingBytes >= HIGHLIGHT_FLOOD_PENDING_BYTES
+        ? HIGHLIGHT_FLOOD_RETRY_MS
+        : HIGHLIGHT_BUSY_RETRY_MS;
+      window.setTimeout(runHighlightScan, wait);
+    }
+    return;
+  }
+  highlightLastScanAt = performance.now();
+  const range = highlightPendingRange;
+  highlightPendingRange = undefined;
+  if (!range) return;
+  scanHighlightRange(range.start, range.end);
+}
+
+function scanHighlightRange(start: number, end: number) {
+  const term = terminal;
+  if (!term) return;
+  const buffer = term.buffer.active;
+  // onRender 的 start/end 是视口相对行号，这里的 row / viewportY 是缓冲绝对行号
+  // （换算与裁剪见 toAbsoluteRowRange：漏了这步，滚过一屏后脏行判定永不命中）。
+  const dirty = toAbsoluteRowRange(start, end, buffer.viewportY, buffer.length);
+  // onRender 给的是"本帧重绘的行"（输入时常常只有光标行），不是视口——装饰的
+  // 去留必须按视口判定，否则每次击键都把整屏高亮 dispose 掉再异步补回（可见闪烁）。
+  const vpFrom = Math.max(0, Math.min(buffer.viewportY, buffer.length - 1));
+  const vpTo = Math.min(buffer.length - 1, vpFrom + term.rows - 1);
+  for (const [row, entry] of highlightDecorationsByRow) {
+    // 拆组条件（视口外 / 本帧重绘且文本变了）见 shouldRebuildHighlightRow；
+    // "重绘但文本没变就保留"是掐断"拆建→重绘"自激回路的关键。
+    const dirtyRow = row >= dirty.from && row <= dirty.to;
+    const currentText = dirtyRow ? buffer.getLine(row)?.translateToString(true) ?? "" : entry.text;
+    if (!shouldRebuildHighlightRow({ row, viewportFrom: vpFrom, viewportTo: vpTo, dirty: dirtyRow, previousText: entry.text, currentText })) continue;
+    entry.dispose();
+    highlightDecorationsByRow.delete(row);
+  }
+  const compiled = compiledHighlightRules.value;
+  if (!compiled.length) return;
+  // registerMarker 的 offset 相对光标绝对行（baseY + cursorY）；marker dispose 时
+  // xterm 会连带 dispose 挂在其上的 decoration。
+  const base = buffer.baseY + buffer.cursorY;
+  for (let row = vpFrom; row <= vpTo; row++) {
+    if (highlightDecorationsByRow.has(row)) continue;
+    if (highlightDecorationCount >= HIGHLIGHT_DECORATION_LIMIT) return;
+    const lineText = buffer.getLine(row)?.translateToString(true) ?? "";
+    if (!lineText) continue;
+    const matches = matchesInLine(lineText, compiled);
+    if (!matches.length) continue;
+    const marker = term.registerMarker(row - base);
+    if (!marker) continue;
+    const disposables: Array<{ dispose(): void }> = [marker];
+    const entry = {
+      text: lineText,
+      decorations: 0,
+      dispose() {
+        for (const disposable of disposables.splice(0)) disposable.dispose();
+        // 计数只增不减会顶到全局上限、高亮逐渐不再出现（看起来像闪烁后消失）。
+        highlightDecorationCount -= entry.decorations;
+        entry.decorations = 0;
+      },
+    };
+    for (const match of matches) {
+      if (highlightDecorationCount >= HIGHLIGHT_DECORATION_LIMIT) break;
+      const decoration = term.registerDecoration({ marker, x: match.start, width: match.end - match.start });
+      if (decoration) {
+        // xterm 5 的 DOM renderer 不应用 registerDecoration 的 backgroundColor
+        // 选项（与 @xterm/addon-search 同因），着色走 onRender 自绘元素样式。
+        // 装饰层在文字层上方，必须用半透明填充——纯色会把字形整个盖住。
+        decoration.onRender((element) => {
+          element.style.backgroundColor = highlightFillStyle(match.color);
+        });
+        disposables.push(decoration);
+        entry.decorations++;
+        highlightDecorationCount++;
+      }
+    }
+    highlightDecorationsByRow.set(row, entry);
+  }
+}
+
+// 规则/开关变化：全量清理后重扫当前视口（即时生效语义）。
+watch(compiledHighlightRules, () => {
+  clearHighlightDecorations();
+  rescanHighlightViewport();
+});
+
+// ---------------------------------------------------------------------------
+// metrics sparkline + 发行版徽标（IMPL_PLAN_NETCATTY_PARITY §3-B2）
+// ---------------------------------------------------------------------------
+
+// 每方向环形采样（60 帧 × 5s 轮询 ≈ 5 分钟）；跨重连（新 session）清空。
+// F2：cpu/mem 环形同样 60 帧，打开指标卡时用落盘历史回填（跨重启可见趋势）。
+const metricSamples = reactive({ rx: [] as number[], tx: [] as number[], cpu: [] as number[], mem: [] as number[] });
+
+function recordMetricSamples() {
+  let rx = 0;
+  let tx = 0;
+  for (const net of metrics.value?.network ?? []) {
+    rx += Math.max(0, net.rxRate || 0);
+    tx += Math.max(0, net.txRate || 0);
+  }
+  metricSamples.rx = pushSample(metricSamples.rx, rx, METRICS_SAMPLE_CAPACITY);
+  metricSamples.tx = pushSample(metricSamples.tx, tx, METRICS_SAMPLE_CAPACITY);
+  const cpuPercent = metrics.value?.cpu?.percent;
+  if (cpuPercent != null) metricSamples.cpu = pushSample(metricSamples.cpu, cpuPercent, METRICS_SAMPLE_CAPACITY);
+  const totalBytes = metrics.value?.memory?.totalBytes ?? 0;
+  if (totalBytes > 0) metricSamples.mem = pushSample(metricSamples.mem, ((metrics.value?.memory?.usedBytes ?? 0) / totalBytes) * 100, METRICS_SAMPLE_CAPACITY);
+}
+
+const metricsRxSparkline = computed(() => sparklinePath(metricSamples.rx, 60, 18));
+const metricsTxSparkline = computed(() => sparklinePath(metricSamples.tx, 60, 18));
+const metricsCpuSparkline = computed(() => sparklinePath(metricSamples.cpu, 120, 18));
+const metricsMemSparkline = computed(() => sparklinePath(metricSamples.mem, 120, 18));
+// 视图层去噪：伪文件系统/overlay 重复挂载/零流量虚拟网卡不进渲染（纯函数在 lib/metricsView）。
+const visibleDiskMounts = computed(() => filterDiskMounts(metrics.value?.disks));
+const visibleNetworkInterfaces = computed(() => filterNetworkInterfaces(metrics.value?.network));
+// 旧 sidecar 无 osId/osPretty 时整体缺徽标（optional 降级，§6.6）。
+const metricsDistroBadge = computed<DistroBadge | null>(() => (metrics.value ? distroBadge(metrics.value.osId, metrics.value.osPretty) : null));
+
+watch(() => session.value?.sessionId, (next, previous) => {
+  if (next !== previous) {
+    metricSamples.rx = [];
+    metricSamples.tx = [];
+    metricSamples.cpu = [];
+    metricSamples.mem = [];
+    // 录制挂在具体 session 上：换会话后本端标记复位（后端随旧会话自动收尾）。
+    recordingActive.value = false;
+    cancelRecordCountdown();
+    stopRecordingClock();
+  }
+});
+
+watch(() => protocolSession.value?.sessionId, (next, previous) => {
+  if (next !== previous) {
+    recordingActive.value = false;
+    cancelRecordCountdown();
+    stopRecordingClock();
+    serialUploadAbort = true;
+    serialUploadDialogOpen.value = false;
+    serialUploadState.value = initialSerialUploadState();
+  }
+});
+
+/** showHidden 切换后侧栏树缓存失效——下次展开节点时重新拉取、按新可见性过滤。 */
+watch(sftpShowHidden, () => {
+  markTreeStale(sftpTree.value);
+});
+
+// ---------------------------------------------------------------------------
+// 审计日志查看（IMPL_PLAN_NETCATTY_PARITY §3-B4）：独立工具栏入口，
+// 只读最近 200 条；打开/过滤变化/刷新时拉取，失败静默空态。
+// ---------------------------------------------------------------------------
+const auditEntries = ref<AuditEntry[]>([]);
+const auditLoading = ref(false);
+const auditLoadFailed = ref(false);
+const auditTruncated = ref(false);
+const auditKindFilter = ref("");
+
+async function loadAuditEntries() {
+  auditLoading.value = true;
+  try {
+    // kind 过滤在客户端做（sanitizeAuditEntries 统一 newest-first；后端可能
+    // 不认 `kind` 参数，见 lib/auditLog.ts 双形状容忍说明）。
+    const result = await window.datawisePlugin.invoke<{ entries: unknown; truncated?: boolean }>("ssh/audit/list", { limit: 200 });
+    auditEntries.value = sanitizeAuditEntries(result.entries, 200);
+    auditTruncated.value = result.truncated === true;
+    auditLoadFailed.value = false;
+  } catch {
+    // 失败不打断设置弹窗（§3-B4-T1），但与"确无记录"区分开：显示加载失败
+    // 提示 + 重试入口（与其他设置 section 的 error+refresh 一致）。
+    auditEntries.value = [];
+    auditTruncated.value = false;
+    auditLoadFailed.value = true;
+  } finally {
+    auditLoading.value = false;
+  }
+}
+
+function openAuditLog() {
+  auditOpen.value = true;
+  auditKindFilter.value = "";
+  void loadAuditEntries();
+}
+
+const visibleAuditEntries = computed(() => {
+  if (!auditKindFilter.value) return auditEntries.value;
+  return auditEntries.value.filter((entry) => entry.kind === auditKindFilter.value);
+});
+
+// 应用内弹窗确认：宿主沙箱 iframe 无 allow-modals，window.confirm 恒 false
+const auditClearOpen = ref(false);
+const auditClearSubmitting = ref(false);
+async function confirmAuditClear() {
+  auditClearSubmitting.value = true;
+  try {
+    await window.datawisePlugin.invoke("ssh/audit/clear", {});
+    auditClearOpen.value = false;
+  } catch {
+    // 清空失败静默：保留现列表，用户可再次尝试或刷新。
+  } finally {
+    auditClearSubmitting.value = false;
+  }
+  await loadAuditEntries();
+}
+
+function auditTime(ts: number) {
+  if (!ts) return "";
+  return new Intl.DateTimeFormat(locale.value, { dateStyle: "short", timeStyle: "medium" }).format(new Date(ts * 1000));
+}
+
+function auditRowKindClass(kind: string) {
+  return `k-${kind.replace(/\./g, "-")}`;
+}
+
+async function loadHome() {
+  if (!session.value) return;
+  const result = await window.datawisePlugin.invoke<{ path: string }>("sftp/home", { sessionId: session.value.sessionId });
+  sftpHomePath.value = normalizeRemotePath(result.path);
+  await loadDirectory(result.path);
+}
+
+/** 会话接通后探测一次主目录：quick tab 置顶项（失败静默隐藏，不阻塞浏览）。 */
+async function refreshSftpHomePath() {
+  if (!session.value) return;
+  try {
+    const result = await window.datawisePlugin.invoke<{ path: string }>("sftp/home", { sessionId: session.value.sessionId });
+    sftpHomePath.value = normalizeRemotePath(result.path);
+  } catch {
+    // 旧 sidecar 缺 sftp/home 或探测失败：quick tab 只展示静态快捷路径。
+  }
+}
+
+// ---- SFTP 侧栏（tree/quick 双 tab）--------------------------------------------
+
+/** quick tab 条目：home 探测结果置顶 + SFTP_QUICK_PATHS 静态列表（去重）。 */
+const sideQuickPaths = computed<SftpSideQuickPath[]>(() => {
+  const list: SftpSideQuickPath[] = [];
+  if (sftpHomePath.value) list.push({ path: sftpHomePath.value, label: t("home"), home: true });
+  for (const path of SFTP_QUICK_PATHS) {
+    if (!list.some((item) => item.path === path)) list.push({ path, label: path });
+  }
+  return list;
+});
+
+/** 侧栏树懒加载：collapse 只翻标记保留缓存；未加载时拉 sftp/list 挂子节点。 */
+async function expandSideTreeNode(node: DirTreeNode) {
+  if (node.expanded) {
+    node.expanded = false;
+    return;
+  }
+  if (!node.loaded) {
+    if (!session.value) return;
+    node.loading = true;
+    try {
+      const result = await window.datawisePlugin.invoke<{ entries: SftpEntry[] }>(sudoMode.value ? "sudo/listDir" : "sftp/list", {
+        sessionId: session.value.sessionId,
+        path: node.path,
+      });
+      applyTreeChildren(sftpTree.value, node.path, result.entries.map((entry) => ({ path: pathFromUri(entry.uri), name: entry.name, kind: entry.kind })), sftpShowHidden.value);
+    } catch (cause) {
+      showError(cause); // 树展开失败要有反馈，不能静默（对标 files 插件 P-FILES 反馈）
+    } finally {
+      node.loading = false;
+    }
+    return;
+  }
+  node.expanded = true;
+}
+
+/** tree tab 可见时确保根已展开（未连接时跳过，接通后由 afterSessionConnected 触发）。 */
+function ensureSideTreeRoot() {
+  if (sftpSideTab.value !== "tree" || !session.value) return;
+  const root = sftpTree.value;
+  if (!root.loaded && !root.loading) void expandSideTreeNode(root);
+}
+
+/** 侧栏刷新按钮：整树标记重拉后重展开根。 */
+function refreshSideTree() {
+  const root = sftpTree.value;
+  markTreeStale(root);
+  root.expanded = false;
+  void expandSideTreeNode(root);
+}
+
+/** 侧栏（目录树/快捷路径）行右键：打开 / 复制路径 / 复制文件名 / 压缩。
+ *  行处理器只记录负载并互斥收口；定位/打开由包裹侧栏的 reka ContextMenuTrigger
+ *  从冒泡上来的原生 contextmenu 事件完成（DirTree/SideNavPanel 不能再 prevent/stop）。 */
+function openSideMenu(payload: { path: string }) {
+  terminalMenuOpen.value = false;
+  fileMenu.value = undefined;
+  blankMenu.value = false;
+  sideMenu.value = { path: payload.path };
+}
+
+function sideMenuAction(action: "open" | "copyPath" | "copyName" | "archive") {
+  const menu = sideMenu.value;
+  sideMenu.value = undefined;
+  if (!menu) return;
+  if (action === "open") {
+    goToPath(menu.path);
+    return;
+  }
+  if (action === "archive") {
+    void archiveSidePath(menu.path);
+    return;
+  }
+  const value = action === "copyPath" ? menu.path : remoteBasename(menu.path) || "/";
+  copyTextToClipboard(value, action === "copyPath" ? "sftpCopy.copiedPath" : "sftpCopy.copiedName");
+}
+
+/** 侧栏目录压缩：归档落在该目录自身所在父目录（与行内 archiveEntry 语义一致）。 */
+async function archiveSidePath(path: string) {
+  const sessionId = session.value?.sessionId;
+  if (!sessionId || archiveBusy.value) return;
+  archiveBusy.value = true;
+  const archiveName = `${remoteBasename(path) || "root"}.tar.gz`;
+  try {
+    await window.datawisePlugin.invoke("sftp/archive", {
+      sessionId,
+      sourcePaths: [path],
+      archivePath: joinRemote(parentPath(path), archiveName),
+    }, { timeoutMs: 30 * 60 * 1000 });
+    showNotice(t("archive.done", { name: archiveName }));
+    // 父目录内容已变化：树缓存标记重拉；当前目录正是父目录时同步刷新列表。
+    const parentNode = findTreeNode(sftpTree.value, parentPath(path));
+    if (parentNode) parentNode.loaded = false;
+    if (currentPath.value === parentPath(path)) await loadDirectory();
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    archiveBusy.value = false;
+  }
+}
+
+/** 空白处右键：新建文件夹 / 新建文件 / 上传文件 / 刷新（与行菜单共用同一 ContextMenu 根；
+ *  行右键已由 showFileMenu 先行接管，这里按事件目标兜底空白区）。 */
+function onFileAreaContextMenu(event: MouseEvent) {
+  if ((event.target as HTMLElement).closest(".file-row")) return;
+  terminalMenuOpen.value = false;
+  fileMenu.value = undefined;
+  sideMenu.value = undefined;
+  blankMenu.value = true;
+}
+
+function blankMenuAction(action: "mkdir" | "newFile" | "upload" | "refresh") {
+  const menu = blankMenu.value;
+  blankMenu.value = false;
+  if (!menu) return;
+  if (action === "refresh") {
+    void loadDirectory();
+    return;
+  }
+  if (action === "mkdir") {
+    operationDraft.value = "";
+    operationDialog.value = "mkdir";
+  } else if (action === "upload") {
+    void chooseUpload();
+  } else {
+    openNewFileDialog();
+  }
+}
+
+/** 通用剪贴板写入 + 已复制提示（行菜单/侧栏菜单共用；失败走 sftp 错误条）。 */
+function copyTextToClipboard(value: string, noticeKey: string, values?: Record<string, string | number>) {
+  void writeClipboardText(value, clipboardDeps())
+    .then(() => showNotice(t(noticeKey, values)))
+    .catch((cause) => showError(cause instanceof Error ? cause : new Error(String(cause))));
+}
+
+// R3-P1-3：目录列表加载的单调请求序号。慢链路下"先发 A 后发 B、A 晚到"
+// 会把列表/路径/历史整体回跳；只有最新请求允许落地，过期响应整体丢弃。
+const listEpoch = createRequestEpoch();
+
+async function loadDirectory(path = currentPath.value, fromTerminal = false) {
+  if (!session.value) return;
+  const normalized = normalizeRemotePath(path);
+  const epochId = listEpoch.next();
+  loadingFiles.value = true;
+  if (!fromTerminal) { sftpError.value = ""; sftpErrorOpen.value = false; }
+  try {
+    const result = await window.datawisePlugin.invoke<{ entries: SftpEntry[] }>(sudoMode.value ? "sudo/listDir" : "sftp/list", {
+      sessionId: session.value.sessionId,
+      path: normalized,
+      // 属主/属组列开启时才要 owner/group 数据（sudo/listDir 恒定附带）。
+      includeOwner: visibleColumns.value.includes("owner") || visibleColumns.value.includes("group"),
+    });
+    if (!listEpoch.isCurrent(epochId)) return;
+    // R3-P2-3：响应容错——非数组/畸形行走 sanitize（null entries → 空数组、
+    // 缺 kind 的行降级为 file），单行坏数据不再让列表僵死或抛 pageerror。
+    entries.value = sanitizeSftpEntries(result.entries);
+    currentPath.value = normalized;
+    selectedPath.value = "";
+    clearRowSelection();
+    rememberPathHistory(normalized);
+    persistState();
+    void refreshDiskUsage();
+  } catch (cause) {
+    if (!listEpoch.isCurrent(epochId)) return;
+    const message = cause instanceof Error ? cause.message : String(cause);
+    if (fromTerminal) showNotice(t("followDirectoryFailed", { path: normalized, error: message }));
+    else { sftpError.value = message; sftpErrorKey.value += 1; sftpErrorOpen.value = true; }
+  } finally {
+    if (listEpoch.isCurrent(epochId)) loadingFiles.value = false;
+  }
+}
+
+function toggleSudoMode() {
+  if (!connected.value || !canWrite.value || loadingFiles.value) return;
+  sudoMode.value = !sudoMode.value;
+  persistState();
+  void loadDirectory();
+}
+
+function goParent() {
+  void loadDirectory(parentPath(currentPath.value));
+}
+
+/** Protocol kinds that can emit OSC 7 / 633 cwd (passive follow). Serial cannot. */
+function protocolDirectoryTrackingMode(): "ssh" | "passive" | "unsupported" | "none" {
+  const proto = protocolSession.value;
+  if (proto?.kind === "serial") return "unsupported";
+  if (proto?.kind === "local" || proto?.kind === "telnet") return "passive";
+  if (session.value) return "ssh";
+  return "none";
+}
+
+async function setDirectoryTracking(enabled: boolean) {
+  const mode = protocolDirectoryTrackingMode();
+  if (mode === "none") return;
+  if (enabled && (directoryTrackingSupported.value === false || mode === "unsupported")) {
+    showNotice(t(mode === "unsupported" ? "directoryTrackingSerial" : "directoryTrackingUnsupported"));
+    followDirectory.value = false;
+    return;
+  }
+  if (pendingTerminalInput) {
+    showNotice(t("followDirectoryInputPending"));
+    return;
+  }
+  try {
+    if (mode === "ssh" && session.value) {
+      await window.datawisePlugin.invoke("ssh/terminal/directoryTracking", { sessionId: session.value.sessionId, enabled });
+    } else if (mode === "passive" && enabled) {
+      // Local already injects shell integration (incl. fish); telnet may emit OSC 7
+      // if the remote shell is configured. No PTY inject RPC — just listen.
+      showNotice(t("directoryTrackingProtocolPassive"));
+    }
+    followDirectory.value = enabled;
+    directoryTrackingSupported.value = mode !== "unsupported";
+    directoryParser.reset();
+    persistState();
+  } catch (cause) {
+    showError(cause, "terminal");
+  }
+}
+
+function togglePaneOrder() {
+  paneOrder.value = paneOrder.value === "terminal-left" ? "sftp-left" : "terminal-left";
+  persistState();
+  void nextTick(scheduleFit);
+}
+
+function toggleSftpPane() {
+  sftpPaneOpen.value = !sftpPaneOpen.value;
+  persistState();
+  void nextTick(scheduleFit);
+}
+
+// 全局偏好只影响新工作台的初始面板状态；当前工作台不被连带切换。
+function toggleSftpPaneDefaultOpen() {
+  sftpPaneDefaultOpen.value = !sftpPaneDefaultOpen.value;
+  try {
+    uiStorage.setItem(SFTP_PANE_OPEN_KEY, sftpPaneDefaultOpen.value ? "true" : "false");
+  } catch {
+    // localStorage 不可用时偏好仅对当前会话生效。
+  }
+}
+
+function loadSftpPaneDefaultOpen(): boolean {
+  try {
+    return sanitizeSftpPaneDefaultOpen(uiStorage.getItem(SFTP_PANE_OPEN_KEY));
+  } catch {
+    return false;
+  }
+}
+
+function loadResourceStripEnabled(): boolean {
+  try {
+    return uiStorage.getItem(RESOURCE_STRIP_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function setResourceStripEnabled(enabled: boolean) {
+  resourceStripEnabled.value = enabled;
+  try {
+    uiStorage.setItem(RESOURCE_STRIP_KEY, enabled ? "true" : "false");
+  } catch {
+    /* ignore quota / private mode */
+  }
+  syncMetricsPolling();
+}
+
+// 下载偏好（保存目录 + 每次询问 + 终端字体来源）：权威存储在 sidecar
+// preferences.json——工作台 iframe 是 sandbox="allow-scripts"（opaque
+// origin），localStorage 直接抛 SecurityError；localStorage 仅作 web
+// 浏览器直连场景的同步缓存。
+let prefsHydrated = false;
+
+function loadDownloadDir(): string {
+  return downloadDirState.value;
+}
+
+function persistDownloadDir(value: string) {
+  downloadDirState.value = value.trim();
+  void syncPrefs();
+}
+
+function loadDownloadUseDefaultDir(): boolean {
+  return downloadUseDefaultState.value;
+}
+
+function persistDownloadUseDefaultDir(value: boolean) {
+  downloadUseDefaultState.value = value;
+  void syncPrefs();
+}
+
+function loadDownloadConflictPolicy(): DownloadConflictPolicy {
+  return downloadConflictState.value;
+}
+
+function persistDownloadConflictPolicy(value: DownloadConflictPolicy) {
+  downloadConflictState.value = sanitizeConflictPolicy(value);
+  void syncPrefs();
+}
+
+function loadCompressionStrategy(): CompressionStrategy {
+  return compressionStrategyState.value;
+}
+
+function loadCompressionThresholdMib(): number {
+  return compressionThresholdMibState.value;
+}
+
+function persistCompression(strategy: CompressionStrategy, thresholdMib: number) {
+  compressionStrategyState.value = sanitizeCompressionStrategy(strategy);
+  const n = Number(thresholdMib);
+  compressionThresholdMibState.value = Number.isFinite(n) ? Math.max(0, Math.min(4096, Math.round(n))) : 64;
+  void syncPrefs();
+}
+
+function cachePrefs() {
+  try {
+    if (downloadDirState.value) uiStorage.setItem(DOWNLOAD_DIR_KEY, downloadDirState.value);
+    else uiStorage.removeItem(DOWNLOAD_DIR_KEY);
+    // 默认开：只在关闭时落键（"0"），未来默认策略变化时老用户不被钉死。
+    if (!downloadUseDefaultState.value) uiStorage.setItem(DOWNLOAD_USE_DEFAULT_KEY, "0");
+    else uiStorage.removeItem(DOWNLOAD_USE_DEFAULT_KEY);
+    if (downloadConflictState.value !== "rename") uiStorage.setItem(DOWNLOAD_CONFLICT_KEY, downloadConflictState.value);
+    else uiStorage.removeItem(DOWNLOAD_CONFLICT_KEY);
+  } catch {
+    // opaque origin：缓存跳过，内存态仍支撑本次会话。
+  }
+}
+
+async function syncPrefs() {
+  cachePrefs();
+  try {
+    await window.datawisePlugin.invoke("local/preferences/set", {
+      downloadDir: downloadDirState.value,
+      downloadUseDefaultDir: downloadUseDefaultState.value,
+      downloadConflictPolicy: downloadConflictState.value,
+      compressionStrategy: compressionStrategyState.value,
+      compressionThresholdMib: compressionThresholdMibState.value,
+      copilotEnabled: copilotEnabled.value,
+      copilotDockOpen: copilotDockOpen.value,
+      copilotDockWidth: copilotDockWidth.value,
+      copilotChatMode: copilotChatMode.value,
+      copilotReplyLanguage: copilotReplyLanguage.value,
+      copilotModelPreference: copilotModelPreference.value,
+    });
+  } catch {
+    // 旧 sidecar 无此方法：本次会话内存态兜底。
+  }
+}
+
+async function hydratePrefs() {
+  if (prefsHydrated) return;
+  prefsHydrated = true;
+  try {
+    downloadDirState.value = uiStorage.getItem(DOWNLOAD_DIR_KEY)?.trim() || "";
+    downloadUseDefaultState.value = uiStorage.getItem(DOWNLOAD_USE_DEFAULT_KEY) !== "0";
+    downloadConflictState.value = sanitizeConflictPolicy(uiStorage.getItem(DOWNLOAD_CONFLICT_KEY));
+  } catch {
+    // 同上：等待 sidecar 权威值。
+  }
+  try {
+    const prefs = await window.datawisePlugin.invoke<{
+      downloadDir?: unknown;
+      downloadUseDefaultDir?: unknown;
+      downloadConflictPolicy?: unknown;
+      compressionStrategy?: unknown;
+      compressionThresholdMib?: unknown;
+      copilotEnabled?: unknown;
+      copilotDockOpen?: unknown;
+      copilotDockWidth?: unknown;
+      copilotChatMode?: unknown;
+      copilotReplyLanguage?: unknown;
+      copilotModelPreference?: unknown;
+    }>("local/preferences/get", {});
+    if (typeof prefs.downloadDir === "string") downloadDirState.value = prefs.downloadDir.trim();
+    if (typeof prefs.downloadUseDefaultDir === "boolean") downloadUseDefaultState.value = prefs.downloadUseDefaultDir;
+    if (prefs.downloadConflictPolicy !== undefined) downloadConflictState.value = sanitizeConflictPolicy(prefs.downloadConflictPolicy);
+    if (prefs.compressionStrategy !== undefined) compressionStrategyState.value = sanitizeCompressionStrategy(prefs.compressionStrategy);
+    if (typeof prefs.compressionThresholdMib === "number") compressionThresholdMibState.value = Math.max(0, Math.min(4096, Math.round(prefs.compressionThresholdMib)));
+    if (typeof prefs.copilotEnabled === "boolean") copilotEnabled.value = prefs.copilotEnabled;
+    if (typeof prefs.copilotDockOpen === "boolean") copilotDockOpen.value = prefs.copilotDockOpen;
+    const dockWidth = coercePrefNumber(prefs.copilotDockWidth);
+    if (dockWidth != null) {
+      copilotDockWidth.value = clampCopilotDockWidth(dockWidth, copilotDockBounds);
+    }
+    const savedMode = normalizeCopilotChatMode(prefs.copilotChatMode);
+    if (savedMode) copilotChatMode.value = savedMode;
+    const savedReplyLang = normalizeCopilotReplyLanguage(prefs.copilotReplyLanguage);
+    if (savedReplyLang) copilotReplyLanguage.value = savedReplyLang;
+    const savedPrefer = normalizeModelPreference(prefs.copilotModelPreference);
+    if (savedPrefer) copilotModelPreference.value = savedPrefer;
+    cachePrefs();
+    if (copilotEnabled.value) void refreshCopilotModelSource();
+  } catch {
+    // 旧 sidecar：保留 localStorage 种子或默认。
+  }
+}
+
+// 「使用默认地址」关闭时，下载/导出前弹出目录选择小窗。resolve 语义：
+// { dir, setDefault } = 用户确认（dir 空串 = 默认下载目录；setDefault =
+// 勾选了「将此次目录设为默认地址」）；undefined = 取消本次下载。
+interface DownloadPrompt {
+  fileName: string;
+  dir: string;
+  setDefault: boolean;
+  resolve: (result: { dir: string; setDefault: boolean } | undefined) => void;
+}
+const downloadPrompt = ref<DownloadPrompt | null>(null);
+
+function askDownloadTarget(fileName: string): Promise<{ dir: string; setDefault: boolean } | undefined> {
+  return new Promise((resolve) => {
+    downloadPrompt.value = {
+      fileName,
+      dir: loadDownloadDir() || localDownloadDir.value,
+      setDefault: false,
+      resolve,
+    };
+  });
+}
+
+function resolveDownloadPrompt(result?: { dir: string; setDefault: boolean }) {
+  downloadPrompt.value?.resolve(result);
+  downloadPrompt.value = null;
+}
+
+// 勾选「设为默认地址」后的闭环回写：目录成为新默认 + 自动打开
+// 「使用默认地址」开关（设置页草稿同步，弹窗开着也能立即看到）。
+function applyChosenDirAsDefault(dir: string) {
+  const normalized = dir.trim();
+  if (normalized) {
+    persistDownloadDir(normalized);
+    settingsDialog.value?.setDownloadDirDraft(normalized);
+  }
+  persistDownloadUseDefaultDir(true);
+  settingsDialog.value?.setDownloadUseDefaultDraft(true);
+}
+
+// 「浏览」按钮打开应用内目录选择器（FolderPickerDialog，sidecar 列本机
+// 目录）：沙箱 iframe 没有目录选择 API，原生系统对话框有窗口层级问题。
+// target 记录选中值回填到哪——下载询问弹窗还是设置页草稿。
+const folderPickerTarget = ref<"prompt" | "settings" | null>(null);
+
+function onFolderPicked(path: string) {
+  if (folderPickerTarget.value === "prompt" && downloadPrompt.value) {
+    downloadPrompt.value.dir = path;
+  } else if (folderPickerTarget.value === "settings") {
+    settingsDialog.value?.setDownloadDirDraft(path);
+  }
+  folderPickerTarget.value = null;
+}
+
+// 「询问我」冲突策略：目标目录已有同名文件时弹确认（自动重命名/覆盖/取消）。
+interface DownloadConflictPrompt {
+  fileName: string;
+  path: string;
+  resolve: (choice: "rename" | "overwrite" | undefined) => void;
+}
+const downloadConflictPrompt = ref<DownloadConflictPrompt | null>(null);
+
+function askDownloadConflict(fileName: string, path: string) {
+  return new Promise<"rename" | "overwrite" | undefined>((resolve) => {
+    downloadConflictPrompt.value = { fileName, path, resolve };
+  });
+}
+
+function resolveDownloadConflict(choice: "rename" | "overwrite" | undefined) {
+  downloadConflictPrompt.value?.resolve(choice);
+  downloadConflictPrompt.value = null;
+}
+
+// 落盘前的冲突解析：返回传给后端的冲突模式，undefined = 用户取消。
+// rename/overwrite 策略直接放行；ask 仅在确实撞名时打断，预检失败不阻断。
+async function resolveDownloadConflictFor(dir: string, fileName: string): Promise<"rename" | "overwrite" | undefined> {
+  const policy = loadDownloadConflictPolicy();
+  if (policy !== "ask") return policy;
+  const targetDir = dir || loadDownloadDir() || localDownloadDir.value;
+  if (!targetDir) return "rename";
+  try {
+    const probe = await window.datawisePlugin.invoke<{ exists: boolean; path: string }>("local/fs/exists", { dir: targetDir, name: fileName });
+    if (!probe.exists) return "rename";
+    return await askDownloadConflict(fileName, probe.path);
+  } catch {
+    return "rename";
+  }
+}
+
+function loadSelectCopyEnabled(): boolean {
+  try {
+    return sanitizeSelectCopyEnabled(uiStorage.getItem(SELECT_COPY_KEY));
+  } catch {
+    return true;
+  }
+}
+
+function loadClickCursorEnabled(): boolean {
+  try {
+    return sanitizeClickCursorEnabled(uiStorage.getItem(CLICK_CURSOR_KEY));
+  } catch {
+    return true;
+  }
+}
+
+// 侧栏形态偏好：localStorage 全局持久化（不可用时仅当前会话生效，默认 tree/展开）。
+function loadSftpSideTab(): "tree" | "quick" {
+  try {
+    return uiStorage.getItem(SFTP_SIDE_TAB_KEY) === "quick" ? "quick" : "tree";
+  } catch {
+    return "tree";
+  }
+}
+
+function loadSftpSideCollapsed(): boolean {
+  try {
+    return uiStorage.getItem(SFTP_SIDE_COLLAPSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function persistSftpSideShape() {
+  try {
+    uiStorage.setItem(SFTP_SIDE_TAB_KEY, sftpSideTab.value);
+    uiStorage.setItem(SFTP_SIDE_COLLAPSED_KEY, sftpSideCollapsed.value ? "true" : "false");
+  } catch {
+    // localStorage 不可用时偏好仅对当前会话生效。
+  }
+}
+
+function setSftpSideTab(tab: "tree" | "quick") {
+  sftpSideTab.value = tab;
+  persistSftpSideShape();
+  if (tab === "tree") ensureSideTreeRoot();
+}
+
+function setSftpSideCollapsed(collapsed: boolean) {
+  sftpSideCollapsed.value = collapsed;
+  persistSftpSideShape();
+}
+
+// 切换即生效并持久化（纯前端行为，不进连接级 ssh/settings）。
+function toggleSelectCopy() {
+  termSelectCopy.value = !termSelectCopy.value;
+  try {
+    uiStorage.setItem(SELECT_COPY_KEY, termSelectCopy.value ? "true" : "false");
+  } catch {
+    // localStorage 不可用时偏好仅对当前会话生效。
+  }
+  showNotice(t(termSelectCopy.value ? "terminalSelectCopy.enabledNotice" : "terminalSelectCopy.disabledNotice"));
+}
+
+function toggleClickCursor() {
+  termClickCursor.value = !termClickCursor.value;
+  try {
+    uiStorage.setItem(CLICK_CURSOR_KEY, termClickCursor.value ? "true" : "false");
+  } catch {
+    // localStorage 不可用时偏好仅对当前会话生效。
+  }
+  showNotice(t(termClickCursor.value ? "terminalClickCursor.enabledNotice" : "terminalClickCursor.disabledNotice"));
+}
+
+function startDividerDrag(event: PointerEvent) {
+  const container = paneContainer.value;
+  if (!container) return;
+  const pointerId = event.pointerId;
+  const move = (next: PointerEvent) => {
+    const bounds = container.getBoundingClientRect();
+    const fromLeft = ((next.clientX - bounds.left) / bounds.width) * 100;
+    const terminalPercent = paneOrder.value === "terminal-left" ? fromLeft : 100 - fromLeft;
+    splitRatio.value = Math.max(35, Math.min(80, terminalPercent));
+    scheduleFit();
+  };
+  const stop = () => {
+    container.releasePointerCapture(pointerId);
+    container.removeEventListener("pointermove", move);
+    container.removeEventListener("pointerup", stop);
+    container.removeEventListener("pointercancel", stop);
+    persistState();
+  };
+  container.setPointerCapture(pointerId);
+  container.addEventListener("pointermove", move);
+  container.addEventListener("pointerup", stop);
+  container.addEventListener("pointercancel", stop);
+}
+
+function toggleColumn(column: SftpColumn) {
+  const hadOwnerData = visibleColumns.value.includes("owner") || visibleColumns.value.includes("group");
+  visibleColumns.value = visibleColumns.value.includes(column) ? visibleColumns.value.filter((value) => value !== column) : [...visibleColumns.value, column];
+  persistState();
+  // 属主/属组列从关到开：当前列表可能没有 owner/group 数据（此前请求没带
+  // includeOwner），重拉一次目录；关列不需要重拉。
+  if ((column === "owner" || column === "group") && !hadOwnerData && session.value && !sudoMode.value) {
+    void loadDirectory();
+  }
+}
+
+// —— SFTP 列宽拖拽 ——
+// 名称列（弹性填充）从 DOM 实时宽度起算；固定列从记录宽度起算。
+function onColResizeStart(column: SftpColumn | "name", event: PointerEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+  (event.target as Element).setPointerCapture?.(event.pointerId);
+  let startWidth: number;
+  if (column === "name") {
+    const cell = (event.target as Element).closest(".col-wrap");
+    startWidth = cell ? Math.round(cell.getBoundingClientRect().width) : (sftpNameWidth.value ?? NAME_COLUMN_MIN);
+  } else {
+    startWidth = sftpColumnWidths[column];
+  }
+  sftpResizing = { column, startX: event.clientX, startWidth };
+  document.body.classList.add("resizing-col");
+  document.addEventListener("pointermove", onColResizeMove);
+  document.addEventListener("pointerup", onColResizeEnd);
+}
+function onColResizeMove(event: PointerEvent) {
+  if (!sftpResizing) return;
+  const delta = event.clientX - sftpResizing.startX;
+  const next = Math.round(sftpResizing.startWidth + delta);
+  if (sftpResizing.column === "name") {
+    sftpNameWidth.value = Math.max(NAME_COLUMN_MIN, Math.min(NAME_COLUMN_MAX, next));
+  } else {
+    sftpColumnWidths[sftpResizing.column] = Math.max(COLUMN_MIN_WIDTHS[sftpResizing.column], Math.min(COLUMN_WIDTH_MAX, next));
+  }
+}
+function onColResizeEnd() {
+  if (!sftpResizing) return;
+  sftpResizing = null;
+  document.body.classList.remove("resizing-col");
+  document.removeEventListener("pointermove", onColResizeMove);
+  document.removeEventListener("pointerup", onColResizeEnd);
+  persistState();
+}
+
+function toggleSort(column: SftpSortColumn) {
+  sort.value = sort.value.column === column ? { column, direction: sort.value.direction === "asc" ? "desc" : "asc" } : { column, direction: "asc" };
+}
+
+function sortIcon(column: SftpSortColumn) {
+  if (sort.value.column !== column) return ArrowUpDown;
+  return sort.value.direction === "asc" ? ArrowUp : ArrowDown;
+}
+
+// 文件预览：文本编辑链路 + 多格式 PreviewPane（图片/Office/PDF/媒体/表格/Markdown）。
+const {
+  previewOpen, previewTitle, previewText, previewLoading, previewPath, previewSize,
+  previewEditable, previewDraft, previewSaving, previewMode, previewImageUrl,
+  previewImageZoomed, previewTruncated, previewDirty, previewEditableAllowed,
+  multiPreviewOpen, multiPreviewPath,
+  openEntry, closePreview, closeMultiFormatPreview, beginPreviewEdit, cancelPreviewEdit, savePreview,
+  MAX_INLINE_PREVIEW_BYTES,
+} = useFilePreview({
+  t, showNotice, showError, session, sudoMode, canWrite,
+  loadDirectory: (path?: string) => loadDirectory(path),
+  downloadEntry: (entry) => downloadEntry(entry as SftpEntry),
+  pathFromUri,
+});
+// 预览最大化：普通预览与多格式预览共用一个会话级开关（不跨重启持久化）。
+const previewMaximized = ref(false);
+
+function isArchiveName(name: string) {
+  return /\.(tar\.gz|tgz|tar)$/i.test(name);
+}
+
+function archiveDirectoryName(name: string) {
+  if (/\.(tar\.gz|tgz)$/i.test(name)) return name.replace(/\.(tar\.gz|tgz)$/i, "");
+  return name.replace(/\.tar$/i, "");
+}
+
+async function archiveEntry(entry: SftpEntry) {
+  const sessionId = session.value?.sessionId;
+  // 目录与单文件都可压缩（sftp/archive 支持任意路径列表）。
+  if (!sessionId || archiveBusy.value) return;
+  fileMenu.value = undefined;
+  archiveBusy.value = true;
+  const archiveName = `${entry.name}.tar.gz`;
+  try {
+    await window.datawisePlugin.invoke("sftp/archive", {
+      sessionId,
+      sourcePaths: [pathFromUri(entry.uri)],
+      archivePath: joinRemote(currentPath.value, archiveName),
+    }, { timeoutMs: 30 * 60 * 1000 });
+    showNotice(t("archive.done", { name: archiveName }));
+    await loadDirectory();
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    archiveBusy.value = false;
+  }
+}
+
+async function extractEntry(entry: SftpEntry) {
+  const sessionId = session.value?.sessionId;
+  if (!sessionId || archiveBusy.value) return;
+  fileMenu.value = undefined;
+  archiveBusy.value = true;
+  const directoryName = archiveDirectoryName(entry.name);
+  try {
+    await window.datawisePlugin.invoke("sftp/extract", {
+      sessionId,
+      archivePath: pathFromUri(entry.uri),
+      destinationPath: joinRemote(currentPath.value, directoryName),
+      overwrite: false,
+    }, { timeoutMs: 30 * 60 * 1000 });
+    showNotice(t("extract.done", { name: directoryName }));
+    await loadDirectory();
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    archiveBusy.value = false;
+  }
+}
+
+function beginRename(entry: SftpEntry) {
+  if (!canWrite.value) return;
+  selectedPath.value = entry.uri;
+  renamingPath.value = entry.uri;
+  renameDraft.value = entry.name;
+  void nextTick(() => document.querySelector<HTMLInputElement>(".rename-input")?.select());
+}
+
+async function commitRename(entry: SftpEntry) {
+  // R3-P1-2 / R3-P2-1：blur 是"卸载/失焦"兜底提交入口。Esc 取消会先清
+  // renamingPath 再卸载输入框，Enter 提交成功后也会清空——两种场景下
+  // editingPath 已不指向本行，blur 到达时被 shouldCommitRename 短路，
+  // 取消语义不再以草稿名逃逸提交、Enter 也不再双发。
+  if (!shouldCommitRename({ editingPath: renamingPath.value, entryUri: entry.uri, submitting: renameSubmitting.value })) return;
+  const name = renameDraft.value.trim();
+  if (!session.value || !name || name === entry.name) {
+    renamingPath.value = "";
+    return;
+  }
+  const sourcePath = pathFromUri(entry.uri);
+  const targetPath = joinRemote(currentPath.value, name);
+  renameSubmitting.value = true;
+  try {
+    // R3-P2-2：与粘贴对齐的目标存在性预检。OpenSSH rename 撞名语义依
+    // posix-rename 扩展而异，前端先给出明确的覆盖确认；预检失败不阻断，
+    // 交由后端执行时报错。
+    let targetExists = false;
+    try {
+      const probe = await window.datawisePlugin.invoke<{ exists: boolean }>("sftp/exists", {
+        sessionId: session.value.sessionId,
+        path: targetPath,
+      });
+      targetExists = probe.exists === true;
+    } catch {
+      // 预检不可用时保持原语义直接下发。
+    }
+    if (targetExists && !window.confirm(t("sftpRename.overwriteConfirm", { name }))) {
+      renamingPath.value = "";
+      return;
+    }
+    if (sudoMode.value) {
+      await window.datawisePlugin.invoke("sudo/rename", { sessionId: session.value.sessionId, sourcePath, targetPath });
+    } else {
+      await window.datawisePlugin.invoke("sftp/rename", { sessionId: session.value.sessionId, sourcePath, targetPath });
+    }
+    renamingPath.value = "";
+    await loadDirectory();
+  } catch (cause) {
+    // R3-P2-2：失败路径收敛——关闭行内编辑态并刷新列表，不再滞留打开态。
+    renamingPath.value = "";
+    showError(cause);
+    await loadDirectory();
+  } finally {
+    renameSubmitting.value = false;
+  }
+}
+
+async function createDirectory() {
+  const name = operationDraft.value.trim();
+  if (!session.value || !name) return;
+  const path = joinRemote(currentPath.value, name);
+  try {
+    if (sudoMode.value) {
+      await window.datawisePlugin.invoke("sudo/mkdir", { sessionId: session.value.sessionId, path });
+    } else {
+      await window.datawisePlugin.invoke("sftp/createDirectory", { sessionId: session.value.sessionId, path });
+    }
+    operationDialog.value = null;
+    await loadDirectory();
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+async function confirmDelete() {
+  if (!session.value || !deleteTarget.value) return;
+  deleteSubmitting.value = true;
+  try {
+    const path = pathFromUri(deleteTarget.value.uri);
+    if (sudoMode.value) {
+      await window.datawisePlugin.invoke(deleteTarget.value.kind === "directory" ? "sudo/removeAll" : "sudo/remove", {
+        sessionId: session.value.sessionId,
+        path,
+      });
+    } else {
+      await window.datawisePlugin.invoke("sftp/delete", {
+        sessionId: session.value.sessionId,
+        path,
+        recursive: deleteTarget.value.kind === "directory",
+      });
+    }
+    deleteTarget.value = undefined;
+    await loadDirectory();
+    showNotice(t("deleted"));
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    deleteSubmitting.value = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SFTP 面板：搜索/多选/批量/新建文件/属性/路径历史/复制粘贴
+// ---------------------------------------------------------------------------
+
+function loadPathHistories(): Record<string, string[]> {
+  try {
+    const raw = uiStorage.getItem(SFTP_PATH_HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return sanitizePathHistories(parsed, SFTP_PATH_HISTORY_LIMIT);
+  } catch {
+    return {};
+  }
+}
+
+function persistPathHistories() {
+  try {
+    uiStorage.setItem(SFTP_PATH_HISTORY_KEY, JSON.stringify(pathHistories));
+  } catch {
+    // localStorage 不可用时路径历史仅保留在内存中。
+  }
+}
+
+function rememberPathHistory(path: string) {
+  const key = connectionId.value;
+  if (!key || !path) return;
+  const next = pushPathHistory(pathHistories, key, path, SFTP_PATH_HISTORY_LIMIT);
+  for (const connection of Object.keys(next)) pathHistories[connection] = next[connection];
+  persistPathHistories();
+}
+
+// ---------------------------------------------------------------------------
+// SFTP 路径书签（全局清单）：星标收藏 + 路径弹层跳转/删除（sftp/bookmarks/*）
+// ---------------------------------------------------------------------------
+
+async function refreshBookmarks() {
+  try {
+    sftpBookmarks.value = sortBookmarksByLabel(await listBookmarks());
+  } catch {
+    // 后端未升级/读取失败时保留既有列表（optional 特性静默降级，不阻塞路径栏）。
+  }
+}
+
+function toggleBookmarkSave() {
+  if (!connected.value) return;
+  if (bookmarkSaveOpen.value) {
+    bookmarkSaveOpen.value = false;
+    return;
+  }
+  closeToolbarPopovers();
+  bookmarkLabelDraft.value = defaultBookmarkLabel(currentPath.value);
+  bookmarkSaveOpen.value = true;
+}
+
+async function confirmBookmarkSave() {
+  if (!connected.value || bookmarkSaving.value) return;
+  const input = { label: bookmarkLabelDraft.value, path: currentPath.value };
+  // 前端先行校验（与后端同规则）：label 空/超长/重复、path 空/超长、超上限。
+  const localError = validateBookmarkInput(input, sftpBookmarks.value);
+  if (localError) {
+    showNotice(t(`sftpBookmark.error.${localError}`, localError === "limitReached" ? { limit: SFTP_BOOKMARKS_LIMIT } : {}));
+    return;
+  }
+  bookmarkSaving.value = true;
+  try {
+    const result = await saveBookmark(input);
+    sftpBookmarks.value = sortBookmarksByLabel([
+      ...sftpBookmarks.value.filter((item) => item.id !== result.bookmark.id),
+      result.bookmark,
+    ]);
+    bookmarkSaveOpen.value = false;
+    showNotice(t("sftpBookmark.saved", { label: result.bookmark.label }));
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    bookmarkSaving.value = false;
+  }
+}
+
+async function removeBookmark(bookmark: SftpBookmark) {
+  try {
+    await deleteBookmark(bookmark.id);
+    sftpBookmarks.value = sftpBookmarks.value.filter((item) => item.id !== bookmark.id);
+    showNotice(t("sftpBookmark.deleted"));
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+// 连接建立后拉取书签（全局共享，不随会话清空）；打开路径弹层时刷新兜底。
+watch(connected, (value) => {
+  if (value) {
+    void refreshBookmarks();
+    void loadCommandCatalog();
+  } else {
+    hideCommandSuggest();
+    commandSuggestToken = "";
+    commandCatalog.value = [...COMMON_COMMANDS];
+  }
+});
+watch(commandCatalog, () => {
+  if (connected.value) scheduleCommandSuggest();
+});
+watch(currentPath, () => {
+  if (!connected.value) return;
+  window.clearTimeout(catalogRefreshTimer);
+  catalogRefreshTimer = window.setTimeout(() => void loadCommandCatalog(true), 2000);
+});
+watch(pathHistoryOpen, (open) => {
+  if (open) void refreshBookmarks();
+});
+
+function clearRowSelection() {
+  selectedUris.value = [];
+  lastClickedUri.value = "";
+}
+
+function selectFile(entry: SftpEntry, event?: MouseEvent) {
+  selectedPath.value = entry.uri;
+  if (event?.shiftKey && lastClickedUri.value) {
+    const expanded = expandSelection(selectedUris.value, lastClickedUri.value, entry.uri, visibleEntries.value.map((item) => item.uri));
+    if (expanded.length > selectedUris.value.length || selectedUris.value.includes(entry.uri)) {
+      selectedUris.value = expanded;
+      return;
+    }
+  }
+  if (event?.ctrlKey || event?.metaKey) {
+    selectedUris.value = selectedUris.value.includes(entry.uri)
+      ? selectedUris.value.filter((uri) => uri !== entry.uri)
+      : [...selectedUris.value, entry.uri];
+  } else {
+    selectedUris.value = [entry.uri];
+  }
+  lastClickedUri.value = entry.uri;
+}
+
+async function confirmBatchDelete() {
+  const sessionId = session.value?.sessionId;
+  const targets = selectedEntries.value;
+  if (!sessionId || !targets.length || batchDeleteSubmitting.value) return;
+  batchDeleteSubmitting.value = true;
+  let progress = createBatchProgress(targets.length);
+  batchProgress.value = progress;
+  try {
+    for (const entry of targets) {
+      const path = pathFromUri(entry.uri);
+      try {
+        if (sudoMode.value) {
+          await window.datawisePlugin.invoke(entry.kind === "directory" ? "sudo/removeAll" : "sudo/remove", { sessionId, path });
+        } else {
+          await window.datawisePlugin.invoke("sftp/delete", { sessionId, path, recursive: entry.kind === "directory" });
+        }
+        progress = advanceBatchProgress(progress, { name: entry.name, ok: true });
+      } catch (cause) {
+        progress = advanceBatchProgress(progress, { name: entry.name, ok: false });
+        throw cause;
+      }
+      batchProgress.value = progress;
+    }
+    batchDeleteOpen.value = false;
+    clearRowSelection();
+    await loadDirectory();
+    showNotice(t("deleted"));
+  } catch (cause) {
+    showError(cause);
+    await loadDirectory();
+  } finally {
+    batchDeleteSubmitting.value = false;
+    batchProgress.value = null;
+  }
+}
+
+async function batchArchive() {
+  const sessionId = session.value?.sessionId;
+  const targets = selectedEntries.value;
+  if (!sessionId || !targets.length || archiveBusy.value) return;
+  archiveBusy.value = true;
+  let progress = createBatchProgress(targets.length);
+  batchProgress.value = progress;
+  try {
+    let done = 0;
+    for (const entry of targets) {
+      const archiveName = `${entry.name}.tar.gz`;
+      try {
+        await window.datawisePlugin.invoke("sftp/archive", {
+          sessionId,
+          sourcePaths: [pathFromUri(entry.uri)],
+          archivePath: joinRemote(currentPath.value, archiveName),
+        }, { timeoutMs: 30 * 60 * 1000 });
+        progress = advanceBatchProgress(progress, { name: archiveName, ok: true });
+      } catch (cause) {
+        progress = advanceBatchProgress(progress, { name: archiveName, ok: false });
+        throw cause;
+      }
+      batchProgress.value = progress;
+      done += 1;
+    }
+    showNotice(t("sftpBatch.archiveDone", { count: done }));
+    await loadDirectory();
+  } catch (cause) {
+    showError(cause);
+    await loadDirectory();
+  } finally {
+    archiveBusy.value = false;
+    batchProgress.value = null;
+  }
+}
+
+function openNewFileDialog() {
+  if (!connected.value || !canWrite.value) return;
+  newFileDraft.value = "";
+  newFileDialog.value = true;
+}
+
+async function createNewFile() {
+  const sessionId = session.value?.sessionId;
+  const name = newFileDraft.value.trim();
+  if (!sessionId || !name || newFileSubmitting.value) return;
+  newFileSubmitting.value = true;
+  try {
+    await window.datawisePlugin.invoke(sudoMode.value ? "sudo/touch" : "sftp/touch", {
+      sessionId,
+      path: joinRemote(currentPath.value, name),
+    });
+    newFileDialog.value = false;
+    showNotice(t("sftpNewFile.done", { name }));
+    await loadDirectory();
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    newFileSubmitting.value = false;
+  }
+}
+
+async function openAttributes(entry: SftpEntry) {
+  const sessionId = session.value?.sessionId;
+  if (!sessionId) return;
+  fileMenu.value = undefined;
+  attrsTarget.value = entry;
+  attrsInfo.value = undefined;
+  attrsMode.value = entry.permissions || "";
+  attrsLoading.value = true;
+  try {
+    attrsInfo.value = await window.datawisePlugin.invoke<SftpStatInfo>(sudoMode.value ? "sudo/stat" : "sftp/stat", {
+      sessionId,
+      path: pathFromUri(entry.uri),
+    });
+    if (attrsInfo.value?.mode) attrsMode.value = attrsInfo.value.mode;
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    attrsLoading.value = false;
+  }
+}
+
+function closeAttributes() {
+  attrsTarget.value = undefined;
+  attrsInfo.value = undefined;
+}
+
+async function saveAttributesPermissions() {
+  const sessionId = session.value?.sessionId;
+  const entry = attrsTarget.value;
+  const mode = attrsMode.value.trim();
+  if (!sessionId || !entry || !mode || attrsSubmitting.value) return;
+  attrsSubmitting.value = true;
+  try {
+    await window.datawisePlugin.invoke(sudoMode.value ? "sudo/chmod" : "sftp/chmod", {
+      sessionId,
+      path: pathFromUri(entry.uri),
+      mode,
+    });
+    showNotice(t("permissionsUpdated"));
+    if (attrsInfo.value) attrsInfo.value = { ...attrsInfo.value, mode };
+    await loadDirectory();
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    attrsSubmitting.value = false;
+  }
+}
+
+function remoteBasename(path: string) {
+  const index = path.lastIndexOf("/");
+  return index < 0 ? path : path.slice(index + 1);
+}
+
+function copySelectedEntries(mode: "copy" | "cut") {
+  const entry = fileMenu.value?.entry;
+  if (!entry) return;
+  const uris = selectedUris.value.includes(entry.uri) && selectedUris.value.length > 1 ? selectedUris.value : [entry.uri];
+  sftpClipboard.value = { mode, paths: uris.map((uri) => pathFromUri(uri)), connectionId: connectionId.value };
+  fileMenu.value = undefined;
+  showNotice(t("sftpCopy.done", { count: sftpClipboard.value.paths.length }));
+}
+
+async function pasteClipboard() {
+  const clip = sftpClipboard.value;
+  const sessionId = session.value?.sessionId;
+  if (!sessionId || pasteBusy.value) return;
+  if (!clip || clip.connectionId !== connectionId.value || !clip.paths.length) {
+    showNotice(t("sftpPaste.empty"));
+    return;
+  }
+  if (!canWrite.value) return;
+  // 粘贴前逐项检测目标是否已存在；存在则弹覆盖确认。
+  const conflicting: string[] = [];
+  for (const from of clip.paths) {
+    try {
+      const result = await window.datawisePlugin.invoke<{ exists: boolean }>("sftp/exists", {
+        sessionId,
+        path: joinRemote(currentPath.value, remoteBasename(from)),
+      });
+      if (result.exists) conflicting.push(remoteBasename(from));
+    } catch {
+      // 存在性检测失败不阻断粘贴，交由后端执行时报错。
+    }
+  }
+  let overwrite = false;
+  if (conflicting.length) {
+    if (!window.confirm(t("sftpPaste.overwriteConfirm", { count: conflicting.length, names: conflicting.slice(0, 5).join(", ") }))) return;
+    overwrite = true;
+  }
+  pasteBusy.value = true;
+  try {
+    await window.datawisePlugin.invoke<{ success: boolean; results: Array<{ from: string; to: string; ok: boolean; error?: string }> }>(
+      clip.mode === "cut" ? "sftp/move" : "sftp/copy",
+      {
+        connectionId: connectionId.value,
+        from: clip.paths,
+        toDir: currentPath.value,
+        overwrite,
+      },
+      { timeoutMs: 30 * 60 * 1000 },
+    );
+    if (clip.mode === "cut") sftpClipboard.value = undefined;
+    showNotice(t("sftpPaste.done", { count: clip.paths.length }));
+    await loadDirectory();
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    if (/method not found/i.test(message)) showNotice(t("sftpPaste.backendMissing"));
+    else showError(cause);
+  } finally {
+    pasteBusy.value = false;
+  }
+}
+
+function goToPath(path: string) {
+  pathHistoryOpen.value = false;
+  void loadDirectory(path);
+}
+
+// #54 路径栏分段回跳：非编辑态把路径渲染成一串分段 chip（根目录 / 也可点击
+// 回根），点击任一分段经 goToPath 直接回到对应前缀；点击分段以外区域或导航
+// 框聚焦后 Enter 进入编辑态，输入行为与原先完全一致（复用 submitPathInput）。
+const pathBarEditing = ref(false);
+const pathBarInputEl = ref<HTMLInputElement | null>(null);
+// 进入编辑瞬间的路径快照：Esc 是显式取消手势，把草稿还原成编辑前的显示值
+// （失焦仍保留草稿，与输入框既有语义一致——只有 Esc 回滚）。
+const pathBarDraft = ref("");
+const pathCrumbs = computed(() => splitRemotePathSegments(currentPath.value));
+
+function beginPathBarEdit() {
+  if (pathBarEditing.value) return;
+  pathBarDraft.value = currentPath.value;
+  pathBarEditing.value = true;
+  void nextTick(() => pathBarInputEl.value?.focus());
+}
+
+function cancelPathBarEdit() {
+  currentPath.value = pathBarDraft.value;
+  pathBarEditing.value = false;
+}
+
+// R3-P2-4：路径栏提交统一入口——`~`（home 已探测时）展开、`.`/`..` 段消解
+// 及基础归一，下游 joinRemote/exists 拼接与路径历史不再携带未规范路径。
+function submitPathInput() {
+  if (!connected.value) return;
+  const target = resolveRemotePath(currentPath.value, sftpHomePath.value || undefined);
+  currentPath.value = target;
+  pathBarEditing.value = false;
+  void loadDirectory(target);
+}
+
+// R3-P2-5：文件行键盘语义——Enter 打开（目录进入/文件预览）、F2 重命名、
+// Delete 删除，对齐主流文件管理器；动作决策走 fileRowKeydown 纯模块（有
+// 单测），重命名输入框内的按键已自带 .stop。
+function onFileRowKeydown(event: KeyboardEvent, entry: SftpEntry) {
+  const action = decideFileRowAction(event.key, canWrite.value);
+  if (!action) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (action === "open") void openEntry(entry);
+  else if (action === "rename") beginRename(entry);
+  else deleteTarget.value = entry;
+}
+
+async function chooseUpload(lzpack = false) {
+  if (!connected.value || !canWrite.value) return;
+  if (lzpack && sudoMode.value) {
+    showNotice(t("sftpLzpack.sudoUnsupported"));
+    return;
+  }
+  openTransferPanel();
+  if (!window.datawisePlugin.fileTransfer) {
+    if (lzpack) lzpackUploadInput.value?.click();
+    else uploadInput.value?.click();
+    return;
+  }
+  try {
+    // Explicit .dbxz mode is single-file only (one deliverable per spool).
+    const selection = await window.datawisePlugin.fileTransfer.pick({ multiple: !lzpack });
+    const files = lzpack ? selection.files.slice(0, 1) : selection.files;
+    await uploadHandleFiles(files, { lzpack });
+    await loadDirectory();
+    if (lzpack && files[0]) showNotice(t("sftpLzpack.uploaded", { name: `${files[0].name}.dbxz` }));
+    else if (files.length) showNotice(t("uploaded", { count: files.length }));
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+/** Upload absolute local file(s) from the half-pane via `local/fs/read`. */
+async function uploadLocalPaths(entries: Array<{ name: string; path: string; size: number }>) {
+  const files = entries.filter((entry) => entry.path);
+  if (!connected.value || !canWrite.value || !files.length) return;
+  openTransferPanel();
+  try {
+    await runWithConcurrency(files, 3, async (entry) => {
+      await uploadSource(entry.name, entry.size, async (offset, length) => {
+        const chunk = await window.datawisePlugin.invoke<{ dataBase64?: string; length?: number }>("local/fs/read", {
+          path: entry.path,
+          offset,
+          length,
+        });
+        if (!chunk.dataBase64) return new Uint8Array();
+        return window.datawisePlugin.decodeBase64(chunk.dataBase64);
+      });
+    });
+    await loadDirectory();
+    showNotice(t("uploaded", { count: files.length }));
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+async function uploadHandleFiles(files: Array<{ handleId: string; name: string; size: number }>, options?: { lzpack?: boolean }) {
+  if (!window.datawisePlugin.fileTransfer || !files.length) return;
+  await runWithConcurrency(files, 3, async (file) => {
+      try {
+        await uploadSource(file.name, file.size, async (offset, length) => {
+          const result = await window.datawisePlugin.fileTransfer!.read(file.handleId, offset, length);
+          return window.datawisePlugin.decodeBase64(result.dataBase64);
+        }, undefined, undefined, options);
+      } finally {
+        await window.datawisePlugin.fileTransfer!.cancel(file.handleId).catch(() => undefined);
+      }
+  });
+}
+
+async function uploadLocalFiles(files: readonly File[], targetDir?: string, options?: { lzpack?: boolean }) {
+  openTransferPanel();
+  await runWithConcurrency([...files], 3, (file) => uploadSource(file.name, file.size, async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()), undefined, targetDir, options));
+  await loadDirectory();
+  if (files.length) {
+    showNotice(options?.lzpack
+      ? t("sftpLzpack.uploaded", { name: `${files[0]!.name}.dbxz` })
+      : t("uploaded", { count: files.length }));
+  }
+}
+
+async function ensureRemoteDirectory(path: string) {
+  if (!session.value) return;
+  try {
+    if (sudoMode.value) {
+      await window.datawisePlugin.invoke("sudo/mkdir", { sessionId: session.value.sessionId, path });
+    } else {
+      await window.datawisePlugin.invoke("sftp/createDirectory", { sessionId: session.value.sessionId, path });
+    }
+  } catch {
+    // Already exists, or a later upload will fail with a clearer path error.
+  }
+}
+
+async function uploadFolderDrop(files: FolderDropFile[], emptyDirs: string[] = [], targetDir?: string) {
+  const base = targetDir ?? currentPath.value;
+  const dirs = new Set<string>(emptyDirs);
+  for (const item of files) {
+    for (const rel of parentDirsOf(item.relativePath)) dirs.add(rel);
+  }
+  const sorted = [...dirs].sort((a, b) => a.split("/").length - b.split("/").length);
+  for (const rel of sorted) await ensureRemoteDirectory(joinRemote(base, rel));
+  openTransferPanel();
+  await runWithConcurrency(files, 3, (item) => {
+    const parentRel = parentDirsOf(item.relativePath).at(-1);
+    const dir = parentRel ? joinRemote(base, parentRel) : base;
+    return uploadSource(item.file.name, item.file.size, async (offset, length) => new Uint8Array(await item.file.slice(offset, offset + length).arrayBuffer()), undefined, dir);
+  });
+  await loadDirectory();
+  if (files.length || emptyDirs.length) showNotice(t("uploaded", { count: files.length }));
+}
+
+async function applyDropPlan(plan: Awaited<ReturnType<typeof planFolderDrop>>, targetDir?: string) {
+  if (plan.kind === "too-large") {
+    showError(new Error(t(plan.reason === "depth" ? "folderDrop.tooDeep" : "folderDrop.tooMany")));
+    return;
+  }
+  if (plan.kind === "empty-folder") {
+    showNotice(t("folderDrop.empty"));
+    return;
+  }
+  if (plan.kind === "files") {
+    if (!plan.files.length) return;
+    await uploadLocalFiles(plan.files, targetDir);
+    return;
+  }
+  await uploadFolderDrop(plan.files, plan.emptyDirs, targetDir);
+}
+
+async function uploadSource(name: string, size: number, readChunk: (offset: number, length: number) => Promise<Uint8Array>, resume?: { taskId: string; remotePath: string }, targetDir?: string, options?: { lzpack?: boolean }) {
+  if (!session.value) return;
+  // resume 携带原 taskId/remotePath：后端校验 spool meta 后从已传前缀续接。
+  // targetDir 仅新上传生效（终端拖入的自定义目标目录）；缺省仍是 SFTP 当前目录。
+  const lzpack = !!options?.lzpack && !sudoMode.value;
+  const uploadStart = sudoMode.value ? "sudo/upload/start" : "sftp/upload/start";
+  const uploadFinish = sudoMode.value ? "sudo/upload/finish" : "sftp/upload/finish";
+  const info = await window.datawisePlugin.invoke<{ taskId: string; chunkSize: number; resumeOffset?: number }>(uploadStart, resume
+    ? { sessionId: session.value.sessionId, remotePath: resume.remotePath, size, resumeTaskId: resume.taskId }
+    : { sessionId: session.value.sessionId, remotePath: joinRemote(targetDir ?? currentPath.value, name), size, mode: lzpack ? "lzpack" : undefined });
+  const startOffset = info.resumeOffset ?? 0;
+  const uploadName = lzpack ? `${name}.dbxz` : name;
+  transferTasks[info.taskId] = { taskId: info.taskId, sessionId: session.value.sessionId, direction: "upload", fileName: uploadName, size, transferred: startOffset, status: startOffset > 0 ? "running" : "queued", joinedAt: Date.now(), compression: lzpack ? "lzpack" : undefined };
+  try {
+    let offset = startOffset;
+    while (offset < size) {
+      await waitWhilePaused(info.taskId);
+      let chunk: Uint8Array;
+      try {
+        chunk = await readChunk(offset, info.chunkSize);
+      } catch (cause) {
+        throw Object.assign(cause instanceof Error ? cause : new Error(String(cause)), { code: "upload-read-failed" });
+      }
+      if (!chunk.byteLength) throw new Error(t("errors.localFileShortRead"));
+      const payload = new Uint8Array(8 + chunk.byteLength);
+      writeU64(payload, 0, offset);
+      payload.set(chunk, 8);
+      const nextOffset = offset + chunk.byteLength;
+      const ack = waitForUploadAck(info.taskId, nextOffset);
+      await window.datawisePlugin.sendBinary(`sftp/upload/${info.taskId}`, payload);
+      await ack;
+      offset = nextOffset;
+    }
+    // finish RPC 只把远端推送交给 sidecar 后台任务就返回（多 GB 文件的推送
+    // 可达数十分钟，长持 RPC 会被桥上任何一端的 deadline 判死并"自动取消"，
+    // issue #60）；真正的完成/失败由终态 progress 事件回传，这里等它落地。
+    try {
+      await window.datawisePlugin.invoke(uploadFinish, { taskId: info.taskId }, { timeoutMs: 60_000 });
+    } catch (cause) {
+      throw Object.assign(cause instanceof Error ? cause : new Error(String(cause)), { code: "upload-start-failed" });
+    }
+    await waitForTransferCompletion(info.taskId);
+  } catch (cause) {
+    await window.datawisePlugin.invoke("sftp/transfer/cancel", { taskId: info.taskId, reason: transferCancelReason(cause) }).catch(() => undefined);
+    throw cause;
+  }
+}
+
+function waitForUploadAck(taskId: string, nextOffset: number) {
+  return new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(async () => {
+      uploadAckWaiters.delete(taskId);
+      try {
+        const status = await window.datawisePlugin.invoke<{ transferred: number; status: string }>("sftp/transfer/status", { taskId });
+        if (status.transferred >= nextOffset && status.status === "running") resolve();
+        else reject(Object.assign(new Error(t("errors.uploadAckTimeout")), { code: "upload-ack-timeout" }));
+      } catch (cause) {
+        reject(cause instanceof Error ? cause : new Error(String(cause)));
+      }
+    }, 30_000);
+    uploadAckWaiters.set(taskId, { nextOffset, resolve, reject, timer });
+  });
+}
+
+// 本机落盘能力探测（sidecar local/capabilities）：宿主缺 fileTransfer API 时，
+// 桌面端 sidecar 可直接把下载写进本机下载目录；web/docker 模式探测失败或
+// canSaveLocal=false 时回退浏览器 <a download>。结果按工作台生命周期缓存。
+let localCapabilities: Promise<{ canSaveLocal: boolean; downloadsDir: string } | undefined> | undefined;
+const localDownloadDir = ref("");
+const localCanSave = ref(false);
+function probeLocalCapabilities() {
+  localCapabilities ??= window.datawisePlugin
+    .invoke<{ canSaveLocal: boolean; downloadsDir: string }>("local/capabilities")
+    .then((result) => {
+      localDownloadDir.value = result.downloadsDir || "";
+      localCanSave.value = result.canSaveLocal;
+      return result;
+    })
+    .catch(() => undefined);
+  return localCapabilities;
+}
+
+async function downloadEntry(entry: SftpEntry, expandLzpack = false) {
+  fileMenu.value = undefined;
+  // 目录条目走递归文件夹下载（tree/start + 同一分块管线）；文件沿用单文件管线。
+  if (entry.kind === "directory") {
+    if (expandLzpack) {
+      showError(new Error(t("sftpLzpack.filesOnly")));
+      return;
+    }
+    await downloadDirectoryEntry(entry);
+    return;
+  }
+  openTransferPanel();
+  if (!session.value || entry.kind !== "file") return;
+  // Prefer the sidecar local sink on desktop so completed downloads retain a
+  // validated localPath for the reveal/open actions in the transfer panel and
+  // persisted history. Fall back to the host file-transfer bridge when a
+  // local filesystem is unavailable (web/docker).
+  const local = await probeLocalCapabilities();
+  // Expand .dbxz always stages locally (backend gunzip-shaped finish path).
+  const saveToLocal = expandLzpack ? true : !!local?.canSaveLocal;
+  if (expandLzpack && !local?.canSaveLocal) {
+    showError(new Error(t("sftpLzpack.filesOnly")));
+    return;
+  }
+  // 「使用默认地址」关闭时先选保存目录；取消则整次下载不发生。
+  // 仅本地落盘可指定目录——web/docker 浏览器下载由浏览器决定位置。
+  let dirOverride = "";
+  let setDefaultAfter = false;
+  if (saveToLocal && !loadDownloadUseDefaultDir()) {
+    const chosen = await askDownloadTarget(entry.name);
+    if (chosen === undefined) return;
+    dirOverride = chosen.dir.trim();
+    setDefaultAfter = chosen.setDefault;
+  }
+  // 冲突策略：ask 且确实撞名时先问，取消则整次下载不发生（仅本地落盘可查本机目录）。
+  const conflict = saveToLocal ? await resolveDownloadConflictFor(dirOverride, entry.name) : undefined;
+  if (saveToLocal && conflict === undefined) return;
+  const fileTransfer = saveToLocal ? undefined : window.datawisePlugin.fileTransfer;
+  // Web/Docker mode has no local sink and no host save dialog; the whole file
+  // is buffered in browser memory before saving, so warn before large ones.
+  if (!fileTransfer && !saveToLocal && (entry.size || 0) > WEB_DOWNLOAD_WARNING_BYTES && !window.confirm(t("webDownload.largeWarning", { name: entry.name, size: formatBytes(entry.size || 0) }))) return;
+  let info: DownloadInfo | undefined;
+  let target: { handleId: string; chunkBytes: number } | undefined;
+  const chunks = fileTransfer || saveToLocal ? undefined : ([] as Uint8Array[]);
+  try {
+    info = await window.datawisePlugin.invoke<DownloadInfo>("sftp/download/start", {
+      sessionId: session.value.sessionId,
+      remotePath: pathFromUri(entry.uri),
+      saveToLocal,
+      downloadDir: dirOverride || loadDownloadDir() || undefined,
+      conflict: conflict === "overwrite" ? "overwrite" : undefined,
+      expandLzpack: expandLzpack || undefined,
+    });
+    transferTasks[info.taskId] = { taskId: info.taskId, sessionId: session.value.sessionId, direction: "download", fileName: info.fileName, size: info.size, transferred: 0, status: "queued", joinedAt: Date.now(), compression: info.compression === "lzpack" ? "lzpack" : info.compression === "gzip" ? "gzip" : undefined };
+    target = fileTransfer ? await fileTransfer.beginSave({ name: info.fileName, size: info.size }) : undefined;
+    let offset = 0;
+    while (offset < info.size) {
+      await waitWhilePaused(info.taskId);
+      const chunkPromise = waitForDownloadChunk(info.taskId, offset);
+      const nextPromise = window.datawisePlugin.invoke<{ length: number; eof: boolean }>("sftp/download/next", { taskId: info.taskId, offset });
+      // Cancellation interrupts via the chunk waiter; swallow the rejection of the
+      // in-flight request so it cannot surface as an unhandled promise rejection.
+      nextPromise.catch(() => undefined);
+      const result = await nextPromise;
+      const chunk = await chunkPromise;
+      if (chunk.byteLength !== result.length) throw new Error(t("errors.downloadChunkLength"));
+      if (!result.eof && result.length === 0) throw new Error(t("errors.downloadEmptyChunk"));
+      if (chunks) {
+        chunks.push(chunk);
+        offset += chunk.byteLength;
+        const task = transferTasks[info.taskId];
+        if (task) {
+          task.status = "running";
+          task.transferred = offset;
+        }
+      } else if (fileTransfer && target) {
+        const write = await fileTransfer.write(target.handleId, offset, chunk);
+        offset = write.nextOffset;
+      } else {
+        // saveToLocal：字节已在 sidecar 侧写入暂存文件，这里只跟进进度。
+        offset += chunk.byteLength;
+        const task = transferTasks[info.taskId];
+        if (task) {
+          task.status = "running";
+          task.transferred = offset;
+        }
+      }
+      if (result.eof) break;
+    }
+    let localPath: string | undefined;
+    if (target) {
+      await fileTransfer!.finish(target.handleId);
+      target = undefined;
+    } else if (chunks) {
+      saveBrowserDownload(chunks, info.fileName);
+    }
+    const finishResult = await window.datawisePlugin.invoke<{ localPath?: string }>("sftp/download/finish", { taskId: info.taskId });
+    localPath = finishResult?.localPath;
+    cancelledTransferTasks.delete(info.taskId);
+    const task = transferTasks[info.taskId];
+    if (task) {
+      task.status = "completed";
+      task.transferred = info.size;
+      if (localPath) task.localPath = localPath;
+    }
+    // 完成闭环：本机落盘的下载给出「打开文件 / 打开目录」动作。
+    if (localPath) {
+      const savedPath = localPath;
+      showNotice(t("downloadedTo", { name: info.fileName, path: savedPath }), [
+        { label: t("openDownloadedFile"), run: () => void openTransferTarget(savedPath) },
+        { label: t("revealInFolder"), run: () => void revealTransferTarget(savedPath) },
+      ]);
+    } else {
+      showNotice(t("downloaded", { name: info.fileName }));
+    }
+    if (setDefaultAfter) applyChosenDirAsDefault(dirOverride);
+  } catch (cause) {
+    if (info) {
+      const waiter = downloadChunkWaiters.get(info.taskId);
+      if (waiter) {
+        window.clearTimeout(waiter.timer);
+        downloadChunkWaiters.delete(info.taskId);
+      }
+    }
+    if (target && fileTransfer) await fileTransfer.cancel(target.handleId).catch(() => undefined);
+    if (info) await window.datawisePlugin.invoke("sftp/transfer/cancel", { taskId: info.taskId }).catch(() => undefined);
+    if (info && cancelledTransferTasks.delete(info.taskId)) {
+      const task = transferTasks[info.taskId];
+      if (task) task.status = "cancelled";
+      showNotice(t("transferStatus.cancelled"));
+    } else {
+      // 失败闭环：横幅带「重试」，按原入口完整重跑（含询问/冲突流程）。
+      showError(cause, "sftp", () => void downloadEntry(entry));
+    }
+  }
+}
+
+// —— 递归文件夹下载（issue #46）：目录条目 → sftp/download/tree/start ——
+// 复用单文件下载的分块循环（saveToLocal 语义：字节留在 sidecar 落盘，前端
+// 只跟进度）；与文件下载的差异：必须本机落盘（web/docker 无本地文件系统时
+// 不可用），循环跑到 eof 为止（空树也会先收到一次空 eof 块），根名撞车由
+// sidecar 自动让位（无「覆盖」语义），取消/未完成时 sidecar 整树删除。
+async function downloadDirectoryEntry(entry: SftpEntry) {
+  fileMenu.value = undefined;
+  openTransferPanel();
+  if (!session.value || entry.kind !== "directory") return;
+  const local = await probeLocalCapabilities();
+  if (!local?.canSaveLocal) {
+    showError(new Error(t("folderDownload.unsupported")));
+    return;
+  }
+  // 「使用默认地址」关闭时先选保存目录；取消则整次下载不发生。
+  let dirOverride = "";
+  let setDefaultAfter = false;
+  if (!loadDownloadUseDefaultDir()) {
+    const chosen = await askDownloadTarget(entry.name);
+    if (chosen === undefined) return;
+    dirOverride = chosen.dir.trim();
+    setDefaultAfter = chosen.setDefault;
+  }
+  let info: DownloadInfo | undefined;
+  try {
+    // start 里做远端递归扫描（有界）：树很大时这一步本身耗时，给足超时。
+    info = await window.datawisePlugin.invoke<DownloadInfo>("sftp/download/tree/start", {
+      sessionId: session.value.sessionId,
+      remotePath: pathFromUri(entry.uri),
+      downloadDir: dirOverride || loadDownloadDir() || undefined,
+    }, { timeoutMs: 10 * 60 * 1000 });
+    transferTasks[info.taskId] = {
+      taskId: info.taskId,
+      sessionId: session.value.sessionId,
+      direction: "download",
+      fileName: info.fileName,
+      size: info.size,
+      transferred: 0,
+      status: "running",
+      fileCount: info.fileCount,
+    };
+    let offset = 0;
+    while (true) {
+      await waitWhilePaused(info.taskId);
+      const chunkPromise = waitForDownloadChunk(info.taskId, offset);
+      const nextPromise = window.datawisePlugin.invoke<{ length: number; eof: boolean }>("sftp/download/next", { taskId: info.taskId, offset });
+      // 取消会通过分块等待器中断；吞掉在途请求的拒绝避免 unhandled rejection。
+      nextPromise.catch(() => undefined);
+      const result = await nextPromise;
+      const chunk = await chunkPromise;
+      if (!result.eof && result.length === 0) throw new Error(t("errors.downloadEmptyChunk"));
+      offset += result.length;
+      if (chunk.byteLength && chunk.byteLength !== result.length) throw new Error(t("errors.downloadChunkLength"));
+      const task = transferTasks[info.taskId];
+      if (task) {
+        task.status = "running";
+        task.transferred = offset;
+      }
+      if (result.eof) break;
+    }
+    const finish = await window.datawisePlugin.invoke<FolderDownloadFinish>("sftp/download/finish", { taskId: info.taskId }, { timeoutMs: 30 * 60 * 1000 });
+    cancelledTransferTasks.delete(info.taskId);
+    const outcome = folderDownloadOutcome(finish);
+    const task = transferTasks[info.taskId];
+    if (task) {
+      task.status = "completed";
+      task.transferred = info.size;
+      if (outcome.localPath) task.localPath = outcome.localPath;
+      task.failedCount = outcome.failedCount || undefined;
+      task.failureSample = outcome.failureSample || undefined;
+      task.currentFile = undefined;
+    }
+    const revealActions = outcome.localPath
+      ? [
+          {
+            label: t("revealInFolder"),
+            run: () => {
+              const savedPath = outcome.localPath;
+              if (savedPath) void revealTransferTarget(savedPath);
+            },
+          },
+        ]
+      : [];
+    let message: string;
+    if (outcome.partial) {
+      message = t("folderDownload.completedWithFailures", { path: outcome.localPath, count: outcome.failedCount, total: outcome.fileCount });
+    } else {
+      message = t("downloadedToDir", { count: outcome.fileCount, path: outcome.localPath });
+    }
+    if (outcome.skippedCount) message += t("folderDownload.skippedNote", { count: outcome.skippedCount });
+    showNotice(message, revealActions);
+    if (setDefaultAfter) applyChosenDirAsDefault(dirOverride);
+  } catch (cause) {
+    if (info) {
+      const waiter = downloadChunkWaiters.get(info.taskId);
+      if (waiter) {
+        window.clearTimeout(waiter.timer);
+        downloadChunkWaiters.delete(info.taskId);
+      }
+      await window.datawisePlugin.invoke("sftp/transfer/cancel", { taskId: info.taskId }).catch(() => undefined);
+      if (cancelledTransferTasks.delete(info.taskId)) {
+        const task = transferTasks[info.taskId];
+        if (task) task.status = "cancelled";
+        showNotice(t("transferStatus.cancelled"));
+      } else {
+        showError(cause, "sftp", () => void downloadDirectoryEntry(entry));
+      }
+    } else {
+      showError(cause, "sftp", () => void downloadDirectoryEntry(entry));
+    }
+  }
+}
+
+// 多选批量下载：文件与目录混选，逐项走各自管线（单项失败不阻断剩余项）。
+async function batchDownload() {
+  const menu = fileMenu.value;
+  fileMenu.value = undefined;
+  if (!menu) return;
+  const uris = menu.selection.length ? menu.selection : [menu.entry.uri];
+  const targets = entries.value.filter((entry) => uris.includes(entry.uri));
+  for (const entry of targets) {
+    if (entry.kind !== "file" && entry.kind !== "directory") continue;
+    await downloadEntry(entry);
+  }
+}
+
+function saveBrowserDownload(chunks: Uint8Array[], fileName: string) {
+  // Runtime chunks always come from decodeBase64 (ArrayBuffer-backed); the
+  // ArrayBufferLike generic just doesn't fit BlobPart's stricter view typing.
+  const blob = new Blob(chunks as unknown as BlobPart[]);
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  // Give the browser time to start the download before releasing the blob.
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+function waitForDownloadChunk(taskId: string, offset: number) {
+  return new Promise<Uint8Array>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      downloadChunkWaiters.delete(taskId);
+      reject(new Error(t("errors.downloadChunkTimeout")));
+    }, 30_000);
+    downloadChunkWaiters.set(taskId, { offset, resolve, reject, timer });
+  });
+}
+
+// 在文件管理器中定位本机落盘的下载（sidecar 校验过该路径确为本插件记录）。
+async function revealTransferTarget(path: string) {
+  try {
+    await window.datawisePlugin.invoke("local/reveal", { path });
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+/** Auto-reveal after sz/trzsz: never surface errors (capability missing / path gate). */
+async function silentRevealTransferTarget(path: string) {
+  try {
+    await window.datawisePlugin.invoke("local/reveal", { path });
+  } catch {
+    // silent skip
+  }
+}
+
+// 在系统默认应用中打开已完成的下载；sidecar 会校验路径必须来自本插件
+// 的完成历史，避免把这个按钮变成任意本机路径打开入口。
+async function openTransferTarget(path: string) {
+  try {
+    await window.datawisePlugin.invoke("local/open", { path });
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+// —— 断点续传：暂停/恢复 + 可续传上传 ———
+
+// 分片循环在每个分片之间调用；暂停时挂起，恢复后继续。
+function waitWhilePaused(taskId: string): Promise<void> | undefined {
+  if (!pausedTaskIds.has(taskId)) return undefined;
+  return new Promise((resolve) => {
+    const waiters = pauseWaiters.get(taskId) ?? [];
+    waiters.push(resolve);
+    pauseWaiters.set(taskId, waiters);
+  });
+}
+
+// 外部编辑回传：watch 确认状态机 / 上传串行链 / 「打开方式」下载打开入口。
+const {
+  externalEditBusy,
+  watchModifiedQueue,
+  watchModifiedPrompt,
+  dismissWatchModified,
+  uploadWatchedFileOnce,
+  uploadWatchedFileAlways,
+  handleWatchModified,
+  openInExternalEditor,
+  editorConfig,
+  updateEditorConfig,
+  externalEditors,
+  ensureExternalEditors,
+} = useExternalEdits({
+  t,
+  showNotice,
+  showError,
+  loadDirectory,
+  session,
+  openTransferPanel,
+  // 外部编辑只写最小字段；与 App TransferTask 联合状态字面量兼容（运行时同一 reactive 表）。
+  transferTasks: transferTasks as Record<string, { taskId: string; sessionId?: string; direction: "upload" | "download"; fileName: string; size: number; transferred: number; status: string; joinedAt?: number; compression?: string; localPath?: string }>,
+  pathFromUri,
+  waitWhilePaused,
+  waitForDownloadChunk: (taskId, offset) => waitForDownloadChunk(taskId, offset),
+  cancelledTransferTasks,
+  downloadChunkWaiters,
+  probeLocalCapabilities: () => probeLocalCapabilities(),
+  loadDownloadDir,
+  copyTextToClipboard,
+  closeFileMenu: () => { fileMenu.value = undefined; },
+});
+
+const availableExternalEditors = computed(() => externalEditors.value.filter((editor) => editor.available));
+function mappedEditorIdFor(fileName: string): string {
+  const resolved = resolveEditorForFile(fileName, editorConfig.value, externalEditors.value);
+  return resolved.kind === "system" ? "" : resolved.editor.id;
+}
+function openWithSystemEntry(entry: SftpEntry) {
+  void openInExternalEditor(entry, { kind: "system" });
+}
+function openWithKnownEntry(entry: SftpEntry, editor: KnownEditor) {
+  void openInExternalEditor(entry, { kind: "known", editor });
+}
+function openWithCustomEntry(entry: SftpEntry, editor: CustomEditor) {
+  void openInExternalEditor(entry, { kind: "custom", editor });
+}
+function openPreviewWith(editor: ResolvedEditor) {
+  if (!previewPath.value) return;
+  void openInExternalEditor({
+    uri: previewPath.value,
+    name: previewTitle.value || remoteBasename(previewPath.value) || previewPath.value,
+    kind: "file",
+  }, editor);
+}
+function previewFileLabel(path: string | null): string {
+  return path ? path.split(/[\\/]/).pop() ?? path : "";
+}
+function downloadMultiPreview(path: string) {
+  void downloadEntry({ uri: path, name: previewFileLabel(path), kind: "file" });
+}
+function openMultiPreviewWith(editor: ResolvedEditor) {
+  if (!multiPreviewPath.value) return;
+  void openInExternalEditor({
+    uri: multiPreviewPath.value,
+    name: previewFileLabel(multiPreviewPath.value),
+    kind: "file",
+  }, editor);
+}
+
+const customEditorOpen = ref(false);
+const customEditorEntry = ref<SftpEntry>();
+const customEditorName = ref("");
+const customEditorCommand = ref("");
+const customEditorRemember = ref(true);
+const customEditorPattern = computed(() =>
+  customEditorEntry.value ? defaultPatternFor(customEditorEntry.value.name) : "*",
+);
+function beginCustomEditorCommand(entry: SftpEntry) {
+  customEditorEntry.value = entry;
+  customEditorName.value = "";
+  customEditorCommand.value = "";
+  customEditorRemember.value = true;
+  customEditorOpen.value = true;
+}
+function beginPreviewCustomCommand() {
+  if (!previewPath.value) return;
+  beginCustomEditorCommand({
+    uri: previewPath.value,
+    name: previewTitle.value || remoteBasename(previewPath.value) || previewPath.value,
+    kind: "file",
+  });
+}
+function customCommandForMultiPreview() {
+  if (!multiPreviewPath.value) return;
+  beginCustomEditorCommand({
+    uri: multiPreviewPath.value,
+    name: previewFileLabel(multiPreviewPath.value),
+    kind: "file",
+  });
+}
+async function commitCustomEditor() {
+  const entry = customEditorEntry.value;
+  const command = customEditorCommand.value.trim();
+  if (!entry || !command) return;
+  const id = newCustomEditorId();
+  const name = customEditorName.value.trim() || command.split(/\s+/)[0] || id;
+  const next = sanitizeEditorConfig(editorConfig.value);
+  next.customEditors = [...next.customEditors, { id, name, command }];
+  if (customEditorRemember.value) {
+    const pattern = defaultPatternFor(entry.name);
+    next.associations = [
+      ...next.associations.filter((assoc) => assoc.pattern.toLowerCase() !== pattern.toLowerCase()),
+      { pattern, customId: id },
+    ];
+  }
+  updateEditorConfig(next);
+  customEditorOpen.value = false;
+  await openInExternalEditor(entry, { kind: "custom", editor: { id, name, command } });
+}
+
+const editorPrefsAdapter = {
+  loadConfig: () => editorConfig.value,
+  persistConfig: (value: EditorConfig) => updateEditorConfig(value),
+  loadEditors: () => externalEditors.value,
+  reloadEditors: () => ensureExternalEditors(),
+};
+
+function releasePause(taskId: string) {
+  if (pausedTaskIds.delete(taskId)) {
+    for (const waiter of pauseWaiters.get(taskId) ?? []) waiter();
+  }
+  pauseWaiters.delete(taskId);
+}
+
+function toggleTransferPause(task: TransferTask) {
+  if (!transferPausable(task.status)) return;
+  if (pausedTaskIds.has(task.taskId)) releasePause(task.taskId);
+  else pausedTaskIds.add(task.taskId);
+}
+
+async function cancelTransfer(task: TransferTask) {
+  releasePause(task.taskId);
+  if (task.direction === "download") {
+    // Reject the pending chunk waiter so the download loop exits immediately
+    // instead of waiting for its 30s timeout; the backend cancel follows below.
+    const waiter = downloadChunkWaiters.get(task.taskId);
+    if (waiter) {
+      window.clearTimeout(waiter.timer);
+      downloadChunkWaiters.delete(task.taskId);
+      waiter.reject(new Error(t("transferStatus.cancelled")));
+    }
+    cancelledTransferTasks.add(task.taskId);
+  }
+  // reason=user 让后端账本把"用户主动取消"与异常清理区分开（issue #60）。
+  await window.datawisePlugin.invoke("sftp/transfer/cancel", { taskId: task.taskId, reason: "user" }).catch((cause) => showError(cause));
+}
+
+async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
+  const queue = [...items];
+  await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    while (queue.length) {
+      const item = queue.shift();
+      if (item !== undefined) await worker(item);
+    }
+  }));
+}
+
+function onUploadInput(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  input.value = "";
+  if (files.length) void uploadLocalFiles(files).catch(showError);
+}
+
+function onLzpackUploadInput(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (file) void uploadLocalFiles([file], undefined, { lzpack: true }).catch(showError);
+}
+
+/**
+ * Focus the SFTP workbench itself when the user clicks its blank area. This
+ * gives Ctrl/Cmd+V a stable native paste target without stealing focus from
+ * path/search inputs or toolbar controls.
+ */
+function focusSftpPaneOnPointerDown(event: PointerEvent) {
+  const target = event.target;
+  if (target instanceof Element && target.closest("button, input, select, textarea, a, [contenteditable='true']")) return;
+  sftpPane.value?.focus({ preventScroll: true });
+}
+
+/**
+ * Native file paste is the browser-compatible bridge for Finder/Explorer
+ * clipboard files. Text paste is deliberately left untouched so path/search
+ * inputs and the remote SFTP clipboard keep their existing behavior.
+ */
+function onSftpClipboardPaste(event: ClipboardEvent) {
+  if (!connected.value || !canWrite.value) return;
+  const files = filesFromClipboard(event.clipboardData);
+  if (!files.length) return;
+  event.preventDefault();
+  event.stopPropagation();
+  void uploadLocalFiles(files).catch(showError);
+}
+
+function onDrop(event: DragEvent) {
+  dragActive.value = false;
+  if (!canWrite.value) return;
+  void planFolderDrop(event.dataTransfer).then((plan) => applyDropPlan(plan)).catch(showError);
+}
+
+function onTerminalDragEnter(event: DragEvent) {
+  if (!event.dataTransfer?.types.includes("Files")) return;
+  if (!canAcceptTerminalDrop({ connected: connected.value, canWrite: canWrite.value, transferBusy: terminalTransferBusy.value })) return;
+  terminalDragActive.value = true;
+}
+
+function onTerminalDrop(event: DragEvent) {
+  terminalDragActive.value = false;
+  if (!canAcceptTerminalDrop({ connected: connected.value, canWrite: canWrite.value, transferBusy: terminalTransferBusy.value })) return;
+  // Files dropped on the terminal ask for a landing directory first: the
+  // shell's cwd (SFTP directory tracking) or any absolute directory typed in
+  // the prompt — silence would make a wrong-guess overwrite too easy.
+  void (async () => {
+    try {
+      const plan = await planFolderDrop(event.dataTransfer);
+      if (plan.kind === "too-large") {
+        showError(new Error(t(plan.reason === "depth" ? "folderDrop.tooDeep" : "folderDrop.tooMany")));
+        return;
+      }
+      if (plan.kind === "empty-folder") {
+        showNotice(t("folderDrop.empty"));
+        return;
+      }
+      const promptFiles = plan.kind === "files" ? plan.files : plan.files.map((item) => item.file);
+      if (!promptFiles.length) return;
+      const choice = await askDropUploadTarget(promptFiles);
+      terminal?.focus();
+      if (choice === "cancel") return;
+      await applyDropPlan(plan, choice === "cwd" ? undefined : choice.dir);
+    } catch (cause) {
+      showError(cause);
+    }
+  })();
+}
+
+function askDropUploadTarget(files: File[]): Promise<"cancel" | "cwd" | { dir: string }> {
+  dropUploadTarget.value = "cwd";
+  dropUploadPathInput.value = "";
+  return new Promise((resolve) => {
+    dropUploadResolver = resolve;
+    dropUploadPrompt.value = { files };
+  });
+}
+
+// 选中“指定目录”即聚焦路径输入框（禁用态拿不到焦点，所以不在打开时聚焦）：
+// 键盘流为拖入 → Tab/方向键切到自定义 → 直接输入 → Enter 提交。
+watch(dropUploadTarget, async (target) => {
+  if (target !== "custom") return;
+  await nextTick();
+  dropUploadPathInputEl.value?.focus();
+});
+
+function confirmDropUpload() {
+  if (!dropUploadPrompt.value) return;
+  if (dropUploadTarget.value === "custom") {
+    const dir = normalizeDropTargetDir(dropUploadPathInput.value);
+    if (!dir) return;
+    resolveDropUpload({ dir });
+    return;
+  }
+  resolveDropUpload("cwd");
+}
+
+function resolveDropUpload(choice: "cancel" | "cwd" | { dir: string }) {
+  dropUploadPrompt.value = undefined;
+  const resolve = dropUploadResolver;
+  dropUploadResolver = undefined;
+  resolve?.(choice);
+}
+
+// 沙箱 iframe 的剪贴板依赖注入：宿主桥是 optional 且现网宿主未提供，
+// 缺失/拒绝时由 clipboardBridge 逐级降级（见 lib/clipboardBridge.ts）。
+function clipboardDeps(): ClipboardDeps {
+  return {
+    bridge: window.datawisePlugin.clipboard ?? null,
+    nativeClipboard: typeof navigator !== "undefined" ? (navigator as Navigator & { clipboard?: ClipboardDeps["nativeClipboard"] }).clipboard ?? null : null,
+  };
+}
+
+async function copyTerminalSelection() {
+  const text = terminal?.getSelection() || "";
+  if (!text) return;
+  try {
+    await writeClipboardText(text, clipboardDeps());
+    showNotice(t("terminalCopied"));
+  } catch {
+    showError(new Error(t("terminalCopyUnavailable")), "terminal");
+  }
+  terminalMenuOpen.value = false;
+  terminal?.focus();
+}
+
+async function pasteTerminal() {
+  terminalMenuOpen.value = false;
+  try {
+    const text = await readClipboardText(clipboardDeps());
+    await sendConfirmedPaste(text || "");
+  } catch {
+    // 读剪贴板全链失败（宿主桥缺失 + 沙箱拒绝）：引导走原生 paste 快捷键。
+    showError(new Error(t("terminalPasteUseShortcut")), "terminal");
+    terminal?.focus();
+  }
+}
+
+/** Xshell「粘贴选中」：把当前选区文本直接写入 PTY（不经系统剪贴板）。 */
+async function pasteTerminalSelection() {
+  terminalMenuOpen.value = false;
+  const text = terminal?.getSelection() || "";
+  if (!text) {
+    terminal?.focus();
+    return;
+  }
+  await sendConfirmedPaste(text);
+}
+
+/** 选区若含 http(s) URL，在新窗口打开（插件沙箱内 window.open）。 */
+function openTerminalSelectionUrl() {
+  terminalMenuOpen.value = false;
+  const url = extractHttpUrl(terminal?.getSelection() || "");
+  if (!url) {
+    terminal?.focus();
+    return;
+  }
+  try {
+    window.open(url, "_blank", "noopener,noreferrer");
+  } catch {
+    showError(new Error(t("terminalOpenUrlFailed")), "terminal");
+  }
+  terminal?.focus();
+}
+
+/** 向 PTY 发送 Ctrl+C（0x03），中断远端前台进程。 */
+function sendTerminalInterrupt() {
+  terminalMenuOpen.value = false;
+  if (!session.value || terminalTransferBusy.value) {
+    terminal?.focus();
+    return;
+  }
+  sendTerminalBytes(new Uint8Array([3]));
+  terminal?.focus();
+}
+
+/** 菜单打开瞬间读选区 URL（terminal 非响应式，勿用 computed）。 */
+function currentTerminalSelectionUrl(): string | null {
+  return extractHttpUrl(terminal?.getSelection() || "");
+}
+
+function interceptTerminalPaste(event: ClipboardEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+  const text = event.clipboardData?.getData("text/plain") || "";
+  if (!text) return;
+  void sendConfirmedPaste(text);
+}
+
+async function sendConfirmedPaste(text: string) {
+  if (!text) return;
+  const accepted = await confirmRiskyPaste(text);
+  if (!accepted) {
+    terminal?.focus();
+    return;
+  }
+  if (!session.value || terminalTransferBusy.value) return;
+  trackPendingInput(text);
+  sendTerminalBytes(new TextEncoder().encode(text));
+  terminal?.focus();
+}
+
+function confirmRiskyPaste(text: string): Promise<boolean> {
+  const confirmation = buildPasteConfirmation(text);
+  if (!confirmation.required) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    pasteConfirmResolver = resolve;
+    pasteConfirm.value = confirmation;
+  });
+}
+
+function resolvePasteConfirm(accepted: boolean) {
+  pasteConfirm.value = undefined;
+  const resolve = pasteConfirmResolver;
+  pasteConfirmResolver = undefined;
+  resolve?.(accepted);
+}
+
+function selectAllTerminal() {
+  terminal?.selectAll();
+  terminalMenuOpen.value = false;
+  terminal?.focus();
+}
+
+function clearTerminal() {
+  terminal?.clear();
+  terminalMenuOpen.value = false;
+  terminal?.focus();
+}
+
+function chooseZmodem() {
+  terminalMenuOpen.value = false;
+  zmodemInput.value?.click();
+}
+
+function openCommandDialog() {
+  commandOpen.value = true;
+  commandError.value = "";
+  commandHistoryIndex.value = -1;
+  commandHistoryBackup.value = "";
+}
+
+function loadCommandHistory(): HistoryEntry[] {
+  try {
+    return sanitizeCommandHistory(JSON.parse(uiStorage.getItem(COMMAND_HISTORY_KEY) || "null"));
+  } catch {
+    return [];
+  }
+}
+
+function persistCommandHistory() {
+  try {
+    // 疑似内嵌凭据 / 超长 / 多行的命令只留在内存，不写 localStorage。
+    uiStorage.setItem(
+      COMMAND_HISTORY_KEY,
+      JSON.stringify(commandHistory.value.filter(isPersistableEntry).slice(0, interactionPrefs.value.historyLimit)),
+    );
+  } catch {
+    // localStorage 不可用时命令历史仅保留在内存中。
+  }
+}
+
+function loadInteractionPrefs(): InteractionPrefs {
+  try {
+    return sanitizeInteractionPrefs(JSON.parse(uiStorage.getItem(INTERACTION_PREFS_KEY) || "null"));
+  } catch {
+    return sanitizeInteractionPrefs(null);
+  }
+}
+
+function persistInteractionPrefs() {
+  try {
+    uiStorage.setItem(INTERACTION_PREFS_KEY, JSON.stringify(interactionPrefs.value));
+  } catch {
+    // ignore
+  }
+}
+
+function updateInteractionPrefs(patch: Partial<InteractionPrefs>) {
+  interactionPrefs.value = sanitizeInteractionPrefs({ ...interactionPrefs.value, ...patch });
+  persistInteractionPrefs();
+  if (commandHistory.value.length > interactionPrefs.value.historyLimit) {
+    commandHistory.value = commandHistory.value.slice(0, interactionPrefs.value.historyLimit);
+    persistCommandHistory();
+  }
+}
+
+// ↑↓ 在命令输入框中浏览历史；进入浏览态前备份当前草稿，回到最新一条之下时恢复。
+function browseCommandHistoryUp() {
+  commandHistoryBackup.value = commandHistoryIndex.value === -1 ? commandDraft.value : commandHistoryBackup.value;
+  const step = browseCommandHistory(commandHistory.value, commandHistoryIndex.value, "up", commandHistoryBackup.value);
+  commandHistoryIndex.value = step.index;
+  commandDraft.value = step.draft;
+}
+
+function browseCommandHistoryDown() {
+  const step = browseCommandHistory(commandHistory.value, commandHistoryIndex.value, "down", commandHistoryBackup.value);
+  commandHistoryIndex.value = step.index;
+  commandDraft.value = step.draft;
+}
+
+function handleCommandInputKeydown(event: KeyboardEvent) {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLTextAreaElement)) return;
+  const action = commandInputAction({
+    key: event.key,
+    ctrlKey: event.ctrlKey,
+    metaKey: event.metaKey,
+    shiftKey: event.shiftKey,
+    selectionStart: target.selectionStart,
+    selectionEnd: target.selectionEnd,
+    valueLength: target.value.length,
+  });
+  if (action === "run") {
+    event.preventDefault();
+    void runCommand();
+  } else if (action === "history-up") {
+    event.preventDefault();
+    browseCommandHistoryUp();
+  } else if (action === "history-down") {
+    event.preventDefault();
+    browseCommandHistoryDown();
+  }
+}
+
+// 一键重发：把历史条目回填输入框并立即执行。
+function rerunHistoryCommand(command: string) {
+  if (commandRunning.value) return;
+  commandDraft.value = command;
+  commandHistoryIndex.value = -1;
+  void runCommand();
+}
+
+function clearCommandHistory() {
+  commandHistory.value = [];
+  commandHistoryIndex.value = -1;
+  persistCommandHistory();
+}
+
+async function runCommand() {
+  const sessionId = session.value?.sessionId;
+  const command = commandDraft.value.trim();
+  if (!sessionId || !command || commandRunning.value) return;
+  commandRunning.value = true;
+  commandError.value = "";
+  commandResult.value = undefined;
+  const execId = randomUUID();
+  commandExecId.value = execId;
+  try {
+    commandResult.value = await window.datawisePlugin.invoke<ExecResult>("ssh/exec", {
+      sessionId,
+      execId,
+      command,
+      sudo: commandUseSudo.value,
+    }, { timeoutMs: 120_000 });
+    // 执行成功提交即入历史（不论退出码），与输入框 ↑↓、一键重发共用同一份。
+    if (interactionPrefs.value.historyEnabled) {
+      commandHistory.value = pushCommandHistory(commandHistory.value, command, interactionPrefs.value.historyLimit, { connectionId: connectionId.value });
+      persistCommandHistory();
+    }
+    commandHistoryIndex.value = -1;
+    commandHistoryBackup.value = "";
+  } catch (cause) {
+    commandError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    commandRunning.value = false;
+    commandExecId.value = "";
+  }
+}
+
+async function cancelCommand() {
+  const execId = commandExecId.value;
+  if (!execId || !commandRunning.value) return;
+  await window.datawisePlugin.invoke("ssh/exec/cancel", { execId }).catch((cause) => showError(cause));
+}
+
+// ---------------------------------------------------------------------------
+// 快速命令栏：全局存储（sidecar 数据目录）CRUD + PTY 一键发送
+// ---------------------------------------------------------------------------
+
+// localStorage 旧键仅作为一次性迁移种子：宿主 webview 存储按工作台分区，
+// 旧数据表现为"和连接绑定"，迁移到 sidecar 后才真正全局共享。
+function loadQuickCommands(): QuickCommand[] {
+  try {
+    return normalizeQuickCommands(JSON.parse(uiStorage.getItem(QUICK_COMMANDS_KEY) || "null"));
+  } catch {
+    return [];
+  }
+}
+
+// 挂载时从后端拉取全局清单；后端为空且本工作台有旧 localStorage 数据时一次性
+// 迁移（逐条 save 后清除本地键）。后端不可用时保留本地/内存值兜底。
+async function hydrateQuickCommands() {
+  try {
+    let response = await window.datawisePlugin.invoke<{ commands: unknown }>("ssh/quickCommands/list");
+    let commands = normalizeQuickCommands(response.commands);
+    if (!commands.length) {
+      const legacy = loadQuickCommands();
+      for (const item of legacy) {
+        await window.datawisePlugin.invoke("ssh/quickCommands/save", { id: "", name: item.name, command: item.command }).catch(() => undefined);
+      }
+      if (legacy.length) {
+        response = await window.datawisePlugin.invoke<{ commands: unknown }>("ssh/quickCommands/list");
+        commands = normalizeQuickCommands(response.commands);
+        try {
+          uiStorage.removeItem(QUICK_COMMANDS_KEY);
+        } catch {
+          // 清理失败只影响下次空跑迁移，不影响功能。
+        }
+      }
+    }
+    quickCommands.value = commands;
+  } catch {
+    // 后端不可用（如旧版 sidecar）：保留 localStorage/内存值，行为回到旧语义。
+  }
+}
+
+async function addQuickCommand() {
+  const command = quickDraft.command.trim();
+  if (!command || quickSaving.value) return;
+  if (!quickDraftCanAdd.value) return;
+  const boundConnectionId =
+    quickDraft.scope === "connection" && connectionId.value ? connectionId.value : "";
+  quickSaving.value = true;
+  try {
+    const response = await window.datawisePlugin.invoke<{ commands: unknown }>("ssh/quickCommands/save", {
+      id: quickDraft.id ?? "",
+      name: quickDraft.name.trim(),
+      command,
+      connectionId: boundConnectionId,
+      group: quickDraft.group.trim().slice(0, QUICK_COMMAND_GROUP_MAX_LENGTH),
+    });
+    quickCommands.value = normalizeQuickCommands(response.commands);
+    closeQuickEditor();
+  } catch (cause) {
+    showError(cause, "terminal");
+  } finally {
+    quickSaving.value = false;
+  }
+}
+
+// 点击卡片的编辑按钮：编辑器子视图载入草稿（携带 id 即更新语义）。
+function editQuickCommand(item: QuickCommand) {
+  openQuickEditor(item);
+}
+
+// 快速命令删除确认走应用内弹窗：工作台 iframe 无 allow-modals，window.confirm 恒 false。
+const quickDeleteTarget = ref<QuickCommand | null>(null);
+const quickDeleteSubmitting = ref(false);
+const quickDeleteConnectionTarget = ref<{ connectionId: string; count: number } | null>(null);
+const quickDeleteConnectionSubmitting = ref(false);
+
+function deleteQuickCommand(id: string) {
+  const target = quickCommands.value.find((item) => item.id === id);
+  if (!target) return;
+  quickDeleteTarget.value = target;
+}
+
+async function confirmQuickCommandDelete() {
+  const target = quickDeleteTarget.value;
+  if (!target || quickDeleteSubmitting.value) return;
+  quickDeleteSubmitting.value = true;
+  try {
+    const response = await window.datawisePlugin.invoke<{ commands: unknown }>("ssh/quickCommands/delete", { id: target.id });
+    quickCommands.value = normalizeQuickCommands(response.commands);
+    quickDeleteTarget.value = null;
+  } catch (cause) {
+    showError(cause, "terminal");
+  } finally {
+    quickDeleteSubmitting.value = false;
+  }
+}
+
+function deleteQuickCommandsForConnection(scopeConnectionId: string) {
+  const trimmed = scopeConnectionId.trim();
+  if (!trimmed) return;
+  const count = countQuickCommandsInScope(quickCommands.value, trimmed);
+  if (!count) return;
+  quickDeleteConnectionTarget.value = { connectionId: trimmed, count };
+}
+
+async function confirmQuickCommandsDeleteForConnection() {
+  const target = quickDeleteConnectionTarget.value;
+  if (!target || quickDeleteConnectionSubmitting.value) return;
+  quickDeleteConnectionSubmitting.value = true;
+  try {
+    const response = await window.datawisePlugin.invoke<{ commands: unknown }>("ssh/quickCommands/deleteByConnection", {
+      connectionId: target.connectionId,
+    });
+    quickCommands.value = normalizeQuickCommands(response.commands);
+    showNotice(t("quickCommands.deletedConnection", { count: target.count }));
+    quickDeleteConnectionTarget.value = null;
+  } catch (cause) {
+    showError(cause, "terminal");
+  } finally {
+    quickDeleteConnectionSubmitting.value = false;
+  }
+}
+
+async function makeQuickCommandGlobal(item: QuickCommand) {
+  if (!item.connectionId?.trim()) return;
+  if (!canAddQuickCommandInScope(quickCommands.value, null)) {
+    showError(new Error(t("quickCommands.limitScope", { count: countQuickCommandsInScope(quickCommands.value, null), limit: QUICK_COMMANDS_LIMIT })), "terminal");
+    return;
+  }
+  try {
+    const response = await window.datawisePlugin.invoke<{ commands: unknown }>("ssh/quickCommands/save", {
+      id: item.id,
+      name: item.name,
+      command: item.command,
+      connectionId: "",
+      group: item.group ?? "",
+    });
+    quickCommands.value = normalizeQuickCommands(response.commands);
+  } catch (cause) {
+    showError(cause, "terminal");
+  }
+}
+
+// 发送语义：快速命令是"在当前交互 shell 中执行"的片段（对齐 tiny-rdm），
+// 必须走 PTY 写入——输出直接回显在终端里、cd/env 等状态留在当前 shell；
+// ssh/exec 是独立非交互通道，不回显也不共享 shell 状态，不符合语义。
+// 命令原文按键盘输入写入（用户可见可中断），不经过任何 shell 拼接转义。
+// Run = 写入并回车执行；Paste = 只粘贴到命令行（不执行，可继续编辑）。
+// 两种模式都不关弹窗（对齐 Termius：连续挑多条命令是高频操作，关窗会
+// 打断流程）；手动 Esc/外点/再点工具栏按钮关闭。
+function writeQuickCommand(item: QuickCommand, execute: boolean) {
+  if (!session.value || terminalTransferBusy.value || commandRunning.value) return;
+  const text = quickCommandText(item.command);
+  if (!text) return;
+  const payload = execute ? `${text}\r` : text;
+  if (execute) trackPendingInput(payload);
+  sendTerminalBytes(new TextEncoder().encode(payload));
+  terminal?.focus();
+}
+function sendQuickCommand(item: QuickCommand) {
+  writeQuickCommand(item, true);
+}
+function pasteQuickCommand(item: QuickCommand) {
+  writeQuickCommand(item, false);
+}
+
+// 一键 sudo -v：向当前交互终端按键盘语义写入 `sudo -v` + 回车（等价手敲执行），
+// 立即刷新远端 sudo 凭据缓存；输出回显在终端，密码提示由用户/Quick Sudo 应答。
+function sendSudoRefresh() {
+  if (!session.value || terminalTransferBusy.value) return;
+  trackPendingInput("sudo -v\r");
+  sendTerminalBytes(new TextEncoder().encode("sudo -v\r"));
+  terminal?.focus();
+}
+
+// ---------------------------------------------------------------------------
+// 批量发送：跨连接把命令写入多个已打开会话的交互终端（tiny-rdm batch send）
+// ---------------------------------------------------------------------------
+
+/** 命令条开关：持久化（localStorage），打开时顺带刷新目标列表。 */
+function toggleBatchBar() {
+  batchBarOpen.value = !batchBarOpen.value;
+  try {
+    uiStorage.setItem(BATCH_BAR_OPEN_KEY, batchBarOpen.value ? "1" : "0");
+  } catch {
+    // 存储不可用时仅失去记忆，功能不受影响。
+  }
+  if (batchBarOpen.value) {
+    void refreshBatchTargets();
+  } else {
+    batchTargetsOpen.value = false;
+    batchQuickPickOpen.value = false;
+    batchSaveMode.value = false;
+  }
+  broadcastBatchBarState(true);
+}
+
+/** 本地命令条状态广播（输入去抖 150ms，开关/清空等离散动作立即发）。 */
+function broadcastBatchBarState(immediate = false) {
+  if (batchBroadcastTimer !== undefined) window.clearTimeout(batchBroadcastTimer);
+  const send = () => {
+    batchBroadcastTimer = undefined;
+    void window.datawisePlugin
+      .notify("ssh/batchBar/state", {
+        source: batchBarSourceId,
+        draft: batchDraft.value,
+        quickPickId: batchQuickPickId.value,
+        open: batchBarOpen.value,
+        sessionIds: [...batchSelected.value],
+      })
+      .catch(() => undefined);
+  };
+  if (immediate) {
+    send();
+  } else {
+    batchBroadcastTimer = window.setTimeout(send, 150);
+  }
+}
+
+/** 应用其他工作台广播来的命令条状态（不含保存态/弹出层，不打断本端输入焦点）。 */
+function applyRemoteBatchBarState(params: {
+  draft?: unknown;
+  quickPickId?: unknown;
+  open?: unknown;
+  sessionIds?: unknown;
+}) {
+  if (typeof params.draft === "string") batchDraft.value = params.draft;
+  if (typeof params.quickPickId === "string") batchQuickPickId.value = params.quickPickId;
+  if (Array.isArray(params.sessionIds)) {
+    const ids = params.sessionIds.filter((id): id is string => typeof id === "string" && !!id);
+    batchSelected.value = ids;
+    persistBatchSelected(ids);
+  }
+  batchHistoryIndex.value = -1;
+  if (typeof params.open === "boolean" && params.open !== batchBarOpen.value) {
+    batchBarOpen.value = params.open;
+    try {
+      uiStorage.setItem(BATCH_BAR_OPEN_KEY, batchBarOpen.value ? "1" : "0");
+    } catch {
+      // 同 toggleBatchBar：存储不可用只失去记忆。
+    }
+    if (params.open && !batchTargets.value.length) void refreshBatchTargets();
+  }
+}
+
+async function refreshBatchTargets() {
+  batchLoading.value = true;
+  batchError.value = "";
+  try {
+    const response = await window.datawisePlugin.invoke<{ sessions: unknown }>("ssh/sessions/list");
+    let targets = normalizeBatchTargets(response.sessions);
+    // 宿主打开的 workbench tab 集合：列表只展示有 tab 的会话，并顺手关掉无 tab 孤儿。
+    let openWorkbenchIds: string[] = [];
+    try {
+      const open = await window.datawisePlugin.request<{ workbenchIds?: string[] }>("host.listOpenWorkbenches", {}, { timeoutMs: 3_000 });
+      openWorkbenchIds = Array.isArray(open?.workbenchIds) ? open.workbenchIds.filter((id) => typeof id === "string" && !!id.trim()) : [];
+    } catch {
+      // 旧宿主无此 API：退化为只滤掉 disconnected，不主动 prune。
+    }
+    const orphans = orphanBatchSessionIds(targets, openWorkbenchIds);
+    for (const sessionId of orphans) {
+      void window.datawisePlugin.invoke("ssh/session/close", { sessionId }).catch(() => undefined);
+    }
+    if (orphans.length) {
+      const orphanSet = new Set(orphans);
+      targets = targets.filter((target) => !orphanSet.has(target.sessionId));
+    }
+    // 批量发送只对存活且仍有 tab 的会话有意义；断开项仅作清理不展示。
+    batchTargets.value = liveBatchTargets(
+      openWorkbenchIds.length
+        ? targets.filter((target) => {
+            const wid = target.workbenchId?.trim();
+            return !!wid && openWorkbenchIds.includes(wid);
+          })
+        : targets,
+    );
+    // 切 tab remount 后 batchSelected 会空：优先恢复 localStorage / 广播勾选，
+    // 只在完全没有可勾项时才回落到「当前」会话。
+    const known = batchTargets.value.map((target) => target.sessionId);
+    const preferred = batchSelected.value.length ? batchSelected.value : loadBatchSelected();
+    batchSelected.value = restoreBatchSelection(known, preferred, session.value?.sessionId);
+    persistBatchSelected(batchSelected.value);
+  } catch (cause) {
+    batchTargets.value = [];
+    batchError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    batchLoading.value = false;
+  }
+}
+
+function toggleBatchTargetsPopover() {
+  batchTargetsOpen.value = !batchTargetsOpen.value;
+  if (batchTargetsOpen.value) {
+    batchTargetFocusIndex.value = 0;
+    void refreshBatchTargets();
+  }
+}
+
+function onBatchTargetsKeydown(event: KeyboardEvent) {
+  if (!batchTargetsOpen.value) return;
+  const resolved = resolveBatchTargetKey(event);
+  if (resolved.action === "ignore") return;
+  event.preventDefault();
+  if (resolved.action === "close") {
+    batchTargetsOpen.value = false;
+    return;
+  }
+  if (resolved.action === "select-all") {
+    pickBatchTargets("all");
+    return;
+  }
+  if (resolved.action === "select-connected") {
+    pickBatchTargets("connected");
+    return;
+  }
+  const targets = batchTargets.value;
+  if (!targets.length) return;
+  if (resolved.action === "move") {
+    batchTargetFocusIndex.value = clampHistoryIndex(targets.length, batchTargetFocusIndex.value, resolved.delta);
+    return;
+  }
+  if (resolved.action === "toggle") {
+    const target = targets[batchTargetFocusIndex.value];
+    if (target) toggleBatchTargetId(target.sessionId);
+  }
+}
+
+function toggleBatchTargetId(sessionId: string) {
+  batchSelected.value = toggleBatchTarget(batchSelected.value, sessionId);
+  persistBatchSelected(batchSelected.value);
+  broadcastBatchBarState(true);
+}
+
+function pickBatchTargets(mode: "all" | "connected") {
+  batchSelected.value = selectBatchTargets(batchTargets.value, mode);
+  persistBatchSelected(batchSelected.value);
+  broadcastBatchBarState(true);
+}
+
+// 下拉切换命令：回填输入框（Electerm 语义），发送仍由回车/发送按钮触发。
+function onBatchQuickPick(value: unknown) {
+  batchQuickPickId.value = value == null ? "" : String(value);
+  applyBatchQuickPick();
+}
+
+function applyBatchQuickPick() {
+  const command = quickPickCommandById(visibleQuickCommandList.value, batchQuickPickId.value);
+  if (command) {
+    batchDraft.value = command;
+    batchHistoryIndex.value = -1;
+    broadcastBatchBarState(true);
+  }
+}
+
+function clampBatchSuggestIndex() {
+  const max = Math.max(batchSuggestItems.value.length - 1, 0);
+  batchQuickActiveIndex.value = Math.min(Math.max(batchQuickActiveIndex.value, 0), max);
+}
+
+function scrollBatchSuggestActiveIntoView() {
+  void nextTick(() => {
+    document
+      .querySelector<HTMLElement>(`.batch-quick-item[data-active="true"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  });
+}
+
+function focusBatchComposeInput() {
+  void nextTick(() => batchComposeInput.value?.focus());
+}
+
+/** 填入联想项（不发送）；快捷命令同步 batchQuickPickId。 */
+function fillBatchSuggestItem(item: BatchSuggestItem) {
+  if (item.kind === "quick") {
+    const quickId = item.id.startsWith("quick:") ? item.id.slice("quick:".length) : "";
+    if (quickId) onBatchQuickPick(quickId);
+    else {
+      batchDraft.value = item.command;
+      batchHistoryIndex.value = -1;
+      broadcastBatchBarState(true);
+    }
+  } else {
+    batchDraft.value = item.command;
+    batchQuickPickId.value = "";
+    batchHistoryIndex.value = -1;
+    broadcastBatchBarState(true);
+  }
+  batchQuickPickOpen.value = false;
+  batchQuickActiveIndex.value = 0;
+  focusBatchComposeInput();
+}
+
+/** 填入并立即发送（命令面板 Enter 语义）。 */
+function runBatchSuggestItem(item: BatchSuggestItem) {
+  fillBatchSuggestItem(item);
+  void sendBatchCommand();
+}
+
+function toggleBatchQuickPick() {
+  if (!batchSuggestAvailable.value) return;
+  batchQuickPickOpen.value = !batchQuickPickOpen.value;
+  if (batchQuickPickOpen.value) {
+    batchQuickActiveIndex.value = 0;
+    scrollBatchSuggestActiveIntoView();
+  }
+  focusBatchComposeInput();
+}
+
+/**
+ * 输入联想：草稿非空且有匹配 → 自动打开；无匹配 → 关闭。
+ * 空草稿不自动打开（全量列表靠按钮 / Ctrl+Space）。
+ */
+function syncBatchQuickSuggestFromDraft() {
+  if (!batchSuggestAvailable.value) {
+    batchQuickPickOpen.value = false;
+    return;
+  }
+  const query = batchDraft.value.trim();
+  if (!query) return;
+  if (batchSuggestItems.value.length) {
+    batchQuickPickOpen.value = true;
+    clampBatchSuggestIndex();
+    scrollBatchSuggestActiveIntoView();
+  } else {
+    batchQuickPickOpen.value = false;
+    batchQuickActiveIndex.value = 0;
+  }
+}
+
+function onBatchDraftInput() {
+  broadcastBatchBarState();
+  syncBatchQuickSuggestFromDraft();
+}
+
+function onBatchDraftKeydown(event: KeyboardEvent) {
+  const mod = event.ctrlKey || event.metaKey;
+  // Ctrl/Cmd+Space：开关联想（空草稿也可浏览）。
+  if (mod && (event.code === "Space" || event.key === " ") && !event.shiftKey) {
+    event.preventDefault();
+    toggleBatchQuickPick();
+    return;
+  }
+  // Ctrl/Cmd+T：打开目标选择（全键盘勾选会话）。
+  if (mod && (event.key === "t" || event.key === "T") && !event.shiftKey && !event.altKey) {
+    event.preventDefault();
+    if (!batchTargetsOpen.value) toggleBatchTargetsPopover();
+    else batchTargetsOpen.value = false;
+    return;
+  }
+  if (batchTargetsOpen.value) {
+    onBatchTargetsKeydown(event);
+    if (event.defaultPrevented) return;
+  }
+
+  const items = batchSuggestItems.value;
+  const suggestOpen = batchQuickPickOpen.value && items.length > 0;
+
+  if (suggestOpen) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      batchQuickActiveIndex.value = Math.min(batchQuickActiveIndex.value + 1, items.length - 1);
+      scrollBatchSuggestActiveIntoView();
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      batchQuickActiveIndex.value = Math.max(batchQuickActiveIndex.value - 1, 0);
+      scrollBatchSuggestActiveIntoView();
+      return;
+    }
+    if (event.key === "Tab") {
+      event.preventDefault();
+      const item = items[batchQuickActiveIndex.value];
+      if (item) fillBatchSuggestItem(item);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      batchQuickPickOpen.value = false;
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const item = items[batchQuickActiveIndex.value];
+      if (item) runBatchSuggestItem(item);
+      else {
+        batchQuickPickOpen.value = false;
+        void sendBatchCommand();
+      }
+      return;
+    }
+  }
+
+  // 弹层关闭时：↓ 若有可联想项则打开面板，否则逛历史。
+  if (event.key === "ArrowDown" && !event.altKey) {
+    event.preventDefault();
+    if (batchSuggestAvailable.value && items.length) {
+      batchQuickPickOpen.value = true;
+      batchQuickActiveIndex.value = 0;
+      scrollBatchSuggestActiveIntoView();
+      return;
+    }
+    browseBatchHistoryDown();
+    return;
+  }
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    browseBatchHistoryUp();
+    return;
+  }
+  if (event.key === "Enter") {
+    void sendBatchCommand();
+  }
+}
+
+// 命令条 ↑↓ 浏览历史（与命令弹窗同一份 commandHistory，弹窗/命令条互相可见）。
+function browseBatchHistoryUp() {
+  batchHistoryBackup.value = batchHistoryIndex.value === -1 ? batchDraft.value : batchHistoryBackup.value;
+  const step = browseCommandHistory(commandHistory.value, batchHistoryIndex.value, "up", batchHistoryBackup.value);
+  batchHistoryIndex.value = step.index;
+  batchDraft.value = step.draft;
+}
+
+function browseBatchHistoryDown() {
+  const step = browseCommandHistory(commandHistory.value, batchHistoryIndex.value, "down", batchHistoryBackup.value);
+  batchHistoryIndex.value = step.index;
+  batchDraft.value = step.draft;
+}
+
+function batchSessionLabel(sessionId: string): string {
+  const target = batchTargets.value.find((item) => item.sessionId === sessionId);
+  return target ? batchTargetLabel(target) : sessionId.slice(0, 8);
+}
+
+let batchResultDismissTimer = 0;
+
+function clearBatchResultDismissTimer() {
+  if (batchResultDismissTimer) {
+    window.clearTimeout(batchResultDismissTimer);
+    batchResultDismissTimer = 0;
+  }
+}
+
+/** 成功约 2.2s、含失败/错误约 5s 后自动收起右下角结果条。 */
+function scheduleBatchResultDismiss(hasFailure: boolean) {
+  clearBatchResultDismissTimer();
+  batchResultDismissTimer = window.setTimeout(() => {
+    batchResultDismissTimer = 0;
+    dismissBatchResult();
+  }, hasFailure ? 5000 : 2200);
+}
+
+async function sendBatchCommand() {
+  const command = batchDraft.value.trim();
+  if (!command || !batchSelected.value.length || batchSending.value) return;
+  // 危险/超长命令复用粘贴红色确认弹窗（同一套 dangerousCommands 规则）。
+  const confirmed = await confirmRiskyPaste(command);
+  if (!confirmed) return;
+  batchSending.value = true;
+  clearBatchResultDismissTimer();
+  batchError.value = "";
+  batchSummary.value = undefined;
+  try {
+    const response = await window.datawisePlugin.invoke<{ results: unknown }>("ssh/terminal/batchInput", {
+      // postMessage 走 structured clone：Vue 响应式数组 Proxy 会抛 DataCloneError。
+      sessionIds: [...batchSelected.value],
+      command,
+    });
+    batchSummary.value = summarizeBatchResults(response.results);
+    scheduleBatchResultDismiss(batchSummary.value.failed > 0);
+    if (batchSummary.value.sent) {
+      // 发送成功即清空输入与下拉选中（对齐原弹窗语义），命令入历史供 ↑↓ 回选。
+      if (interactionPrefs.value.historyEnabled) {
+        commandHistory.value = pushCommandHistory(
+          commandHistory.value,
+          command,
+          interactionPrefs.value.historyLimit,
+          { connectionId: connectionId.value },
+        );
+        persistCommandHistory();
+      }
+      batchDraft.value = "";
+      batchQuickPickId.value = "";
+      batchHistoryIndex.value = -1;
+      batchHistoryBackup.value = "";
+      broadcastBatchBarState(true);
+    }
+  } catch (cause) {
+    batchError.value = cause instanceof Error ? cause.message : String(cause);
+    scheduleBatchResultDismiss(true);
+  } finally {
+    batchSending.value = false;
+  }
+}
+
+function dismissBatchResult() {
+  clearBatchResultDismissTimer();
+  batchSummary.value = undefined;
+  batchError.value = "";
+}
+
+// ---- 命令条内联保存为快速命令（与工具栏 Zap 弹层同一后端；可选全局/当前连接）----
+
+function openBatchBarSave() {
+  const command = batchDraft.value.trim();
+  if (!command) return;
+  batchQuickPickOpen.value = false;
+  batchSaveScope.value = connectionId.value ? "connection" : "global";
+  if (!canAddQuickCommandInScope(quickCommands.value, batchSaveScope.value === "connection" ? connectionId.value || null : null)) {
+    // Prefer the other scope when the default bucket is full.
+    const alt: "global" | "connection" = batchSaveScope.value === "connection" ? "global" : "connection";
+    const altId = alt === "connection" ? connectionId.value || null : null;
+    if (!canAddQuickCommandInScope(quickCommands.value, altId)) return;
+    batchSaveScope.value = alt;
+  }
+  batchSaveMode.value = true;
+  batchSaveName.value = deriveBatchCommandName(command);
+}
+
+async function confirmBatchBarSave() {
+  const command = batchDraft.value.trim();
+  if (!command || batchSaving.value || !batchScopeCanAdd.value) return;
+  const boundConnectionId =
+    batchSaveScope.value === "connection" && connectionId.value ? connectionId.value : "";
+  batchSaving.value = true;
+  try {
+    const response = await window.datawisePlugin.invoke<{ commands: unknown }>("ssh/quickCommands/save", {
+      id: "",
+      name: batchSaveName.value.trim(),
+      command,
+      connectionId: boundConnectionId,
+    });
+    quickCommands.value = normalizeQuickCommands(response.commands);
+    batchSaveMode.value = false;
+    batchSaveName.value = "";
+    batchSaveScope.value = connectionId.value ? "connection" : "global";
+    batchQuickPickId.value = visibleQuickCommandList.value.find((item) => item.command === command)?.id ?? "";
+  } catch (cause) {
+    showError(cause, "terminal");
+  } finally {
+    batchSaving.value = false;
+  }
+}
+
+function cancelBatchBarSave() {
+  batchSaveMode.value = false;
+  batchSaveName.value = "";
+  batchSaveScope.value = connectionId.value ? "connection" : "global";
+}
+
+// 连接建立后刷新目标计数；断开时收起命令条的弹出层/保存态。
+watch(connected, (value) => {
+  if (value && batchBarOpen.value) {
+    void refreshBatchTargets();
+  } else if (!value) {
+    batchTargetsOpen.value = false;
+    batchQuickPickOpen.value = false;
+    batchSaveMode.value = false;
+  }
+  if (value) {
+    void refreshAgentMode();
+  } else {
+    agentModeOpen.value = false;
+    metrics.value = undefined;
+    metricsError.value = "";
+  }
+  syncMetricsPolling();
+});
+
+// ---------------------------------------------------------------------------
+// 连接信息面板（只读）
+// ---------------------------------------------------------------------------
+
+function toggleQuickMenu() {
+  const next = !quickMenuOpen.value;
+  closeToolbarPopovers();
+  quickMenuOpen.value = next;
+  if (next) {
+    // 每次打开回到列表态：清空搜索/展开/编辑器子视图。
+    quickSearch.value = "";
+    quickExpandedId.value = null;
+    quickEditorOpen.value = false;
+  }
+}
+
+function toggleConnectionInfo() {
+  const next = !connectionInfoOpen.value;
+  closeToolbarPopovers();
+  connectionInfoOpen.value = next;
+  if (next) {
+    void measureLatency();
+    void refreshConnectionAuthMethod();
+    // 发行版徽标数据源是 metrics 快照：未拉过时补拉一次（一次 exec，约 0.4s），
+    // 否则从未开过指标浮层的会话在连接信息里永远看不到徽标。
+    if (!metrics.value) void refreshMetrics();
+  }
+}
+
+function toggleAgentModeMenu() {
+  const next = !agentModeOpen.value;
+  closeToolbarPopovers();
+  agentModeOpen.value = next;
+  if (next) void refreshAgentMode();
+}
+
+// ---- 模板内联互斥清单收敛为具名 toggle（round2），与五个函数 toggle 同族 ----
+
+function toggleColumnsMenu() {
+  const next = !columnsOpen.value;
+  closeToolbarPopovers();
+  columnsOpen.value = next;
+}
+
+function toggleTransferPanel() {
+  const next = !transferPanelOpen.value;
+  closeToolbarPopovers();
+  transferPanelOpen.value = next;
+}
+
+function togglePathHistoryMenu() {
+  const next = !pathHistoryOpen.value;
+  closeToolbarPopovers();
+  pathHistoryOpen.value = next;
+}
+
+/// 读取当前连接的 agentTerminalMode（与设置弹窗同一 ssh/settings/get 视图）；
+/// 失败保留上次已知值，仅影响按钮态不影响终端。
+async function refreshAgentMode() {
+  const sessionId = session.value?.sessionId;
+  if (!sessionId) return;
+  try {
+    const meta = await window.datawisePlugin.invoke<{ agentTerminalMode?: string }>("ssh/settings/get", { sessionId });
+    const mode = meta.agentTerminalMode;
+    agentMode.value = mode && (AGENT_MODES as readonly string[]).includes(mode) ? (mode as AgentTerminalMode) : "off";
+  } catch {
+    // 静默降级：读不到就保持现状（默认 off），不打断终端使用。
+  }
+}
+
+/// 切换即生效（ssh/settings/set），成功后本地同步并收起弹出层。
+async function applyAgentMode(mode: AgentTerminalMode) {
+  const sessionId = session.value?.sessionId;
+  if (!sessionId || agentModeBusy.value) return;
+  agentModeBusy.value = true;
+  try {
+    await window.datawisePlugin.invoke("ssh/settings/set", { sessionId, agentTerminalMode: mode });
+    agentMode.value = mode;
+    agentModeOpen.value = false;
+  } catch (cause) {
+    showError(cause, "terminal");
+  } finally {
+    agentModeBusy.value = false;
+  }
+}
+
+// 认证方式：读取 ssh/sessions/list 当前会话行的 authMethod（只读方法名，
+// 不含任何凭据材料）。失败时面板显示占位符，不影响其他信息。
+async function refreshConnectionAuthMethod() {
+  const sessionId = session.value?.sessionId;
+  if (!sessionId) return;
+  try {
+    const result = await window.datawisePlugin.invoke<{ sessions: Array<{ sessionId?: string; authMethod?: string; readOnly?: boolean }> }>(
+      "ssh/sessions/list",
+      {},
+      { timeoutMs: 15_000 },
+    );
+    const mine = result.sessions?.find((row) => row.sessionId === sessionId);
+    connectionAuthMethod.value = typeof mine?.authMethod === "string" && mine.authMethod ? mine.authMethod : "";
+    connectionReadOnly.value = mine?.readOnly === true;
+  } catch {
+    connectionAuthMethod.value = "";
+  }
+}
+
+// 延迟测量：复用既有 ssh/exec 跑一条 echo 只读命令，计时整个 RPC 往返
+// （含通道建立），无需新增后端方法。测量值仅用于展示，不参与任何逻辑。
+async function measureLatency() {
+  const sessionId = session.value?.sessionId;
+  if (!sessionId || connectionLatencyBusy.value) return;
+  connectionLatencyBusy.value = true;
+  connectionLatencyFailed.value = false;
+  const startedAt = performance.now();
+  try {
+    const result = await window.datawisePlugin.invoke<ExecResult>("ssh/exec", {
+      sessionId,
+      command: "echo dw-rtt-probe",
+      timeoutSecs: 8,
+    }, { timeoutMs: 15_000 });
+    if (!result.output.includes("dw-rtt-probe")) throw new Error(t("errors.probeOutput"));
+    connectionLatency.value = performance.now() - startedAt;
+  } catch {
+    connectionLatency.value = null;
+    connectionLatencyFailed.value = true;
+  } finally {
+    connectionLatencyBusy.value = false;
+  }
+}
+
+let metricsTimer = 0;
+
+async function refreshMetrics() {
+  if (!session.value) return;
+  metricsLoading.value = true;
+  try {
+    metrics.value = await window.datawisePlugin.invoke<ServerMetrics>("ssh/metrics", { sessionId: session.value.sessionId }, { timeoutMs: 30_000 });
+    metricsError.value = "";
+    recordMetricSamples();
+  } catch (cause) {
+    metricsError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    metricsLoading.value = false;
+  }
+}
+
+/** 资源条或指标浮层任一需要时共用 5s 轮询；两者都关则停表。 */
+function syncMetricsPolling() {
+  window.clearInterval(metricsTimer);
+  metricsTimer = 0;
+  const need = connected.value && (resourceStripEnabled.value || metricsOpen.value);
+  if (!need || !session.value) return;
+  void refreshMetrics();
+  metricsTimer = window.setInterval(() => {
+    if (!metricsLoading.value && (resourceStripEnabled.value || metricsOpen.value)) {
+      void refreshMetrics();
+    }
+  }, 5000);
+}
+
+// 悬浮指标卡：打开即刷新并启动 5s 轮询；不阻塞终端/SFTP 操作，随时开关。
+function toggleMetrics() {
+  if (metricsOpen.value) {
+    closeMetrics();
+    return;
+  }
+  metricsOpen.value = true;
+  void backfillMetricsHistory();
+  syncMetricsPolling();
+}
+
+function closeMetrics() {
+  metricsOpen.value = false;
+  syncMetricsPolling();
+}
+
+function openMetricsFromStrip() {
+  if (!metricsOpen.value) {
+    metricsOpen.value = true;
+    void backfillMetricsHistory();
+  }
+  syncMetricsPolling();
+}
+
+async function refreshDocker() {
+  if (!session.value) return;
+  dockerLoading.value = true;
+  try {
+    const result = await window.datawisePlugin.invoke<{ containers?: DockerContainer[] }>("ssh/docker/list", { sessionId: session.value.sessionId }, { timeoutMs: 45_000 });
+    dockerRows.value = result.containers ?? [];
+    dockerError.value = "";
+  } catch (cause) {
+    dockerError.value = cause instanceof Error ? cause.message : String(cause);
+    dockerRows.value = [];
+  } finally {
+    dockerLoading.value = false;
+  }
+}
+
+function toggleDocker() {
+  if (dockerOpen.value) {
+    closeDocker();
+    return;
+  }
+  dockerOpen.value = true;
+  void refreshDocker();
+}
+
+function closeDockerLogs() {
+  dockerLogs.value = "";
+  dockerLogsFor.value = "";
+}
+
+function closeDocker() {
+  dockerOpen.value = false;
+  dockerQuery.value = "";
+  closeDockerLogs();
+}
+
+function toggleAssets() {
+  if (assetsOpen.value) {
+    closeAssets();
+    return;
+  }
+  assetsOpen.value = true;
+}
+
+function closeAssets() {
+  assetsOpen.value = false;
+}
+
+const filteredHistory = computed(() =>
+  filterHistory(
+    historyForScope(commandHistory.value, interactionPrefs.value.historyScope, connectionId.value),
+    historyPanelQuery.value,
+  ),
+);
+const filteredQuickPalette = computed(() =>
+  filterQuickPaletteItems(visibleQuickCommandList.value, quickPaletteQuery.value),
+);
+const localPaneOpen = ref(false);
+const historyGhostText = computed(() => {
+  if (!historyPanelOpen.value || historyPanelIndex.value < 0) return "";
+  return filteredHistory.value[historyPanelIndex.value]?.command || "";
+});
+const historyAgeLabels = computed(() => ({
+  justNow: t("historyPanel.ageJustNow"),
+  minutes: t("historyPanel.ageMinutes"),
+  hours: t("historyPanel.ageHours"),
+  days: t("historyPanel.ageDays"),
+}));
+
+function syncHistoryDraftFromIndex() {
+  const entry = historyPanelIndex.value >= 0 ? filteredHistory.value[historyPanelIndex.value] : undefined;
+  if (entry) commandDraft.value = entry.command;
+}
+
+function focusHistorySearch() {
+  void nextTick(() => historyPanelQueryInput.value?.focus());
+}
+
+/**
+ * Paste a history line into the interactive PTY (no Enter): erase the local
+ * pending buffer with backspaces, write the command, keep commandDraft in sync.
+ */
+function fillHistoryCommandToTerminal(command: string, execute = false) {
+  const text = command.trim();
+  if (!text || !session.value || terminalTransferBusy.value) return;
+  const erase = "\u007f".repeat(pendingTerminalInput.length);
+  pendingTerminalInput = execute ? "" : text;
+  commandDraft.value = text;
+  sendTerminalBytes(new TextEncoder().encode(`${erase}${text}${execute ? "\r" : ""}`));
+}
+
+function confirmHistoryPanelSelection(run = false) {
+  const entry = historyPanelIndex.value >= 0 ? filteredHistory.value[historyPanelIndex.value] : undefined;
+  const shouldRun = run || interactionPrefs.value.historyEnterRuns;
+  if (entry) fillHistoryCommandToTerminal(entry.command, shouldRun);
+  closeHistoryPanel(false);
+}
+
+function removeHistoryPanelSelection() {
+  const entry = historyPanelIndex.value >= 0 ? filteredHistory.value[historyPanelIndex.value] : undefined;
+  if (!entry) return;
+  // Don't steal Backspace while typing in the search box.
+  if (document.activeElement === historyPanelQueryInput.value && historyPanelQuery.value) return;
+  commandHistory.value = removeHistoryEntry(commandHistory.value, entry.command);
+  persistCommandHistory();
+  historyPanelIndex.value = clampHistoryIndex(filteredHistory.value.length, historyPanelIndex.value, 0);
+  syncHistoryDraftFromIndex();
+}
+
+function pinHistoryPanelSelection() {
+  const entry = historyPanelIndex.value >= 0 ? filteredHistory.value[historyPanelIndex.value] : undefined;
+  if (!entry) return;
+  commandHistory.value = togglePinHistory(commandHistory.value, entry.command);
+  persistCommandHistory();
+  // Keep highlight on the same command after re-sort.
+  const nextIndex = filteredHistory.value.findIndex((item) => item.command === entry.command);
+  historyPanelIndex.value = nextIndex >= 0 ? nextIndex : -1;
+  syncHistoryDraftFromIndex();
+}
+
+function toggleHistoryPanel() {
+  if (historyPanelOpen.value) {
+    closeHistoryPanel(true);
+    return;
+  }
+  if (!interactionPrefs.value.historyEnabled) {
+    showNotice(t("historyPanel.disabledNotice"));
+    return;
+  }
+  closeQuickPalette();
+  hideCommandSuggest();
+  closeCompletionMenu();
+  historyPanelBackup.value = commandDraft.value;
+  historyPanelQuery.value = "";
+  historyPanelOpen.value = true;
+  historyNow.value = Date.now();
+  historyPanelIndex.value = filteredHistory.value.length ? 0 : -1;
+  syncHistoryDraftFromIndex();
+  focusHistorySearch();
+  void importRemoteHistory();
+}
+
+function closeHistoryPanel(restore: boolean) {
+  if (restore) commandDraft.value = historyPanelBackup.value;
+  historyPanelOpen.value = false;
+  historyPanelIndex.value = -1;
+  terminal?.focus();
+}
+
+function toggleQuickPalette() {
+  if (quickPaletteOpen.value) {
+    closeQuickPalette();
+    return;
+  }
+  if (!visibleQuickCommandList.value.length) {
+    showNotice(t("quickPalette.emptyNotice"));
+    return;
+  }
+  closeHistoryPanel(false);
+  hideCommandSuggest();
+  closeCompletionMenu();
+  quickPaletteQuery.value = "";
+  quickPaletteIndex.value = 0;
+  quickPaletteOpen.value = true;
+  void nextTick(() => quickPaletteQueryInput.value?.focus());
+}
+
+function closeQuickPalette() {
+  quickPaletteOpen.value = false;
+  quickPaletteIndex.value = 0;
+  terminal?.focus();
+}
+
+function confirmQuickPaletteSelection(run = false) {
+  const item = filteredQuickPalette.value[quickPaletteIndex.value] as QuickPaletteItem | undefined;
+  if (!item) {
+    closeQuickPalette();
+    return;
+  }
+  closeQuickPalette();
+  fillHistoryCommandToTerminal(item.command, run);
+}
+
+function onQuickPaletteKey(event: KeyboardEvent) {
+  const resolved = resolveQuickPaletteKey(event);
+  if (resolved.action === "ignore") return;
+  event.preventDefault();
+  if (resolved.action === "cancel") {
+    closeQuickPalette();
+    return;
+  }
+  if (resolved.action === "confirm") {
+    confirmQuickPaletteSelection(false);
+    return;
+  }
+  if (resolved.action === "confirm-run") {
+    confirmQuickPaletteSelection(true);
+    return;
+  }
+  quickPaletteIndex.value = clampHistoryIndex(
+    filteredQuickPalette.value.length,
+    quickPaletteIndex.value,
+    resolved.delta,
+  );
+}
+
+function onHistoryPanelKey(event: KeyboardEvent) {
+  const resolved = resolveHistoryPanelKey(event);
+  if (resolved.action === "ignore") return;
+  // Let the search input handle plain typing / Backspace when non-empty.
+  if (
+    resolved.action === "remove"
+    && document.activeElement === historyPanelQueryInput.value
+    && historyPanelQuery.value
+  ) {
+    return;
+  }
+  event.preventDefault();
+  if (resolved.action === "cancel") {
+    closeHistoryPanel(true);
+    return;
+  }
+  if (resolved.action === "confirm") {
+    confirmHistoryPanelSelection(false);
+    return;
+  }
+  if (resolved.action === "confirm-run") {
+    confirmHistoryPanelSelection(true);
+    return;
+  }
+  if (resolved.action === "remove") {
+    removeHistoryPanelSelection();
+    return;
+  }
+  if (resolved.action === "pin") {
+    pinHistoryPanelSelection();
+    return;
+  }
+  historyPanelIndex.value = clampHistoryIndex(filteredHistory.value.length, historyPanelIndex.value, resolved.delta);
+  syncHistoryDraftFromIndex();
+}
+
+async function importRemoteHistory() {
+  if (!session.value || !interactionPrefs.value.historyEnabled) return;
+  if (isBastionMenuContext(readVisibleShellLine())) {
+    return;
+  }
+  try {
+    const result = await window.datawisePlugin.invoke<{ lines?: string[] }>("ssh/history/remote", { sessionId: session.value.sessionId }, { timeoutMs: 30_000 });
+    commandHistory.value = mergeRemoteHistory(
+      commandHistory.value,
+      result.lines || [],
+      interactionPrefs.value.historyLimit,
+    );
+    persistCommandHistory();
+    if (historyPanelOpen.value) {
+      historyPanelIndex.value = filteredHistory.value.length
+        ? Math.max(0, Math.min(historyPanelIndex.value, filteredHistory.value.length - 1))
+        : -1;
+      syncHistoryDraftFromIndex();
+    }
+  } catch (cause) {
+    showNotice(t("historyPanel.importFailed", { error: settingsErrorOf(cause) }));
+  }
+}
+
+function hideCommandSuggest() {
+  commandSuggestOpen.value = false;
+  commandSuggestItems.value = [];
+  commandSuggestPrefix.value = "";
+  commandSuggestLine.value = "";
+  commandSuggestTabArmed.value = false;
+}
+
+function scheduleCommandSuggest() {
+  window.clearTimeout(commandSuggestTimer);
+  // Align with CompletionController debounce (90ms) to avoid soft-history flash before Fig.
+  commandSuggestTimer = window.setTimeout(() => refreshCommandSuggest(), 90);
+}
+
+function refreshCommandSuggest() {
+  if (historyPanelOpen.value || quickPaletteOpen.value || !terminal || !terminalHost.value || !connected.value) {
+    hideCommandSuggest();
+    return;
+  }
+  const buffer = terminal.buffer.active;
+  const mouse = terminal.modes?.mouseTrackingMode;
+  if (buffer.type !== "normal" || (mouse && mouse !== "none")) {
+    hideCommandSuggest();
+    return;
+  }
+  const bufferLine = cursorLineTextBeforeCursor(buffer);
+  if (shouldSuppressSuggest(bufferLine)) {
+    hideCommandSuggest();
+    return;
+  }
+  // Prefer the keystroke-tracked line (pendingTerminalInput) so history fuzzy
+  // sees the full command, not just the last token.
+  let typedLine = pendingTerminalInput || extractShellInput(bufferLine);
+  if (!typedLine && commandSuggestToken) typedLine = commandSuggestToken;
+
+  // One overlay at a time: first token → line; args/flags → Fig (line = soft fallback).
+  const owner = resolveCompletionOwner({
+    typedLine,
+    figEnabled: interactionPrefs.value.figCompletionEnabled,
+    lineEnabled: interactionPrefs.value.lineSuggestEnabled,
+  });
+  if (owner === "none") {
+    hideCommandSuggest();
+    return;
+  }
+  if (owner === "fig" && completionOpen.value) {
+    hideCommandSuggest();
+    return;
+  }
+  if (owner === "line" && completionOpen.value) {
+    closeCompletionMenu();
+    completionController.dismiss();
+  }
+  if (owner === "fig" && !interactionPrefs.value.lineSuggestEnabled) {
+    hideCommandSuggest();
+    return;
+  }
+
+  let query = parseSuggestQuery(bufferLine);
+  if (!query.prefix && commandSuggestToken) {
+    query = {
+      kind: commandSuggestToken.includes("/") || commandSuggestToken.startsWith("~") ? "path" : "command",
+      prefix: commandSuggestToken,
+    };
+  }
+  if (typedLine !== commandSuggestLine.value || query.prefix !== commandSuggestPrefix.value) {
+    commandSuggestIndex.value = 0;
+    commandSuggestTabArmed.value = false;
+  }
+  commandSuggestLine.value = typedLine;
+  commandSuggestPrefix.value = query.prefix;
+
+  // Always search history + quick commands against the full typed line.
+  const historyLines = historyCommands(commandHistory.value);
+
+  // Empty prompt: no popup until the user types something.
+  if (!typedLine.trim()) {
+    hideCommandSuggest();
+    return;
+  }
+
+  // Under Fig args: demote soft history (fewer rows, higher score floor).
+  const underFigArgs = owner === "fig";
+  const lineHits = searchLineSuggestions(
+    typedLine,
+    {
+      history: historyLines,
+      quickCommands: visibleQuickCommandList.value,
+    },
+    underFigArgs ? 6 : undefined,
+    underFigArgs ? 28 : 0,
+  );
+
+  if (query.kind === "path") {
+    // Args-phase path tokens are owned by Fig path generator; avoid dual RPC.
+    if (owner === "fig") {
+      hideCommandSuggest();
+      return;
+    }
+    if (!isSafePathPrefix(query.prefix) || pathSegment(query.prefix).length < 1) {
+      if (lineHits.length) showCommandSuggest(lineHits, buffer);
+      else hideCommandSuggest();
+      return;
+    }
+    void loadPathSuggest(query.prefix, buffer, lineHits);
+    return;
+  }
+
+  // Args phase (Fig owner): suppress soft history when Fig will list flags/subs/values.
+  if (owner === "fig") {
+    if (
+      isPendingOptionArgPhase(typedLine, WAVE1_FIG_MANIFEST)
+      || shouldSuppressSoftHistoryUnderFig(typedLine, WAVE1_FIG_MANIFEST)
+    ) {
+      hideCommandSuggest();
+      return;
+    }
+    if (lineHits.length) showCommandSuggest(lineHits, buffer);
+    else hideCommandSuggest();
+    return;
+  }
+
+  const catalog = catalogSuggestItems(commandCatalog.value, query.prefix, historyLines);
+  showCommandSuggest(mergeSuggestItems(lineHits, catalog), buffer);
+}
+
+function showCommandSuggest(items: SuggestItem[], buffer: { cursorX: number; cursorY: number }) {
+  let useful = filterRedundantExactSuggest(commandSuggestLine.value, items);
+  // Exact Fig command with nothing longer in history → ghost a trailing space to enter args.
+  const typed = commandSuggestLine.value.trimEnd();
+  if (
+    !useful.length
+    && typed
+    && !/\s/.test(typed)
+    && interactionPrefs.value.figCompletionEnabled
+    && hasFigCommandSpec(typed, WAVE1_FIG_MANIFEST)
+  ) {
+    useful = [figArgsHandoffItem(typed)];
+  }
+  commandSuggestItems.value = useful;
+  if (!useful.length) {
+    hideCommandSuggest();
+    return;
+  }
+  const pane = terminalHost.value?.parentElement;
+  if (!pane || !terminal || !terminalHost.value) {
+    hideCommandSuggest();
+    return;
+  }
+  const placement = overlayPlacement(buffer.cursorY, terminal.rows);
+  commandSuggestPlacement.value = placement;
+  const offset = overlayOffsetForCell(
+    terminalHost.value,
+    { cols: terminal.cols, rows: terminal.rows },
+    buffer.cursorX,
+    buffer.cursorY,
+    pane,
+    placement,
+  );
+  const ghost = overlayOffsetForCell(
+    terminalHost.value,
+    { cols: terminal.cols, rows: terminal.rows },
+    buffer.cursorX,
+    buffer.cursorY,
+    pane,
+    "inline",
+  );
+  if (offset) commandSuggestPos.value = offset;
+  if (ghost) commandSuggestGhostPos.value = ghost;
+  if (commandSuggestIndex.value >= useful.length) commandSuggestIndex.value = 0;
+  commandSuggestOpen.value = true;
+}
+
+async function loadPathSuggest(prefix: string, buffer: { cursorX: number; cursorY: number }, lineHits: SuggestItem[] = []) {
+  if (!session.value) return;
+  const gen = ++pathSuggestGen;
+  try {
+    const result = await window.datawisePlugin.invoke<{ names?: string[] }>("ssh/files/complete", {
+      sessionId: session.value.sessionId,
+      prefix,
+    }, { timeoutMs: 15_000 });
+    if (gen !== pathSuggestGen) return;
+    const names = (result.names || []).map((name) => normalizePathCandidate(prefix, name)).filter(Boolean);
+    showCommandSuggest(mergeSuggestItems(lineHits, pathSuggestItems(names, prefix)), buffer);
+  } catch {
+    if (gen !== pathSuggestGen) return;
+    if (lineHits.length) showCommandSuggest(lineHits, buffer);
+    else hideCommandSuggest();
+  }
+}
+
+function acceptCommandSuggest() {
+  const item = commandSuggestItems.value[commandSuggestIndex.value];
+  const typed = commandSuggestLine.value;
+  const pathPrefix = item?.source === "path" ? commandSuggestPrefix.value : undefined;
+  hideCommandSuggest();
+  if (!item) return;
+  const payload = fillSuggestPayload(typed, item, pathPrefix);
+  if (payload) {
+    sendTerminalBytes(new TextEncoder().encode(payload));
+    // Keep pendingTerminalInput in sync with what we injected (replaceTerminalLineWith).
+    if (item.source === "path") {
+      const erased = typed.slice(0, Math.max(0, typed.length - (pathPrefix?.length ?? 0)));
+      pendingTerminalInput = `${erased}${item.command}`;
+    } else {
+      pendingTerminalInput = item.command;
+    }
+  }
+  commandSuggestToken = item.source === "path" ? pathSegment(item.command) : item.command.split(/\s+/)[0] ?? "";
+}
+
+/** Fish-style: accept one word of the ghost remainder; keep the suggest menu open. */
+function acceptCommandSuggestWord() {
+  const ghost = commandSuggestGhost.value;
+  const chunk = ghostWordRemainder(ghost);
+  if (!chunk) return;
+  sendTerminalBytes(new TextEncoder().encode(chunk));
+  pendingTerminalInput += chunk;
+  commandSuggestLine.value = pendingTerminalInput;
+  commandSuggestToken = applyInputToToken(commandSuggestToken, chunk);
+  completionController.lineChanged();
+  scheduleCommandSuggest();
+}
+
+async function loadCommandCatalog(force = false) {
+  if (!session.value) return;
+  const id = connectionId.value || session.value.sessionId;
+  const cached = commandCatalogCache.get(id);
+  if (cached?.length && !force) {
+    commandCatalog.value = cached;
+    return;
+  }
+  if (!cached?.length) commandCatalog.value = [...COMMON_COMMANDS];
+  try {
+    const result = await window.datawisePlugin.invoke<{ names?: string[] }>("ssh/commands/complete", { sessionId: session.value.sessionId }, { timeoutMs: 30_000 });
+    const names = parseCommandNames((result.names || []).join("\n"));
+    if (names.length) {
+      commandCatalogCache.set(id, names);
+      commandCatalog.value = names;
+    } else if (!cached?.length) {
+      commandCatalog.value = [...COMMON_COMMANDS];
+    }
+  } catch {
+    if (!cached?.length) commandCatalog.value = [...COMMON_COMMANDS];
+  }
+}
+
+function toggleOtpPanel() {
+  otpOpen.value = !otpOpen.value;
+  if (!otpOpen.value) {
+    window.clearInterval(otpRefreshTimer);
+    otpRefreshTimer = 0;
+  }
+}
+
+function closeOtpPanel() {
+  otpOpen.value = false;
+  window.clearInterval(otpRefreshTimer);
+  otpRefreshTimer = 0;
+}
+
+function beginProtocolTerminal(kind: "local" | "telnet" | "serial", sessionId: string, label: string) {
+  protocolSession.value = { kind, sessionId, label };
+  activeTerminalSessionId = sessionId;
+  lastSequence = 0;
+  pendingTerminalFrames.clear();
+  terminalInputQueue.reset();
+  terminal?.reset();
+  terminalState.value = "connected";
+  terminalError.value = "";
+  // Local/telnet: OSC 7 passive follow is available (local injects fish/bash/zsh).
+  // Serial: no shell cwd — gate the follow switch honestly.
+  if (kind === "serial") {
+    directoryTrackingSupported.value = false;
+    if (followDirectory.value) {
+      followDirectory.value = false;
+      showNotice(t("directoryTrackingSerial"));
+    }
+  } else {
+    directoryTrackingSupported.value = true;
+  }
+  directoryParser.reset();
+  scheduleFit();
+}
+
+async function openLocalShell() {
+  protocolMenuOpen.value = false;
+  try {
+    const cols = Math.max(40, terminal?.cols ?? 80);
+    const rows = Math.max(10, terminal?.rows ?? 24);
+    const result = await startLocalTerminal({ workbenchId: workbenchId.value, cols, rows });
+    beginProtocolTerminal("local", result.sessionId, t("protocol.localShell"));
+    showNotice(t("protocol.started", { kind: t("protocol.localShell") }));
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+async function onTelnetConnect(opts: TelnetConnectOptions) {
+  telnetDialogOpen.value = false;
+  try {
+    const cols = Math.max(40, terminal?.cols ?? 80);
+    const rows = Math.max(10, terminal?.rows ?? 24);
+    const result = await startTelnet({
+      ...opts,
+      workbenchId: workbenchId.value,
+      cols,
+      rows,
+    });
+    beginProtocolTerminal("telnet", result.sessionId, `${opts.host}:${opts.port}`);
+    showNotice(t("protocol.started", { kind: "Telnet" }));
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+async function onSerialConnect(opts: SerialConnectOptions) {
+  serialDialogOpen.value = false;
+  try {
+    const result = await startSerial({ ...opts, workbenchId: workbenchId.value } as Record<string, unknown>);
+    beginProtocolTerminal("serial", result.sessionId, opts.portName || "serial");
+    showNotice(t("protocol.started", { kind: "Serial" }));
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+function openSerialUploadDialog() {
+  if (!serialSessionActive.value || serialUploadBusy.value) return;
+  serialUploadDialogOpen.value = true;
+}
+
+async function onSerialUploadStart(payload: { file: File; protocol: SerialUploadProtocol }) {
+  const proto = protocolSession.value;
+  if (!proto || proto.kind !== "serial") return;
+  serialUploadAbort = false;
+  serialUploadState.value = {
+    phase: "running",
+    fileName: payload.file.name,
+    protocol: payload.protocol,
+    sent: 0,
+    total: payload.file.size,
+    reason: "",
+  };
+  try {
+    await streamSerialUploadFile(payload.file, {
+      sessionId: proto.sessionId,
+      protocol: payload.protocol,
+      fileName: payload.file.name,
+      bridge: {
+        invoke: (method, params) => window.datawisePlugin.invoke(method, params),
+        encodeBase64: (bytes) => window.datawisePlugin.encodeBase64(bytes),
+      },
+      readChunk: async (start, end) => new Uint8Array(await payload.file.slice(start, end).arrayBuffer()),
+      shouldAbort: () => serialUploadAbort,
+    });
+  } catch (cause) {
+    serialUploadState.value = {
+      ...serialUploadState.value,
+      phase: "failed",
+      reason: cause instanceof Error ? cause.message : String(cause),
+    };
+    showError(cause, "terminal");
+  }
+}
+
+function cancelSerialUpload() {
+  const proto = protocolSession.value;
+  if (!proto || proto.kind !== "serial") return;
+  serialUploadAbort = true;
+  void window.datawisePlugin.invoke("serial/upload/cancel", { sessionId: proto.sessionId }).catch(() => undefined);
+}
+
+async function closeProtocolGraphics(kind: "vnc" | "rdp") {
+  const sessionId = kind === "vnc" ? vncSessionId.value : rdpSessionId.value;
+  if (sessionId) {
+    void window.datawisePlugin.invoke(`${kind}/close`, { sessionId }).catch(() => undefined);
+  }
+  if (kind === "vnc") {
+    vncSurfaceRef.value?.reset();
+    vncSessionId.value = "";
+  } else {
+    rdpSurfaceRef.value?.reset();
+    rdpSessionId.value = "";
+  }
+  if (protocolSession.value?.kind === kind) protocolSession.value = null;
+}
+
+function sendVncInput(ev: unknown) {
+  if (!vncSessionId.value) return;
+  void window.datawisePlugin.invoke("vnc/write", { sessionId: vncSessionId.value, event: ev }).catch((cause) => showError(cause));
+}
+
+function sendRdpInput(ev: unknown) {
+  if (!rdpSessionId.value) return;
+  void window.datawisePlugin.invoke("rdp/write", { sessionId: rdpSessionId.value, input: ev }).catch((cause) => showError(cause));
+}
+
+function sendVncClipboard(text: string) {
+  if (!vncSessionId.value || !text) return;
+  void window.datawisePlugin.invoke("vnc/set-clipboard", { sessionId: vncSessionId.value, text }).catch((cause) => showError(cause));
+}
+
+function sendRdpClipboard(text: string) {
+  if (!rdpSessionId.value || !text) return;
+  void window.datawisePlugin
+    .invoke("rdp/set-clipboard", { sessionId: rdpSessionId.value, text })
+    .then(() => showNotice(t("rdp.clipboardSent")))
+    .catch((cause) => showError(cause));
+}
+
+async function onVncConnect(opts: VncConnectOptions) {
+  vncDialogOpen.value = false;
+  try {
+    if (vncSessionId.value) await closeProtocolGraphics("vnc");
+    const result = await startVnc({ ...opts, workbenchId: workbenchId.value } as Record<string, unknown>);
+    vncSessionId.value = result.sessionId;
+    vncScaleMode.value = opts.scaleMode || "fit";
+    protocolSession.value = { kind: "vnc", sessionId: result.sessionId, label: opts.host || "vnc" };
+    vncSurfaceRef.value?.reset();
+    showNotice(t("protocol.started", { kind: "VNC" }));
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+async function onRdpConnect(opts: RdpConnectOptions) {
+  rdpDialogOpen.value = false;
+  try {
+    if (rdpSessionId.value) await closeProtocolGraphics("rdp");
+    const result = await startRdp({ ...opts, workbenchId: workbenchId.value } as Record<string, unknown>);
+    rdpSessionId.value = result.sessionId;
+    rdpScaleMode.value = opts.scaleMode || "fit";
+    protocolSession.value = { kind: "rdp", sessionId: result.sessionId, label: opts.host || "rdp" };
+    rdpSurfaceRef.value?.reset();
+    showNotice(t("protocol.started", { kind: "RDP" }));
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+async function loadDockerLogs(row: DockerContainer) {
+  if (!session.value) return;
+  const container = sanitizeContainerRef(row.id) ?? sanitizeContainerRef(row.name);
+  if (!container) return;
+  dockerBusyId.value = container;
+  try {
+    const result = await window.datawisePlugin.invoke<{ output?: string }>("ssh/docker/logs", { sessionId: session.value.sessionId, container }, { timeoutMs: 60_000 });
+    dockerLogs.value = result.output || t("docker.logsEmpty");
+    dockerLogsFor.value = row.name || container;
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    dockerBusyId.value = "";
+  }
+}
+
+/** Interactive container shell via the shared SSH PTY (bash, then sh). */
+function execDockerShell(row: DockerContainer) {
+  if (!session.value || !row.running) return;
+  const container = sanitizeContainerRef(row.name) ?? sanitizeContainerRef(row.id);
+  if (!container) return;
+  const command = `docker exec -it -- ${container} bash || docker exec -it -- ${container} sh\r`;
+  trackPendingInput(command);
+  sendTerminalBytes(new TextEncoder().encode(command));
+  showNotice(t("docker.execDone", { name: row.name || container }));
+}
+
+async function runDockerAction(row: DockerContainer, action: "start" | "stop" | "restart") {
+  if (!session.value || !canWrite.value) return;
+  dockerConfirm.value = { row, action };
+}
+
+async function confirmDockerAction() {
+  const pending = dockerConfirm.value;
+  dockerConfirm.value = null;
+  if (!pending || !session.value || !canWrite.value) return;
+  const container = sanitizeContainerRef(pending.row.id) ?? sanitizeContainerRef(pending.row.name);
+  if (!container) return;
+  dockerBusyId.value = container;
+  try {
+    await window.datawisePlugin.invoke("ssh/docker/action", { sessionId: session.value.sessionId, action: pending.action, container }, { timeoutMs: 90_000 });
+    showNotice(t("docker.done", { action: t(`docker.${pending.action}`), name: pending.row.name || container }));
+    await refreshDocker();
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    dockerBusyId.value = "";
+  }
+}
+
+// Peak rate across every interface normalizes the per-interface bars; the
+// network/process sections only render when the sidecar reports the fields,
+// so older backends simply hide them.
+const metricsRatePeak = computed(() => {
+  let peak = 0;
+  for (const net of metrics.value?.network ?? []) peak = Math.max(peak, net.rxRate, net.txRate);
+  return peak > 0 ? peak : 1;
+});
+
+function networkRateShare(net: { rxRate: number; txRate: number }) {
+  return Math.min(100, Math.round((Math.max(net.rxRate, net.txRate) / metricsRatePeak.value) * 100));
+}
+
+const metricsProcGridStyle = { gridTemplateColumns: "48px 64px 48px 52px minmax(0, 1fr)" };
+const procGridStyle = { gridTemplateColumns: "48px 60px 48px 52px 76px minmax(0, 1fr) 132px" };
+
+// —— F2：指标历史回填 + 进程管理 ———
+
+// 打开指标卡时拉一次落盘历史（connectionId 维度，跨重启可见趋势）；
+// 旧 sidecar 无该方法时静默降级。
+async function backfillMetricsHistory() {
+  if (!session.value) return;
+  try {
+    const result = await window.datawisePlugin.invoke<{ samples: Array<{ cpuPercent?: number; memoryPercent?: number; rxRate?: number; txRate?: number }> }>("ssh/metrics/history", { sessionId: session.value.sessionId, limit: METRICS_SAMPLE_CAPACITY });
+    for (const sample of result.samples ?? []) {
+      if (sample.cpuPercent != null) metricSamples.cpu = pushSample(metricSamples.cpu, sample.cpuPercent, METRICS_SAMPLE_CAPACITY);
+      if (sample.memoryPercent != null) metricSamples.mem = pushSample(metricSamples.mem, sample.memoryPercent, METRICS_SAMPLE_CAPACITY);
+      metricSamples.rx = pushSample(metricSamples.rx, Math.max(0, sample.rxRate ?? 0), METRICS_SAMPLE_CAPACITY);
+      metricSamples.tx = pushSample(metricSamples.tx, Math.max(0, sample.txRate ?? 0), METRICS_SAMPLE_CAPACITY);
+    }
+  } catch {
+    // optional 降级：无历史则趋势从本次打开开始累计。
+  }
+}
+
+async function toggleProcessPanel() {
+  processesOpen.value = !processesOpen.value;
+  if (processesOpen.value) await refreshProcessList();
+}
+
+async function refreshProcessList() {
+  if (!session.value) return;
+  processLoading.value = true;
+  try {
+    const result = await window.datawisePlugin.invoke<{ processes: ProcessRow[] }>("ssh/processes/list", { sessionId: session.value.sessionId }, { timeoutMs: 20_000 });
+    processRows.value = result.processes ?? [];
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    processLoading.value = false;
+  }
+}
+
+const sortedProcessRows = computed(() => sortProcessRows(processRows.value, processSortKey.value));
+const PROCESS_VISIBLE_LIMIT = 100;
+const visibleProcessRows = computed(() => sortedProcessRows.value.slice(0, PROCESS_VISIBLE_LIMIT));
+
+async function killProcessRow(row: ProcessRow, signal: 15 | 9) {
+  if (!session.value || !canKillProcess(row.pid)) return;
+  const confirmKey = signal === 9 ? "procKillForceConfirm" : "procKillConfirm";
+  if (!window.confirm(t(confirmKey, { pid: row.pid, command: row.command }))) return;
+  try {
+    await window.datawisePlugin.invoke("ssh/processes/kill", { sessionId: session.value.sessionId, pid: row.pid, signal });
+    showNotice(t("procKilled", { pid: row.pid }));
+    await refreshProcessList();
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+// —— F3：终端录制 + 回放（asciicast v2）———
+
+// 录制开始倒计时（录制软件惯例）：点击后 3→2→1 动画，归零才真正
+// recording/start；Esc/点击遮罩取消。录制中工具栏按钮变红，终端区底部
+// 浮出控制条（呼吸点 + 时长 + 停止）。
+const recordCountdown = ref<number | null>(null);
+const recordingStartedAt = ref<number | null>(null);
+const recordingElapsedSec = ref(0);
+let recordCountdownTimer = 0;
+let recordingElapsedTimer = 0;
+
+/** Active recording target: local protocol shell or SSH session. */
+function recordingTarget(): { method: "local/recording" | "ssh/recording"; sessionId: string } | null {
+  const proto = protocolSession.value;
+  if (proto?.kind === "local" && terminalState.value === "connected") {
+    return { method: "local/recording", sessionId: proto.sessionId };
+  }
+  if (session.value) {
+    return { method: "ssh/recording", sessionId: session.value.sessionId };
+  }
+  return null;
+}
+
+function beginRecordCountdown() {
+  if (!recordingTarget() || recordCountdown.value !== null) return;
+  recordCountdown.value = RECORD_COUNTDOWN_START;
+  window.clearInterval(recordCountdownTimer);
+  recordCountdownTimer = window.setInterval(() => {
+    const next = nextCountdownValue(recordCountdown.value);
+    recordCountdown.value = next;
+    if (next === null) {
+      window.clearInterval(recordCountdownTimer);
+      void startRecordingNow();
+    }
+  }, 1000);
+}
+
+function cancelRecordCountdown() {
+  window.clearInterval(recordCountdownTimer);
+  recordCountdown.value = null;
+}
+
+function startRecordingClock() {
+  recordingStartedAt.value = Date.now();
+  recordingElapsedSec.value = 0;
+  window.clearInterval(recordingElapsedTimer);
+  recordingElapsedTimer = window.setInterval(() => {
+    recordingElapsedSec.value = recordingStartedAt.value
+      ? Math.floor((Date.now() - recordingStartedAt.value) / 1000)
+      : 0;
+  }, 1000);
+}
+
+function stopRecordingClock() {
+  window.clearInterval(recordingElapsedTimer);
+  recordingStartedAt.value = null;
+  recordingElapsedSec.value = 0;
+}
+
+async function startRecordingNow() {
+  const target = recordingTarget();
+  if (!target || recordingActive.value) return;
+  try {
+    await window.datawisePlugin.invoke(`${target.method}/start`, { sessionId: target.sessionId });
+    recordingActive.value = true;
+    startRecordingClock();
+    showNotice(t("recordingStarted"));
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+async function toggleRecording() {
+  const target = recordingTarget();
+  if (!target) return;
+  if (!recordingActive.value) {
+    beginRecordCountdown();
+    return;
+  }
+  try {
+    await window.datawisePlugin.invoke(`${target.method}/stop`, { sessionId: target.sessionId });
+    recordingActive.value = false;
+    stopRecordingClock();
+    showNotice(t("recordingStopped"));
+    if (recordingsOpen.value) await loadRecordings();
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+async function loadRecordings() {
+  recordingsLoading.value = true;
+  try {
+    const result = await window.datawisePlugin.invoke<{ recordings: RecordingSummary[] }>("ssh/recording/list", {});
+    recordings.value = result.recordings ?? [];
+  } catch {
+    recordings.value = [];
+  } finally {
+    recordingsLoading.value = false;
+  }
+}
+
+function toggleRecordings() {
+  recordingsOpen.value = !recordingsOpen.value;
+  if (recordingsOpen.value) {
+    void probeLocalCapabilities();
+    void loadRecordings();
+  }
+}
+
+// 打开录制文件所在目录：仅在桌面端（sidecar 在本机）有意义，
+// web/docker 的录制文件在远端服务器上。
+async function revealRecording(item: RecordingSummary) {
+  try {
+    await window.datawisePlugin.invoke("ssh/recording/reveal", { recordingId: item.recordingId });
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+function deleteRecording(item: RecordingSummary) {
+  recordingDeleteTarget.value = item;
+}
+
+async function confirmRecordingDelete() {
+  const item = recordingDeleteTarget.value;
+  if (!item || recordingDeleteSubmitting.value) return;
+  recordingDeleteSubmitting.value = true;
+  try {
+    await window.datawisePlugin.invoke("ssh/recording/delete", { recordingId: item.recordingId });
+    recordingDeleteTarget.value = null;
+    await loadRecordings();
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    recordingDeleteSubmitting.value = false;
+  }
+}
+
+// 一键清空：应用内确认弹窗（沙箱 iframe confirm 恒 false），确认后
+// ssh/recording/clear 全删 .cast，重载列表并提示删除数量。
+const recordingClearAllOpen = ref(false);
+const recordingClearAllSubmitting = ref(false);
+
+async function confirmRecordingClearAll() {
+  if (recordingClearAllSubmitting.value) return;
+  recordingClearAllSubmitting.value = true;
+  try {
+    const result = await window.datawisePlugin.invoke<{ deleted?: number }>("ssh/recording/clear", {});
+    recordingClearAllOpen.value = false;
+    await loadRecordings();
+    showNotice(t("recordingsCleared", { count: result.deleted ?? 0 }));
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    recordingClearAllSubmitting.value = false;
+  }
+}
+
+// 回放：事件一次性拉全（分页合并，封顶 2 万事件），rAF 按时间轴推进。
+const REPLAY_EVENT_CAP = 20000;
+let replayTerminal: Terminal | null = null;
+let replayTimeline: number[] = [];
+let replayWriteIndex = 0;
+let replayRaf = 0;
+let replayStartWall = 0;
+let replayStartPlayhead = 0;
+const replayDurationMs = computed(() => (replayState.value ? replayDuration(replayState.value.events) * 1000 : 0));
+
+async function loadReplayEvents(recordingId: string): Promise<ReplayEvent[]> {
+  const pages: ReplayEventPage[] = [];
+  let offset = 0;
+  for (;;) {
+    const page = await window.datawisePlugin.invoke<ReplayEventPage>("ssh/recording/get", { recordingId, offset, limit: 500 });
+    pages.push(page);
+    offset += page.events.length;
+    if (!page.hasMore || offset >= page.total || offset >= REPLAY_EVENT_CAP) break;
+  }
+  return mergeEventPages(pages);
+}
+
+async function openReplay(item: RecordingSummary) {
+  try {
+    const events = await loadReplayEvents(item.recordingId);
+    closeReplay();
+    replayState.value = { summary: item, events };
+    replayTimeline = buildTimeline(events, 1);
+    replayWriteIndex = 0;
+    replayPlayheadMs.value = 0;
+    replayPlaying.value = false;
+    await nextTick();
+    if (replayHost.value) {
+      // 回放终端跟随宿主外观（主题色/字体/字号），不再是默认纯黑 xterm。
+      replayTerminal = new Terminal({
+        cols: 100,
+        rows: 26,
+        convertEol: false,
+        theme: terminalTheme(),
+        fontFamily: hostTerminalFontFamily(appearance.value),
+        fontSize: appearance.value.terminal.fontSize,
+      });
+      replayTerminal.open(replayHost.value);
+      // 与主终端同用 Unicode 11 宽度表：emoji/宽字符行在回放里保持相同折行。
+      replayTerminal.loadAddon(new Unicode11Addon());
+      replayTerminal.unicode.activeVersion = "11";
+    }
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+function closeReplay() {
+  cancelAnimationFrame(replayRaf);
+  replayPlaying.value = false;
+  replayTerminal?.dispose();
+  replayTerminal = null;
+  replayState.value = null;
+}
+
+function stopReplayLoop() {
+  cancelAnimationFrame(replayRaf);
+  replayPlaying.value = false;
+}
+
+function replayFrame() {
+  const state = replayState.value;
+  if (!state || !replayPlaying.value) return;
+  const elapsed = (performance.now() - replayStartWall) * replaySpeed.value;
+  replayPlayheadMs.value = Math.min(replayDurationMs.value, replayStartPlayhead + elapsed);
+  const target = eventIndexAtTime(replayTimeline, replayPlayheadMs.value);
+  while (replayWriteIndex < target) {
+    replayTerminal?.write(state.events[replayWriteIndex]!.data);
+    replayWriteIndex += 1;
+  }
+  if (replayPlayheadMs.value >= replayDurationMs.value) {
+    stopReplayLoop();
+    return;
+  }
+  replayRaf = requestAnimationFrame(replayFrame);
+}
+
+function toggleReplayPlay() {
+  if (!replayState.value) return;
+  if (replayPlaying.value) {
+    stopReplayLoop();
+    return;
+  }
+  replayStartWall = performance.now();
+  replayStartPlayhead = replayPlayheadMs.value;
+  replayPlaying.value = true;
+  replayRaf = requestAnimationFrame(replayFrame);
+}
+
+function onReplaySeek(event: Event) {
+  const value = Number((event.target as HTMLInputElement).value);
+  if (!Number.isFinite(value) || !replayState.value) return;
+  cancelAnimationFrame(replayRaf);
+  replayPlaying.value = false;
+  replayPlayheadMs.value = value;
+  replayStartPlayhead = value;
+  replayStartWall = performance.now();
+  replayWriteIndex = eventIndexAtTime(replayTimeline, value);
+  replayTerminal?.reset();
+  for (let index = 0; index < replayWriteIndex; index += 1) {
+    replayTerminal?.write(replayState.value.events[index]!.data);
+  }
+}
+
+// GIF 导出管线：离屏 xterm 逐事件重放，按 500ms 事件时间抽帧（封顶 120 帧），
+// 每帧从 xterm 画布取像素 → encodeGif。纯前端，无新依赖。回放弹窗与录制
+// 列表行内按钮共用；调用方负责 replayExporting 状态与错误呈现。
+async function exportRecordingGif(summary: RecordingSummary, events: readonly ReplayEvent[]) {
+  const COLS = 80;
+  const ROWS = 24;
+  const FRAME_INTERVAL_MS = 500;
+  const MAX_FRAMES = 120;
+  const fileName = `${summary.recordingId || "session"}.gif`;
+  // Open the native save picker before the first await so browsers that require
+  // a user gesture keep the permission to choose both directory and filename.
+  // Hosts without File System Access continue through fileTransfer below.
+  let nativeSave: DatawiseGifSaveFileHandle | undefined;
+  if (window.showSaveFilePicker) {
+    try {
+      nativeSave = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        types: [{ description: "GIF image", accept: { "image/gif": [".gif"] } }],
+      });
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      throw cause;
+    }
+  }
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-99999px;top:0;";
+  document.body.appendChild(host);
+  let term: Terminal | null = null;
+  try {
+    term = new Terminal({ cols: COLS, rows: ROWS });
+    term.open(host);
+    // xterm 6 移除了 canvas 渲染器：DOM 渲染器不产出 canvas，逐帧取像素必须
+    // 挂 WebGL renderer。两个此前就存在的坑在此一并修掉：screenElement 下第
+    // 一块 canvas 是链接下划线的 2d renderLayer（透明，querySelector 会抓错），
+    // 真画布按「能取到 webgl2 上下文」选中（getContext 幂等无副作用）；
+    // preserveDrawingBuffer 是 WebglAddon 的构造参数（0.20 beta 起改为 options
+    // 对象；默认 false，关闭时合成后回读全零像素），导出终端显式开启——主终端
+    // 不取像素，维持默认。GPU 被
+    // 禁/context 耗尽挂不上 renderer（DOM 渲染无 canvas）时，走 !screen 分支
+    // 给出 replayExportFailed 明确错误，而不是永远空帧。
+    attachWebglRenderer(term, () => new WebglAddon({ preserveDrawingBuffer: true }));
+    const screen =
+      (Array.from(host.querySelectorAll("canvas")) as HTMLCanvasElement[])
+        .find((c) => c.getContext("webgl2")) ?? null;
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!screen || !context) throw new Error(t("replayExportFailed"));
+    canvas.width = screen.width;
+    canvas.height = screen.height;
+    const timeline = buildTimeline(events, 1);
+    const plan = gifFramePlan(timeline, FRAME_INTERVAL_MS, MAX_FRAMES);
+    const frames: Array<{ rgba: Uint8Array; delayMs: number }> = [];
+    let written = 0;
+    for (const boundary of plan) {
+      while (written < boundary) {
+        term.write(events[written]!.data);
+        written += 1;
+      }
+      // 等两帧渲染再取像素：正常窗口双 rAF 精确等待；标签页被隐藏等场景
+      // rAF 永不回调，用 250ms 定时兜底，导出流程永不悬挂在 Encoding…。
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const settle = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+        requestAnimationFrame(() => requestAnimationFrame(settle));
+        window.setTimeout(settle, 250);
+      });
+      context.drawImage(screen, 0, 0);
+      frames.push({ rgba: new Uint8Array(context.getImageData(0, 0, canvas.width, canvas.height).data), delayMs: FRAME_INTERVAL_MS });
+    }
+    term.dispose();
+    term = null;
+    const gif = encodeGif(canvas.width, canvas.height, frames);
+    if (nativeSave) {
+      const writable = await nativeSave.createWritable();
+      await writable.write(gif);
+      await writable.close();
+    } else if (window.datawisePlugin.fileTransfer) {
+      // Hosts own the native save dialog here, so the user can choose the
+      // destination instead of silently losing the file in an unknown folder.
+      const fileTransfer = window.datawisePlugin.fileTransfer;
+      const target = await fileTransfer.beginSave({ name: fileName, contentType: "image/gif", size: gif.byteLength });
+      try {
+        await fileTransfer.write(target.handleId, 0, gif);
+        await fileTransfer.finish(target.handleId);
+      } catch (cause) {
+        await fileTransfer.cancel(target.handleId).catch(() => undefined);
+        throw cause;
+      }
+      showNotice(t("replayExported"));
+    } else {
+      // 沙箱 iframe（宿主 fileTransfer 缺失）下的可靠路径：sidecar 落盘到
+      // 下载目录（或「每次询问」选择的目录），完成后提示完整路径。
+      // web/docker（sidecar 不在本机）仍回退浏览器 <a download>。
+      const local = await probeLocalCapabilities();
+      if (!local?.canSaveLocal) {
+        saveBrowserDownload([gif], fileName);
+        showNotice(t("replayExported"));
+        return;
+      }
+      let targetDir = "";
+      let setDefaultAfter = false;
+      if (!loadDownloadUseDefaultDir()) {
+        const chosen = await askDownloadTarget(fileName);
+        if (chosen === undefined) return;
+        targetDir = chosen.dir.trim();
+        setDefaultAfter = chosen.setDefault;
+      }
+      const conflict = await resolveDownloadConflictFor(targetDir, fileName);
+      if (conflict === undefined) return;
+      const saved = await window.datawisePlugin.invoke<{ localPath: string; name: string }>("local/saveFile", {
+        name: fileName,
+        dataBase64: window.datawisePlugin.encodeBase64(gif),
+        targetDir: targetDir || loadDownloadDir() || undefined,
+        conflict: conflict === "overwrite" ? "overwrite" : undefined,
+      });
+      const savedPath = saved.localPath;
+      showNotice(t("downloadedTo", { name: saved.name, path: savedPath }), [
+        { label: t("openDownloadedFile"), run: () => void openTransferTarget(savedPath) },
+        { label: t("revealInFolder"), run: () => void revealTransferTarget(savedPath) },
+      ]);
+      if (setDefaultAfter) applyChosenDirAsDefault(targetDir);
+      return;
+    }
+    showNotice(t("replayExported"));
+  } finally {
+    term?.dispose();
+    host.remove();
+  }
+}
+
+async function exportReplayGif() {
+  const state = replayState.value;
+  if (!state || replayExporting.value || !state.events.length) return;
+  replayExporting.value = true;
+  try {
+    await exportRecordingGif(state.summary, state.events);
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    replayExporting.value = false;
+  }
+}
+
+// 列表行内导出：按需拉取事件（回放窗不必先打开），再走同一导出管线。
+async function exportRecordingFromList(item: RecordingSummary) {
+  if (replayExporting.value) return;
+  replayExporting.value = true;
+  recordingExportingId.value = item.recordingId;
+  try {
+    const events = await loadReplayEvents(item.recordingId);
+    if (!events.length) throw new Error(t("replayExportFailed"));
+    await exportRecordingGif(item, events);
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    recordingExportingId.value = null;
+    replayExporting.value = false;
+  }
+}
+
+function formatDuration(secs: number) {
+  const total = Math.max(0, Math.round(secs));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
+}
+
+function formatRecordedAt(startedAt?: number) {
+  if (!startedAt) return "";
+  return new Date(startedAt * 1000).toLocaleString();
+}
+
+onBeforeUnmount(() => {
+  closeOtpPanel();
+  clearBatchResultDismissTimer();
+  cancelAnimationFrame(replayRaf);
+  replayTerminal?.dispose();
+  replayTerminal = null;
+});
+
+async function refreshDiskUsage() {
+  if (!session.value) return;
+  diskUsage.value = await window.datawisePlugin
+    .invoke<DiskUsage>("sftp/diskUsage", { sessionId: session.value.sessionId, path: currentPath.value }, { timeoutMs: 30_000 })
+    .catch(() => undefined);
+}
+
+// 权限矩阵（所有者/属组/其他人 × 读/写/执行）与八进制草稿双向换算：
+// 草稿非法或为空时以 0 为基准，setuid/setgid/sticky 高位原样保留。
+const PERM_ROLES = [
+  { who: 6, key: "permOwner" },
+  { who: 3, key: "permGroup" },
+  { who: 0, key: "permOthers" },
+] as const;
+const PERM_COLUMNS = [
+  { bit: 4, key: "permRead" },
+  { bit: 2, key: "permWrite" },
+  { bit: 1, key: "permExec" },
+] as const;
+
+function draftModeBits(raw: string): number {
+  const text = raw.trim();
+  return /^[0-7]{3,4}$/.test(text) ? parseInt(text, 8) : 0;
+}
+
+function permBit(raw: string, who: number, bit: number): boolean {
+  return Boolean(draftModeBits(raw) & (bit << who));
+}
+
+function applyPermBit(raw: string, who: number, bit: number, on: boolean): string {
+  const bits = draftModeBits(raw);
+  const mode = on ? bits | (bit << who) : bits & ~(bit << who);
+  return `0${mode.toString(8)}`;
+}
+
+function toggleChmodPerm(who: number, bit: number, event: Event) {
+  const input = event.target;
+  if (input instanceof HTMLInputElement) chmodDraft.value = applyPermBit(chmodDraft.value, who, bit, input.checked);
+}
+
+function toggleAttrsPerm(who: number, bit: number, event: Event) {
+  const input = event.target;
+  if (input instanceof HTMLInputElement) attrsMode.value = applyPermBit(attrsMode.value, who, bit, input.checked);
+}
+
+function beginChmod(entry: SftpEntry) {
+  if (!canWrite.value) return;
+  chmodTarget.value = entry;
+  chmodDraft.value = entry.permissions || "";
+  fileMenu.value = undefined;
+}
+
+function openSettings() {
+  settingsOpen.value = true;
+  void probeLocalCapabilities();
+}
+
+function openImportWizard() {
+  closeToolbarPopovers();
+  importOpen.value = true;
+}
+
+function openProfilesManager() {
+  profilesOpen.value = true;
+}
+
+async function confirmChmod() {
+  const entry = chmodTarget.value;
+  const mode = chmodDraft.value.trim();
+  if (!session.value || !entry || !mode) return;
+  chmodSubmitting.value = true;
+  try {
+    if (sudoMode.value) {
+      await window.datawisePlugin.invoke("sudo/chmod", {
+        sessionId: session.value.sessionId,
+        path: pathFromUri(entry.uri),
+        mode,
+      });
+    } else {
+      await window.datawisePlugin.invoke("sftp/chmod", {
+        sessionId: session.value.sessionId,
+        path: pathFromUri(entry.uri),
+        mode,
+      });
+    }
+    chmodTarget.value = undefined;
+    await loadDirectory();
+    showNotice(t("permissionsUpdated"));
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    chmodSubmitting.value = false;
+  }
+}
+
+function onZmodemInput(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  input.value = "";
+  if (!files.length || !connected.value) return;
+  pendingZmodemFiles = files;
+  zmodemState.value = "waiting";
+  zmodemFileName.value = files[0]?.name || "";
+  zmodemTransferred.value = 0;
+  zmodemTotalSize.value = files.reduce((sum, file) => sum + file.size, 0);
+  resetZmodemSentry();
+  sendTerminalBytes(new TextEncoder().encode("rz\r"));
+  zmodemDetectionTimer = window.setTimeout(() => finishZmodemUpload(new Error(t("zmodemNotAvailable"))), ZMODEM_DETECTION_TIMEOUT_MS);
+}
+
+function showTerminalMenu(event: MouseEvent) {
+  // Xshell 取向：有选区 / Shift / 关闭选中粘贴 → 完整菜单；
+  // 选中复制开启且空白处右键 → 快捷粘贴（SecureCRT 习惯，可关）。
+  // 粘贴分支必须 preventDefault：reka 触发器据此跳过开菜单（同时也压住系统菜单）；
+  // 菜单分支不能 preventDefault，否则 reka ContextMenuTrigger 不会打开。
+  const hasSelection = !!terminal?.hasSelection();
+  if (
+    resolveTerminalRightClickAction({
+      selectCopy: termSelectCopy.value,
+      shiftKey: event.shiftKey,
+      hasSelection,
+    }) === "paste"
+  ) {
+    event.preventDefault();
+    terminalMenuOpen.value = false;
+    fileMenu.value = undefined;
+    void pasteTerminal();
+    return;
+  }
+  terminalMenuOpen.value = true;
+  fileMenu.value = undefined;
+}
+
+function showFileMenu(event: MouseEvent, entry: SftpEntry) {
+  // 不再 preventDefault/stopPropagation：事件要冒泡到包裹 .file-rows 的
+  // ContextMenuTrigger 完成定位与打开；空白区与行共用同一菜单根，由容器处理器
+  // onFileAreaContextMenu 按事件目标区分（行内目标直接返回）。
+  selectedPath.value = entry.uri;
+  fileMenu.value = {
+    entry,
+    selection: [...selectedUris.value],
+  };
+  terminalMenuOpen.value = false;
+  blankMenu.value = false;
+  sideMenu.value = undefined;
+  transferHistoryMenu.value = undefined;
+}
+
+function showTransferHistoryMenu(event: MouseEvent, entry: TransferHistoryEntry) {
+  // 浏览器下载、上传及旧记录都可能没有可验证的本机路径：拦截系统菜单与
+  // reka 触发器（preventDefault 后 reka 跳过打开），但不展示无效操作。
+  if (!entry.localPath) {
+    event.preventDefault();
+    transferHistoryMenu.value = undefined;
+    return;
+  }
+  transferHistoryMenu.value = { taskId: entry.taskId };
+  terminalMenuOpen.value = false;
+  fileMenu.value = undefined;
+  blankMenu.value = false;
+  sideMenu.value = undefined;
+}
+
+/**
+ * 工具栏弹出层互斥族统一收口（round2：收敛五处 + 三处模板内联的手抄互斥清单）。
+ * 打开任一同族弹出层前调用，先关掉全部兄弟弹出层与右键菜单，再由各 toggle
+ * 设定自身状态。族成员 = 模板 class="popover" 的九个弹出层（quick-commands /
+ * agent-mode / highlight-rules / connection-info / columns / transfer /
+ * batch-targets / bookmark-save / path-history）。语义差异说明：metrics 浮层
+ * （.metrics-float，closeMetrics 自带轮询清理）与批量保存态（batchSaveMode，
+ * cancelBatchBarSave 带草稿清理）不属于本族，仍由 Esc 链单独收口；
+ * batch-targets 弹层另有 mousedown-capture 点空白收起，此处再关一次幂等无害。
+ */
+function closeToolbarPopovers() {
+  fileMenu.value = undefined;
+  terminalMenuOpen.value = false;
+  transferHistoryMenu.value = undefined;
+  transferPanelOpen.value = false;
+  columnsOpen.value = false;
+  pathHistoryOpen.value = false;
+  quickMenuOpen.value = false;
+  connectionInfoOpen.value = false;
+  agentModeOpen.value = false;
+  highlightMenuOpen.value = false;
+  bookmarkSaveOpen.value = false;
+  batchTargetsOpen.value = false;
+  batchQuickPickOpen.value = false;
+}
+
+function closeMenus() {
+  terminalMenuOpen.value = false;
+  fileMenu.value = undefined;
+  blankMenu.value = false;
+  sideMenu.value = undefined;
+  transferHistoryMenu.value = undefined;
+  closeToolbarPopovers();
+}
+
+/** document click 收口：reka 菜单/弹层内容 portal 到 body，内部点击会冒泡到
+ *  document——旧实现面板上有 @click.stop，内部点击从不触发这里的清扫，保持语义一致。 */
+function onDocumentClickCloseMenus(event: MouseEvent) {
+  if ((event.target as HTMLElement | null)?.closest?.('[data-slot="context-menu-content"], [data-slot="popover-content"]')) return;
+  closeMenus();
+}
+
+/** 多选批量：复制所选路径（换行拼接写入剪贴板）。 */
+function copySelectedPaths() {
+  const menu = fileMenu.value;
+  fileMenu.value = undefined;
+  if (!menu) return;
+  const uris = menu.selection.length ? menu.selection : [menu.entry.uri];
+  copyTextToClipboard(uris.map((uri) => pathFromUri(uri)).join("\n"), "sftpCopy.copiedPaths", { count: uris.length });
+}
+
+/**
+ * 弹层焦点管理（P1-2）：打开时焦点进入弹层首控件、关闭后归还触发元素。
+ * 原生 autofocus 在 Vue 动态插入时不生效，改为显式驱动；Tab 圈定已移交
+ * reka Dialog 的 FocusScope（Phase 6），Esc 关闭链沿用下方
+ * onDocumentKeydown 的分层退出。
+ */
+// 触发元素栈：与弹层嵌套深度同步 push/pop。右键菜单项这类"打开弹层后自身
+// 随菜单卸载"的触发元素无法承接归还焦点，逐层弹出时跳过已断连元素。
+const modalTriggerStack: HTMLElement[] = [];
+// 弹层外最近聚焦的稳定元素：右键菜单项属瞬态控件（点击打开弹层后随菜单
+// 卸载，无法承接归还焦点），归还目标回退到菜单打开前的焦点宿主；
+// 弹层内聚焦不覆盖该记录。
+let lastStableFocus: HTMLElement | null = null;
+// 幽灵点击守卫（R3-P1-1）：焦点归还后短窗内拦截无 mousedown 前驱的合成
+// click；决策逻辑走 ghostClickGuard 纯模块（有单测），真实鼠标点击放行。
+const ghostClickGuard = createGhostClickGuard();
+function onDocumentMouseDownCapture(event: MouseEvent) {
+  ghostClickGuard.noteMouseDown();
+  // 批量目标/高亮规则两个 popover 的点空白收起已移交 reka DismissableLayer
+  // （pointerdown-outside → update:open(false)），capture 手动清扫移除。
+}
+function onDocumentClickCapture(event: MouseEvent) {
+  if (!ghostClickGuard.shouldSuppress()) return;
+  event.preventDefault();
+  event.stopPropagation();
+}
+function trackStableFocus(event: FocusEvent) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (target.closest('[data-slot="dialog-content"]') || target.closest('[data-slot="context-menu-content"]')) return;
+  lastStableFocus = target;
+}
+// 与 Esc 关闭链同源的弹层在开状态（hostKey/agent 审批属安全弹窗：
+// 参与聚焦与 Tab 陷阱，但不参与 Esc 关闭）。按模板出现顺序排列，
+// 计数变化驱动聚焦/归还；同层互斥由交互保证。
+const modalOpenStates = computed(() => [
+  folderPickerTarget.value !== null,
+  previewOpen.value,
+  multiPreviewOpen.value,
+  customEditorOpen.value,
+  watchModifiedQueue.value.length > 0,
+  pasteConfirm.value,
+  dropUploadPrompt.value,
+  downloadPrompt.value !== null,
+  downloadConflictPrompt.value !== null,
+  attrsTarget.value,
+  deleteTarget.value,
+  batchDeleteOpen.value,
+  recordingDeleteTarget.value !== null,
+  recordingClearAllOpen.value,
+  transferHistoryClearOpen.value,
+  quickDeleteTarget.value !== null,
+  quickDeleteConnectionTarget.value !== null,
+  chmodTarget.value,
+  newFileDialog.value,
+  operationDialog.value,
+  commandOpen.value,
+  profilesOpen.value,
+  auditOpen.value,
+  auditClearOpen.value,
+  settingsOpen.value,
+  alertTriageOpen.value,
+  hostKeyPrompt.value,
+  agentPromptHead.value,
+  dockerConfirm.value !== null,
+]);
+const modalOpenCount = computed(() => modalOpenStates.value.filter(Boolean).length);
+
+/** 当前最顶层弹层容器；无弹层时返回 null（嵌套时取首个命中即最外层——焦点回落语义）。 */
+function topModalContainer(): HTMLElement | null {
+  if (!modalOpenCount.value) return null;
+  return document.querySelector<HTMLElement>('[data-slot="dialog-content"]');
+}
+
+function focusTopModal() {
+  pickModalFocusTarget(topModalContainer())?.focus({ preventScroll: true });
+}
+
+watch(modalOpenCount, (count, previous) => {
+  if (count > previous) {
+    // 打开：整组从无到有时记录触发元素供关闭归还；嵌套打开（如命令
+    // 对话框上叠粘贴确认）逐层入栈。触发元素优先取"弹层外稳定焦点"，
+    // 避免抓到已随右键菜单卸载的菜单项。
+    for (let i = previous; i < count; i++) {
+      modalTriggerStack.push(lastStableFocus ?? document.body);
+    }
+    void nextTick(focusTopModal);
+    return;
+  }
+  if (!count) {
+    // 全部关闭：焦点归还触发按钮；触发元素已随右键菜单等卸载时逐层回退，
+    // 找不到任何在档元素则落回 BODY（无焦点宿主可还）。
+    while (modalTriggerStack.length) {
+      const trigger = modalTriggerStack.pop()!;
+      if (trigger.isConnected) {
+        // 幽灵点击守卫（R3-P1-1）：键盘 Enter 提交后归还焦点的瞬间，浏览器
+        // 会在刚聚焦的按钮上派发一次无 mousedown 的合成 click 并重开弹层；
+        // 短窗内拦截该 click，纯键盘流一次 Enter 即成功关闭。
+        ghostClickGuard.arm();
+        trigger.focus({ preventScroll: true });
+        break;
+      }
+    }
+    return;
+  }
+  // 内层弹层关闭、外层仍在：焦点回落外层弹层首控件。
+  void nextTick(focusTopModal);
+});
+
+/**
+ * Esc 关闭链（一次按键关一层）：预览 > 对话框 > 右键菜单 > 工具栏弹出层。
+ * 逐层 if-return：无内容打开时按键穿透，不影响终端内 vim 等自身 Esc 语义。
+ */
+function onDocumentKeydown(event: KeyboardEvent) {
+  // Tab 焦点陷阱已移交 reka Dialog 的 FocusScope（每个弹层独立圈定，嵌套时顶层
+  // 生效）；此处不再拦截 Tab。注意 FocusScope 的 keydown 挂在内容元素上，冒泡先于
+  // 本 document 处理器，若恢复自制陷阱会与 reka 双步进，勿回退。
+  if (event.key === "Tab") return;
+  if (event.key !== "Escape") return;
+  // reka Select/ContextMenu/Popover 弹层打开时 Esc 由 reka 消费（关弹层），不落入下方
+  // 弹窗关闭链。本处理器注册早于 DismissableLayer，先跑时弹层 DOM 仍在。
+  if (document.querySelector('[data-slot="select-content"], [data-slot="context-menu-content"], [data-slot="popover-content"]')) return;
+  // 录制倒计时优先取消（遮罩在终端区，不属于弹层体系）。
+  if (isCountdownActive(recordCountdown.value)) {
+    cancelRecordCountdown();
+    return;
+  }
+  if (previewOpen.value) {
+    closePreview();
+    return;
+  }
+  if (multiPreviewOpen.value) {
+    closeMultiFormatPreview();
+    return;
+  }
+  if (customEditorOpen.value) {
+    customEditorOpen.value = false;
+    return;
+  }
+  if (watchModifiedQueue.value.length > 0) {
+    dismissWatchModified();
+    return;
+  }
+  // ---- 对话框（安全取消语义；hostKey/agent 审批等安全弹窗不在此列）----
+  if (folderPickerTarget.value) {
+    folderPickerTarget.value = null;
+    return;
+  }
+  if (pasteConfirm.value) {
+    resolvePasteConfirm(false);
+    return;
+  }
+  if (dropUploadPrompt.value) {
+    resolveDropUpload("cancel");
+    return;
+  }
+  if (downloadPrompt.value) {
+    resolveDownloadPrompt(undefined);
+    return;
+  }
+  if (downloadConflictPrompt.value) {
+    resolveDownloadConflict(undefined);
+    return;
+  }
+  if (attrsTarget.value) {
+    closeAttributes();
+    return;
+  }
+  if (deleteTarget.value) {
+    deleteTarget.value = undefined;
+    return;
+  }
+  if (batchDeleteOpen.value) {
+    if (!batchDeleteSubmitting.value) batchDeleteOpen.value = false;
+    return;
+  }
+  if (recordingDeleteTarget.value) {
+    if (!recordingDeleteSubmitting.value) recordingDeleteTarget.value = null;
+    return;
+  }
+  if (recordingClearAllOpen.value) {
+    if (!recordingClearAllSubmitting.value) recordingClearAllOpen.value = false;
+    return;
+  }
+  if (transferHistoryClearOpen.value) {
+    transferHistoryClearOpen.value = false;
+    return;
+  }
+  if (quickDeleteTarget.value) {
+    if (!quickDeleteSubmitting.value) quickDeleteTarget.value = null;
+    return;
+  }
+  if (quickDeleteConnectionTarget.value) {
+    if (!quickDeleteConnectionSubmitting.value) quickDeleteConnectionTarget.value = null;
+    return;
+  }
+  if (chmodTarget.value) {
+    chmodTarget.value = undefined;
+    return;
+  }
+  if (newFileDialog.value) {
+    newFileDialog.value = false;
+    return;
+  }
+  if (operationDialog.value) {
+    operationDialog.value = null;
+    return;
+  }
+  if (commandOpen.value) {
+    commandOpen.value = false;
+    return;
+  }
+  if (alertTriageOpen.value) {
+    alertTriageOpen.value = false;
+    return;
+  }
+  if (profilesOpen.value) {
+    profilesOpen.value = false;
+    return;
+  }
+  if (auditOpen.value) {
+    if (auditClearOpen.value) {
+      if (!auditClearSubmitting.value) auditClearOpen.value = false;
+      return;
+    }
+    auditOpen.value = false;
+    return;
+  }
+  if (importOpen.value) {
+    importOpen.value = false;
+    return;
+  }
+  if (settingsOpen.value) {
+    // 内联 profile 管理（设置弹窗内）沿用 profilesOpen→settingsOpen 的逐层
+    // 退出语义：先关编辑表单，再收起配置档 section，最后关弹窗
+    // （表单/section 状态在 SettingsDialog 内部，经组件实例询问是否已消费）。
+    if (settingsDialog.value?.consumeInlineEsc()) return;
+    // 关窗前落盘：本机偏好即时写、连接设置一并 flush，避免只改不点「保存」就丢。
+    event.preventDefault();
+    event.stopPropagation();
+    const dialog = settingsDialog.value;
+    void (async () => {
+      try {
+        await dialog?.flushSettings?.();
+      } finally {
+        settingsOpen.value = false;
+      }
+    })();
+    return;
+  }
+  // 右键菜单与九个工具栏 popover 均已迁移 reka（ContextMenu/Popover）：Esc 与外点
+  // 由 reka 自行消费（见上方 content 守卫），不再占 Esc 链一层。本层只剩
+  // 指标浮层（.metrics-float 非 reka）与批量保存态（带草稿清理）。
+  if (historyPanelOpen.value) {
+    closeHistoryPanel(true);
+    return;
+  }
+  if (otpOpen.value) {
+    closeOtpPanel();
+    return;
+  }
+  if (metricsOpen.value || dockerOpen.value || assetsOpen.value || batchSaveMode.value) {
+    if (batchSaveMode.value) cancelBatchBarSave();
+    if (metricsOpen.value) closeMetrics();
+    if (dockerOpen.value) closeDocker();
+    if (assetsOpen.value) closeAssets();
+  }
+}
+
+function openTransferPanel() {
+  // 右键菜单项打开：菜单项自身随后卸载，互斥族统一收口后再开面板。
+  closeToolbarPopovers();
+  transferPanelOpen.value = true;
+}
+
+function pathFromUri(uri: string) {
+  return uri.replace(/^sftp:/, "") || "/";
+}
+
+function normalizeRemotePath(path: string) {
+  let value = path.trim() || "/";
+  try { value = decodeURIComponent(value); } catch {}
+  if (!value.startsWith("/")) value = `/${value}`;
+  value = value.replace(/\/{2,}/g, "/");
+  return value === "/" ? value : value.replace(/\/+$/, "");
+}
+
+function joinRemote(parent: string, name: string) {
+  return `${parent === "/" ? "" : parent.replace(/\/+$/, "")}/${name.replace(/^\/+/, "")}`;
+}
+
+function parentPath(path: string) {
+  const normalized = path.replace(/\/+$/, "");
+  const index = normalized.lastIndexOf("/");
+  return index <= 0 ? "/" : normalized.slice(0, index);
+}
+
+function formatUptime(seconds: number) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days >= 1) return t("uptimeDays", { count: days, hours });
+  if (hours >= 1) return t("uptimeHours", { count: hours, minutes });
+  return t("uptimeMinutes", { count: minutes });
+}
+
+function formatModified(value?: number) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat(locale.value, { dateStyle: "short", timeStyle: "short" }).format(new Date(value * 1000));
+}
+
+function transferPercent(task: TransferTask) {
+  return task.size > 0 ? Math.min(100, Math.round((task.transferred / task.size) * 100)) : task.status === "completed" ? 100 : 0;
+}
+
+/** staging 阶段进度条走不定态（推送计数尚未开始），uploading 用真实百分比。 */
+function transferBarValue(task: TransferTask): number | undefined {
+  return task.phase === "staging" ? undefined : transferPercent(task);
+}
+
+/** staging 行展示的字节数：spool 进度；其余阶段是已推送/已接收计数。 */
+function transferShownBytes(task: TransferTask): number {
+  return task.phase === "staging" ? task.staged ?? 0 : task.transferred;
+}
+
+/** 精确字节数 tooltip：化解 5.9GB(十进制) vs 5.49GiB(二进制) 的口径困惑（issue #60）。 */
+function transferBytesTitle(task: TransferTask): string | undefined {
+  if (!(task.size > 0)) return undefined;
+  return `${transferShownBytes(task).toLocaleString()} / ${task.size.toLocaleString()} bytes`;
+}
+
+function readU64(bytes: Uint8Array, offset: number) {
+  return Number(new DataView(bytes.buffer, bytes.byteOffset + offset, 8).getBigUint64(0, false));
+}
+
+function writeU64(bytes: Uint8Array, offset: number, value: number) {
+  new DataView(bytes.buffer, bytes.byteOffset + offset, 8).setBigUint64(0, BigInt(value), false);
+}
+
+async function waitForHostApi(timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!window.datawisePlugin && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+  if (!window.datawisePlugin) throw new Error(t("hostApiUnavailable"));
+  return window.datawisePlugin;
+}
+
+/** Read connection context seeded on the iframe URL (Host uiUrl / bootstrap). */
+function readContextFromUrl(): Record<string, unknown> {
+  try {
+    const q = new URLSearchParams(location.search || "");
+    const out: Record<string, unknown> = {};
+    const cid = q.get("dwConnectionId");
+    const wid = q.get("dwWorkbenchId");
+    if (cid) out.connectionId = cid;
+    if (wid) out.workbenchId = wid;
+    const raw = q.get("dwContext");
+    if (raw) {
+      const parsed = JSON.parse(decodeURIComponent(escape(atob(raw)))) as Record<string, unknown>;
+      if (parsed && typeof parsed === "object") Object.assign(out, parsed, out);
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function mergeHostContext(...parts: Array<Record<string, unknown> | null | undefined>): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  for (const part of parts) {
+    if (!part || typeof part !== "object") continue;
+    Object.assign(merged, part);
+    const conn = part.connection;
+    if (conn && typeof conn === "object" && !Array.isArray(conn)) {
+      merged.connection = {
+        ...((merged.connection && typeof merged.connection === "object")
+          ? (merged.connection as Record<string, unknown>)
+          : {}),
+        ...(conn as Record<string, unknown>),
+      };
+    }
+  }
+  const connectionId = normalizeConnectionText(merged.connectionId)
+    || normalizeConnectionText((merged.connection as { id?: unknown } | undefined)?.id);
+  if (connectionId) merged.connectionId = connectionId;
+  return merged;
+}
+
+/** Wait until host env/context carries connectionId (boot can race the first env push). */
+async function waitForHostContext(
+  api: NonNullable<typeof window.datawisePlugin>,
+  timeoutMs = 10000,
+) {
+  const deadline = Date.now() + timeoutMs;
+  const urlSeed = readContextFromUrl();
+  const read = async () => {
+    let fromRequest: Record<string, unknown> = {};
+    try {
+      const result = await api.request<Record<string, unknown>>("host.getContext", {}, { timeoutMs: 2000 });
+      if (result && typeof result === "object") fromRequest = result;
+    } catch {
+      // fall through to api.context / ready
+    }
+    const fromApi = (api.context && typeof api.context === "object" ? api.context : {}) as Record<string, unknown>;
+    return mergeHostContext(urlSeed, fromApi, fromRequest);
+  };
+  while (Date.now() < deadline) {
+    // Prefer a fresh host.getContext; also observe ready/env side effects on api.context.
+    void api.ready.catch(() => undefined);
+    const ctx = await read();
+    hostContext.value = ctx;
+    if (normalizeConnectionText(ctx.connectionId)) return ctx;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  const last = await read();
+  hostContext.value = last;
+  return last;
+}
+
+async function initialize() {
+  const api = await waitForHostApi();
+  await waitForHostContext(api);
+  transportReuseState = createSessionTransportReuseState(hostContext.value);
+  locale.value = api.locale || "zh-CN";
+  restoreUiState();
+  // Neutral host intent (plugin-center "browse files" → reveal-files).
+  const bootIntent = hostContext.value.intent;
+  if (bootIntent && typeof bootIntent === "object" && (bootIntent as { action?: string }).action === "reveal-files") {
+    sftpPaneOpen.value = true;
+  }
+  const appearanceAppliedAtBoot = Boolean(api.appearance || api.theme);
+  if (api.appearance) applyAppearance(api.appearance);
+  else if (isHostPluginTheme(api.theme)) applyAppearance(themeToAppearance(api.theme));
+  // 宿主可能在 init 前先应答 host.getContext（如重推连接期间 init 被延迟）：
+  // 此时 api.locale/appearance 仍是 bootstrap 默认值。init 落地后重读一次，
+  // 否则会话会停在默认英文/默认主题。ready 已解决时 then 立即执行，是幂等重读。
+  void api.ready.then(() => {
+    if (api.locale) locale.value = api.locale;
+    if (!appearanceAppliedAtBoot) {
+      if (api.appearance) applyAppearance(api.appearance);
+      else if (isHostPluginTheme(api.theme)) applyAppearance(themeToAppearance(api.theme));
+    }
+  });
+  unsubscribeAppearance = api.onAppearanceChange?.(applyAppearance);
+  // appearance 契约缺失（当前 1.1 桥只推 theme）时订阅 env 主题推送，两套不同时挂。
+  if (!unsubscribeAppearance) unsubscribeTheme = onHostThemeChange((theme) => applyAppearance(themeToAppearance(theme)));
+  unsubscribeLocale = api.onLocaleChange?.((nextLocale) => (locale.value = nextLocale || "zh-CN"));
+  unsubscribeContext = api.onContextChange?.((context) => {
+    hostContext.value = context;
+    // Plugin center may ask to reveal the files pane via neutral intent.
+    const intent = context && typeof context === "object" ? (context as { intent?: { action?: string } }).intent : undefined;
+    if (intent?.action === "reveal-files") {
+      sftpPaneOpen.value = true;
+    }
+  });
+  unsubscribeEvent = api.onEvent(handleEvent);
+  unsubscribeBinary = api.onBinary(handleBinary);
+  // Workspace tab activate leaves focus on the tab button; host posts focus and
+  // we move it into xterm so Enter goes to the PTY, not the tab strip.
+  unsubscribeFocus = api.onFocus?.(() => {
+    setWorkbenchActive(true);
+    flushTerminalOutputNow();
+    terminal?.focus();
+  });
+  unsubscribeActive = api.onActive?.((active) => {
+    setWorkbenchActive(active);
+    if (active) terminal?.focus();
+  });
+  if (typeof api.active === "boolean") workbenchActive = api.active;
+  unsubscribeFileDrag = api.fileTransfer?.onDragState((active) => (dragActive.value = active));
+  unsubscribeFileDrop = api.fileTransfer?.onDrop((files) => {
+    dragActive.value = false;
+    void uploadHandleFiles(files).then(() => loadDirectory()).catch(showError);
+  });
+  await nextTick();
+  createTerminal();
+  if (!connectionId.value || !workbenchId.value) {
+    // Plugin-center cold open without a saved connection used to throw here.
+    // Host now prefers connect-or-new-connection; keep a soft fallback if a bare tab still lands.
+    terminalState.value = "disconnected";
+    terminalError.value = t("errors.hostBridgeMissing");
+    connectLogsOpen.value = true;
+    connectLog.push("error", t("errors.hostBridgeMissing"));
+    return;
+  }
+  connectLogsOpen.value = true;
+  // Attempt rows are pushed by openSession/attachSession — do not pre-log here
+  // (that duplicated "第 1 次尝试" before the real open).
+  const state = initialState();
+  if (restored.value) {
+    terminalState.value = "disconnected";
+    terminalError.value = t("restartDisconnected");
+    return;
+  }
+  if (typeof state.sessionId === "string" && state.sessionId) await attachSession(state.sessionId);
+  else {
+    // 宿主切 tab / 左侧菜单重开可能整体重建工作台 webview。只恢复
+    // 同一 workbench 的 live session；不能按 connectionId 复用任意会话，
+    // 否则打开同一连接的新 Tab 会接管已有 Tab 的 PTY。
+    const reattach = await findReattachSession();
+    if (reattach) await attachSession(reattach, reattach);
+    // bootRestore: 宿主启动恢复 tab 时会异步重放 connect（见 queryStore
+    // reconnectRestoredPluginTabs），首个 ssh/session/open 可能先于它落地，
+    // inactive 错误在该路径下参与有界重试。
+    else await openSession(false, true);
+  }
+}
+
+/**
+ * Asks the sidecar for the live session bound to this workbench and connection
+ * (sidecar `ssh/sessions/list`); "" when none — caller dials a fresh session.
+ * Failures degrade to a fresh open instead of blocking the workbench.
+ */
+async function findReattachSession(): Promise<string> {
+  try {
+    const result = await window.datawisePlugin.invoke<{ sessions?: SessionSummary[] }>("ssh/sessions/list", {}, { timeoutMs: 10_000 });
+    return pickLiveSessionForReattach(result?.sessions, { connectionId: connectionId.value, workbenchId: workbenchId.value });
+  } catch {
+    return "";
+  }
+}
+
+watch([splitRatio, paneOrder, sftpPaneOpen, followDirectory, sudoMode, visibleColumns], persistState, { deep: true });
+
+onMounted(() => {
+  document.addEventListener("click", onDocumentClickCloseMenus);
+  document.addEventListener("click", onDocumentClickCapture, true);
+  document.addEventListener("mousedown", onDocumentMouseDownCapture, true);
+  document.addEventListener("keydown", onDocumentKeydown);
+  document.addEventListener("focusin", trackStableFocus);
+  document.addEventListener("mouseover", onTooltipOver);
+  document.addEventListener("mouseout", onTooltipOut);
+  document.addEventListener("focusin", onTooltipFocusIn);
+  document.addEventListener("focusout", onTooltipFocusOut);
+  document.addEventListener("pointerdown", hideTooltip, true);
+  document.addEventListener("wheel", hideTooltip, true);
+  // JCEF may park rAF while the tab is hidden; force any coalesced PTY bytes
+  // out as soon as the workbench is visible / focused again.
+  document.addEventListener("visibilitychange", flushTerminalOutputNow);
+  window.addEventListener("focus", flushTerminalOutputNow);
+  window.addEventListener("pageshow", flushTerminalOutputNow);
+  hostFontObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+  void hydrateQuickCommands();
+  void hydrateHighlightRules();
+  void hydratePrefs();
+  // After first paint: expand Tabby scheme catalog so saved scheme ids resolve.
+  void ensureBuiltinSchemeCatalog().then(() => applyTerminalAppearance());
+  void initialize().catch((cause) => {
+    terminalState.value = "error";
+    showError(cause, "terminal");
+  });
+});
+
+onBeforeUnmount(() => {
+  disposed = true;
+  document.removeEventListener("visibilitychange", flushTerminalOutputNow);
+  window.removeEventListener("focus", flushTerminalOutputNow);
+  window.removeEventListener("pageshow", flushTerminalOutputNow);
+  document.removeEventListener("mouseover", onTooltipOver);
+  document.removeEventListener("mouseout", onTooltipOut);
+  document.removeEventListener("focusin", onTooltipFocusIn);
+  document.removeEventListener("focusout", onTooltipFocusOut);
+  document.removeEventListener("pointerdown", hideTooltip, true);
+  document.removeEventListener("wheel", hideTooltip, true);
+  hostFontObserver.disconnect();
+  hideTooltip();
+  window.clearTimeout(persistTimer);
+  window.clearInterval(recordCountdownTimer);
+  void writeWorkbenchState();
+  if (dockerResizing) {
+    document.body.classList.remove("resizing-docker");
+    document.removeEventListener("pointermove", onDockerPanelResizeMove);
+    document.removeEventListener("pointerup", onDockerPanelResizeEnd);
+    document.removeEventListener("pointercancel", onDockerPanelResizeEnd);
+    dockerResizing = null;
+  }
+  window.clearTimeout(resizeTimer);
+  window.clearTimeout(reconnectTimer);
+  window.clearInterval(reconnectCountdownTimer);
+  window.clearTimeout(zmodemDetectionTimer);
+  window.clearTimeout(trzszDetectionTimer);
+  window.clearTimeout(trzszWatchdogTimer);
+  window.clearTimeout(trzszOverlayTimer);
+  trzszFilter?.stopTransferringFiles();
+  trzszFilter = null;
+  window.clearTimeout(zoomNoticeTimer);
+  window.clearTimeout(batchBroadcastTimer);
+  window.clearInterval(metricsTimer);
+  stopCommandMarkerTick();
+  stopAgentPromptTimer();
+  resolvePasteConfirm(false);
+  if (terminalHost.value) {
+    if (terminalPasteHandler) terminalHost.value.removeEventListener("paste", terminalPasteHandler, true);
+    if (terminalWheelHandler) terminalHost.value.removeEventListener("wheel", terminalWheelHandler, true);
+    if (terminalMouseDownHandler) terminalHost.value.removeEventListener("mousedown", terminalMouseDownHandler);
+    if (terminalMouseUpHandler) terminalHost.value.removeEventListener("mouseup", terminalMouseUpHandler);
+  }
+  document.removeEventListener("click", onDocumentClickCloseMenus);
+  document.removeEventListener("click", onDocumentClickCapture, true);
+  document.removeEventListener("mousedown", onDocumentMouseDownCapture, true);
+  document.removeEventListener("keydown", onDocumentKeydown);
+  document.removeEventListener("focusin", trackStableFocus);
+  unsubscribeEvent?.();
+  unsubscribeBinary?.();
+  unsubscribeAppearance?.();
+  unsubscribeTheme?.();
+  unsubscribeLocale?.();
+  unsubscribeContext?.();
+  unsubscribeFocus?.();
+  unsubscribeActive?.();
+  unsubscribeFileDrag?.();
+  unsubscribeFileDrop?.();
+  deferredTerminalChunks.length = 0;
+  deferredTerminalBytes = 0;
+  resizeObserver?.disconnect();
+  for (const disposable of oscColorQueryDisposables) disposable.dispose();
+  oscColorQueryDisposables = [];
+  osc52Disposable?.dispose();
+  osc52Disposable = undefined;
+  disposeInput?.dispose();
+  disposeWriteParsed?.dispose();
+  disposeSelectionCopy?.dispose();
+  terminalWriteThrottle.dispose();
+  detachHighlightRender();
+  terminal?.dispose();
+  for (const waiter of uploadAckWaiters.values()) {
+    window.clearTimeout(waiter.timer);
+    waiter.reject(new Error(t("errors.workbenchDetached")));
+  }
+  for (const waiter of downloadChunkWaiters.values()) {
+    window.clearTimeout(waiter.timer);
+    waiter.reject(new Error(t("errors.workbenchDetached")));
+  }
+  // KeepAlive 保活：切 tab 不会卸载；关 tab / 缓存淘汰才会走到这里。
+  // 侧车会话主要由 Host workbench/close + workspace.closeTab 回收。
+});
+</script>
+
+<template>
+  <main class="workbench">
+    <header class="toolbar" :style="toolbarStyle">
+      <!-- 连接信息入口：Info 图标按钮紧跟标识区（状态徽章右侧），弹层左对齐锚定 -->
+      <div class="identity-side">
+        <div class="identity">
+          <span v-if="connection.color" class="connection-color" :style="{ backgroundColor: connection.color }" />
+          <strong>{{ connectionIdentity }}</strong>
+          <span v-if="connection.readOnly || connectionReadOnly" class="read-only-badge">{{ t("readOnly") }}</span>
+          <span class="session-pill" :class="`session-${sessionStatus}`"><span class="session-dot" aria-hidden="true" />{{ t(`sessionStatus.${sessionStatus}`) }}<span v-if="sessionStatus === 'reconnecting' && reconnectCountdown" class="session-pill-countdown mono">{{ t("sessionStatus.reconnectCountdown", { seconds: reconnectCountdown.seconds, attempt: reconnectCountdown.attempt }) }}</span></span>
+        </div>
+        <Popover :open="connectionInfoOpen" @update:open="(open) => { if (!open) connectionInfoOpen = false; }">
+          <PopoverAnchor as-child>
+            <button type="button" class="icon-button icon-neutral" :title="t('connectionInfo')" :aria-expanded="connectionInfoOpen" @click.stop="toggleConnectionInfo"><Info /></button>
+          </PopoverAnchor>
+          <PopoverContent class="popover connection-info-popover" align="start" :side-offset="5">
+          <h3>{{ t("connectionInfo") }}</h3>
+          <dl class="connection-info-grid">
+            <dt>{{ t("connectionInfoHost") }}</dt><dd class="mono"><span v-if="metricsDistroBadge" class="distro-badge" :style="{ backgroundColor: metricsDistroBadge.color }" :title="metricsDistroBadge.name">{{ metricsDistroBadge.label }}</span> {{ connection.host || connection.name || "–" }}</dd>
+            <dt>{{ t("connectionInfoPort") }}</dt><dd class="mono">{{ connection.port || 22 }}</dd>
+            <dt>{{ t("connectionInfoUser") }}</dt><dd class="mono">{{ connection.username || "–" }}</dd>
+            <dt>{{ t("connectionInfoAuth") }}</dt><dd>{{ connectionAuthMethodLabel }}</dd>
+            <template v-if="connection.readOnly || connectionReadOnly"><dt>{{ t("readOnly") }}</dt><dd>{{ t("yes") }}</dd></template>
+            <dt>{{ t("connectionInfoLatency") }}</dt>
+            <dd>
+              <span class="mono">{{ connectionLatencyBusy ? t("connectionInfoMeasuring") : formatLatency(connectionLatency) }}</span>
+              <span v-if="connectionLatencyFailed && !connectionLatencyBusy" class="task-error">{{ t("connectionInfoFailed") }}</span>
+              <button class="link-button" :disabled="connectionLatencyBusy || !connected" @click="measureLatency">{{ t("connectionInfoMeasure") }}</button>
+            </dd>
+          </dl>
+          </PopoverContent>
+        </Popover>
+      </div>
+      <div class="toolbar-actions">
+        <button class="icon-button icon-neutral" :title="paneOrder === 'terminal-left' ? t('moveSftpLeft') : t('moveTerminalLeft')" @click="togglePaneOrder"><ArrowLeftRight /></button>
+        <button class="icon-button icon-cyan" :class="{ 'is-active': sftpPaneOpen }" :title="sftpPaneOpen ? t('sftpPane.close') : t('sftpPane.open')" :aria-pressed="sftpPaneOpen" @click="toggleSftpPane"><FolderOpen v-if="!sftpPaneOpen" /><PanelRightClose v-else /></button>
+        <button class="icon-button" :title="t('terminalFontDecrease')" @click="adjustTerminalZoom(-1)"><span class="font-step-label" aria-hidden="true">A−</span></button>
+        <button class="icon-button" :title="t('terminalFontIncrease')" @click="adjustTerminalZoom(1)"><span class="font-step-label" aria-hidden="true">A+</span></button>
+        <button class="icon-button icon-emerald" :title="t('newSessionTab')" :disabled="!connectionId" @click="openNewSessionTab"><SquarePlus /></button>
+        <button class="icon-button icon-emerald" :title="t('copySessionTab')" :disabled="!connectionId || !connected" @click="openCopiedSessionTab"><Copy /></button>
+        <button class="icon-button icon-emerald" :title="t('reconnect')" :disabled="terminalState === 'connecting' && !reconnectPending" @click="reconnectNow"><PlugZap /></button>
+        <!-- 一键 sudo -v：向当前 PTY 写入命令刷新 sudo 凭据缓存；quick sudo 自动应答
+             是否启用由连接设置决定（设置弹窗），工作台不再提供开关。 -->
+        <button class="icon-button icon-emerald" :title="t('sudoRefresh.title')" :disabled="!connected" @click="sendSudoRefresh"><ShieldCheck /></button>
+        <button class="icon-button icon-emerald" :title="t('profilesTitle')" @click="openProfilesManager"><KeyRound /></button>
+        <button class="icon-button icon-cyan" :title="t('alertTriage.title')" @click="openAlertTriage"><Siren /></button>
+        <button class="icon-button icon-cyan" :title="t('forwards.title')" :disabled="!session" @click="forwardsOpen = true"><Network /></button>
+        <button v-if="isJumpServerMode" class="icon-button icon-cyan" :class="{ 'is-active': assetsOpen }" :title="t('jumpserver.title')" :aria-label="t('jumpserver.title')" :aria-pressed="assetsOpen" :disabled="!connected" @click="toggleAssets"><Server /></button>
+        <button class="icon-button icon-cyan" :class="{ 'is-active': dockerOpen }" :title="t('docker.title')" :aria-label="t('docker.title')" :aria-pressed="dockerOpen" :disabled="!connected" @click="toggleDocker"><Container /></button>
+        <button class="icon-button icon-cyan" :class="{ 'is-active': historyPanelOpen }" :title="t('historyPanel.titleShortcut')" :aria-pressed="historyPanelOpen" :disabled="!connected" @click="toggleHistoryPanel"><History /></button>
+        <button class="icon-button icon-cyan" :class="{ 'is-active': otpOpen }" :title="t('otp.title')" :aria-pressed="otpOpen" @click="toggleOtpPanel"><Lock /></button>
+        <button
+          v-if="serialSessionActive"
+          class="icon-button icon-cyan"
+          :title="t('serial.upload.title')"
+          :disabled="serialUploadBusy"
+          @click="openSerialUploadDialog"
+        ><FileUp /></button>
+        <Popover :open="protocolMenuOpen" @update:open="(open) => { protocolMenuOpen = open; }">
+          <PopoverAnchor as-child>
+            <button class="icon-button icon-cyan" :title="t('protocol.menu')" :aria-pressed="protocolMenuOpen" @click.stop="protocolMenuOpen = !protocolMenuOpen"><Monitor /></button>
+          </PopoverAnchor>
+          <PopoverContent class="popover" align="end" :side-offset="5">
+            <h3>{{ t("protocol.menu") }}</h3>
+            <button class="link-button" @click="openLocalShell"><SquareTerminal /> {{ t("protocol.localShell") }}</button>
+            <button class="link-button" @click="protocolMenuOpen = false; telnetDialogOpen = true"><Cable /> Telnet</button>
+            <button class="link-button" @click="protocolMenuOpen = false; serialDialogOpen = true"><Cable /> Serial</button>
+            <button
+              class="link-button"
+              :disabled="!serialSessionActive || serialUploadBusy"
+              @click="protocolMenuOpen = false; openSerialUploadDialog()"
+            ><FileUp /> {{ t("serial.upload.title") }}</button>
+            <button class="link-button" @click="protocolMenuOpen = false; vncDialogOpen = true"><AppWindow /> VNC</button>
+            <button class="link-button" @click="protocolMenuOpen = false; rdpDialogOpen = true"><Monitor /> RDP</button>
+            <button class="link-button" @click="protocolMenuOpen = false; taskDialogOpen = true"><Timer /> {{ t("task.title") }}</button>
+          </PopoverContent>
+        </Popover>
+        <label class="follow-directory-control" :title="t('followTerminal')">
+          <Switch
+            size="sm"
+            :model-value="followDirectory"
+            :disabled="!(connected || (protocolSession && (protocolSession.kind === 'local' || protocolSession.kind === 'telnet' || protocolSession.kind === 'serial') && terminalState === 'connected'))"
+            @update:model-value="setDirectoryTracking"
+          />
+          <span>{{ t("followTerminal") }}</span>
+        </label>
+        <span class="toolbar-separator" aria-hidden="true" />
+        <button class="icon-button icon-neutral" :title="t('commandTitle')" :disabled="!connected" @click="openCommandDialog"><SquareTerminal /></button>
+        <button class="icon-button icon-neutral" :class="{ 'is-active': batchBarOpen }" :title="t('batchSendTitle')" :aria-pressed="batchBarOpen" :disabled="!connected" @click="toggleBatchBar"><ListChecks /></button>
+        <div>
+          <Popover :open="quickMenuOpen" @update:open="(open) => { if (!open) quickMenuOpen = false; }">
+            <PopoverAnchor as-child>
+              <button class="icon-button icon-amber" :title="t('quickCommands')" :disabled="!connected" @click.stop="toggleQuickMenu"><Zap /></button>
+            </PopoverAnchor>
+            <PopoverContent class="popover quick-commands-popover" align="end" :side-offset="5">
+            <!-- Termius Snippets 式结构：列表态（搜索 + 卡片 + 整宽新建按钮）与
+                 编辑器子视图（返回 + 名称 + 多行命令 + 保存）两个视图切换。 -->
+            <template v-if="!quickEditorOpen">
+              <h3>{{ t("quickCommands") }}</h3>
+              <div v-if="visibleQuickCommandList.length" class="quick-search">
+                <Search />
+                <input v-model="quickSearch" :placeholder="t('quickCommandsSearch')" spellcheck="false" />
+              </div>
+              <div v-if="!visibleQuickCommandList.length" class="empty compact">{{ t("quickCommandsEmpty") }}</div>
+              <div v-else-if="!filteredQuickCommands.length" class="empty compact">{{ t("quickCommandsNoMatch") }}</div>
+              <template v-else>
+                <p v-if="quickHasRealGroups" class="quick-command-group-summary">{{ t("quickCommands.groupSummary", { groups: quickCommandGroupCount(visibleQuickCommandList), count: visibleQuickCommandList.length }) }}</p>
+                <section v-for="group in groupedQuickCommands" :key="group.id || '__ungrouped__'" class="quick-group">
+                  <button v-if="quickHasRealGroups" type="button" class="quick-group-head" :aria-expanded="!quickCollapsedGroups.includes(group.id)" @click="toggleQuickGroupCollapse(group.id)">
+                    <ChevronDown v-if="!quickCollapsedGroups.includes(group.id)" class="quick-group-chevron" />
+                    <ChevronRight v-else class="quick-group-chevron" />
+                    <span class="quick-group-name">{{ quickGroupName(group) }}</span>
+                    <span class="quick-group-count">{{ group.commands.length }}</span>
+                  </button>
+                  <template v-if="!quickHasRealGroups || !quickCollapsedGroups.includes(group.id)">
+                    <div v-for="item in group.commands" :key="item.id" class="quick-command-row quick-card" :class="{ expanded: quickExpandedId === item.id }">
+                      <button class="quick-card-main" :title="item.command" @click="toggleQuickExpand(item.id)">
+                        <Braces class="quick-card-icon" />
+                        <span class="quick-card-text">
+                          <span class="quick-card-title">
+                            <strong>{{ item.name }}</strong>
+                            <span
+                              class="quick-command-scope-badge"
+                              :data-scope="item.connectionId ? 'connection' : 'global'"
+                            >{{ item.connectionId ? t("quickCommands.badge.connection") : t("quickCommands.badge.global") }}</span>
+                          </span>
+                          <span class="mono">{{ item.command }}</span>
+                        </span>
+                      </button>
+                      <div class="quick-card-actions">
+                        <button class="quick-action" :disabled="!connected" @click="sendQuickCommand(item)">{{ t("quickCommandRun") }}</button>
+                        <button class="quick-action" :disabled="!connected" @click="pasteQuickCommand(item)">{{ t("quickCommandPaste") }}</button>
+                        <button class="icon-button compact" :title="t('quickCommandsEdit')" @click="editQuickCommand(item)"><Pencil /></button>
+                        <button class="icon-button compact" :title="t('delete')" @click="deleteQuickCommand(item.id)"><Trash2 /></button>
+                      </div>
+                      <div v-if="quickExpandedId === item.id" class="quick-card-full mono">{{ item.command }}</div>
+                    </div>
+                  </template>
+                </section>
+              </template>
+              <div v-if="otherQuickCommandCount" class="quick-other-section">
+                <button type="button" class="quick-other-toggle" @click="quickOtherOpen = !quickOtherOpen">
+                  <span>{{ t("quickCommands.otherConnections", { count: otherQuickCommandCount }) }}</span>
+                </button>
+                <div v-if="quickOtherOpen" class="quick-other-list">
+                  <div v-for="group in otherQuickCommandGroups" :key="group.connectionId" class="quick-other-group">
+                    <div class="quick-other-group-head">
+                      <span class="mono" :title="group.connectionId">{{ shortenConnectionId(group.connectionId) }}</span>
+                      <span class="quick-command-limit">{{ group.commands.length }}</span>
+                      <button type="button" class="link-button" @click="deleteQuickCommandsForConnection(group.connectionId)">{{ t("quickCommands.deleteConnection") }}</button>
+                    </div>
+                    <div v-for="item in group.commands" :key="item.id" class="quick-other-row">
+                      <span class="quick-other-name" :title="item.command">{{ item.name }}</span>
+                      <button type="button" class="link-button" @click="makeQuickCommandGlobal(item)">{{ t("quickCommands.makeGlobal") }}</button>
+                      <button type="button" class="icon-button compact" :title="t('delete')" @click="deleteQuickCommand(item.id)"><Trash2 /></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <footer class="quick-command-footer">
+                <button
+                  class="quick-new-btn"
+                  :disabled="!canAddQuickCommandInScope(quickCommands, connectionId || null) && !canAddQuickCommandInScope(quickCommands, null)"
+                  @click="openQuickEditor()"
+                ><Plus />{{ t("quickCommandsNew") }}</button>
+                <span class="quick-command-limit">{{ t("quickCommands.limitScope", { count: countQuickCommandsInScope(quickCommands, connectionId || null), limit: QUICK_COMMANDS_LIMIT }) }}</span>
+              </footer>
+            </template>
+            <template v-else>
+              <header class="quick-editor-head">
+                <button class="icon-button compact" :title="t('cancel')" @click="closeQuickEditor"><ArrowLeft /></button>
+                <h3>{{ quickDraft.id ? t("quickCommandsEdit") : t("quickCommandsNew") }}</h3>
+              </header>
+              <footer class="quick-command-editor">
+                <input v-model="quickDraft.name" :placeholder="t('quickCommandsName')" :maxlength="60" autofocus />
+                <input v-model="quickDraft.group" :placeholder="t('quickCommands.groupPlaceholder')" :maxlength="QUICK_COMMAND_GROUP_MAX_LENGTH" />
+                <label
+                  class="quick-scope-bind"
+                  :class="{ disabled: !connectionId }"
+                  :title="connectionId ? t('quickCommands.scope.connection') : t('quickCommands.scope.global')"
+                >
+                  <Switch
+                    size="sm"
+                    :model-value="quickDraft.scope === 'connection'"
+                    :disabled="!connectionId"
+                    @update:model-value="setQuickDraftBoundToConnection"
+                  />
+                  <span>{{ t("quickCommands.bindCurrent") }}</span>
+                </label>
+                <textarea v-model="quickDraft.command" class="mono" rows="4" :placeholder="t('quickCommandsCommand')" :maxlength="500" @keydown.ctrl.enter="addQuickCommand" />
+                <div class="quick-command-editor-actions">
+                  <button class="primary-button" :disabled="quickSaving || !quickDraft.command.trim() || !quickDraftCanAdd" @click="addQuickCommand">{{ quickDraft.id ? t("save") : t("quickCommandsAdd") }}</button>
+                  <button @click="closeQuickEditor">{{ t("cancel") }}</button>
+                  <span class="quick-command-limit">{{ t("quickCommands.limitScope", { count: quickDraftScopeCount, limit: QUICK_COMMANDS_LIMIT }) }}</span>
+                </div>
+              </footer>
+            </template>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div>
+          <Popover :open="agentModeOpen" @update:open="(open) => { if (!open) agentModeOpen = false; }">
+            <PopoverAnchor as-child>
+              <button class="icon-button" :class="agentMode === 'off' ? 'icon-neutral' : 'icon-emerald is-active'" :title="t('agentTerminalQuickHint')" :aria-pressed="agentMode !== 'off'" :disabled="!connected" @click.stop="toggleAgentModeMenu"><Bot /></button>
+            </PopoverAnchor>
+            <PopoverContent class="popover agent-mode-popover" align="end" :side-offset="5">
+            <h3>{{ t("agentTerminalSection") }}</h3>
+            <label v-for="mode in AGENT_MODES" :key="mode" class="agent-mode-option">
+              <input type="radio" name="agent-mode" :checked="agentMode === mode" :disabled="agentModeBusy" @change="applyAgentMode(mode)" />
+              <span>{{ t(`agentTerminal${mode === "off" ? "Off" : mode === "auto" ? "Auto" : "Strict"}`) }}</span>
+            </label>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div>
+          <Popover :open="highlightMenuOpen" @update:open="(open) => { if (!open) highlightMenuOpen = false; }">
+            <PopoverAnchor as-child>
+              <button class="icon-button icon-violet" :class="{ 'is-active': highlightMenuOpen }" :title="t('highlightRules.title')" :aria-pressed="highlightMenuOpen" @click.stop="toggleHighlightMenu"><Palette /></button>
+            </PopoverAnchor>
+            <PopoverContent class="popover highlight-rules-popover" align="end" :side-offset="5">
+            <h3>{{ t("highlightRules.title") }}</h3>
+            <div v-if="!highlightRules.length" class="empty compact">{{ t("highlightRules.empty") }}</div>
+            <div v-else class="highlight-rule-list">
+              <div v-for="item in highlightRules" :key="item.id" class="highlight-rule-row">
+              <span class="highlight-color-dot" :style="{ backgroundColor: item.color }" />
+              <div class="highlight-rule-main">
+                <span class="highlight-rule-pattern mono" :class="{ disabled: !item.enabled }" :title="item.pattern">{{ item.pattern }}</span>
+                <span class="highlight-rule-badges">
+                  <span v-if="item.isRegex">regex</span>
+                  <span v-if="item.caseSensitive">Aa</span>
+                </span>
+              </div>
+              <span class="highlight-rule-actions">
+                <label class="highlight-switch-control" :title="t('highlightRules.enabled')">
+                  <input type="checkbox" :checked="item.enabled" @change="toggleHighlightRule(item)" />
+                </label>
+                <button class="icon-button" :title="t('quickCommandsEdit')" @click="editHighlightRule(item)"><Pencil /></button>
+                <button class="icon-button" :title="t('delete')" @click="deleteHighlightRule(item.id)"><Trash2 /></button>
+              </span>
+            </div>
+            </div>
+            <footer class="highlight-editor">
+              <div class="highlight-editor-inputs">
+                <input v-model="highlightDraft.pattern" :placeholder="t('highlightRules.patternPlaceholder')" :maxlength="200" spellcheck="false" @keydown.enter="saveHighlightRule" />
+                <ToggleGroup v-model="highlightFlagValues" type="multiple" class="highlight-editor-flags">
+                  <ToggleGroupItem value="regex" class="highlight-editor-flag-item" :title="t('highlightRules.regex')">.*</ToggleGroupItem>
+                  <ToggleGroupItem value="case" class="highlight-editor-flag-item" :title="t('highlightRules.caseSensitive')">Aa</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+              <div class="highlight-palette">
+                <button v-for="swatch in HIGHLIGHT_PALETTE" :key="swatch" type="button" class="highlight-palette-swatch" :class="{ selected: highlightDraft.color.toLowerCase() === swatch }" :style="{ backgroundColor: swatch }" :aria-label="swatch" @click="highlightDraft.color = swatch" />
+                <input v-model="highlightDraft.color" class="highlight-hex-input mono" :title="t('highlightRules.color')" :maxlength="7" spellcheck="false" />
+              </div>
+              <div class="highlight-editor-actions">
+                <span class="highlight-rule-limit">{{ t("highlightRules.limit", { count: highlightRules.length, limit: HIGHLIGHT_RULES_LIMIT }) }}</span>
+                <button v-if="highlightDraft.id" @click="resetHighlightDraft">{{ t("cancel") }}</button>
+                <button class="primary-button" :disabled="highlightSaving || !highlightDraft.pattern.trim() || (!highlightDraft.id && highlightRules.length >= HIGHLIGHT_RULES_LIMIT)" @click="saveHighlightRule">{{ highlightDraft.id ? t("save") : t("highlightRules.add") }}</button>
+              </div>
+              <p v-if="highlightDraftError" class="task-error">{{ highlightDraftError }}</p>
+            </footer>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <button class="icon-button icon-cyan" :class="{ 'is-active': copilotDockOpen }" :title="t('copilot.openDock')" :aria-pressed="copilotDockOpen" :disabled="!connected" @click="setCopilotDockOpen(!copilotDockOpen)"><Sparkles /></button>
+        <button class="icon-button icon-emerald" :class="{ 'is-active': metricsOpen }" :title="t('metrics')" :aria-pressed="metricsOpen" :disabled="!connected" @click="toggleMetrics"><Gauge /></button>
+        <button class="icon-button" :class="{ 'is-recording': recordingActive }" :title="recordingActive ? t('recordingStop') : t('recordingTitle')" :disabled="!canRecord" @click="toggleRecording"><Disc /></button>
+        <button class="icon-button" :class="{ 'is-active': recordingsOpen }" :title="t('recordingsTitle')" :aria-pressed="recordingsOpen" @click="toggleRecordings"><Film /></button>
+        <button class="icon-button icon-violet" :title="t('settings')" :disabled="!connected" @click="openSettings"><Settings /></button>
+        <button class="icon-button" :title="t('importWizard.title')" :aria-pressed="importOpen" @click="openImportWizard"><FolderInput /></button>
+        <button class="icon-button icon-amber" :title="t('auditLog.title')" @click="openAuditLog"><FileText /></button>
+        <div>
+          <Popover :open="columnsOpen" @update:open="(open) => { if (!open) columnsOpen = false; }">
+            <PopoverAnchor as-child>
+              <button class="icon-button icon-violet" :title="t('customizeColumns')" @click.stop="toggleColumnsMenu"><Columns3 /></button>
+            </PopoverAnchor>
+            <PopoverContent class="popover columns-popover" align="end" :side-offset="5">
+            <label v-for="column in (['size', 'modified', 'owner', 'group', 'permissions'] as SftpColumn[])" :key="column"><input type="checkbox" :checked="visibleColumns.includes(column)" @change="toggleColumn(column)" />{{ t(column) }}</label>
+            <hr class="columns-popover-separator" />
+            <label><input type="checkbox" :checked="sftpPaneDefaultOpen" @change="toggleSftpPaneDefaultOpen" />{{ t("sftpPane.defaultOpen") }}</label>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div>
+          <!-- 历史卡右键菜单（ContextMenu）打开时忽略弹层的外点关闭请求：
+               菜单项 pointerdown 相对弹层是"外部"，不加守卫会在 select 前把宿主弹层
+               连同菜单一起卸载，动作丢失。 -->
+          <Popover :open="transferPanelOpen" @update:open="(open) => { if (!open && !transferHistoryMenu) transferPanelOpen = false; }">
+            <PopoverAnchor as-child>
+              <button class="icon-button icon-blue" :title="t('transfers')" @click.stop="toggleTransferPanel"><ArrowUpDown /><span v-if="activeTransfers" class="activity-dot" /></button>
+            </PopoverAnchor>
+            <PopoverContent class="popover transfer-popover" align="end" :side-offset="5">
+            <h3>{{ t("transfers") }}</h3>
+            <div v-if="!transferList.length" class="empty compact">{{ t("noTransfers") }}</div>
+            <article v-for="task in transferList" :key="task.taskId" class="transfer-card">
+              <div class="transfer-title"><FileUp v-if="task.direction === 'upload'" /><Download v-else /><span>{{ task.fileName || task.taskId }}</span><span v-if="task.compression === 'gzip'" class="transfer-gz">gz</span><span v-else-if="task.compression === 'lzpack'" class="transfer-gz">dbxz</span><strong v-if="task.phase !== 'staging'">{{ transferPercent(task) }}%</strong></div>
+              <progress :value="transferBarValue(task)" max="100" />
+              <div class="transfer-meta"><span>{{ t(`transferStatus.${task.status}`) }}</span><span :title="transferBytesTitle(task)">{{ formatBytes(transferShownBytes(task)) }} / {{ formatBytes(task.size) }}</span><span v-if="transferSpeeds[task.taskId]">{{ formatBytes(transferSpeeds[task.taskId]) }}/s</span></div>
+              <!-- 目录下载：在传文件相对路径，让长传输有可感知的推进。 -->
+              <p v-if="task.currentFile" class="transfer-path mono" :title="task.currentFile">{{ task.currentFile }}</p>
+              <p v-if="task.localPath" class="transfer-path mono" :title="task.localPath">{{ task.localPath }}</p>
+              <!-- 目录下载部分失败的汇总由完成 toast 承担：failedCount 与终态
+                   同拍赋值，终态卡随即转入历史区，活跃卡上的失败行永远渲染
+                   不到（UI 回归确认），故不再放置死分支。 -->
+              <div v-if="transferPausable(task.status) || task.status === 'queued' || task.status === 'running' || task.localPath" class="transfer-actions">
+                <button v-if="transferPausable(task.status)" class="icon-button" :title="t(pausedTaskIds.has(task.taskId) ? 'transferResume' : 'transferPause')" :aria-label="t(pausedTaskIds.has(task.taskId) ? 'transferResume' : 'transferPause')" @click="toggleTransferPause(task)"><Play v-if="pausedTaskIds.has(task.taskId)" /><Pause v-else /></button>
+                <button v-if="task.status === 'queued' || task.status === 'running'" class="icon-button" :title="t('cancel')" :aria-label="t('cancel')" @click="cancelTransfer(task)"><X /></button>
+                <button v-if="task.localPath" class="icon-button" :title="t('revealInFolder')" :aria-label="t('revealInFolder')" @click="revealTransferTarget(task.localPath)"><FolderOpen /></button>
+                <button v-if="task.localPath" class="icon-button" :title="t('openDownloadedFile')" :aria-label="t('openDownloadedFile')" @click="openTransferTarget(task.localPath)"><FileText /></button>
+              </div>
+              <p v-if="task.error" class="task-error">{{ task.error }}</p>
+            </article>
+            <!-- 保留上传断点续传入口；文件选择器本身始终隐藏，仅由 Resume 按钮唤起。 -->
+            <template v-if="resumableTasks.length">
+              <h3 class="transfer-history-title">{{ t("resumableTitle") }}</h3>
+              <article v-for="task in resumableTasks" :key="task.taskId" class="transfer-card">
+                <div class="transfer-title"><FileUp /><span :title="task.remotePath">{{ task.fileName }}</span></div>
+                <div class="transfer-meta"><span>{{ formatBytes(task.resumableBytes) }} / {{ formatBytes(task.size) }}</span></div>
+                <div class="transfer-actions"><button class="icon-button" :title="t('resumableResume')" :aria-label="t('resumableResume')" @click="beginResumeUpload(task)"><Play /></button></div>
+              </article>
+            </template>
+            <input ref="resumeInput" type="file" class="hidden" @change="onResumeFilePicked" />
+            <!-- 传输历史与活跃任务并列展示：历史是落盘快照，不应被当前传输状态遮住。 -->
+            <div class="transfer-history-head">
+              <h3 class="transfer-history-title">{{ t("transfersHistory.title") }}</h3>
+              <span class="transfer-history-actions">
+                <button type="button" class="icon-button" :title="t('refresh')" :disabled="transferHistoryLoading || resumableLoading" @click.stop="refreshTransferPanel"><RefreshCw :class="{ spinning: transferHistoryLoading || resumableLoading }" /></button>
+                <button type="button" class="icon-button" :title="t('transfersHistory.clear')" :disabled="!transferHistory.length" @click.stop="transferHistoryClearOpen = true"><Trash2 /></button>
+              </span>
+            </div>
+            <div v-if="transferHistoryFailed" class="empty compact">
+              <span>{{ t("transfersHistory.loadFailed") }}</span>
+              <button type="button" class="link-button" @click.stop="refreshTransferPanel">{{ t("refresh") }}</button>
+            </div>
+            <div v-else-if="transferHistoryLoading && !transferHistory.length" class="empty compact"><Loader2 class="spinning" />{{ t("loading") }}</div>
+            <div v-else-if="!transferHistory.length" class="empty compact">{{ t("transfersHistory.empty") }}</div>
+            <ContextMenu v-for="entry in transferHistory" :key="entry.taskId" :open="transferHistoryMenu?.taskId === entry.taskId" @update:open="(open) => { if (!open && transferHistoryMenu?.taskId === entry.taskId) transferHistoryMenu = undefined; }">
+              <ContextMenuTrigger as-child>
+                <article class="transfer-card transfer-history-card" @contextmenu="showTransferHistoryMenu($event, entry)">
+                  <div class="transfer-title"><FileUp v-if="entry.direction === 'upload'" /><Download v-else /><span :title="entry.fileName">{{ entry.fileName || entry.taskId }}</span></div>
+                  <div class="transfer-meta"><span>{{ t(`transferStatus.${entry.status}`) }}</span><span>{{ formatBytes(entry.size) }}</span></div>
+                  <p v-if="entry.localPath" class="transfer-path mono" :title="entry.localPath">{{ entry.localPath }}</p>
+                  <p v-if="entry.error" class="task-error">{{ entry.error }}</p>
+                </article>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem @select="entry.localPath && revealTransferTarget(entry.localPath)"><FolderOpen />{{ t("revealInFolder") }}</ContextMenuItem>
+                <ContextMenuItem @select="entry.localPath && openTransferTarget(entry.localPath)"><FileText />{{ t("openDownloadedFile") }}</ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+    </header>
+
+    <ResourceStrip
+      v-if="connected && resourceStripEnabled"
+      :metrics="metrics"
+      :loading="metricsLoading"
+      :error="metricsError"
+      :t="t"
+      @open-metrics="openMetricsFromStrip"
+      @open-copilot="openCopilotFromStrip"
+    />
+
+    <div v-if="tooltip" ref="tooltipBubble" class="app-tooltip" :class="{ 'app-tooltip-above': tooltip.above }" :style="{ left: `${tooltip.x}px`, top: `${tooltip.y}px`, '--arrow-offset': `${tooltip.arrowOffset}px` }" role="tooltip">{{ tooltip.text }}</div>
+    <ToastProvider :label="t('notification')">
+      <ToastRoot v-if="notice" :key="noticeKey" :open="noticeOpen" :duration="noticeActions.length ? 8000 : 3500" class="notice" @update:open="onNoticeOpenChange">
+        <span>{{ notice }}</span>
+        <ToastAction v-for="action in noticeActions" :key="action.label" :alt-text="action.label" class="notice-action" @click="action.run()">{{ action.label }}</ToastAction>
+      </ToastRoot>
+      <ToastViewport class="notice-viewport" />
+    </ToastProvider>
+    <ToastProvider :label="t('notification')">
+      <ToastRoot v-if="sftpError" :key="sftpErrorKey" :open="sftpErrorOpen" :duration="8000" class="error-banner" @update:open="onSftpErrorOpenChange">
+        <span>{{ sftpError }}</span>
+        <ToastAction v-if="sftpErrorRetry" :alt-text="t('retry')" class="notice-action" @click="sftpErrorRetry()">{{ t("retry") }}</ToastAction>
+        <ToastClose :title="t('close')"><X /></ToastClose>
+      </ToastRoot>
+      <ToastViewport class="error-viewport" />
+    </ToastProvider>
+
+    <div class="workbench-body">
+    <section ref="paneContainer" :class="orderedPaneClass">
+      <ContextMenu :open="terminalMenuOpen" @update:open="(open) => { if (!open) terminalMenuOpen = false; }">
+        <ContextMenuTrigger as-child>
+      <section class="terminal-pane" :class="{ 'drag-active': terminalDragActive, 'batch-bar-open': connected && batchBarOpen }" :style="terminalBasis" @contextmenu="showTerminalMenu" @dragenter.prevent="onTerminalDragEnter" @dragover.prevent @dragleave.self="terminalDragActive = false" @drop.prevent="onTerminalDrop($event)">
+        <div ref="terminalHost" class="terminal-host" />
+        <div v-if="terminalDragActive || (dragActive && !sftpPaneOpen)" class="drop-overlay"><FileUp /><strong>{{ t("terminalDrop.hint") }}</strong></div>
+        <TerminalSearchPanel
+          v-if="searchOpen"
+          :locale="locale"
+          :initial-query="searchSeedQuery"
+          :initial-options="searchSeedOptions"
+          :match-state="searchMatchState"
+          :result-index="searchResultIndex"
+          :result-count="searchResultCount"
+          @find-next="(query, options) => runTerminalSearch(query, options, 'next')"
+          @find-previous="(query, options) => runTerminalSearch(query, options, 'prev')"
+          @clear="clearTerminalSearch"
+          @close="closeTerminalSearch"
+        />
+        <section
+          v-if="historyPanelOpen"
+          class="history-overlay"
+          role="dialog"
+          :aria-label="t('historyPanel.title')"
+          @keydown="onHistoryPanelKey"
+          @mousedown.stop
+        >
+          <div class="history-overlay-head">
+            <History />
+            <input
+              ref="historyPanelQueryInput"
+              v-model="historyPanelQuery"
+              class="mono"
+              :placeholder="t('historyPanel.search')"
+              spellcheck="false"
+            />
+            <span class="history-overlay-badge">{{ t("historyPanel.title") }} · {{ filteredHistory.length }}</span>
+            <button :title="t('close')" class="icon-button" @click="closeHistoryPanel(true)"><X /></button>
+          </div>
+          <div v-if="!filteredHistory.length" class="empty compact">{{ t("historyPanel.empty") }}</div>
+          <div v-else class="history-overlay-list">
+            <div
+              v-for="(item, index) in filteredHistory"
+              :key="item.command"
+              class="history-item"
+              :class="{ 'is-active': index === historyPanelIndex, 'is-failed': item.failed }"
+              :title="item.command"
+              @mouseenter="historyPanelIndex = index; commandDraft = item.command"
+              @click="historyPanelIndex = index; confirmHistoryPanelSelection(false)"
+              @dblclick.prevent="historyPanelIndex = index; confirmHistoryPanelSelection(true)"
+            >
+              <Pin v-if="item.pinned" class="history-item-pin" />
+              <span class="history-item-cmd mono">{{ truncateHistoryCommand(item.command) }}</span>
+              <span class="history-item-meta">{{ formatHistoryAge(item.at, historyNow, historyAgeLabels) }}</span>
+              <button
+                type="button"
+                class="icon-button history-item-action"
+                :title="item.pinned ? t('historyPanel.unpin') : t('historyPanel.pin')"
+                @click.stop="historyPanelIndex = index; pinHistoryPanelSelection()"
+              ><Pin /></button>
+              <button
+                type="button"
+                class="icon-button history-item-action"
+                :title="t('historyPanel.remove')"
+                @click.stop="historyPanelIndex = index; removeHistoryPanelSelection()"
+              ><Trash2 /></button>
+            </div>
+          </div>
+          <p class="history-overlay-hint">{{ t("historyPanel.hint") }}</p>
+        </section>
+        <section
+          v-if="quickPaletteOpen"
+          class="history-overlay quick-palette"
+          role="dialog"
+          :aria-label="t('quickPalette.title')"
+          @keydown="onQuickPaletteKey"
+          @mousedown.stop
+        >
+          <div class="history-overlay-head">
+            <Zap />
+            <input
+              ref="quickPaletteQueryInput"
+              v-model="quickPaletteQuery"
+              class="mono"
+              :placeholder="t('quickPalette.search')"
+              spellcheck="false"
+              @input="quickPaletteIndex = 0"
+            />
+            <span class="history-overlay-badge">{{ t("quickPalette.title") }} · {{ filteredQuickPalette.length }}</span>
+            <button :title="t('close')" class="icon-button" @click="closeQuickPalette"><X /></button>
+          </div>
+          <div v-if="!filteredQuickPalette.length" class="empty compact">{{ t("quickPalette.empty") }}</div>
+          <div v-else class="history-overlay-list">
+            <div
+              v-for="(item, index) in filteredQuickPalette"
+              :key="item.id"
+              class="history-item"
+              :class="{ 'is-active': index === quickPaletteIndex }"
+              :title="item.command"
+              @mouseenter="quickPaletteIndex = index"
+              @click="quickPaletteIndex = index; confirmQuickPaletteSelection(false)"
+              @dblclick.prevent="quickPaletteIndex = index; confirmQuickPaletteSelection(true)"
+            >
+              <span class="history-item-cmd">{{ item.name }}</span>
+              <span class="history-item-meta mono">{{ truncateHistoryCommand(item.command, 48) }}</span>
+            </div>
+          </div>
+          <p class="history-overlay-hint">{{ t("quickPalette.hint") }}</p>
+        </section>
+        <div
+          v-if="historyPanelOpen && historyGhostText"
+          class="command-suggest-ghost history-ghost mono"
+          :title="historyGhostText"
+        >{{ truncateHistoryCommand(historyGhostText, 96) }}</div>
+        <CompletionMenu
+          v-if="completionOpen"
+          :items="completionItems"
+          :active-index="completionActiveIndex"
+          :anchor="completionAnchor"
+          :viewport="completionViewport"
+          :loading="completionLoading"
+          :t="t"
+          @activate="completionActiveIndex = $event"
+          @accept="acceptCompletionItem"
+        />
+        <div
+          v-if="commandSuggestListVisible"
+          class="command-suggest"
+          :class="{ 'is-below': commandSuggestPlacement === 'below' }"
+          :style="{ left: `${commandSuggestPos.left}px`, top: `${commandSuggestPos.top}px` }"
+          role="listbox"
+          @mousedown.prevent
+        >
+          <div class="command-suggest-list">
+            <button
+              v-for="(item, index) in commandSuggestItems"
+              :key="`${item.source}:${item.command}`"
+              type="button"
+              class="command-suggest-item"
+              :class="{ 'is-active': index === commandSuggestIndex }"
+              @mouseenter="armCommandSuggest(index)"
+              @click="armCommandSuggest(index); acceptCommandSuggest()"
+            >
+              <ChevronRight class="command-suggest-icon" aria-hidden="true" />
+              <span class="command-suggest-cmd">{{ item.command }}</span>
+              <span class="command-suggest-source">{{ suggestSourceLabel(item.source) }}</span>
+            </button>
+          </div>
+          <p v-if="commandSuggestHintChips.length" class="command-suggest-hint">{{ commandSuggestHintChips.join(" · ") }}</p>
+        </div>
+        <div
+          v-if="commandSuggestOpen && commandSuggestGhost"
+          class="command-suggest-ghost mono"
+          :style="{ left: `${commandSuggestGhostPos.left}px`, top: `${commandSuggestGhostPos.top}px`, fontSize: `${terminalFontSize}px` }"
+        >{{ commandSuggestGhost }}</div>
+        <div v-if="reconnectPending" class="reconnect-banner" role="status">
+          <Loader2 class="spinning" />
+          <span class="reconnect-text">{{ t("reconnectBanner.label") }}</span>
+          <span v-if="reconnectCountdown" class="reconnect-countdown mono">{{ t("sessionStatus.reconnectCountdown", { seconds: reconnectCountdown.seconds, attempt: reconnectCountdown.attempt }) }}</span>
+          <span v-if="reconnectCountdown" class="reconnect-attempt">{{ t("reconnectBanner.attempt", { attempt: reconnectCountdown.attempt }) }}</span>
+          <progress v-if="reconnectCountdown" :value="reconnectCountdown.percent" max="100" />
+          <button class="reconnect-now" @click="reconnectNow">{{ t("reconnectNow") }}</button>
+        </div>
+        <!-- 录制中悬浮控制条：底部居中，红色呼吸点 + 时长 + 停止 -->
+        <div v-if="recordingActive" class="recording-float" role="status">
+          <Disc class="recording-float-dot" />
+          <span class="recording-elapsed mono">{{ formatDuration(recordingElapsedSec) }}</span>
+          <button class="recording-stop" @click="toggleRecording"><Square />{{ t("recordingStop") }}</button>
+        </div>
+        <!-- 录制开始倒计时遮罩：大数字 3→2→1（:key 重触发放缩动画），Esc/点击取消 -->
+        <div v-if="recordCountdown !== null" class="record-countdown-overlay" role="status" @click="cancelRecordCountdown">
+          <span class="record-countdown-number" :key="recordCountdown">{{ recordCountdown }}</span>
+          <span class="record-countdown-hint">{{ t("recordingCountdownHint") }}</span>
+        </div>
+        <div v-if="terminalState !== 'connected' && !reconnectPending" class="terminal-overlay">
+          <ConnectingCard
+            :locale="locale"
+            :name="connection.name || connectionIdentity"
+            :identity="connectionIdentity"
+            :state="connectCardState"
+            :status-text="inactiveWaiting ? t('connectCard.waitingReopen') : ''"
+            :error-text="terminalErrorFriendly || terminalError || t('disconnected')"
+            :error-detail="terminalErrorDetail"
+            :logs-open="connectLogsOpen"
+            :logs="connectLogEntries"
+            @cancel="cancelConnect"
+            @reconnect="reconnect"
+            @connect="startConnect"
+            @toggle-logs="connectLogsOpen = !connectLogsOpen"
+          />
+        </div>
+        <div v-if="commandMarker.installed" class="terminal-command-marker" :class="{ active: commandMarker.active, failed: !commandMarker.active && commandMarker.exitCode !== null && commandMarker.exitCode !== 0 }" :title="commandMarkerDetails" @click="terminal?.focus()">
+          <Loader2 v-if="commandMarker.active" class="spinning" />
+          <TriangleAlert v-else-if="commandMarker.exitCode" />
+          <Info v-else />
+          <span v-if="commandMarker.active" class="marker-text">{{ t("terminalCommand.running", { command: commandMarker.command || "…" }) }}</span>
+          <span v-if="commandMarker.active && commandMarkerElapsed !== null" class="marker-elapsed mono">{{ formatCommandDuration(commandMarkerElapsed) }}</span>
+          <span v-else-if="commandMarker.exitCode !== null" class="marker-text">{{ t("terminalCommand.finished", { code: commandMarker.exitCode, duration: formatCommandDuration(commandMarker.durationMs) }) }}</span>
+          <span v-else class="marker-text">{{ t("terminalCommand.hint") }}</span>
+          <span v-if="commandMarker.cwd" class="marker-cwd mono">{{ commandMarker.cwd }}</span>
+        </div>
+        <div v-if="agentRunning" class="agent-run-banner" role="status">
+          <Loader2 class="spinning" />
+          <span class="agent-run-text">{{ t("agentRunningBanner") }}</span>
+          <code class="agent-run-command mono" :title="agentRunning.command">{{ agentRunning.command }}</code>
+          <button class="agent-interrupt" @click="interruptAgentRun">{{ t("agentInterrupt") }}</button>
+        </div>
+        <div v-if="zmodemBusy" class="zmodem-status" role="status">
+          <Loader2 class="spinning" />
+          <span>{{ zmodemStatusLabel }}</span>
+          <span v-if="zmodemState === 'downloading' && zmodemFileCount > 1" class="trzsz-count mono">{{ zmodemFileIndex }}/{{ zmodemFileCount }}</span>
+          <span v-if="zmodemSpeed">{{ formatBytes(zmodemSpeed) }}/s</span>
+          <button v-if="zmodemState === 'uploading' || zmodemState === 'downloading'" class="trzsz-cancel" :title="t('cancel')" @click="cancelZmodemTransfer"><X /></button>
+        </div>
+        <div v-if="trzszOverlayVisible" class="zmodem-status trzsz-status" role="status" :class="{ 'trzsz-done': trzszPhase === 'success', 'trzsz-failed': trzszPhase === 'failed' }">
+          <Loader2 v-if="trzszPhase === 'waiting' || trzszPhase === 'transferring'" class="spinning" />
+          <TriangleAlert v-else-if="trzszPhase === 'failed'" />
+          <span class="trzsz-label">{{ trzszStatusLabel }}</span>
+          <progress v-if="trzszPhase === 'transferring'" :value="trzszPercent" max="100" />
+          <span v-if="trzszPhase === 'transferring' && trzszFileCount > 1" class="trzsz-count mono">{{ trzszFileIndex }}/{{ trzszFileCount }}</span>
+          <span v-if="trzszPhase === 'transferring' && trzszSpeed" class="trzsz-speed">{{ formatBytes(trzszSpeed) }}/s</span>
+          <button v-if="trzszBusy" class="trzsz-cancel" :title="t('cancel')" @click="cancelTrzszTransfer"><X /></button>
+        </div>
+        <div
+          v-if="serialUploadState.phase !== 'idle'"
+          class="zmodem-status trzsz-status"
+          role="status"
+          :class="{ 'trzsz-done': serialUploadState.phase === 'complete', 'trzsz-failed': serialUploadState.phase === 'failed' }"
+        >
+          <Loader2 v-if="serialUploadState.phase === 'running'" class="spinning" />
+          <TriangleAlert v-else-if="serialUploadState.phase === 'failed'" />
+          <span class="trzsz-label">{{
+            serialUploadState.phase === "failed"
+              ? t("serial.upload.failedDetail", { name: serialUploadState.fileName || "…", reason: serialUploadState.reason || "…" })
+              : t("serial.upload.progress", {
+                  protocol: (serialUploadState.protocol || "xmodem").toUpperCase(),
+                  name: serialUploadState.fileName || "…",
+                  percent: serialUploadPct,
+                })
+          }}</span>
+          <progress v-if="serialUploadState.phase === 'running'" :value="serialUploadPct" max="100" />
+          <button v-if="serialUploadBusy" class="trzsz-cancel" :title="t('cancel')" @click="cancelSerialUpload"><X /></button>
+        </div>
+        <section v-if="metricsOpen" class="metrics-float">
+          <header>
+            <h2>{{ t("metrics") }}<span v-if="metricsDistroBadge" class="distro-badge" :style="{ backgroundColor: metricsDistroBadge.color }" :title="metricsDistroBadge.name">{{ metricsDistroBadge.label }}</span><span v-if="metrics?.hostname" class="metrics-host" :title="metrics.hostname"> · {{ metrics.hostname }}</span></h2>
+            <button class="link-button" :disabled="!connected" @click="toggleDocker">{{ t("docker.title") }}</button>
+            <button :title="t('close')" class="icon-button" @click="closeMetrics"><X /></button>
+          </header>
+          <div class="metrics-float-body">
+            <div v-if="metricsLoading && !metrics" class="empty compact"><Loader2 class="spinning" />{{ t("loading") }}</div>
+            <p v-else-if="metricsError" class="task-error">{{ metricsError }} <button class="link-button" @click="refreshMetrics">{{ t("refresh") }}</button></p>
+            <template v-else-if="metrics">
+              <div class="metrics-grid">
+                <div class="metric-card">
+                  <strong>{{ metrics.cpu?.percent ?? "–" }}%</strong>
+                  <span>{{ t("metricsCpu") }}</span>
+                  <small v-if="metrics.cpu?.cores">{{ metrics.cpu.cores }} vCPU · {{ metrics.cpu?.load1 ?? "–" }} / {{ metrics.cpu?.load5 ?? "–" }} / {{ metrics.cpu?.load15 ?? "–" }}</small>
+                </div>
+                <div class="metric-card">
+                  <strong>{{ metrics.memory?.totalBytes ? Math.round(((metrics.memory.usedBytes ?? 0) / metrics.memory.totalBytes) * 100) : "–" }}%</strong>
+                  <span>{{ t("metricsMemory") }}</span>
+                  <small v-if="metrics.memory?.totalBytes">{{ formatBytes(metrics.memory.usedBytes) }} / {{ formatBytes(metrics.memory.totalBytes) }}<template v-if="metrics.memory.swapTotalBytes"> · {{ t("metricsSwap") }} {{ formatBytes(metrics.memory.swapUsedBytes ?? 0) }}</template></small>
+                </div>
+                <div class="metric-card metric-card--wide" v-if="metrics.uptimeSeconds != null">
+                  <strong>{{ formatUptime(metrics.uptimeSeconds) }}</strong>
+                  <span>{{ t("metricsUptime") }}</span>
+                  <small v-if="metrics.kernel">{{ metrics.kernel }}</small>
+                </div>
+              </div>
+              <div v-if="metrics.gpus?.length" class="metrics-disks">
+                <div v-for="gpu in metrics.gpus" :key="gpu.name" class="disk-row">
+                  <span class="mono" :title="gpu.name">{{ t("metricsGpu") }} · {{ gpu.name }}</span>
+                  <progress :value="Math.min(100, gpu.utilPercent)" max="100" />
+                  <span class="numeric">{{ gpu.utilPercent }}% · {{ gpu.memoryUsedMiB }} / {{ gpu.memoryTotalMiB }} MiB</span>
+                </div>
+              </div>
+              <p v-if="metrics.npu" class="muted mono">{{ t("metricsNpu") }} · {{ metrics.npu }}</p>
+              <div v-if="metricsCpuSparkline || metricsMemSparkline" class="metrics-disks metrics-trend">
+                <div class="disk-row"><span class="mono">{{ t("metricsCpu") }}</span><svg class="metrics-sparkline metrics-trend-line" width="120" height="18" viewBox="0 0 120 18" role="img" aria-label="cpu trend"><polyline :points="metricsCpuSparkline" fill="none" style="stroke: var(--info)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg><span class="numeric">{{ Math.round(metricSamples.cpu.at(-1) ?? 0) }}%</span></div>
+                <div class="disk-row"><span class="mono">{{ t("metricsMemory") }}</span><svg class="metrics-sparkline metrics-trend-line" width="120" height="18" viewBox="0 0 120 18" role="img" aria-label="memory trend"><polyline :points="metricsMemSparkline" fill="none" style="stroke: var(--success)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg><span class="numeric">{{ Math.round(metricSamples.mem.at(-1) ?? 0) }}%</span></div>
+              </div>
+              <div v-if="visibleDiskMounts.length" class="metrics-disks">
+                <div v-for="disk in visibleDiskMounts" :key="disk.mount" class="disk-row">
+                  <span class="mono" :title="disk.mount">{{ disk.mount }}</span>
+                  <progress :value="Math.min(100, disk.percentUsed)" max="100" :class="{ 'disk-warn': disk.percentUsed >= 85 }" />
+                  <span class="numeric">{{ formatBytes(disk.usedBytes) }} / {{ formatBytes(disk.totalBytes) }} · {{ Math.round(disk.percentUsed) }}%</span>
+                </div>
+              </div>
+              <div v-if="visibleNetworkInterfaces.length">
+                <h3 class="settings-section-title metrics-net-title">
+                  <span>{{ t("metricsNetwork") }}</span>
+                  <span v-if="metricsRxSparkline || metricsTxSparkline" class="metrics-sparkline-group">
+                    <svg class="metrics-sparkline" width="60" height="18" viewBox="0 0 60 18" role="img" aria-label="rx"><polyline :points="metricsRxSparkline" fill="none" style="stroke: var(--info)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg>
+                    <svg class="metrics-sparkline" width="60" height="18" viewBox="0 0 60 18" role="img" aria-label="tx"><polyline :points="metricsTxSparkline" fill="none" style="stroke: var(--success)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg>
+                  </span>
+                </h3>
+                <div class="metrics-disks">
+                  <div
+                    v-for="net in visibleNetworkInterfaces"
+                    :key="net.name"
+                    class="disk-row"
+                    :title="`rx ${formatBytes(net.rxTotal)} · tx ${formatBytes(net.txTotal)}`"
+                  >
+                    <span class="mono" :title="net.name">{{ net.name }}</span>
+                    <progress :value="networkRateShare(net)" max="100" />
+                    <span class="numeric">↓ {{ formatRate(net.rxRate) }} · ↑ {{ formatRate(net.txRate) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="metrics.processes?.length">
+                <h3 class="settings-section-title"><span>{{ t("metricsProc") }}</span><button class="link-button" @click="toggleProcessPanel">{{ t(processesOpen ? "procCollapse" : "procManage") }}</button></h3>
+                <div class="file-header" :style="metricsProcGridStyle">
+                  <span>{{ t("metricsProcPid") }}</span>
+                  <span>{{ t("metricsProcUser") }}</span>
+                  <span class="numeric">{{ t("metricsProcCpu") }}</span>
+                  <span class="numeric">{{ t("metricsProcMem") }}</span>
+                  <span>{{ t("metricsProcCommand") }}</span>
+                </div>
+                <div v-for="proc in metrics.processes" :key="proc.pid" class="file-row" :style="metricsProcGridStyle">
+                  <span class="mono">{{ proc.pid }}</span>
+                  <span class="mono">{{ proc.user }}</span>
+                  <span class="numeric" :class="{ 'proc-hot': proc.cpuPercent >= 50 }">{{ proc.cpuPercent }}%</span>
+                  <span class="numeric" :class="{ 'proc-hot': proc.memPercent >= 30 }">{{ proc.memPercent }}%</span>
+                  <span class="mono" :title="proc.command">{{ proc.command }}</span>
+                </div>
+              </div>
+              <div v-if="processesOpen" class="proc-manage">
+                <div class="command-history-header">
+                  <span>{{ t("procTitle", { count: processRows.length }) }}</span>
+                  <span class="batch-target-actions">
+                    <button class="link-button" @click="refreshProcessList">{{ t("refresh") }}</button>
+                  </span>
+                </div>
+                <div class="proc-sort-row">
+                  <label v-for="key in (['cpu', 'mem', 'pid'] as const)" :key="key" class="proc-sort-option">
+                    <input type="radio" name="procSort" :value="key" v-model="processSortKey" />{{ t(`procSort.${key}`) }}
+                  </label>
+                </div>
+                <div v-if="processLoading && !visibleProcessRows.length" class="empty compact"><Loader2 class="spinning" />{{ t("loading") }}</div>
+                <div v-else-if="!visibleProcessRows.length" class="empty compact">{{ t("procEmpty") }}</div>
+                <template v-else>
+                  <div class="file-header" :style="procGridStyle">
+                    <span>{{ t("metricsProcPid") }}</span>
+                    <span>{{ t("metricsProcUser") }}</span>
+                    <span class="numeric">{{ t("metricsProcCpu") }}</span>
+                    <span class="numeric">{{ t("metricsProcMem") }}</span>
+                    <span>{{ t("procEtime") }}</span>
+                    <span>{{ t("metricsProcCommand") }}</span>
+                    <span></span>
+                  </div>
+                  <div v-for="proc in visibleProcessRows" :key="proc.pid" class="file-row" :style="procGridStyle">
+                    <span class="mono">{{ proc.pid }}</span>
+                    <span class="mono">{{ proc.user }}</span>
+                    <span class="numeric" :class="{ 'proc-hot': proc.cpuPercent >= 50 }">{{ proc.cpuPercent }}%</span>
+                    <span class="numeric" :class="{ 'proc-hot': proc.memPercent >= 30 }">{{ proc.memPercent }}%</span>
+                    <span class="mono">{{ proc.etime }}</span>
+                    <span class="mono" :title="proc.command">{{ proc.command }}</span>
+                    <span class="proc-kill-group">
+                      <button class="link-button" @click="killProcessRow(proc, 15)">{{ t("procKill") }}</button>
+                      <button class="link-button proc-kill-force" @click="killProcessRow(proc, 9)">{{ t("procKillForce") }}</button>
+                    </span>
+                  </div>
+                  <p v-if="sortedProcessRows.length > visibleProcessRows.length" class="muted metrics-hint">{{ t("procCapped", { shown: visibleProcessRows.length, total: sortedProcessRows.length }) }}</p>
+                </template>
+              </div>
+            </template>
+          </div>
+        </section>
+        <section v-if="assetsOpen && isJumpServerMode" class="metrics-float docker-float js-assets-float">
+          <header>
+            <h2>{{ t("jumpserver.title") }}</h2>
+            <button :title="t('close')" class="icon-button" @click="closeAssets"><X /></button>
+          </header>
+          <div class="metrics-float-body">
+            <JumpServerAssetsPanel
+              v-if="session?.sessionId"
+              :session-id="session.sessionId"
+              :t="t"
+              @entered="closeAssets"
+            />
+          </div>
+        </section>
+        <section v-if="dockerOpen" class="metrics-float docker-float docker-float--panel" :style="dockerListStyle">
+          <header>
+            <h2>{{ t("docker.title") }}</h2>
+            <div class="metrics-float-actions">
+              <button type="button" class="icon-button" :title="t('refresh')" :disabled="dockerLoading" @click="refreshDocker"><RefreshCw :class="{ spinning: dockerLoading }" /></button>
+              <button type="button" :title="t('close')" class="icon-button" @click="closeDocker"><X /></button>
+            </div>
+          </header>
+          <div class="metrics-float-body docker-float-body">
+            <div class="docker-main">
+              <label v-if="dockerRows.length || dockerQuery" class="docker-search">
+                <Search aria-hidden="true" />
+                <input
+                  v-model="dockerQuery"
+                  type="search"
+                  spellcheck="false"
+                  :placeholder="t('docker.searchPlaceholder')"
+                  :aria-label="t('docker.searchPlaceholder')"
+                />
+                <button v-if="dockerQuery" type="button" class="icon-button" :title="t('docker.clearSearch')" @click="dockerQuery = ''"><X /></button>
+              </label>
+              <div v-if="dockerLoading && !dockerRows.length && !dockerError" class="empty compact"><Loader2 class="spinning" />{{ t("loading") }}</div>
+              <p v-else-if="dockerError" class="task-error">{{ dockerError }} <button class="link-button" @click="refreshDocker">{{ t("retry") }}</button></p>
+              <div v-else-if="!dockerRows.length" class="empty compact">{{ t("docker.empty") }}</div>
+              <div v-else-if="!filteredDockerRows.length" class="empty compact">{{ t("docker.searchEmpty") }}</div>
+              <div v-else class="docker-table">
+                <div class="file-header docker-grid">
+                  <span>{{ t("docker.name") }}</span>
+                  <span>{{ t("docker.image") }}</span>
+                  <span>{{ t("docker.status") }}</span>
+                  <span class="docker-actions-head">{{ t("docker.actions") }}</span>
+                </div>
+                <div class="docker-rows">
+                  <div v-for="row in filteredDockerRows" :key="row.id" class="file-row docker-grid docker-row" :class="{ 'is-active': dockerLogsFor === (row.name || row.id) }">
+                    <span class="mono docker-cell" :title="row.name || row.id">{{ row.name || row.id }}</span>
+                    <span class="mono docker-cell" :title="row.image">{{ row.image }}</span>
+                    <span class="docker-cell" :class="{ 'docker-running': row.running }" :title="row.status || (row.running ? t('docker.running') : t('docker.stopped'))">{{ row.status || (row.running ? t("docker.running") : t("docker.stopped")) }}</span>
+                    <span class="docker-actions">
+                      <button type="button" class="icon-button" :title="t('docker.logs')" :aria-label="t('docker.logs')" :disabled="!!dockerBusyId" @click="loadDockerLogs(row)"><ScrollText /></button>
+                      <button
+                        v-if="row.running"
+                        type="button"
+                        class="icon-button"
+                        :title="t('docker.exec')"
+                        :aria-label="t('docker.exec')"
+                        :disabled="!!dockerBusyId"
+                        @click="execDockerShell(row)"
+                      ><SquareTerminal /></button>
+                      <template v-if="canWrite">
+                        <button v-if="!row.running" type="button" class="icon-button" :title="t('docker.start')" :aria-label="t('docker.start')" :disabled="!!dockerBusyId" @click="runDockerAction(row, 'start')"><Play /></button>
+                        <button v-else type="button" class="icon-button" :title="t('docker.stop')" :aria-label="t('docker.stop')" :disabled="!!dockerBusyId" @click="runDockerAction(row, 'stop')"><Square /></button>
+                        <button type="button" class="icon-button" :title="t('docker.restart')" :aria-label="t('docker.restart')" :disabled="!!dockerBusyId" @click="runDockerAction(row, 'restart')"><RotateCw /></button>
+                      </template>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <span class="float-resize-handle" :title="t('docker.resize')" @pointerdown="startDockerPanelResize('list', $event)" />
+        </section>
+        <section v-if="dockerOpen && dockerLogsFor" class="metrics-float docker-logs-float" :style="dockerLogsFloatStyle">
+          <header>
+            <h2 class="docker-logs-title" :title="dockerLogsFor">{{ t("docker.logsFor", { name: dockerLogsFor }) }}</h2>
+            <div class="metrics-float-actions">
+              <button type="button" class="icon-button" :title="t('docker.closeLogs')" :aria-label="t('docker.closeLogs')" @click="closeDockerLogs"><X /></button>
+            </div>
+          </header>
+          <div class="metrics-float-body docker-logs-float-body">
+            <pre class="docker-logs mono">{{ dockerLogs || t("docker.logsEmpty") }}</pre>
+          </div>
+          <span class="float-resize-handle" :title="t('docker.resize')" @pointerdown="startDockerPanelResize('logs', $event)" />
+        </section>
+        <section v-if="otpOpen" class="metrics-float docker-float otp-vault-float">
+          <header>
+            <h2>{{ t("otp.title") }}</h2>
+            <button :title="t('close')" class="icon-button" @click="closeOtpPanel"><X /></button>
+          </header>
+          <div class="metrics-float-body">
+            <OtpPanel :t="t" />
+          </div>
+        </section>
+        <TelnetConnectDialog :open="telnetDialogOpen" :locale="locale" @update:open="(v) => (telnetDialogOpen = v)" @connect="onTelnetConnect" />
+        <SerialConnectDialog :open="serialDialogOpen" :locale="locale" @update:open="(v) => (serialDialogOpen = v)" @connect="onSerialConnect" />
+        <SerialUploadDialog
+          :open="serialUploadDialogOpen"
+          :locale="locale"
+          :busy="serialUploadBusy"
+          @update:open="(v) => (serialUploadDialogOpen = v)"
+          @start="onSerialUploadStart"
+        />
+        <VncConnectDialog :open="vncDialogOpen" :locale="locale" @update:open="(v) => (vncDialogOpen = v)" @connect="onVncConnect" />
+        <RdpConnectDialog :open="rdpDialogOpen" :locale="locale" @update:open="(v) => (rdpDialogOpen = v)" @connect="onRdpConnect" />
+        <TaskRunnerDialog :open="taskDialogOpen" :connection-id="connectionId || ''" :t="t" @update:open="taskDialogOpen = $event" />
+        <section v-if="vncSessionId" class="metrics-float docker-float protocol-surface">
+          <header>
+            <h2>{{ t("vnc.sessionTitle", { host: protocolSession?.label || vncSessionId }) }}</h2>
+            <button :title="t('close')" class="icon-button" @click="closeProtocolGraphics('vnc')"><X /></button>
+          </header>
+          <div class="metrics-float-body protocol-surface-body">
+            <VncSurface
+              ref="vncSurfaceRef"
+              :scale-mode="vncScaleMode"
+              @input="sendVncInput"
+              @clipboard-out="sendVncClipboard"
+            />
+          </div>
+        </section>
+        <section v-if="rdpSessionId" class="metrics-float docker-float protocol-surface">
+          <header>
+            <h2>{{ t("rdp.sessionTitle", { host: protocolSession?.label || rdpSessionId }) }}</h2>
+            <button :title="t('close')" class="icon-button" @click="closeProtocolGraphics('rdp')"><X /></button>
+          </header>
+          <div class="metrics-float-body protocol-surface-body">
+            <RdpSurface
+              ref="rdpSurfaceRef"
+              :scale-mode="rdpScaleMode"
+              @input="sendRdpInput"
+              @clipboard-out="sendRdpClipboard"
+            />
+          </div>
+        </section>
+        <section v-if="recordingsOpen" class="metrics-float recordings-float">
+          <header>
+            <h2>{{ t("recordingsTitle") }}</h2>
+            <button v-if="recordings.length" class="icon-button recording-delete" :title="t('recordingsClear')" :disabled="recordingClearAllSubmitting" @click="recordingClearAllOpen = true"><Trash2 /></button>
+            <button :title="t('close')" class="icon-button" @click="toggleRecordings"><X /></button>
+          </header>
+          <div class="metrics-float-body">
+            <div v-if="recordingsLoading && !recordings.length" class="empty compact"><Loader2 class="spinning" />{{ t("loading") }}</div>
+            <div v-else-if="!recordings.length" class="empty compact">{{ t("recordingsEmpty") }}</div>
+            <article v-for="item in recordings" :key="item.recordingId" class="recording-card">
+              <Disc class="recording-icon" />
+              <div class="recording-text">
+                <span class="recording-host">{{ item.host || item.recordingId }}</span>
+                <span class="recording-meta">{{ formatRecordedAt(item.startedAt) }}<template v-if="item.bytes"> · {{ formatBytes(item.bytes) }}</template></span>
+              </div>
+              <span class="recording-duration mono">{{ formatDuration(item.durationSecs ?? 0) }}</span>
+              <div class="recording-actions">
+                <button class="icon-button compact" :title="t('replayOpen')" @click="openReplay(item)"><Play /></button>
+                <button class="icon-button compact" :title="t('replayExportGif')" :disabled="replayExporting" @click="exportRecordingFromList(item)"><Loader2 v-if="recordingExportingId === item.recordingId" class="spinning" /><ImagePlay v-else /></button>
+                <button v-if="localCanSave" class="icon-button compact" :title="t('revealInFolder')" :aria-label="t('revealInFolder')" @click="revealRecording(item)"><FolderOpen /></button>
+                <button class="icon-button compact recording-delete" :title="t('recordingDelete')" @click="deleteRecording(item)"><Trash2 /></button>
+              </div>
+            </article>
+          </div>
+        </section>
+        <!-- 回放弹窗：xterm 重放 + 倍速/进度/GIF 导出 -->
+        <div v-if="replayState" class="replay-overlay" @click.self="closeReplay">
+          <section class="replay-modal">
+            <header>
+              <h2>{{ t("replayTitle") }}<span class="metrics-host"> · {{ replayState.summary.host || replayState.summary.recordingId }}</span></h2>
+              <button class="icon-button" :title="t('replayClose')" @click="closeReplay"><X /></button>
+            </header>
+            <div class="replay-terminal-wrap">
+              <div ref="replayHost" class="replay-terminal"></div>
+              <div v-if="replayDurationMs <= 0" class="replay-empty">{{ t("replayEmpty") }}</div>
+            </div>
+            <div class="replay-controls">
+              <button class="icon-button" :title="t(replayPlaying ? 'replayPause' : 'replayPlay')" @click="toggleReplayPlay"><Pause v-if="replayPlaying" /><Play v-else /></button>
+              <Select :model-value="String(replaySpeed)" @update:model-value="(v) => (replaySpeed = Number(v))">
+                <SelectTrigger size="xs" class="replay-speed" :title="t('replaySpeed')">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0.5">0.5×</SelectItem>
+                  <SelectItem value="1">1×</SelectItem>
+                  <SelectItem value="2">2×</SelectItem>
+                  <SelectItem value="4">4×</SelectItem>
+                </SelectContent>
+              </Select>
+              <input class="replay-seek" type="range" min="0" :max="Math.max(1, replayDurationMs)" :value="replayPlayheadMs" step="100" @input="onReplaySeek" />
+              <span class="mono replay-time">{{ formatDuration(replayPlayheadMs / 1000) }} / {{ formatDuration(replayDurationMs / 1000) }}</span>
+              <button class="link-button" :disabled="replayExporting" @click="exportReplayGif">{{ replayExporting ? t("replayExporting") : t("replayExportGif") }}</button>
+            </div>
+          </section>
+        </div>
+        <!-- 批量发送结果：右下角紧凑 toast，成功自动消失，失败稍长，可手动关。 -->
+        <div
+          v-if="connected && batchBarOpen && (batchSummary || batchError)"
+          class="batch-bar-status"
+          :class="{ 'is-error': batchError || (batchSummary && batchSummary.failed) }"
+          role="status"
+        >
+          <template v-if="batchSummary">
+            <p :class="batchSummary.failed ? 'task-error' : undefined">
+              {{ batchSummary.failed ? t("batchSendPartial", { sent: batchSummary.sent, failed: batchSummary.failed }) : t("batchSendSent", { count: batchSummary.sent }) }}
+            </p>
+            <div v-if="batchSummary.failed" class="batch-result-list">
+              <span v-for="row in batchSummary.rows.filter((item) => !item.success).slice(0, 3)" :key="row.sessionId" class="batch-result-row mono">
+                {{ batchSessionLabel(row.sessionId) }} · {{ row.error || t("batchSendFailed") }}
+              </span>
+            </div>
+          </template>
+          <p v-else class="task-error">{{ batchError }}</p>
+          <button class="icon-button compact" :title="t('close')" @click="dismissBatchResult"><X /></button>
+        </div>
+        <!-- 批量发送命令条（Electerm quick-command bar）：贴终端底部，回车即发送；
+             目标选择/快速命令切换/保存为快速命令均在条上完成。 -->
+        <section v-if="connected && batchBarOpen" class="batch-bar" @contextmenu.stop @mousedown.stop @click.stop>
+          <div>
+            <!-- 底部条上的 popover 向上展开（reka side="top"，旧绝对定位会被裁切）。 -->
+            <Popover :open="batchTargetsOpen" @update:open="(open) => { if (!open) batchTargetsOpen = false; }">
+              <PopoverAnchor as-child>
+                <button class="batch-bar-targets" :title="t('batchSendTargetsShortcut')" @click.stop="toggleBatchTargetsPopover"><ListChecks /><span>{{ t("batchSendTargets", { count: batchSelected.length, total: batchTargets.length }) }}</span></button>
+              </PopoverAnchor>
+              <PopoverContent
+                class="popover batch-targets-popover"
+                side="top"
+                align="start"
+                :side-offset="6"
+                @keydown="onBatchTargetsKeydown"
+                @open-auto-focus.prevent
+                @close-auto-focus.prevent
+              >
+              <div class="command-history-header">
+                <span>{{ t("batchSendTargets", { count: batchSelected.length, total: batchTargets.length }) }}</span>
+                <span class="batch-target-actions">
+                  <button class="link-button" @click="pickBatchTargets('connected')">{{ t("batchSendConnected") }}</button>
+                  <button class="link-button" @click="pickBatchTargets('all')">{{ t("batchSendAll") }}</button>
+                  <button class="link-button" :disabled="batchLoading" @click="refreshBatchTargets">{{ t("refresh") }}</button>
+                </span>
+              </div>
+              <div v-if="batchLoading && !batchTargets.length" class="empty compact"><Loader2 class="spinning" /><span>{{ t("batchSendLoading") }}</span></div>
+              <div v-else-if="!batchTargets.length" class="empty compact">{{ t("batchSendNoSessions") }}</div>
+              <div v-else class="batch-target-list">
+                <label
+                  v-for="(target, index) in batchTargets"
+                  :key="target.sessionId"
+                  class="batch-target-row"
+                  :class="{ offline: target.connected === false, 'is-active': index === batchTargetFocusIndex }"
+                >
+                  <input type="checkbox" :checked="batchSelected.includes(target.sessionId)" @change="toggleBatchTargetId(target.sessionId)" />
+                  <span class="mono">{{ batchTargetLabel(target, { disambiguate: batchLabelsAmbiguous }) }}</span>
+                  <span v-if="target.sessionId === session?.sessionId" class="batch-badge">{{ t("batchSendCurrent") }}</span>
+                  <span v-if="target.connected === false" class="batch-badge batch-badge-warn">{{ t("batchSendDisconnected") }}</span>
+                  <span v-if="target.readOnly" class="read-only-badge">{{ t("readOnly") }}</span>
+                </label>
+              </div>
+              <p class="batch-target-hint">{{ t("batchSendTargetsHint") }}</p>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <template v-if="batchSaveMode">
+            <label
+              class="quick-scope-bind batch-scope-bind"
+              :class="{ disabled: batchSaving || !connectionId }"
+              :title="connectionId ? t('quickCommands.scope.connection') : t('quickCommands.scope.global')"
+            >
+              <Switch
+                size="sm"
+                :model-value="batchSaveScope === 'connection'"
+                :disabled="batchSaving || !connectionId"
+                @update:model-value="setBatchSaveBoundToConnection"
+              />
+              <span>{{ t("quickCommands.bindCurrentShort") }}</span>
+            </label>
+            <input
+              v-model="batchSaveName"
+              class="batch-bar-input"
+              :placeholder="t('quickCommandsName')"
+              :maxlength="60"
+              autofocus
+              :disabled="batchSaving"
+              @keydown.enter="confirmBatchBarSave"
+            />
+            <button class="icon-button icon-emerald" :title="t('save')" :disabled="batchSaving || !batchScopeCanAdd" @click="confirmBatchBarSave"><Save /></button>
+            <button class="icon-button" :title="t('cancel')" :disabled="batchSaving" @click="cancelBatchBarSave"><X /></button>
+          </template>
+          <template v-else>
+            <!-- 一体输入：快捷命令+历史联想；Ctrl+Space / ↓ / 左侧按钮打开；Enter 执行选中项。 -->
+            <Popover
+              v-if="batchSuggestAvailable"
+              :open="batchQuickPickOpen"
+              @update:open="(open) => { batchQuickPickOpen = open === true; if (open) { batchQuickActiveIndex = 0; scrollBatchSuggestActiveIntoView(); } }"
+            >
+              <PopoverAnchor as-child>
+                <div class="batch-bar-compose">
+                  <button
+                    type="button"
+                    class="batch-bar-compose-trigger"
+                    :title="t('batchSendQuickPick')"
+                    :disabled="batchSending"
+                    @click.stop="toggleBatchQuickPick"
+                  >
+                    <ChevronsUpDown />
+                  </button>
+                  <input
+                    ref="batchComposeInput"
+                    v-model="batchDraft"
+                    class="batch-bar-compose-input mono"
+                    spellcheck="false"
+                    :placeholder="t('batchSendPlaceholder')"
+                    :disabled="batchSending"
+                    @input="onBatchDraftInput"
+                    @keydown="onBatchDraftKeydown"
+                  />
+                </div>
+              </PopoverAnchor>
+              <!-- 禁止 open/close 自动抢焦点：输入联想打开时必须焦点留在 input。 -->
+              <PopoverContent
+                class="popover batch-quick-popover"
+                side="top"
+                align="start"
+                :side-offset="6"
+                @open-auto-focus.prevent
+                @close-auto-focus.prevent
+              >
+                <p v-if="!batchSuggestItems.length" class="muted settings-note">{{ t("batchSendQuickEmpty") }}</p>
+                <button
+                  v-for="(item, index) in batchSuggestItems"
+                  :key="item.id"
+                  type="button"
+                  class="batch-quick-item"
+                  :class="{ active: index === batchQuickActiveIndex }"
+                  :data-active="index === batchQuickActiveIndex ? 'true' : undefined"
+                  :title="item.command"
+                  tabindex="-1"
+                  @mouseenter="batchQuickActiveIndex = index"
+                  @click="fillBatchSuggestItem(item)"
+                  @dblclick.prevent="runBatchSuggestItem(item)"
+                >
+                  <span class="batch-quick-item-main">
+                    <span class="batch-quick-item-name">
+                      <template v-for="(seg, si) in highlightBatchSuggestText(item.title, batchDraft)" :key="si">
+                        <mark v-if="seg.matched">{{ seg.text }}</mark><template v-else>{{ seg.text }}</template>
+                      </template>
+                    </span>
+                    <span class="batch-quick-item-badge">{{ item.kind === "quick" ? t("batchSendSuggestQuick") : t("batchSendSuggestHistory") }}</span>
+                  </span>
+                  <span v-if="item.kind === 'quick' && item.title !== item.command" class="batch-quick-item-cmd mono">
+                    <template v-for="(seg, si) in highlightBatchSuggestText(item.command, batchDraft)" :key="si">
+                      <mark v-if="seg.matched">{{ seg.text }}</mark><template v-else>{{ seg.text }}</template>
+                    </template>
+                  </span>
+                </button>
+                <p v-if="batchSuggestItems.length" class="batch-quick-hint">{{ t("batchSendQuickHint") }}</p>
+              </PopoverContent>
+            </Popover>
+            <div v-else class="batch-bar-compose">
+              <input
+                ref="batchComposeInput"
+                v-model="batchDraft"
+                class="batch-bar-compose-input mono"
+                spellcheck="false"
+                :placeholder="t('batchSendPlaceholder')"
+                :disabled="batchSending"
+                @input="broadcastBatchBarState()"
+                @keydown.up.prevent="browseBatchHistoryUp"
+                @keydown.down.prevent="browseBatchHistoryDown"
+                @keydown.enter="sendBatchCommand"
+              />
+            </div>
+            <button
+              class="icon-button"
+              :title="t('batchBarSave')"
+              :disabled="!batchDraft.trim() || (!canAddQuickCommandInScope(quickCommands, connectionId || null) && !canAddQuickCommandInScope(quickCommands, null))"
+              @click="openBatchBarSave"
+            ><Save /></button>
+          </template>
+          <button class="icon-button icon-emerald batch-bar-send" :title="t('batchSendSend')" :disabled="batchSending || !batchDraft.trim() || !batchSelected.length" @click="sendBatchCommand">
+            <Loader2 v-if="batchSending" class="spinning" />
+            <Send v-else />
+          </button>
+        </section>
+      </section>
+        </ContextMenuTrigger>
+        <ContextMenuContent class="terminal-context-menu">
+          <!-- 精简 Xshell 核心项；字号/会话/sudo/批量等仍在工具栏。 -->
+          <ContextMenuItem :disabled="!terminal?.hasSelection()" @select="copyTerminalSelection"><Copy />{{ t("terminalCopy") }}</ContextMenuItem>
+          <ContextMenuItem :disabled="!terminal?.hasSelection() || !connected" @select="askCopilotAboutTerminalSelection"><Sparkles />{{ t("copilot.explainTerminal") }}</ContextMenuItem>
+          <ContextMenuItem :disabled="!connected || terminalTransferBusy" @select="pasteTerminal"><ClipboardPaste />{{ t("terminalPaste") }}</ContextMenuItem>
+          <ContextMenuItem :disabled="!terminal?.hasSelection() || !connected || terminalTransferBusy" @select="pasteTerminalSelection"><ClipboardPaste />{{ t("terminalPasteSelection") }}</ContextMenuItem>
+          <ContextMenuItem @select="selectAllTerminal"><TextSelect />{{ t("terminalSelectAll") }}</ContextMenuItem>
+          <ContextMenuItem v-if="currentTerminalSelectionUrl()" @select="openTerminalSelectionUrl"><Link2 />{{ t("terminalOpenUrl") }}</ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem @select="openTerminalSearch"><Search />{{ t("terminalSearch.open") }}</ContextMenuItem>
+          <ContextMenuItem :disabled="!connected" @select="toggleHistoryPanel"><History />{{ t("historyPanel.titleShortcut") }}</ContextMenuItem>
+          <ContextMenuItem :disabled="!connected" @select="toggleQuickPalette"><Zap />{{ t("quickPalette.titleShortcut") }}</ContextMenuItem>
+          <ContextMenuItem :disabled="!connected" @select="toggleBatchBar"><ListChecks />{{ t("batchSendTitle") }}</ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem @select="clearTerminal"><Eraser />{{ t("terminalClear") }}</ContextMenuItem>
+          <ContextMenuItem :disabled="!connected || terminalTransferBusy" @select="sendTerminalInterrupt"><CircleStop />{{ t("terminalInterrupt") }}</ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem :disabled="!connected || terminalTransferBusy || !canWrite" @select="chooseZmodem"><FileUp />{{ t("zmodemUpload") }}</ContextMenuItem>
+          <ContextMenuItem :disabled="!connected || terminalTransferBusy || !canWrite" @select="chooseTrzszUpload"><FileUp />{{ t("trzszUpload") }}</ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+
+      <div v-if="sftpPaneOpen" class="divider" @pointerdown="startDividerDrag" />
+
+      <section v-if="sftpPaneOpen" ref="sftpPane" class="sftp-pane" tabindex="-1" :class="{ 'drag-active': dragActive }" @pointerdown="focusSftpPaneOnPointerDown" @paste.capture="onSftpClipboardPaste" @dragenter.prevent="dragActive = true" @dragover.prevent @dragleave.self="dragActive = false" @drop.prevent="onDrop">
+        <div class="path-toolbar">
+          <button class="icon-button" :title="t('parentFolder')" :disabled="currentPath === '/'" @click="goParent"><ArrowUp /></button>
+          <button class="icon-button icon-amber" :title="t('home')" :disabled="!connected" @click="loadHome"><Home /></button>
+          <button class="icon-button icon-cyan" :title="t('refresh')" :disabled="!connected || loadingFiles" @click="loadDirectory()"><RefreshCw :class="{ spinning: loadingFiles }" /></button>
+          <!-- #54 路径栏双态：非编辑态把当前路径渲染成可点击分段（末段为当前位置），
+               点击分段直接回跳、点击分段外区域进入编辑；编辑态是原先的完整输入框，
+               提交后回到分段展示。分段切分走 remotePathInput（有单测）。 -->
+          <div class="path-bar">
+            <input
+              v-show="pathBarEditing"
+              ref="pathBarInputEl"
+              v-model="currentPath"
+              spellcheck="false"
+              @keydown.enter="submitPathInput"
+              @keydown.esc="cancelPathBarEdit"
+              @blur="pathBarEditing = false"
+            />
+            <nav v-show="!pathBarEditing" class="path-crumbs" tabindex="0" @click="beginPathBarEdit" @keydown.enter.self.prevent="beginPathBarEdit">
+              <template v-for="(crumb, index) in pathCrumbs" :key="crumb.path">
+                <span v-if="index" class="path-crumb-sep" aria-hidden="true">/</span>
+                <button v-if="index < pathCrumbs.length - 1" class="path-crumb mono" :title="crumb.path" @click.stop="goToPath(crumb.path)">{{ crumb.name }}</button>
+                <span v-else class="path-crumb current mono" :title="crumb.path" aria-current="location">{{ crumb.name }}</span>
+              </template>
+            </nav>
+          </div>
+          <div>
+            <Popover :open="bookmarkSaveOpen" @update:open="(open) => { if (!open) bookmarkSaveOpen = false; }">
+              <PopoverAnchor as-child>
+                <button class="icon-button icon-amber" :title="t('sftpBookmark.add')" :disabled="!connected" @click.stop="toggleBookmarkSave"><Star /></button>
+              </PopoverAnchor>
+              <!-- 星标收藏弹层：label 默认取路径末段，可编辑后保存（前端先行校验 + 后端错误回显） -->
+              <PopoverContent class="popover bookmark-save-popover" align="end" :side-offset="5">
+              <strong class="path-history-title">{{ t("sftpBookmark.add") }}</strong>
+              <span class="bookmark-save-path mono" :title="currentPath">{{ currentPath }}</span>
+              <input v-model="bookmarkLabelDraft" class="bookmark-label-input mono" :maxlength="SFTP_BOOKMARK_LABEL_MAX_LENGTH" spellcheck="false" :placeholder="t('sftpBookmark.namePlaceholder')" :disabled="bookmarkSaving" autofocus @keydown.enter="confirmBookmarkSave" />
+              <div class="bookmark-save-actions">
+                <button class="icon-button icon-emerald" :title="t('save')" :disabled="bookmarkSaving" @click="confirmBookmarkSave"><Save /></button>
+                <button class="icon-button" :title="t('cancel')" :disabled="bookmarkSaving" @click="bookmarkSaveOpen = false"><X /></button>
+              </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div>
+            <Popover :open="pathHistoryOpen" @update:open="(open) => { if (!open) pathHistoryOpen = false; }">
+              <PopoverAnchor as-child>
+                <button class="icon-button" :title="t('sftpPathHistory.title')" :disabled="!connected" @click.stop="togglePathHistoryMenu"><History /></button>
+              </PopoverAnchor>
+              <PopoverContent class="popover path-history-popover" align="end" :side-offset="5">
+              <strong class="path-history-title">{{ t("sftpPathHistory.title") }}</strong>
+              <button v-for="item in currentPathHistory" :key="item" class="path-item mono" :title="item" @click="goToPath(item)">{{ item }}</button>
+              <div v-if="!currentPathHistory.length" class="empty compact">{{ t("sftpPathHistory.empty") }}</div>
+              <!-- 书签区：点击跳转，行尾悬浮删除；全局清单（跨连接共享） -->
+              <strong class="path-history-title">{{ t("sftpBookmark.title") }}</strong>
+              <template v-if="sftpBookmarks.length">
+                <div v-for="bookmark in sftpBookmarks" :key="bookmark.id" class="bookmark-row">
+                  <button class="path-item mono" :title="`${bookmark.label} · ${bookmark.path}`" @click="goToPath(bookmark.path)">{{ bookmark.label }}</button>
+                  <button class="bookmark-delete" :title="t('delete')" @click.stop="removeBookmark(bookmark)"><Trash2 /></button>
+                </div>
+              </template>
+              <div v-else class="empty compact">{{ t("sftpBookmark.empty") }}</div>
+              <strong class="path-history-title">{{ t("sftpQuickPath.title") }}</strong>
+              <button v-for="item in SFTP_QUICK_PATHS" :key="item" class="path-item mono" :title="item" @click="goToPath(item)">{{ item }}</button>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <button class="icon-button" :title="t('sftpPaste.action')" :disabled="!connected || !canWrite || !sftpClipboard || pasteBusy" @click="pasteClipboard"><ClipboardPaste /></button>
+          <button class="icon-button icon-teal" :title="`${t('upload')} · Ctrl/Cmd+V`" :disabled="!connected || !canWrite" @click.stop="chooseUpload"><FileUp /></button>
+          <button class="icon-button icon-neutral" :class="{ 'is-active': localPaneOpen }" :title="t('localPane.toggle')" :aria-pressed="localPaneOpen" @click="localPaneOpen = !localPaneOpen"><HardDrive /></button>
+          <button class="icon-button icon-amber" :title="t('newFolder')" :disabled="!connected || !canWrite" @click="operationDraft = ''; operationDialog = 'mkdir'"><FolderPlus /></button>
+          <button class="icon-button icon-amber" :title="t('sftpNewFile.action')" :disabled="!connected || !canWrite" @click="openNewFileDialog"><FilePlus /></button>
+          <label class="follow-directory-control sudo-label" :title="!canWrite ? t('readOnly') : undefined">
+            <Switch size="sm" :model-value="sudoMode" :disabled="!connected || !canWrite" @update:model-value="toggleSudoMode" />
+            <span>{{ t("sudo.mode") }}</span>
+          </label>
+        </div>
+        <!-- SFTP 面板主体：本机半栏 + 远端 tree/quick 侧栏 + 文件区 -->
+        <div class="sftp-body">
+          <LocalBrowsePanel
+            v-if="localPaneOpen"
+            :locale="locale"
+            :can-upload="connected && canWrite"
+            @upload="uploadLocalPaths"
+          />
+          <ContextMenu :open="!!sideMenu" @update:open="(open) => { if (!open) sideMenu = undefined; }">
+            <!-- display:contents 避免包装 span 参与 flex 布局；行右键经冒泡到达触发器。 -->
+            <ContextMenuTrigger class="contents">
+          <SideNavPanel
+            :tab="sftpSideTab"
+            :collapsed="sftpSideCollapsed"
+            :tree-root="sftpTree"
+            :quick-paths="sideQuickPaths"
+            :current-path="currentPath"
+            :t="t"
+            @update:tab="setSftpSideTab"
+            @update:collapsed="setSftpSideCollapsed"
+            @navigate="goToPath"
+            @toggle-node="expandSideTreeNode"
+            @refresh-tree="refreshSideTree"
+            @node-context="openSideMenu"
+          />
+            </ContextMenuTrigger>
+            <!-- 侧栏（目录树/快捷路径）行右键：打开 / 复制路径 / 复制文件名 / 压缩 -->
+            <ContextMenuContent>
+              <ContextMenuItem @select="sideMenuAction('open')"><Folder />{{ t("openFolder") }}</ContextMenuItem>
+              <ContextMenuItem @select="sideMenuAction('copyPath')"><Copy />{{ t("sftpCopy.copyPath") }}</ContextMenuItem>
+              <ContextMenuItem @select="sideMenuAction('copyName')"><FileText />{{ t("sftpCopy.copyName") }}</ContextMenuItem>
+              <ContextMenuItem :disabled="!canWrite || archiveBusy" @select="sideMenuAction('archive')"><Archive />{{ t("archive.action") }}</ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
+          <div class="sftp-main">
+          <div class="sftp-filter-bar">
+            <label class="sftp-search-input">
+              <Search />
+              <input v-model="sftpSearch" type="search" :placeholder="t('sftpSearch.placeholder')" spellcheck="false" />
+              <button v-if="sftpSearch" class="sftp-search-clear" :title="t('cancel')" @click.prevent="sftpSearch = ''"><X /></button>
+            </label>
+            <Select :model-value="sftpTypeFilter" @update:model-value="(v) => (sftpTypeFilter = v as SftpTypeFilter)">
+              <SelectTrigger size="xs" class="sftp-type-filter" :title="t('sftpFilter.all')">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{{ t("sftpFilter.all") }}</SelectItem>
+                <SelectItem value="directory">{{ t("sftpFilter.folders") }}</SelectItem>
+                <SelectItem value="file">{{ t("sftpFilter.files") }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <button
+              class="icon-button sftp-hidden-toggle"
+              :class="{ 'is-active': sftpShowHidden }"
+              :title="sftpShowHidden ? t('sftpFilter.hideHidden') : t('sftpFilter.showHidden')"
+              :aria-pressed="sftpShowHidden"
+              @click="sftpShowHidden = !sftpShowHidden"
+            >
+              <Eye v-if="sftpShowHidden" />
+              <EyeOff v-else />
+            </button>
+          </div>
+          <div v-if="selectedUris.length > 1" class="sftp-batch-bar">
+            <span>{{ t("sftpBatch.selected", { count: selectedUris.length }) }}</span>
+            <template v-if="batchProgress">
+              <progress class="batch-progress-bar" :value="batchProgressPercent(batchProgress)" max="100" />
+              <span class="batch-progress mono">{{ t("sftpBatch.progress", { done: batchProgress.done, total: batchProgress.total }) }}</span>
+            </template>
+            <button :disabled="!canWrite || archiveBusy || batchDeleteSubmitting" @click="batchArchive"><Archive />{{ t("sftpBatch.archive") }}</button>
+            <button class="danger" :disabled="!canWrite || archiveBusy || batchDeleteSubmitting" @click="batchDeleteOpen = true"><Trash2 />{{ t("sftpBatch.delete") }}</button>
+            <button @click="clearRowSelection"><X />{{ t("sftpBatch.clear") }}</button>
+          </div>
+          <div class="file-table">
+            <!-- 行右键（文件操作）与空白处右键（新建/刷新）共用同一 ContextMenu 根：
+                 行处理器 showFileMenu 先行设置负载，容器处理器按事件目标兜空白区；
+                 定位/碰撞/Esc/外点关闭均由 reka 承担。 -->
+            <ContextMenu :open="!!(fileMenu || blankMenu)" @update:open="(open) => { if (!open) { fileMenu = undefined; blankMenu = false; } }">
+              <ContextMenuTrigger as-child>
+            <div class="file-rows" @contextmenu="onFileAreaContextMenu">
+              <div class="file-header" :style="sftpGridStyle">
+                <button class="col-wrap" @click="toggleSort('name')">{{ t("name") }}<component :is="sortIcon('name')" /><span class="col-resizer" @pointerdown="(e) => onColResizeStart('name', e)" /></button>
+                <button v-if="visibleColumns.includes('size')" class="col-wrap" @click="toggleSort('size')">{{ t("size") }}<component :is="sortIcon('size')" /><span class="col-resizer" @pointerdown="(e) => onColResizeStart('size', e)" /></button>
+                <button v-if="visibleColumns.includes('modified')" class="col-wrap" @click="toggleSort('modified')">{{ t("modified") }}<component :is="sortIcon('modified')" /><span class="col-resizer" @pointerdown="(e) => onColResizeStart('modified', e)" /></button>
+                <span v-if="visibleColumns.includes('owner')" class="col-wrap" :title="t('owner')">{{ t("owner") }}<span class="col-resizer" @pointerdown="(e) => onColResizeStart('owner', e)" /></span>
+                <span v-if="visibleColumns.includes('group')" class="col-wrap" :title="t('group')">{{ t("group") }}<span class="col-resizer" @pointerdown="(e) => onColResizeStart('group', e)" /></span>
+                <span v-if="visibleColumns.includes('permissions')" class="col-wrap">{{ t("permissions") }}<span class="col-resizer" @pointerdown="(e) => onColResizeStart('permissions', e)" /></span>
+              </div>
+              <div v-if="loadingFiles" class="empty"><Loader2 class="spinning" />{{ t("loading") }}</div>
+              <button
+                v-for="entry in visibleEntries"
+                v-else
+                :key="entry.uri"
+                class="file-row"
+                :class="{ selected: selectedPath === entry.uri || selectedUris.includes(entry.uri) }"
+                :style="sftpGridStyle"
+                @click="selectFile(entry, $event)"
+                @dblclick="openEntry(entry)"
+                @contextmenu="showFileMenu($event, entry)"
+                @keydown="onFileRowKeydown($event, entry)"
+              >
+                <span class="file-name">
+                  <!-- issue #36：目录/symlink 仍按 sftpEntryIconKind；普通文件按扩展名选图标。 -->
+                  <Folder v-if="sftpEntryIconKind(entry.kind) === 'folder'" class="folder-icon" />
+                  <component :is="fileIcon(entry.name)" v-else-if="sftpEntryIconKind(entry.kind) === 'file'" :class="fileIconClass(entry.name)" />
+                  <FileText v-else />
+                  <input
+                    v-if="renamingPath === entry.uri"
+                    v-model="renameDraft"
+                    class="rename-input"
+                    :disabled="renameSubmitting"
+                    @click.stop
+                    @dblclick.stop
+                    @keydown.enter.stop="commitRename(entry)"
+                    @keydown.escape.stop="renamingPath = ''"
+                    @blur="commitRename(entry)"
+                  />
+                  <span v-else>{{ entry.name }}</span>
+                </span>
+                <span v-if="visibleColumns.includes('size')" class="numeric">{{ entry.kind === "file" ? formatBytes(entry.size) : "" }}</span>
+                <span v-if="visibleColumns.includes('modified')">{{ formatModified(entry.modifiedAt) }}</span>
+                <span v-if="visibleColumns.includes('owner')" class="mono" :title="entry.owner">{{ entry.owner || "-" }}</span>
+                <span v-if="visibleColumns.includes('group')" class="mono" :title="entry.group">{{ entry.group || "-" }}</span>
+                <span v-if="visibleColumns.includes('permissions')" class="mono">{{ entry.permissions }}</span>
+              </button>
+              <div v-if="!loadingFiles && !visibleEntries.length" class="empty">{{ entries.length ? t("sftpSearch.noMatch") : t("emptyFolder") }}</div>
+            </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <!-- 多选感知：右键时已多选（selection > 1）→ 菜单整体切换为批量区，单项动作隐藏 -->
+                <template v-if="fileMenu && fileMenu.selection.length > 1">
+                  <ContextMenuItem @select="askCopilotAboutSelection"><Sparkles />{{ t("copilot.explainSelection") }}</ContextMenuItem>
+                  <ContextMenuItem @select="batchDownload"><Download />{{ t("download") }}</ContextMenuItem>
+                  <ContextMenuItem :disabled="!canWrite || archiveBusy || batchDeleteSubmitting" @select="batchArchive()"><Archive />{{ t("sftpBatch.archive") }}</ContextMenuItem>
+                  <ContextMenuItem variant="destructive" :disabled="!canWrite || archiveBusy || batchDeleteSubmitting" @select="batchDeleteOpen = true"><Trash2 />{{ t("sftpBatch.delete") }}</ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem @select="copySelectedPaths"><Copy />{{ t("sftpCopy.copySelected") }}</ContextMenuItem>
+                </template>
+                <template v-else-if="fileMenu">
+                  <ContextMenuItem v-if="fileMenu.entry.kind === 'directory' || fileMenu.entry.kind === 'file'" @select="openEntry(fileMenu.entry)"><Folder v-if="fileMenu.entry.kind === 'directory'" /><FileText v-else />{{ fileMenu.entry.kind === "directory" ? t("openFolder") : t("preview") }}</ContextMenuItem>
+                  <ContextMenuItem @select="askCopilotAboutSelection"><Sparkles />{{ t("copilot.explainSelection") }}</ContextMenuItem>
+                  <ContextMenuItem v-if="fileMenu.entry.kind === 'file' || fileMenu.entry.kind === 'directory'" @select="downloadEntry(fileMenu.entry)"><Download />{{ t("download") }}</ContextMenuItem>
+                  <ContextMenuItem v-if="fileMenu.entry.kind === 'file' && fileMenu.entry.name.endsWith('.dbxz')" @select="downloadEntry(fileMenu.entry, true)"><PackageOpen />{{ t("sftpLzpack.expandAction") }}</ContextMenuItem>
+                  <ContextMenuSub v-if="fileMenu.entry.kind === 'file'" @update:open="(open) => { if (open) void ensureExternalEditors(); }">
+                    <ContextMenuSubTrigger :disabled="!canWrite || !localCanSave" class="gap-2"><ExternalLink />{{ t("sftpEdit.openWith") }}<ChevronRight class="ml-auto opacity-60" /></ContextMenuSubTrigger>
+                    <ContextMenuSubContent class="min-w-[12rem]">
+                      <ContextMenuItem :disabled="!canWrite || !localCanSave" @select="openWithSystemEntry(fileMenu.entry)">{{ t("sftpEdit.systemDefault") }}<Check v-if="!mappedEditorIdFor(fileMenu.entry.name)" class="ml-auto" /></ContextMenuItem>
+                      <template v-if="availableExternalEditors.length">
+                        <ContextMenuSeparator />
+                        <ContextMenuItem v-for="editor in availableExternalEditors" :key="`known-${editor.id}`" :disabled="!canWrite || !localCanSave" @select="openWithKnownEntry(fileMenu.entry, editor)">{{ editor.name }}<Check v-if="mappedEditorIdFor(fileMenu.entry.name) === editor.id" class="ml-auto" /></ContextMenuItem>
+                      </template>
+                      <template v-if="editorConfig.customEditors.length">
+                        <ContextMenuSeparator />
+                        <ContextMenuItem v-for="editor in editorConfig.customEditors" :key="`custom-${editor.id}`" :disabled="!canWrite || !localCanSave" @select="openWithCustomEntry(fileMenu.entry, editor)">{{ editor.name }}<Check v-if="mappedEditorIdFor(fileMenu.entry.name) === editor.id" class="ml-auto" /></ContextMenuItem>
+                      </template>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem :disabled="!canWrite || !localCanSave" @select="beginCustomEditorCommand(fileMenu.entry)"><Pencil />{{ t("sftpEdit.customCommand") }}</ContextMenuItem>
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                  <ContextMenuItem :disabled="!canWrite" @select="beginRename(fileMenu.entry)"><Pencil />{{ t("rename") }}</ContextMenuItem>
+                  <ContextMenuItem @select="copySelectedEntries('copy')"><Copy />{{ t("sftpCopy.copy") }}</ContextMenuItem>
+                  <ContextMenuItem :disabled="!canWrite" @select="copySelectedEntries('cut')"><Scissors />{{ t("sftpCopy.cut") }}</ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem @select="copyTextToClipboard(pathFromUri(fileMenu.entry.uri), 'sftpCopy.copiedPath')"><Copy />{{ t("sftpCopy.copyPath") }}</ContextMenuItem>
+                  <ContextMenuItem @select="copyTextToClipboard(fileMenu.entry.name, 'sftpCopy.copiedName')"><FileText />{{ t("sftpCopy.copyName") }}</ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem :disabled="!canWrite" @select="beginChmod(fileMenu.entry)"><Lock />{{ t("permissionsEdit") }}</ContextMenuItem>
+                  <ContextMenuItem @select="openAttributes(fileMenu.entry)"><Info />{{ t("sftpAttrs.action") }}</ContextMenuItem>
+                  <ContextMenuItem v-if="fileMenu.entry.kind === 'directory' || (fileMenu.entry.kind === 'file' && !isArchiveName(fileMenu.entry.name))" :disabled="!canWrite || archiveBusy" @select="archiveEntry(fileMenu.entry)"><Archive />{{ t("archive.action") }}</ContextMenuItem>
+                  <ContextMenuItem v-if="fileMenu.entry.kind === 'file' && isArchiveName(fileMenu.entry.name)" :disabled="!canWrite || archiveBusy" @select="extractEntry(fileMenu.entry)"><PackageOpen />{{ t("extract.action") }}</ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem variant="destructive" :disabled="!canWrite" @select="deleteTarget = fileMenu.entry"><Trash2 />{{ t("delete") }}</ContextMenuItem>
+                </template>
+                <!-- 文件列表空白处右键：新建文件夹 / 新建文件 / 上传文件 / 刷新 -->
+                <template v-else>
+                  <ContextMenuItem :disabled="!canWrite" @select="blankMenuAction('mkdir')"><FolderPlus />{{ t("newFolder") }}</ContextMenuItem>
+                  <ContextMenuItem :disabled="!canWrite" @select="blankMenuAction('newFile')"><FilePlus />{{ t("sftpNewFile.action") }}</ContextMenuItem>
+                  <ContextMenuItem :disabled="!connected || !canWrite" @select="blankMenuAction('upload')"><FileUp />{{ t("upload") }}</ContextMenuItem>
+                  <ContextMenuItem :disabled="!connected || !canWrite || sudoMode" @select="chooseUpload(true)"><Archive />{{ t("sftpLzpack.uploadAction") }}</ContextMenuItem>
+                  <ContextMenuItem :disabled="!connected || loadingFiles" @select="blankMenuAction('refresh')"><RefreshCw />{{ t("refresh") }}</ContextMenuItem>
+                </template>
+              </ContextMenuContent>
+            </ContextMenu>
+            <footer class="file-footer"><span>{{ sftpFiltersActive ? t("sftpSearch.footerMatch", { matched: visibleEntries.length, total: entries.length }) : t("items", { count: entries.length }) }}</span><span v-if="diskUsage" :title="`${diskUsage.filesystem} → ${diskUsage.mount}`">{{ formatBytes(diskUsage.availableBytes) }} {{ t("diskFreeOf", { total: formatBytes(diskUsage.totalBytes) }) }}</span><span>{{ currentPath }}</span></footer>
+          </div>
+          </div>
+        </div>
+        <div v-if="dragActive" class="drop-overlay"><FileUp /><strong>{{ t("upload") }}</strong></div>
+      </section>
+    </section>
+
+    <CopilotDock
+      :open="copilotDockOpen"
+      :enabled="copilotEnabled"
+      :chat-mode="copilotChatMode"
+      :model-preference="copilotModelPreference"
+      :model-options="copilotModelOptions"
+      :context="copilotContext"
+      :model-source="copilotModelSource"
+      :messages="copilotMessages"
+      :busy="copilotBusy"
+      :width="copilotDockWidth"
+      :width-bounds="sshCopilotAdapter.dockWidth"
+      :intents="sshCopilotAdapter.intents"
+      :t="t"
+      @close="setCopilotDockOpen(false)"
+      @toggle-enabled="setCopilotEnabled"
+      @intent="(intent) => runCopilotIntent(intent)"
+      @run-card="runCopilotCard"
+      @open-settings="openCopilotSettings"
+      @send-prompt="sendCopilotPrompt"
+      @stop="stopCopilotGeneration"
+      @notice="showNotice"
+      @update:width="setCopilotDockWidth"
+      @update:chat-mode="setCopilotChatMode"
+      @update:model-preference="setCopilotModelPreference"
+    />
+    </div>
+
+    <!-- 弹层统一迁移 reka Dialog（Strategy B）：portal/遮罩/焦点陷阱/外点关闭由 reka
+         承担；Esc 仍由 onDocumentKeydown 分层链独占（内容上一律 @escape-key-down.prevent），
+         外点关闭经 update:open(false) 路由到各弹窗的语义取消函数。 -->
+    <Dialog :open="previewOpen" @update:open="(open) => { if (!open) closePreview(); }">
+      <DialogContent class="modal preview-modal" :class="{ 'preview-modal-max': previewMaximized }" @escape-key-down.prevent>
+        <header>
+          <DialogTitle>
+            {{ previewTitle }}
+            <span v-if="previewDirty" class="preview-dirty"><span class="preview-dirty-dot" />{{ t("editSave.unsaved") }}</span>
+            <span v-else-if="previewTruncated" class="preview-truncated-badge">{{ t("previewDialog.truncated", { limit: formatBytes(MAX_INLINE_PREVIEW_BYTES), size: formatBytes(previewSize) }) }}</span>
+          </DialogTitle>
+          <div class="preview-actions">
+            <FileOpenWithMenu
+              :file-name="previewTitle"
+              :editors="externalEditors"
+              :editor-config="editorConfig"
+              :can-open="canWrite && localCanSave"
+              :disabled-hint="localCanSave ? undefined : t('sftpEdit.desktopOnly')"
+              :t="t"
+              @open="openPreviewWith"
+              @custom-command="beginPreviewCustomCommand"
+              @request-editors="ensureExternalEditors"
+            />
+            <template v-if="previewEditableAllowed && !previewEditable">
+              <button :title="t('editSave.edit')" @click="beginPreviewEdit"><Pencil />{{ t("editSave.edit") }}</button>
+            </template>
+            <template v-else-if="previewEditableAllowed && previewEditable">
+              <button :title="t('cancel')" @click="cancelPreviewEdit">{{ t("cancel") }}</button>
+              <button :title="t('editSave.save')" :disabled="previewSaving" @click="savePreview"><Loader2 v-if="previewSaving" class="spinning" /><Save v-else />{{ t("editSave.save") }}</button>
+            </template>
+          </div>
+          <button :title="t('close')" class="icon-button" @click="closePreview"><X /></button>
+        </header>
+        <div v-if="previewLoading" class="empty"><Loader2 class="spinning" />{{ t("loading") }}</div>
+        <div v-else-if="previewMode === 'image'" class="preview-image-stage">
+          <img class="preview-image" :class="{ 'preview-image--full': previewImageZoomed }" :src="previewImageUrl" :alt="previewTitle" :title="previewImageZoomed ? t('imagePreview.zoomOut') : t('imagePreview.zoomIn')" @click="previewImageZoomed = !previewImageZoomed" />
+        </div>
+        <TextPreview v-else :text="previewText" :file-name="previewTitle" :appearance="appearance" :editable="previewEditable" @change="previewDraft = $event" />
+      </DialogContent>
+    </Dialog>
+
+    <!-- 多格式预览：图片/Office/PDF/媒体/表格/Markdown 等走分块流式 + 内嵌 file-viewer。 -->
+    <Dialog v-if="multiPreviewOpen" :open="multiPreviewOpen" @update:open="(open) => { if (!open) closeMultiFormatPreview(); }">
+      <DialogContent class="modal preview-modal" :class="{ 'preview-modal-max': previewMaximized }" @escape-key-down.prevent>
+        <DialogTitle class="sr-only">{{ previewFileLabel(multiPreviewPath) }}</DialogTitle>
+        <PreviewPane
+          :path="multiPreviewPath"
+          :session-id="session?.sessionId"
+          :sudo="sudoMode && canWrite"
+          :can-write="canWrite"
+          :appearance="appearance"
+          :t="t"
+          :editors="externalEditors"
+          :editor-config="editorConfig"
+          :can-open-local="localCanSave"
+          :maximized="previewMaximized"
+          @close="closeMultiFormatPreview"
+          @saved="showNotice(t('editSave.saved', { name: previewFileLabel(multiPreviewPath) }))"
+          @download="(path) => downloadMultiPreview(path)"
+          @open-with="openMultiPreviewWith"
+          @custom-command="customCommandForMultiPreview"
+          @request-editors="ensureExternalEditors"
+          @toggle-maximize="previewMaximized = !previewMaximized"
+        />
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="watchModifiedQueue.length > 0" @update:open="(open) => { if (!open) dismissWatchModified(); }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <header><DialogTitle>{{ t("sftpEdit.modifiedTitle") }}</DialogTitle><Loader2 v-if="externalEditBusy" class="spinning" /><button :title="t('close')" :aria-label="t('close')" class="icon-button" @click="dismissWatchModified"><X /></button></header>
+        <p class="sftp-dialog-hint">{{ t("sftpEdit.modifiedMessage", { name: watchModifiedPrompt?.name || "" }) }}</p>
+        <footer>
+          <button @click="dismissWatchModified">{{ t("cancel") }}</button>
+          <button @click="uploadWatchedFileAlways">{{ t("sftpEdit.alwaysUpload") }}</button>
+          <button class="primary-button" @click="uploadWatchedFileOnce">{{ t("sftpEdit.uploadOnce") }}</button>
+        </footer>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="customEditorOpen" @update:open="(open) => { if (!open) customEditorOpen = false; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <header><DialogTitle>{{ t("sftpEdit.customCommandTitle") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="customEditorOpen = false"><X /></button></header>
+        <input v-model="customEditorName" :placeholder="t('sftpEdit.customEditorNamePlaceholder')" />
+        <input v-model="customEditorCommand" class="mono" spellcheck="false" autofocus :placeholder="t('sftpEdit.customEditorCommandPlaceholder')" />
+        <p class="muted">{{ t("sftpEdit.customEditorCommandHint") }}</p>
+        <label class="quick-sudo-control">
+          <Switch v-model="customEditorRemember" size="sm" />
+          <span>{{ t("sftpEdit.rememberAssociation", { pattern: customEditorPattern }) }}</span>
+        </label>
+        <footer><button @click="customEditorOpen = false">{{ t("cancel") }}</button><button class="primary-button" :disabled="!customEditorCommand.trim()" @click="commitCustomEditor">{{ t("sftpEdit.customCommandRun") }}</button></footer>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 端口映射管理（-L/-R）：列表/添加/停止与 ssh/forward/state 订阅都在
+         PortForwardDialog 内；会话断开由 sidecar 清理全部映射。 -->
+    <PortForwardDialog
+      :locale="locale"
+      :open="forwardsOpen"
+      :connection-id="connectionId"
+      :session-id="session?.sessionId ?? null"
+      @update:open="forwardsOpen = $event"
+      @error="showError($event, 'terminal')"
+      @notice="showNotice($event)"
+    />
+
+    <Dialog :open="operationDialog === 'mkdir'" @update:open="(open) => { if (!open) operationDialog = null; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <header><DialogTitle>{{ t("newFolder") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="operationDialog = null"><X /></button></header>
+        <input v-model="operationDraft" autofocus @keydown.enter="createDirectory" />
+        <footer><button @click="operationDialog = null">{{ t("cancel") }}</button><button class="primary-button" :disabled="!operationDraft.trim()" @click="createDirectory">{{ t("confirm") }}</button></footer>      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="commandOpen" @update:open="(open) => { if (!open) commandOpen = false; }">
+      <DialogContent class="modal command-modal" @escape-key-down.prevent>
+        <header><DialogTitle>{{ t("commandTitle") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="commandOpen = false"><X /></button></header>
+        <textarea
+          v-model="commandDraft"
+          class="mono"
+          rows="5"
+          spellcheck="false"
+          autofocus
+          :placeholder="t('commandPlaceholder')"
+          :disabled="commandRunning"
+          @keydown="handleCommandInputKeydown"
+        />
+        <div v-if="commandDialogHistory.length" class="command-history">
+          <div class="command-history-header">
+            <span>{{ t("commandHistoryTitle") }}</span>
+            <button class="link-button" type="button" @click="clearCommandHistory">{{ t("commandHistoryClear") }}</button>
+          </div>
+          <div class="command-history-list" role="list">
+            <button
+              v-for="item in commandDialogHistory"
+              :key="`${item.at ?? 0}:${item.command}`"
+              type="button"
+              class="command-history-item mono"
+              :title="item.command"
+              @click="rerunHistoryCommand(item.command)"
+            >{{ truncateHistoryCommand(item.command) }}</button>
+          </div>
+        </div>
+        <label class="quick-sudo-control">
+          <Switch v-model="commandUseSudo" size="sm" :disabled="commandRunning" />
+          <span>{{ t("quickSudo") }}</span>
+        </label>
+        <div v-if="commandRunning" class="command-output"><Loader2 class="spinning" /><span>{{ t("commandRunning") }}</span></div>
+        <pre v-else-if="commandResult" class="command-output mono">{{ commandOutputText || t("commandNoOutput") }}<span class="command-exit">exit {{ commandResult.exitCode }}</span></pre>
+        <p v-if="commandError" class="task-error">{{ commandError }}</p>
+        <footer>
+          <button @click="commandOpen = false">{{ t("close") }}</button>
+          <button v-if="commandRunning" @click="cancelCommand"><X />{{ t("commandCancel") }}</button>
+          <button class="primary-button" :disabled="!commandDraft.trim() || commandRunning" @click="runCommand">
+            <Loader2 v-if="commandRunning" class="spinning" />
+            <SquareTerminal v-else />
+            {{ t("commandRun") }}
+          </button>
+        </footer>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!chmodTarget" @update:open="(open) => { if (!open) chmodTarget = undefined; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="chmodTarget">
+        <header><DialogTitle>{{ t("permissionsEdit") }} · {{ chmodTarget.name }}</DialogTitle><button :title="t('close')" class="icon-button" @click="chmodTarget = undefined"><X /></button></header>
+        <div class="perm-matrix" role="group" :aria-label="t('permissionsEdit')">
+          <span></span>
+          <span v-for="column in PERM_COLUMNS" :key="column.bit" class="perm-matrix-head">{{ t(column.key) }}</span>
+          <template v-for="role in PERM_ROLES" :key="role.who">
+            <span class="perm-matrix-role">{{ t(role.key) }}</span>
+            <label v-for="column in PERM_COLUMNS" :key="column.bit" class="perm-matrix-cell">
+              <input type="checkbox" :checked="permBit(chmodDraft, role.who, column.bit)" @change="toggleChmodPerm(role.who, column.bit, $event)" />
+            </label>
+          </template>
+        </div>
+        <input v-model="chmodDraft" class="mono" spellcheck="false" :placeholder="t('permissionsPlaceholder')" @keydown.enter="confirmChmod" />
+        <footer><button @click="chmodTarget = undefined">{{ t("cancel") }}</button><button class="primary-button" :disabled="!chmodDraft.trim() || chmodSubmitting" @click="confirmChmod">{{ t("confirm") }}</button></footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!deleteTarget" @update:open="(open) => { if (!open) deleteTarget = undefined; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="deleteTarget">
+        <header><DialogTitle>{{ t("deleteTitle") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="deleteTarget = undefined"><X /></button></header>
+        <div class="destructive-copy"><div><strong>{{ deleteTarget.name }}</strong><p class="muted">{{ t("deleteMessage") }}</p></div></div>
+        <footer><button @click="deleteTarget = undefined">{{ t("cancel") }}</button><button class="danger-button" :disabled="deleteSubmitting" @click="confirmDelete"><Trash2 />{{ t("delete") }}</button></footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="batchDeleteOpen" @update:open="(open) => { if (!open) batchDeleteOpen = false; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <header><DialogTitle>{{ t("sftpBatch.deleteTitle") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="batchDeleteOpen = false"><X /></button></header>
+        <div class="destructive-copy"><div><strong>{{ t("sftpBatch.selected", { count: selectedEntries.length }) }}</strong><p class="muted">{{ t("sftpBatch.deleteMessage") }}</p></div></div>
+        <div v-if="batchProgress" class="batch-progress-row"><progress class="batch-progress-bar" :value="batchProgressPercent(batchProgress)" max="100" /><span class="batch-progress mono">{{ t("sftpBatch.progress", { done: batchProgress.done, total: batchProgress.total }) }}</span></div>
+        <footer><button @click="batchDeleteOpen = false" :disabled="batchDeleteSubmitting">{{ t("cancel") }}</button><button class="danger-button" :disabled="batchDeleteSubmitting" @click="confirmBatchDelete"><Loader2 v-if="batchDeleteSubmitting" class="spinning" /><Trash2 v-else />{{ t("delete") }}</button></footer>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 录制删除确认：应用内弹窗替代 window.confirm（宿主沙箱 iframe 无 allow-modals，confirm 恒 false） -->
+    <!-- 下载/导出前的保存目录选择（设置里开启「每次询问」时出现） -->
+    <Dialog :open="!!downloadPrompt" @update:open="(open) => { if (!open) resolveDownloadPrompt(undefined); }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="downloadPrompt">
+        <header><DialogTitle>{{ t("downloadSettings.askTitle") }}</DialogTitle><button class="icon-button" :title="t('close')" @click="resolveDownloadPrompt(undefined)"><X /></button></header>
+        <p class="muted mono">{{ downloadPrompt.fileName }}</p>
+        <label class="settings-field">
+          <span>{{ t("downloadSettings.directory") }}</span>
+          <span class="settings-dir-row">
+            <input v-model="downloadPrompt.dir" class="mono" spellcheck="false" autofocus @keydown.enter="resolveDownloadPrompt({ dir: downloadPrompt.dir, setDefault: downloadPrompt.setDefault })" />
+            <button v-if="localCanSave" type="button" class="browse-button" :title="t('downloadSettings.browse')" :aria-label="t('downloadSettings.browse')" @click="folderPickerTarget = 'prompt'"><FolderOpen /></button>
+          </span>
+        </label>
+        <label class="settings-field settings-switch-row">
+          <input v-model="downloadPrompt.setDefault" type="checkbox" />
+          <span>{{ t("downloadSettings.setDefaultThisTime") }}</span>
+        </label>
+        <footer>
+          <button @click="resolveDownloadPrompt(undefined)">{{ t("cancel") }}</button>
+          <button class="primary-button" @click="resolveDownloadPrompt({ dir: downloadPrompt.dir, setDefault: downloadPrompt.setDefault })">{{ t("save") }}</button>
+        </footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 「询问我」冲突策略：目标目录已有同名文件时的选择 -->
+    <Dialog :open="!!downloadConflictPrompt" @update:open="(open) => { if (!open) resolveDownloadConflict(undefined); }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="downloadConflictPrompt">
+        <header><DialogTitle>{{ t("downloadConflict.title") }}</DialogTitle><button class="icon-button" :title="t('close')" @click="resolveDownloadConflict(undefined)"><X /></button></header>
+        <p>{{ t("downloadConflict.message", { name: downloadConflictPrompt.fileName }) }}</p>
+        <p class="muted mono">{{ downloadConflictPrompt.path }}</p>
+        <footer>
+          <button @click="resolveDownloadConflict(undefined)">{{ t("cancel") }}</button>
+          <button class="danger-button" @click="resolveDownloadConflict('overwrite')">{{ t("downloadSettings.conflict.overwrite") }}</button>
+          <button class="primary-button" @click="resolveDownloadConflict('rename')">{{ t("downloadSettings.conflict.rename") }}</button>
+        </footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="dockerConfirm !== null" @update:open="(open) => { if (!open) dockerConfirm = null; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="dockerConfirm">
+        <header><DialogTitle>{{ t(`docker.${dockerConfirm.action}`) }}</DialogTitle><button :title="t('close')" class="icon-button" @click="dockerConfirm = null"><X /></button></header>
+        <p>{{ t("docker.confirm", { action: t(`docker.${dockerConfirm.action}`), name: dockerConfirm.row.name || dockerConfirm.row.id }) }}</p>
+        <footer>
+          <button @click="dockerConfirm = null">{{ t("cancel") }}</button>
+          <button class="primary-button" @click="confirmDockerAction">{{ t(`docker.${dockerConfirm.action}`) }}</button>
+        </footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!recordingDeleteTarget" @update:open="(open) => { if (!open) recordingDeleteTarget = null; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="recordingDeleteTarget">
+        <header><DialogTitle>{{ t("recordingDelete") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="recordingDeleteTarget = null"><X /></button></header>
+        <div class="destructive-copy"><div><strong>{{ t("recordingDeleteConfirm", { host: recordingDeleteTarget.host || recordingDeleteTarget.recordingId }) }}</strong><p class="muted">{{ formatRecordedAt(recordingDeleteTarget.startedAt) }} · {{ formatDuration(recordingDeleteTarget.durationSecs ?? 0) }}</p></div></div>
+        <footer><button @click="recordingDeleteTarget = null" :disabled="recordingDeleteSubmitting">{{ t("cancel") }}</button><button class="danger-button" :disabled="recordingDeleteSubmitting" @click="confirmRecordingDelete"><Loader2 v-if="recordingDeleteSubmitting" class="spinning" /><Trash2 v-else />{{ t("delete") }}</button></footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 录制一键清空确认：应用内弹窗（沙箱 iframe confirm 恒 false） -->
+    <Dialog :open="recordingClearAllOpen" @update:open="(open) => { if (!open) recordingClearAllOpen = false; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <header><DialogTitle>{{ t("recordingsClear") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="recordingClearAllOpen = false"><X /></button></header>
+        <div class="destructive-copy"><div><strong>{{ t("recordingsClearConfirm", { count: recordings.length }) }}</strong></div></div>
+        <footer><button @click="recordingClearAllOpen = false" :disabled="recordingClearAllSubmitting">{{ t("cancel") }}</button><button class="danger-button" :disabled="recordingClearAllSubmitting" @click="confirmRecordingClearAll"><Loader2 v-if="recordingClearAllSubmitting" class="spinning" /><Trash2 v-else />{{ t("delete") }}</button></footer>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 传输历史清空确认：应用内弹窗（沙箱 iframe confirm 恒 false） -->
+    <Dialog :open="transferHistoryClearOpen" @update:open="(open) => { if (!open) transferHistoryClearOpen = false; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <header><DialogTitle>{{ t("transfersHistory.clear") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="transferHistoryClearOpen = false"><X /></button></header>
+        <div class="destructive-copy"><div><strong>{{ t("transfersHistory.clearConfirm") }}</strong></div></div>
+        <footer><button @click="transferHistoryClearOpen = false">{{ t("cancel") }}</button><button class="danger-button" @click="confirmTransferHistoryClear"><Trash2 />{{ t("delete") }}</button></footer>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 快速命令删除确认：应用内弹窗（沙箱 iframe confirm 恒 false） -->
+    <Dialog :open="!!quickDeleteTarget" @update:open="(open) => { if (!open && !quickDeleteSubmitting) quickDeleteTarget = null; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="quickDeleteTarget">
+        <header><DialogTitle>{{ t("delete") }}</DialogTitle><button :title="t('close')" class="icon-button" :disabled="quickDeleteSubmitting" @click="quickDeleteTarget = null"><X /></button></header>
+        <div class="destructive-copy"><div><strong>{{ t("quickCommandDeleteConfirm", { name: quickDeleteTarget.name || quickDeleteTarget.command }) }}</strong><p v-if="quickDeleteTarget.name" class="muted mono">{{ quickDeleteTarget.command }}</p></div></div>
+        <footer><button @click="quickDeleteTarget = null" :disabled="quickDeleteSubmitting">{{ t("cancel") }}</button><button class="danger-button" :disabled="quickDeleteSubmitting" @click="confirmQuickCommandDelete"><Loader2 v-if="quickDeleteSubmitting" class="spinning" /><Trash2 v-else />{{ t("delete") }}</button></footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!quickDeleteConnectionTarget" @update:open="(open) => { if (!open && !quickDeleteConnectionSubmitting) quickDeleteConnectionTarget = null; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="quickDeleteConnectionTarget">
+        <header><DialogTitle>{{ t("quickCommands.deleteConnection") }}</DialogTitle><button :title="t('close')" class="icon-button" :disabled="quickDeleteConnectionSubmitting" @click="quickDeleteConnectionTarget = null"><X /></button></header>
+        <div class="destructive-copy"><div><strong>{{ t("quickCommands.deleteConnectionConfirm", { id: shortenConnectionId(quickDeleteConnectionTarget.connectionId), count: quickDeleteConnectionTarget.count }) }}</strong></div></div>
+        <footer><button @click="quickDeleteConnectionTarget = null" :disabled="quickDeleteConnectionSubmitting">{{ t("cancel") }}</button><button class="danger-button" :disabled="quickDeleteConnectionSubmitting" @click="confirmQuickCommandsDeleteForConnection"><Loader2 v-if="quickDeleteConnectionSubmitting" class="spinning" /><Trash2 v-else />{{ t("delete") }}</button></footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="newFileDialog" @update:open="(open) => { if (!open) newFileDialog = false; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <header><DialogTitle>{{ t("sftpNewFile.title") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="newFileDialog = false"><X /></button></header>
+        <input v-model="newFileDraft" autofocus spellcheck="false" :placeholder="t('sftpNewFile.placeholder')" @keydown.enter="createNewFile" />
+        <footer><button @click="newFileDialog = false">{{ t("cancel") }}</button><button class="primary-button" :disabled="!newFileDraft.trim() || newFileSubmitting" @click="createNewFile"><Loader2 v-if="newFileSubmitting" class="spinning" />{{ t("confirm") }}</button></footer>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!attrsTarget" @update:open="(open) => { if (!open) closeAttributes(); }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="attrsTarget">
+        <header><DialogTitle>{{ t("sftpAttrs.title") }} · {{ attrsTarget.name }}</DialogTitle><button :title="t('close')" class="icon-button" @click="closeAttributes"><X /></button></header>
+        <div v-if="attrsLoading" class="empty compact"><Loader2 class="spinning" />{{ t("loading") }}</div>
+        <template v-else-if="attrsInfo">
+          <dl class="attrs-grid">
+            <dt>{{ t("sftpAttrs.path") }}</dt><dd class="mono">{{ attrsInfo.path }}</dd>
+            <dt>{{ t("sftpAttrs.type") }}</dt><dd>{{ t(`sftpAttrs.kind.${attrsInfo.kind}`) }}</dd>
+            <dt>{{ t("size") }}</dt><dd class="numeric">{{ attrsInfo.kind === "directory" ? "–" : formatBytes(attrsInfo.size || 0) }}</dd>
+            <dt>{{ t("sftpAttrs.permissions") }}</dt><dd class="mono">{{ attrsInfo.mode || "–" }}</dd>
+            <dt>{{ t("sftpAttrs.owner") }}</dt><dd>{{ attrsOwnerDisplay }}</dd>
+            <dt>{{ t("sftpAttrs.modified") }}</dt><dd>{{ formatModified(attrsInfo.modifiedAt) || "–" }}</dd>
+          </dl>
+          <div class="perm-matrix" role="group" :aria-label="t('sftpAttrs.permissions')">
+            <span></span>
+            <span v-for="column in PERM_COLUMNS" :key="column.bit" class="perm-matrix-head">{{ t(column.key) }}</span>
+            <template v-for="role in PERM_ROLES" :key="role.who">
+              <span class="perm-matrix-role">{{ t(role.key) }}</span>
+              <label v-for="column in PERM_COLUMNS" :key="column.bit" class="perm-matrix-cell">
+                <input type="checkbox" :disabled="!canWrite" :checked="permBit(attrsMode, role.who, column.bit)" @change="toggleAttrsPerm(role.who, column.bit, $event)" />
+              </label>
+            </template>
+          </div>
+          <label class="attrs-permissions-edit">
+            <span>{{ t("sftpAttrs.permissions") }}</span>
+            <input v-model="attrsMode" class="mono" spellcheck="false" :placeholder="t('permissionsPlaceholder')" :disabled="!canWrite" @keydown.enter="saveAttributesPermissions" />
+          </label>
+        </template>
+        <footer>
+          <button @click="closeAttributes">{{ t("close") }}</button>
+          <button class="primary-button" :disabled="!canWrite || !attrsMode.trim() || attrsSubmitting" @click="saveAttributesPermissions"><Loader2 v-if="attrsSubmitting" class="spinning" />{{ t("sftpAttrs.save") }}</button>
+        </footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 设置弹窗 + quick sudo 配置档管理弹窗：独立组件（设置域 UI/状态集中处；Esc 链与终端偏好仍留在 App）。 -->
+    <Dialog :open="importOpen" @update:open="(open) => { if (!open) importOpen = false; }">
+      <DialogContent class="modal import-modal" @escape-key-down.prevent>
+        <header><DialogTitle>{{ t("importWizard.title") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="importOpen = false"><X /></button></header>
+        <ImportWizard :t="t" />
+        <footer><button @click="importOpen = false">{{ t("close") }}</button></footer>
+      </DialogContent>
+    </Dialog>
+
+    <SettingsDialog
+      v-if="settingsOpen || profilesOpen"
+      ref="settingsDialog"
+      :open="settingsOpen"
+      @update:open="onSettingsOpenChange"
+      v-model:profilesOpen="profilesOpen"
+      :focus-category="settingsFocusCategory"
+      :focus-add-model="settingsFocusAddModel"
+      :session-id="session?.sessionId"
+      :connection-id="connectionId"
+      :terminal-font-size="terminalFontSize"
+      :host-font-size="appearance.terminal.fontSize"
+      :host-color-scheme="appearance.colorScheme"
+      :local-download-dir="localDownloadDir"
+      :local-can-save="localCanSave"
+      :webgl-enabled="webglEnabled"
+      :term-select-copy="termSelectCopy"
+      :term-click-cursor="termClickCursor"
+      :resource-strip-enabled="resourceStripEnabled"
+      :copilot-dock-default-open="copilotDockOpen"
+      :copilot-chat-mode="copilotChatMode"
+      :copilot-reply-language="copilotReplyLanguage"
+      :interaction-prefs="interactionPrefs"
+      :download-prefs="downloadPrefsAdapter"
+      :editor-prefs="editorPrefsAdapter"
+      :terminal-appearance="terminalAppearance"
+      :t="t"
+      @notice="showNotice"
+      @error="showError"
+      @browse-download-dir="folderPickerTarget = 'settings'"
+      @update:webgl="setWebglEnabled"
+      @toggle-select-copy="toggleSelectCopy"
+      @toggle-click-cursor="toggleClickCursor"
+      @update:resource-strip="setResourceStripEnabled"
+      @update:copilot-dock-default-open="setCopilotDockOpen"
+      @update:copilot-chat-mode="setCopilotChatMode"
+      @update:copilot-reply-language="setCopilotReplyLanguage"
+      @copilot-llm-saved="refreshCopilotModelSource"
+      @update:interaction-prefs="updateInteractionPrefs"
+      @apply-font="(payload) => applyTerminalFontSettings(payload.family, payload.size)"
+      @update:terminal-appearance="updateTerminalAppearanceState"
+    />
+
+    <Dialog :open="auditOpen" @update:open="(open) => { if (!open) auditOpen = false; }">
+      <DialogContent class="modal audit-modal" @escape-key-down.prevent>
+        <header><DialogTitle>{{ t("auditLog.title") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="auditOpen = false"><X /></button></header>
+        <div class="settings-body">
+          <div class="audit-toolbar">
+            <Select :model-value="auditKindFilter || SELECT_EMPTY_SENTINEL" @update:model-value="(v) => (auditKindFilter = v === SELECT_EMPTY_SENTINEL ? '' : String(v))">
+              <SelectTrigger size="xs" class="audit-kind-select" :aria-label="t('auditLog.kindFilter')">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="SELECT_EMPTY_SENTINEL">{{ t("auditLog.kindAll") }}</SelectItem>
+                <SelectItem v-for="kind in auditKindOptions(auditEntries)" :key="kind" :value="kind">{{ auditKindLabel(kind, t) }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <div class="audit-actions">
+              <button class="icon-button" :title="t('refresh')" :disabled="auditLoading" @click="loadAuditEntries"><RefreshCw :class="{ spinning: auditLoading }" /></button>
+              <button class="icon-button" :title="t('auditLog.clear')" :disabled="!auditEntries.length" @click="auditClearOpen = true"><Trash2 /></button>
+            </div>
+          </div>
+          <div v-if="auditLoading && !auditEntries.length" class="empty compact audit-empty"><Loader2 class="spinning" />{{ t("loading") }}</div>
+          <div v-else-if="auditLoadFailed" class="empty compact audit-empty">
+            <span>{{ t("auditLog.loadFailed") }}</span>
+            <button class="link-button" @click="loadAuditEntries">{{ t("refresh") }}</button>
+          </div>
+          <div v-else-if="!visibleAuditEntries.length" class="audit-empty"><FileText /><span>{{ t("auditLog.empty") }}</span></div>
+          <template v-else>
+            <ul class="audit-list">
+              <li v-for="(entry, index) in visibleAuditEntries" :key="`${entry.ts}-${entry.kind}-${index}`" class="audit-row">
+                <span class="audit-time mono">{{ auditTime(entry.ts) }}</span>
+                <span class="audit-kind-badge" :class="auditRowKindClass(entry.kind)">{{ auditKindLabel(entry.kind, t) }}</span>
+                <span v-if="entry.connection || entry.sessionId" class="audit-connection mono" :title="entry.connection || entry.sessionId">{{ entry.connection || entry.sessionId }}</span>
+                <span v-if="entry.command" class="audit-command mono" :title="entry.command">{{ entry.command }}</span>
+                <span v-if="entry.output" class="audit-output mono" :title="entry.output">{{ entry.output }}</span>
+                <span v-if="entry.gate" class="audit-gate mono">{{ entry.gate }}</span>
+                <span v-if="auditOutcomeLabel(entry, t)" class="audit-outcome" :class="{ error: entry.outcome === 'error' || entry.decision === 'denied' || entry.decision === 'timeout', ok: entry.outcome === 'ok' || entry.decision === 'approved' }">{{ auditOutcomeLabel(entry, t) }}</span>
+                <span v-if="entry.exitCode != null" class="audit-time">{{ t("auditLog.exitCode", { code: entry.exitCode }) }}</span>
+              </li>
+            </ul>
+            <p v-if="auditTruncated" class="muted audit-truncated">{{ t("auditLog.truncated") }}</p>
+          </template>
+        </div>
+        <footer><button @click="auditOpen = false">{{ t("close") }}</button></footer>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 审计日志清空确认：应用内弹窗（沙箱 iframe confirm 恒 false） -->
+    <Dialog :open="auditClearOpen" @update:open="(open) => { if (!open) auditClearOpen = false; }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <header><DialogTitle>{{ t("auditLog.clear") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="auditClearOpen = false"><X /></button></header>
+        <div class="destructive-copy"><div><strong>{{ t("auditLog.clearConfirm") }}</strong></div></div>
+        <footer><button @click="auditClearOpen = false" :disabled="auditClearSubmitting">{{ t("cancel") }}</button><button class="danger-button" :disabled="auditClearSubmitting" @click="confirmAuditClear"><Loader2 v-if="auditClearSubmitting" class="spinning" /><Trash2 v-else />{{ t("delete") }}</button></footer>
+      </DialogContent>
+    </Dialog>
+    <!-- 安全弹窗：不允许 Esc / 点击遮罩关闭，必须显式信任或拒绝（不在 Esc 链中） -->
+    <Dialog :open="!!hostKeyPrompt">
+      <DialogContent class="modal host-key-modal" @escape-key-down.prevent @pointer-down-outside.prevent>
+        <template v-if="hostKeyPrompt">
+        <header><DialogTitle>{{ t("hostKeyDialog.title") }}</DialogTitle></header>
+        <p>{{ t("hostKeyDialog.desc") }}</p>
+        <dl><dt>{{ t("hostKeyDialog.server") }}</dt><dd>{{ hostKeyPrompt.host }}:{{ hostKeyPrompt.port }}</dd><dt>{{ t("hostKeyDialog.keyType") }}</dt><dd>{{ hostKeyPrompt.keyType }}</dd><dt>{{ t("hostKeyDialog.fingerprint") }}</dt><dd class="fingerprint">{{ hostKeyPrompt.fingerprint }}</dd></dl>
+        <label class="remember"><input v-model="rememberHostKey" type="checkbox" /> {{ t("hostKeyDialog.remember") }}</label>
+        <footer><button @click="resolveHostKey(false)">{{ t("hostKeyDialog.reject") }}</button><button class="primary-button" @click="resolveHostKey(true)">{{ t("hostKeyDialog.trust") }}</button></footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 安全弹窗：不允许 Esc / 点击遮罩关闭，必须显式批准或拒绝（不在 Esc 链中） -->
+    <Dialog :open="!!agentPromptHead">
+      <DialogContent class="modal" @escape-key-down.prevent @pointer-down-outside.prevent>
+        <template v-if="agentPromptHead">
+        <header><DialogTitle>{{ agentPromptHead.source === "mcp" ? t("agentPrompt.mcpSource", { tool: agentPromptHead.tool }) : t("agentPromptTitle") }}</DialogTitle></header>
+        <div class="agent-prompt-meta">
+          <span>{{ t("agentPromptSource") }} <code class="mono">{{ agentPromptHead.tool }}</code></span>
+          <span class="agent-risk-badge" :class="agentPromptHead.risk === 'elevated' ? 'elevated' : 'low'">{{ agentPromptHead.risk === "elevated" ? t("agentPromptRiskElevated") : t("agentPromptRiskLow") }}</span>
+        </div>
+        <label class="agent-prompt-command">
+          <span>{{ t("agentPromptCommandLabel") }}</span>
+          <textarea v-model="agentPromptCommand" class="mono" rows="3" spellcheck="false" />
+        </label>
+        <!-- 记住不限风险档：strict 模式下低危命令同样每次弹审、同样需要免审
+             记忆（IMPL_PLAN 预期 strict/auto 下 approve+remember 二次零弹窗）；
+             破坏性命令由后端 D2 兜底忽略 remember。 -->
+        <label class="agent-prompt-remember">
+          <input v-model="agentPromptRemember" type="checkbox" />
+          <span>{{ t("approval.remember") }}</span>
+        </label>
+        <p class="muted agent-prompt-countdown">{{ t("agentPromptTimeoutHint", { seconds: Math.ceil(agentPromptRemaining) }) }}</p>
+        <footer><button @click="resolveAgentPrompt('deny')">{{ t("agentPromptDeny") }}</button><button class="primary-button" @click="resolveAgentPrompt('approve')">{{ t("agentPromptApprove") }}</button></footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 告警排查：异构告警 → 结构化 + 分类 + 只读诊断命令清单 -->
+    <Dialog :open="alertTriageOpen" @update:open="(open) => { if (!open) alertTriageOpen = false; }">
+      <DialogContent class="modal alert-triage-modal" @escape-key-down.prevent>
+        <header>
+          <DialogTitle>{{ t("alertTriage.title") }}</DialogTitle>
+          <button :title="t('close')" class="icon-button" @click="alertTriageOpen = false"><X /></button>
+        </header>
+        <textarea v-model="alertTriagePayload" class="mono alert-triage-payload" rows="6" :placeholder="t('alertTriage.placeholder')" :disabled="alertTriageBusy" spellcheck="false" autofocus />
+        <p v-if="alertTriageError" class="task-error" role="alert">{{ alertTriageError }}</p>
+        <footer class="alert-triage-actions">
+          <button class="primary-button" :disabled="alertTriageBusy || !sanitizeTriagePayload(alertTriagePayload)" @click="runAlertTriage">{{ t("alertTriage.analyze") }}</button>
+        </footer>
+        <div v-if="alertTriageBusy" class="empty compact" role="status"><Loader2 class="spinning" />{{ t("loading") }}</div>
+        <div v-else-if="!alertTriageResult && !alertTriageError" class="empty compact">{{ t("alertTriage.emptyResult") }}</div>
+        <div v-else-if="alertTriageResult" class="alert-triage-result">
+          <div class="alert-triage-summary">
+            <span class="alert-severity-badge" :class="severityClass(alertTriageResult.normalized.severity)">{{ t(`alertTriage.severity.${severityClass(alertTriageResult.normalized.severity)}`) }}</span>
+            <span class="alert-category">{{ t(`alertTriage.category.${alertTriageResult.category}`) }}</span>
+            <strong v-if="alertTriageResult.normalized.title" class="alert-title">{{ alertTriageResult.normalized.title }}</strong>
+          </div>
+          <p v-if="alertTriageResult.normalized.message" class="muted alert-message mono">{{ alertTriageResult.normalized.message }}</p>
+          <p v-if="!alertTriageResult.suggestions.length" class="muted">{{ t("alertTriage.emptyResult") }}</p>
+          <ul v-else class="alert-suggestion-list">
+            <li v-for="suggestion in alertTriageResult.suggestions" :key="suggestion.command" class="alert-suggestion-row">
+              <code class="mono alert-suggestion-command">{{ suggestion.command }}</code>
+              <span class="alert-purpose muted">{{ purposeKeyLabel(suggestion.purposeKey, t) }}</span>
+              <button :disabled="!session" :title="!session ? t('alertTriage.noSession') : ''" @click="sendSuggestionToTerminal(suggestion.command)">{{ t("alertTriage.sendToTerminal") }}</button>
+            </li>
+          </ul>
+          <footer class="alert-triage-actions">
+            <button v-if="alertTriageResult.suggestions.length" @click="copySuggestions">{{ t("alertTriage.copyAll") }}</button>
+            <button class="primary-button" @click="handAlertToCopilot">{{ t("copilot.handOffAlert") }}</button>
+          </footer>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!pasteConfirm" @update:open="(open) => { if (!open) resolvePasteConfirm(false); }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="pasteConfirm">
+        <header>
+          <DialogTitle>{{ pasteConfirm.danger ? t("terminalDanger.title") : t("terminalPasteConfirm.title") }}</DialogTitle>
+          <button :title="t('close')" class="icon-button" @click="resolvePasteConfirm(false)"><X /></button>
+        </header>
+        <div v-if="pasteConfirm.danger" class="destructive-copy warning">
+          <span class="destructive-icon"><TriangleAlert /></span>
+          <div>
+            <strong>{{ t("terminalDanger.detected") }}</strong>
+            <p class="task-error mono">{{ pasteConfirm.hits.map((hit) => hit.label).join(" · ") }}</p>
+            <p class="muted">{{ t("terminalDanger.desc") }}</p>
+          </div>
+        </div>
+        <p v-else class="muted">{{ t("terminalPasteConfirm.desc") }}</p>
+        <p class="muted">{{ t("terminalPasteConfirm.summary", { lines: pasteConfirm.lines, chars: pasteConfirm.chars }) }}<template v-if="pasteConfirm.lines > 1"> · {{ t("terminalPasteConfirm.multiline") }}</template></p>
+        <pre class="command-output mono">{{ pasteConfirm.preview }}</pre>
+        <footer>
+          <button @click="resolvePasteConfirm(false)">{{ t("cancel") }}</button>
+          <button :class="pasteConfirm.danger ? 'danger-button' : 'primary-button'" @click="resolvePasteConfirm(true)">{{ t("terminalPasteConfirm.confirm") }}</button>
+        </footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!dropUploadPrompt" @update:open="(open) => { if (!open) resolveDropUpload('cancel'); }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="dropUploadPrompt">
+        <header>
+          <DialogTitle>{{ t("terminalDropPrompt.title") }}</DialogTitle>
+          <button :title="t('close')" class="icon-button" @click="resolveDropUpload('cancel')"><X /></button>
+        </header>
+        <p class="muted">{{ t("terminalDropPrompt.summary", { count: dropUploadPrompt.files.length }) }}</p>
+        <pre class="command-output mono drop-file-list">{{ dropUploadPrompt.files.map((file) => file.name).join("\n") }}</pre>
+        <label class="drop-option">
+          <input v-model="dropUploadTarget" type="radio" name="drop-upload-target" value="cwd" />
+          <span>{{ t("terminalDropPrompt.toCurrent") }}</span>
+          <code class="mono">{{ currentPath }}</code>
+        </label>
+        <label class="drop-option">
+          <input v-model="dropUploadTarget" type="radio" name="drop-upload-target" value="custom" />
+          <span>{{ t("terminalDropPrompt.toCustom") }}</span>
+        </label>
+        <input
+          ref="dropUploadPathInputEl"
+          v-model="dropUploadPathInput"
+          class="drop-path-input mono"
+          type="text"
+          spellcheck="false"
+          :placeholder="t('terminalDropPrompt.pathPlaceholder')"
+          :disabled="dropUploadTarget !== 'custom'"
+          @keydown.enter.prevent="confirmDropUpload"
+        />
+        <footer>
+          <button @click="resolveDropUpload('cancel')">{{ t("cancel") }}</button>
+          <button class="primary-button" :disabled="dropUploadTarget === 'custom' && !normalizeDropTargetDir(dropUploadPathInput)" @click="confirmDropUpload">{{ t("upload") }}</button>
+        </footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 目录选择器：DOM 末尾渲染，保证叠在设置弹窗/下载询问弹窗之上。
+         不传 initialPath：默认从「此电脑」盘符页开始（macOS/Linux 无盘符概念，
+         回退到默认下载目录），与 kimi-code-desktop 的选择器行为对齐。 -->
+    <FolderPickerDialog
+      v-if="folderPickerTarget"
+      :locale="locale"
+      @select="onFolderPicked"
+      @close="folderPickerTarget = null"
+    />
+
+    <input ref="uploadInput" class="hidden" type="file" multiple @change="onUploadInput" />
+    <input ref="lzpackUploadInput" class="hidden" type="file" @change="onLzpackUploadInput" />
+    <input ref="zmodemInput" class="hidden" type="file" multiple @change="onZmodemInput" />
+    <input ref="trzszInput" class="hidden" type="file" multiple @change="onTrzszPickInput" @cancel="onTrzszPickCancel" />
+  </main>
+</template>
+
+<style>
+/* Host uiDensity tokens → SSH control heights (unscoped so portals inherit). */
+:root {
+  --ssh-ctrl-h: var(--dw-density-sm, 26px);
+  --ssh-ctrl-h-xs: var(--dw-density-xs, 22px);
+  --ssh-ctrl-h-compact: var(--dw-density-xs, 24px);
+}
+</style>
+
+<style scoped>
+/* SFTP 面板扩展（工作包 B）：搜索/类型过滤、批量条、路径历史、属性弹窗。 */
+.sftp-filter-bar { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); padding: 5px 7px; }
+.sftp-search-input { display: flex; flex: 1; min-width: 0; height: var(--ssh-ctrl-h); align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: var(--radius); padding: 0 7px; background: var(--background); }
+.sftp-search-input:focus-within { border-color: color-mix(in srgb, var(--primary) 70%, var(--border)); }
+.sftp-search-input svg { width: 13px; height: 13px; flex: 0 0 13px; color: var(--muted-foreground); }
+.sftp-search-input input { min-width: 0; flex: 1; border: 0; padding: 0; background: transparent; color: var(--foreground); font-size: var(--dw-font-size); outline: none; }
+.sftp-search-clear { display: grid; width: 16px; height: 16px; flex: 0 0 16px; border: 0; border-radius: 50%; padding: 0; place-items: center; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.sftp-search-clear:hover { background: var(--accent); color: var(--foreground); }
+.sftp-search-clear svg { width: 11px; height: 11px; }
+.sftp-type-filter { flex: 0 0 auto; }
+.sftp-hidden-toggle { flex: 0 0 auto; width: var(--ssh-ctrl-h); height: var(--ssh-ctrl-h); border: 1px solid var(--border); border-radius: var(--radius); background: transparent; color: var(--muted-foreground); cursor: pointer; padding: 0; display: inline-grid; place-items: center; }
+.sftp-hidden-toggle:hover { background: var(--accent); color: var(--foreground); }
+.sftp-hidden-toggle.is-active { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 55%, var(--border)); }
+.sftp-hidden-toggle svg { width: 14px; height: 14px; }
+.sftp-batch-bar { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); padding: 5px 8px; background: color-mix(in srgb, var(--primary) 8%, var(--background)); color: var(--muted-foreground); font-size: var(--dw-text-xs); }
+.sftp-batch-bar span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sftp-batch-bar button { display: inline-flex; height: var(--ssh-ctrl-h-compact); align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: var(--radius); padding: 0 8px; background: var(--background); color: var(--foreground); font-size: var(--dw-text-xs); cursor: pointer; }
+.sftp-batch-bar button:hover:not(:disabled) { background: var(--accent); }
+.sftp-batch-bar button.danger { color: var(--destructive); }
+.sftp-batch-bar button svg { width: 12px; height: 12px; }
+.sftp-batch-bar .batch-progress { flex: 0 0 auto; overflow: visible; font-variant-numeric: tabular-nums; }
+.batch-progress-bar { flex: 0 1 140px; height: 6px; min-width: 80px; accent-color: var(--primary); }
+.batch-progress-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.batch-progress-row .batch-progress-bar { flex: 1; }
+/* 弹层根规则移到 style.css 全局：portal 后内容根不带本组件 scopeId。 */
+.path-history-title { margin: 4px; color: var(--muted-foreground); font-size: var(--dw-text-2xs); letter-spacing: .04em; text-transform: uppercase; }
+.path-history-popover .path-item { display: block; width: 100%; height: var(--ssh-ctrl-h); overflow: hidden; border: 0; border-radius: 4px; padding: 0 7px; background: transparent; color: var(--foreground); font-size: var(--dw-text-xs); text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.path-history-popover .path-item:hover { background: var(--accent); }
+/* 书签行：label 跳转 + 行尾悬浮删除（对齐 path-item 观感） */
+.bookmark-row { display: flex; align-items: center; gap: 2px; }
+.bookmark-row .path-item { flex: 1 1 auto; min-width: 0; }
+.bookmark-row .bookmark-delete { display: flex; width: var(--ssh-ctrl-h-xs); height: var(--ssh-ctrl-h-xs); flex: 0 0 var(--ssh-ctrl-h-xs); align-items: center; justify-content: center; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); cursor: pointer; opacity: 0; }
+.bookmark-row:hover .bookmark-delete, .bookmark-row .bookmark-delete:focus-visible { opacity: 1; }
+.bookmark-row .bookmark-delete:hover { color: var(--destructive); background: var(--accent); }
+.bookmark-row .bookmark-delete svg { width: 12px; height: 12px; }
+/* 星标收藏弹层：路径预览 + 可编辑 label + 保存/取消（根规则见 style.css 全局） */
+.bookmark-save-path { overflow: hidden; color: var(--muted-foreground); font-size: var(--dw-text-2xs); text-overflow: ellipsis; white-space: nowrap; }
+.bookmark-label-input { width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 4px 7px; background: var(--background); color: var(--foreground); font-size: var(--dw-text-xs); }
+.bookmark-save-actions { display: flex; justify-content: flex-end; gap: 4px; }
+/* 传输历史区标题：与任务卡片间的分隔线 */
+.transfer-history-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; border-top: 1px solid var(--border); margin-top: 10px; }
+.transfer-history-title { margin: 0; padding-top: 8px; }
+.transfer-history-actions { display: flex; gap: 2px; padding-top: 6px; }
+.attrs-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: var(--dw-font-size); }
+.attrs-grid dt { max-width: 16ch; overflow: hidden; color: var(--muted-foreground); text-overflow: ellipsis; white-space: nowrap; }
+.attrs-grid dd { margin: 0; overflow-wrap: anywhere; }
+.attrs-permissions-edit { display: flex; align-items: center; gap: 8px; font-size: var(--dw-font-size); }
+.attrs-permissions-edit span { flex: 0 0 auto; color: var(--muted-foreground); }
+.attrs-permissions-edit input { flex: 1; }
+/* 权限矩阵：所有者/属组/其他人 × 读/写/执行勾选，与八进制输入双向联动 */
+.perm-matrix { display: grid; grid-template-columns: minmax(56px, auto) repeat(3, 1fr); gap: 4px 6px; align-items: center; margin: 2px 0 8px; font-size: var(--dw-font-size); }
+.perm-matrix-head { color: var(--muted-foreground); font-size: var(--dw-text-xs); text-align: center; }
+.perm-matrix-role { color: var(--muted-foreground); white-space: nowrap; }
+.perm-matrix-cell { display: flex; justify-content: center; }
+.perm-matrix-cell input { width: 13px; height: 13px; margin: 0; accent-color: var(--primary); }
+
+/* 工具栏 A+/A- 字号步进按钮（复用 Ctrl+滚轮的 clampFontSize 语义） */
+.font-step-label { font-size: var(--dw-text-xs); font-weight: 600; line-height: 1; letter-spacing: 0; }
+
+/* 快速命令栏（工具栏下拉）：发送 / 编辑 / 删除 + 底部新增编辑器（根规则见 style.css 全局） */
+.quick-commands-popover h3 { margin: 2px 4px 6px; font-size: var(--dw-font-size); }
+/* 搜索行：图标 + 无边框输入（容器边框即输入框）。 */
+.quick-search { display: flex; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 4px; padding: 0 8px; background: var(--background); }
+.quick-search:focus-within { border-color: color-mix(in srgb, var(--primary) 70%, var(--border)); }
+.quick-search svg { width: 13px; height: 13px; flex: 0 0 13px; color: var(--muted-foreground); }
+.quick-search input { min-width: 0; flex: 1; height: var(--ssh-ctrl-h); border: 0; padding: 0; background: transparent; color: var(--foreground); font-size: var(--dw-font-size); outline: none; }
+/* 命令卡片（Termius Snippets 式）：{} 图标 + 名称/命令两行；动作按钮 hover
+   或展开时浮现；展开时显示完整命令（自动换行）。 */
+.quick-card { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; border: 1px solid transparent; border-radius: var(--radius); padding: 3px 4px; }
+.quick-card:hover { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.quick-card.expanded { border-color: var(--border); background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.quick-card-main { display: flex; min-width: 0; flex: 1; align-items: center; gap: 8px; border: 0; padding: 3px; background: transparent; color: var(--foreground); text-align: left; cursor: pointer; }
+.quick-card-icon { width: 15px; height: 15px; flex: 0 0 15px; color: var(--muted-foreground); }
+.quick-card.expanded .quick-card-icon, .quick-card:hover .quick-card-icon { color: var(--primary); }
+.quick-card-text { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; }
+.quick-card-title { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.quick-card-title strong { min-width: 0; flex: 0 1 auto; overflow: hidden; font-size: var(--dw-font-size); font-weight: 600; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.quick-command-scope-badge {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: var(--dw-text-2xs);
+  font-weight: 500;
+  line-height: 1.35;
+}
+.quick-command-scope-badge[data-scope="global"] {
+  background: color-mix(in srgb, var(--muted-foreground) 14%, transparent);
+  color: var(--muted-foreground);
+}
+.quick-command-scope-badge[data-scope="connection"] {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary);
+}
+.quick-card-text .mono { max-width: 100%; overflow: hidden; color: var(--muted-foreground); font-size: var(--dw-text-xs); line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.quick-scope-bind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  color: var(--muted-foreground);
+  font-size: var(--dw-text-xs);
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+}
+.quick-scope-bind > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-scope-bind.disabled { opacity: 0.55; cursor: not-allowed; }
+.batch-scope-bind { flex: 0 0 auto; font-size: var(--dw-text-2xs); }
+.quick-other-section { margin: 6px 0 0; border-top: 1px solid var(--border); padding-top: 6px; }
+.quick-other-toggle { display: flex; width: 100%; flex-direction: column; gap: 2px; border: 0; padding: 4px 2px; background: transparent; color: var(--foreground); text-align: left; cursor: pointer; }
+.quick-other-toggle span:first-child { font-size: var(--dw-text-xs); font-weight: 600; }
+.quick-other-hint { color: var(--muted-foreground); font-size: var(--dw-text-2xs); }
+.quick-other-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; max-height: 160px; overflow: auto; }
+.quick-other-group { border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 6px; }
+.quick-other-group-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; font-size: var(--dw-text-2xs); }
+.quick-other-group-head .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-other-row { display: flex; align-items: center; gap: 4px; min-height: var(--ssh-ctrl-h-xs); }
+.quick-other-name { flex: 1; min-width: 0; overflow: hidden; font-size: var(--dw-text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.quick-card-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 3px; opacity: 0; transition: opacity 100ms ease; }
+.quick-card:hover .quick-card-actions, .quick-card.expanded .quick-card-actions, .quick-card-actions:focus-within { opacity: 1; }
+.quick-action { height: var(--ssh-ctrl-h-xs); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 8px; background: var(--background); color: var(--foreground); font-size: var(--dw-text-2xs); cursor: pointer; }
+.quick-action:hover:not(:disabled) { background: var(--accent); }
+.quick-card-full { flex: 1 1 100%; margin: 2px 4px 4px 27px; color: var(--foreground); font-size: var(--dw-text-xs); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.quick-command-footer { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
+.quick-new-btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex: 1; height: var(--ssh-ctrl-h); border: 1px dashed var(--border); border-radius: var(--radius); background: transparent; color: var(--foreground); font-size: var(--dw-text-xs); cursor: pointer; }
+.quick-new-btn:hover:not(:disabled) { border-color: color-mix(in srgb, var(--primary) 60%, var(--border)); background: var(--accent); }
+.quick-new-btn:disabled { cursor: default; opacity: .42; }
+.quick-new-btn svg { width: 13px; height: 13px; }
+.quick-editor-head { display: flex; align-items: center; gap: 6px; }
+.quick-editor-head h3 { flex: 1; margin: 0; }
+/* 编辑器子视图（新建/编辑共用）：名称 + 多行命令 + 保存/取消。 */
+.quick-command-editor { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.quick-command-editor > input { width: 100%; height: var(--ssh-ctrl-h); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 8px; background: var(--background); color: var(--foreground); font-size: var(--dw-font-size); box-sizing: border-box; }
+.quick-command-editor textarea { width: 100%; resize: vertical; border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; background: var(--background); color: var(--foreground); font-size: var(--dw-font-size); line-height: 1.5; }
+.quick-command-editor input:focus, .quick-command-editor textarea:focus { border-color: color-mix(in srgb, var(--primary) 70%, var(--border)); outline: none; }
+.quick-command-editor-actions { display: flex; align-items: center; gap: 6px; }
+.quick-command-editor-actions .quick-command-limit { flex: 1; overflow: hidden; color: var(--muted-foreground); font-size: var(--dw-text-2xs); text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.quick-command-editor-actions button { height: var(--ssh-ctrl-h-compact); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 8px; background: var(--background); color: var(--foreground); font-size: var(--dw-text-xs); cursor: pointer; }
+.quick-command-editor-actions .primary-button { background: var(--primary); color: var(--primary-foreground); }
+
+/* 连接信息面板（工具栏下拉，只读；根规则见 style.css 全局） */
+.connection-info-popover h3 { margin: 4px 0 8px; font-size: var(--dw-font-size); }
+.connection-info-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: var(--dw-font-size); }
+.connection-info-grid dt { max-width: 16ch; overflow: hidden; color: var(--muted-foreground); text-overflow: ellipsis; white-space: nowrap; }
+.connection-info-grid dd { display: flex; min-width: 0; align-items: center; gap: 8px; margin: 0; overflow-wrap: anywhere; }
+.connection-info-grid .task-error { font-size: var(--dw-text-2xs); }
+.connection-info-grid .link-button { flex: 0 0 auto; align-self: center; font-size: var(--dw-text-2xs); }
+
+/* 终端 MCP 模式快速开关（工具栏弹出层，与设置弹窗共用三档文案；根规则见 style.css 全局） */
+.agent-mode-popover h3 { margin: 4px 0 8px; font-size: var(--dw-font-size); }
+.agent-mode-option { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: var(--dw-font-size); cursor: pointer; }
+.agent-mode-note { margin: 8px 0 0; font-size: var(--dw-text-xs); }
+
+/* AI 终端同步执行：执行横幅（终端底部，避开命令标记条）+ 审批弹窗 */
+.agent-run-banner { position: absolute; z-index: 3; right: 8px; bottom: 36px; left: 8px; display: flex; align-items: center; gap: 8px; border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); border-radius: var(--radius); padding: 6px 8px; background: color-mix(in srgb, var(--background) 92%, transparent); box-shadow: 0 4px 14px color-mix(in srgb, #000 18%, transparent); font-size: var(--dw-text-xs); }
+.agent-run-banner svg { width: 14px; height: 14px; flex: 0 0 14px; }
+.agent-run-text { flex: 0 0 auto; color: var(--foreground); }
+.agent-run-command { min-width: 0; flex: 1; overflow: hidden; color: var(--muted-foreground); text-overflow: ellipsis; white-space: nowrap; }
+.agent-interrupt { flex: 0 0 auto; height: var(--ssh-ctrl-h-compact); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 8px; background: var(--background); color: var(--destructive); font-size: var(--dw-text-xs); cursor: pointer; }
+.agent-interrupt:hover { background: var(--accent); }
+.agent-prompt-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: var(--dw-font-size); }
+.agent-risk-badge { flex: 0 0 auto; border-radius: 999px; padding: 2px 8px; font-size: var(--dw-text-2xs); font-weight: 600; letter-spacing: .02em; }
+.agent-risk-badge.low { border: 1px solid var(--border); background: var(--accent); color: var(--muted-foreground); }
+.agent-risk-badge.elevated { border: 1px solid color-mix(in srgb, var(--destructive) 55%, transparent); background: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive); }
+.agent-prompt-command { display: flex; flex-direction: column; gap: 5px; padding: 4px 0 8px; font-size: var(--dw-font-size); }
+.agent-prompt-command span { color: var(--muted-foreground); }
+.agent-prompt-command textarea { width: 100%; resize: vertical; border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; background: var(--background); color: var(--foreground); font-family: var(--terminal-font-family); font-size: var(--dw-font-size); }
+.agent-prompt-command textarea:focus { border-color: color-mix(in srgb, var(--primary) 70%, var(--border)); outline: none; }
+.agent-prompt-countdown { padding-bottom: 10px; }
+/* —— 断点续传 / 进程管理 / 会话录制（F1-F3）—— */
+.is-recording { color: var(--destructive); }
+/* 录制中：悬浮控制条（红色呼吸点 + 时长 mono 等宽不跳动 + 停止按钮）。
+   锚定视口而非终端面板：面板底边可能探出可视区（批量栏等会推高布局），
+   绝对定位会被裁掉半截；fixed 与 toast 通知同款，已验证可靠。 */
+.recording-float { position: fixed; z-index: 40; bottom: 64px; left: 50%; display: flex; align-items: center; gap: 8px; transform: translateX(-50%); border: 1px solid color-mix(in srgb, var(--destructive) 45%, var(--border)); border-radius: 999px; padding: 5px 7px 5px 12px; background: color-mix(in srgb, var(--background) 92%, transparent); box-shadow: 0 4px 14px color-mix(in srgb, #000 18%, transparent); font-size: var(--dw-text-xs); }
+.recording-float-dot { width: 12px; height: 12px; flex: 0 0 12px; color: var(--destructive); animation: record-pulse 1.6s ease-in-out infinite; }
+.recording-elapsed { color: var(--foreground); font-size: var(--dw-text-xs); font-variant-numeric: tabular-nums; }
+.recording-stop { display: inline-flex; align-items: center; gap: 4px; height: var(--ssh-ctrl-h-compact); border: 1px solid var(--border); border-radius: 999px; padding: 0 10px; background: var(--background); color: var(--destructive); font-size: var(--dw-text-xs); cursor: pointer; }
+.recording-stop:hover { background: var(--accent); }
+.recording-stop svg { width: 11px; height: 11px; }
+@keyframes record-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* 录制开始倒计时遮罩：终端区中央大数字逐级放缩淡入，点击/Esc 取消。 */
+.record-countdown-overlay {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--background) 62%, transparent);
+  cursor: pointer;
+  user-select: none;
+}
+.record-countdown-number {
+  color: var(--foreground);
+  font-size: var(--dw-text-xl);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 4px 24px rgb(0 0 0 / 40%);
+  animation: record-countdown-pop 0.9s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.record-countdown-hint { color: var(--muted-foreground); font-size: var(--dw-text-xs); }
+@keyframes record-countdown-pop {
+  0% { opacity: 0; transform: scale(1.5); }
+  25% { opacity: 1; transform: scale(1); }
+  85% { opacity: 1; transform: scale(0.96); }
+  100% { opacity: 0.25; transform: scale(0.92); }
+}
+.recordings-float { width: 440px; }
+/* 录制记录列表：shadcn 式行布局——行间距归零，行间仅一条 45% 淡化的发丝线，
+   行 hover 出 accent 圆角背景。旧卡片每条 border-top + body gap 会叠出
+   "每行上下各一条线"的双线观感，此处整体替换。 */
+.recordings-float .metrics-float-body { gap: 0; padding: 4px 6px; }
+.recording-card { display: flex; align-items: center; gap: 8px; border-radius: var(--radius); padding: 7px 8px; }
+.recording-card + .recording-card { border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent); }
+.recording-card:hover { background: var(--accent); }
+.recording-icon { width: 16px; height: 16px; flex: 0 0 16px; color: var(--muted-foreground); }
+.recording-text { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 1px; }
+.recording-host { overflow: hidden; font-size: var(--dw-font-size); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.recording-meta { overflow: hidden; color: var(--muted-foreground); font-size: var(--dw-text-2xs); text-overflow: ellipsis; white-space: nowrap; }
+.recording-duration { flex: 0 0 auto; color: var(--foreground); font-size: var(--dw-text-xs); font-variant-numeric: tabular-nums; }
+.recording-actions { display: flex; flex: 0 0 auto; gap: 2px; }
+.recording-delete { color: var(--muted-foreground); }
+.recording-delete:hover:not(:disabled) { color: var(--destructive); }
+.resumable-hint { margin: 2px 0 6px; font-size: var(--dw-font-size); }
+.metrics-trend .metrics-trend-line { width: 120px; height: 18px; }
+.proc-manage { margin-top: 10px; }
+.proc-manage .settings-section-title { display: flex; justify-content: space-between; align-items: center; }
+.proc-sort-row { display: flex; gap: 16px; margin: 6px 0; font-size: var(--dw-font-size); color: var(--muted-foreground); }
+.proc-sort-option { display: inline-flex; align-items: center; gap: 4px; }
+.proc-kill-group { display: flex; gap: 8px; justify-content: flex-end; }
+.proc-kill-force { color: var(--destructive); }
+/* 回放弹窗并入模态体系：遮罩用 --overlay、z-index 走 80 梯队、圆角同 .modal。 */
+.replay-overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 80; display: flex; align-items: center; justify-content: center; }
+.replay-modal { background: var(--popover); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius-lg, 8px); padding: 16px; width: min(920px, 92vw); display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow-modal); }
+/* 标题行弹性布局：关闭按钮固定右上角（block 布局下按钮会掉到标题下一行）。 */
+.replay-modal header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.replay-modal header h2 { margin: 0; min-width: 0; overflow: hidden; font-size: var(--dw-font-size); text-overflow: ellipsis; white-space: nowrap; }
+/* 不固定高度：xterm 26 行实际渲染 442px，写死 420px 会让终端溢出压住下方控制条。 */
+.replay-terminal { min-height: 44px; }
+.replay-controls { display: flex; align-items: center; gap: 10px; }
+.replay-seek { flex: 1; min-width: 0; height: 4px; accent-color: var(--primary); cursor: pointer; }
+/* 空录制（00:00/00:00）在终端区中央给提示，不再黑屏干等。 */
+.replay-terminal-wrap { position: relative; }
+.replay-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted-foreground); font-size: var(--dw-font-size); pointer-events: none; }
+/* 控制行控件对齐：播放钮 24px / 倍速 26px（SelectTrigger xs）/ 导出按钮走次级按钮规范。 */
+.replay-controls .link-button { display: inline-flex; height: var(--ssh-ctrl-h-compact); align-items: center; align-self: center; border: 1px solid var(--border); border-radius: var(--radius); padding: 0 8px; background: var(--background); color: var(--foreground); font-size: var(--dw-text-xs); }
+.replay-controls .link-button:hover:not(:disabled) { background: var(--accent); }
+.replay-speed { flex: 0 0 auto; width: 76px; }
+.replay-time { min-width: 110px; text-align: right; font-size: var(--dw-font-size); color: var(--muted-foreground); }
+/* 终端拖入上传落点询问：文件清单限高滚动，路径行对齐 radio 观感。 */
+.drop-file-list { max-height: 132px; margin: 0; overflow: auto; white-space: pre; }
+.drop-option { display: flex; align-items: center; gap: 7px; margin: 2px 0; font-size: var(--dw-font-size); cursor: pointer; }
+.drop-option input { accent-color: var(--primary); }
+.drop-option code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: var(--dw-text-xs); }
+.drop-path-input { width: 100%; height: var(--ssh-ctrl-h); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 8px; background: var(--background); color: var(--foreground); font-size: var(--dw-font-size); }
+.drop-path-input:focus { outline: none; border-color: color-mix(in srgb, var(--primary) 70%, var(--border)); }
+.drop-path-input:disabled { opacity: .5; }
+
+/* —— SFTP 列宽拖拽 —— */
+.file-header { position: relative; }
+.file-header .col-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding-right: 6px; /* 给 resizer 留位置 */
+}
+.file-header .col-wrap > *:not(.col-resizer) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.col-resizer {
+  position: absolute;
+  right: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 2;
+}
+.col-resizer::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 25%;
+  bottom: 25%;
+  width: 1px;
+  background: transparent;
+  transition: background-color .15s ease;
+  transform: translateX(-50%);
+}
+.col-resizer:hover::after,
+.col-resizer:active::after,
+.file-header.resizing .col-resizer::after {
+  background: var(--primary);
+}
+/* 拖拽过程中全局光标 */
+body.resizing-col,
+body.resizing-copilot { cursor: col-resize !important; user-select: none; }
+</style>
+
+
+

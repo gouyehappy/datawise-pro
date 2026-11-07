@@ -1,0 +1,156 @@
+/* Shared connector workbench chrome — compact Nacos/DBX head for both skins.
+ * Card surfaces use --dw-wb-card-radius; free-standing controls use --dw-wb-control-radius.
+ * Connected flush panes keep radius 0 (see connector-browse-panel).
+ */
+.connector-workbench.dw-workbench-page,
+.connector-workbench {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  /* Compact chrome: do not inherit large WorkbenchListPage head tokens. */
+  --dw-wb-head-pad-y: 0.45rem;
+  --dw-wb-head-min-height: 2.25rem;
+  --dw-wb-content-pad-x: 0.75rem;
+  background: var(--dw-wb-body-bg, var(--dw-bg-editor));
+}
+
+.connector-workbench__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dw-space-4);
+  flex-shrink: 0;
+  /* Compact Nacos-style row; skins may tighten further (ide pad-y: 0). */
+  min-height: var(--dw-wb-head-min-height, 2.25rem);
+  padding: var(--dw-wb-head-pad-y, 0.45rem) var(--dw-wb-content-pad-x, 0.75rem);
+  border-bottom: 1px solid var(--dw-wb-head-border);
+  background: var(--dw-wb-head-bg);
+  box-shadow: none;
+}
+
+.connector-workbench__identity {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  font-size: var(--dw-text-sm);
+}
+
+.connector-workbench__icon-slot,
+.connector-workbench__identity > .dw-icon,
+.connector-workbench__identity > svg {
+  flex-shrink: 0;
+  color: var(--dw-primary);
+}
+
+.connector-workbench__endpoint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--dw-text);
+}
+
+.connector-workbench__badge {
+  flex-shrink: 0;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--dw-wb-card-border);
+  border-radius: var(--dw-wb-control-radius);
+  color: var(--dw-text-secondary);
+  font-size: var(--dw-text-xs);
+  font-family: var(--dw-mono);
+  background: color-mix(in srgb, var(--dw-bg-muted) 70%, transparent);
+}
+
+.connector-workbench__badge.is-connected,
+.connector-workbench__badge.is-ok {
+  border-color: color-mix(in srgb, var(--dw-success) 45%, var(--dw-border));
+  color: var(--dw-success);
+  background: color-mix(in srgb, var(--dw-success) 12%, transparent);
+}
+
+.connector-workbench__badge.is-error,
+.connector-workbench__badge.is-disconnected {
+  border-color: color-mix(in srgb, var(--dw-danger) 45%, var(--dw-border));
+  color: var(--dw-danger);
+  background: color-mix(in srgb, var(--dw-danger) 12%, transparent);
+}
+
+.connector-workbench__badge.is-connecting {
+  border-color: color-mix(in srgb, var(--dw-warning) 45%, var(--dw-border));
+  color: var(--dw-warning);
+}
+
+.connector-workbench__muted {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dw-text-muted);
+  font-size: var(--dw-text-xs);
+  font-family: var(--dw-mono);
+}
+
+.connector-workbench__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.connector-workbench__tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  padding: 0.35rem var(--dw-wb-content-pad-x);
+  border-bottom: 1px solid var(--dw-wb-head-border);
+  background: var(--dw-wb-head-bg);
+}
+
+.connector-workbench__tabs button {
+  height: 1.75rem;
+  padding: 0 0.75rem;
+  border: none;
+  background: transparent;
+  border-radius: var(--dw-wb-control-radius);
+  color: var(--dw-text-muted);
+  font-size: var(--dw-text-sm);
+  cursor: pointer;
+}
+
+.connector-workbench__tabs button:hover {
+  color: var(--dw-text);
+  background: var(--dw-bg-hover);
+  box-shadow: none;
+}
+
+.connector-workbench__tabs button.is-active {
+  color: var(--dw-text);
+  font-weight: 600;
+  background: var(--dw-bg-muted);
+}
+
+.connector-workbench__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.connector-workbench__panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}

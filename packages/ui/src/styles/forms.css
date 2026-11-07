@@ -1,0 +1,1301 @@
+/* 表单、搜索、标签与页面头部 */
+
+.dw-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dw-gap-sm);
+}
+
+.dw-field label,
+.dw-field__label {
+    font-size: var(--dw-font-size-label);
+    font-weight: 500;
+    color: var(--dw-text-secondary);
+}
+
+.dw-field__hint {
+    margin: 0;
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-muted);
+    line-height: var(--dw-leading);
+}
+
+.dw-field--group .radio-row {
+    width: fit-content;
+}
+
+.dw-input,
+.dw-field input:not([type='checkbox']):not([type='radio']),
+.dw-field select,
+select.dw-input {
+    box-sizing: border-box;
+    width: 100%;
+    height: var(--dw-input-height);
+    min-height: var(--dw-input-height);
+    max-height: var(--dw-input-height);
+    padding: 0 var(--dw-control-pad-x);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-input-radius);
+    background: var(--dw-bg-panel);
+    color: var(--dw-text);
+    font-family: inherit;
+    font-size: var(--dw-font-size-control);
+    line-height: var(--dw-leading);
+    transition: var(--dw-transition-colors), var(--dw-transition-shadow);
+}
+
+.dw-field textarea,
+textarea.dw-input,
+.dw-input.dw-textarea--cell {
+    height: auto;
+    max-height: none;
+    min-height: calc(var(--dw-input-height) * 2.4);
+    padding: var(--dw-pad-control-lg);
+    line-height: var(--dw-leading);
+    resize: vertical;
+}
+
+.dw-input--sm,
+.dw-input.dw-input--sm,
+.dw-field input.dw-input--sm:not([type='checkbox']):not([type='radio']),
+.dw-field select.dw-input--sm,
+select.dw-input--sm,
+select.dw-input.dw-input--sm {
+    height: var(--dw-input-height-sm);
+    min-height: var(--dw-input-height-sm);
+    max-height: var(--dw-input-height-sm);
+    padding: 0 var(--dw-control-pad-x-sm);
+    border-radius: var(--dw-input-radius);
+    font-size: var(--dw-font-size-control);
+    line-height: var(--dw-leading);
+    box-sizing: border-box;
+}
+
+/* 表格内紧凑输入（设置页词条表等） */
+.dw-input--cell {
+    width: 100%;
+    min-width: 88px;
+    height: auto;
+    max-height: none;
+    min-height: var(--dw-input-height-sm);
+    padding: var(--dw-pad-tight);
+    border-radius: var(--dw-control-radius-sm);
+    font-size: var(--dw-text-sm);
+}
+
+.dw-input--mono {
+    font-family: var(--dw-mono);
+    font-size: var(--dw-text-sm);
+}
+
+/* 数字框去掉系统 spinner，观感与普通 DwInput 一致 */
+.dw-input[type='number'],
+.dw-field input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.dw-input[type='number']::-webkit-outer-spin-button,
+.dw-input[type='number']::-webkit-inner-spin-button,
+.dw-field input[type='number']::-webkit-outer-spin-button,
+.dw-field input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.dw-textarea--cell {
+    resize: vertical;
+    min-height: calc(var(--dw-density-md) * 1.6);
+    line-height: var(--dw-leading);
+}
+
+.dw-input::placeholder,
+.dw-field input::placeholder,
+.dw-field textarea::placeholder {
+    color: var(--dw-text-muted);
+    font-weight: 400;
+}
+
+.dw-input:hover,
+.dw-field input:hover,
+.dw-field textarea:hover,
+.dw-field select:hover,
+select.dw-input:hover {
+    border-color: color-mix(in srgb, var(--dw-text) 18%, var(--dw-border));
+}
+
+.dw-input:focus,
+.dw-field input:focus,
+.dw-field textarea:focus,
+.dw-field select:focus,
+select.dw-input:focus {
+    outline: none;
+    border-color: var(--dw-focus-border);
+    box-shadow: var(--dw-focus-ring);
+    background: var(--dw-bg);
+}
+
+/* ── DwCheckbox（统一多选框） ── */
+
+.dw-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dw-gap);
+    font-size: var(--dw-font-size-control);
+    line-height: var(--dw-leading);
+    color: var(--dw-text);
+    cursor: pointer;
+}
+
+.dw-checkbox--block {
+    display: flex;
+    width: 100%;
+    align-items: flex-start;
+    gap: var(--dw-gap-md);
+}
+
+.dw-checkbox__control {
+    flex-shrink: 0;
+    width: var(--dw-icon-size-sm);
+    height: var(--dw-icon-size-sm);
+    margin: 0;
+    accent-color: var(--dw-primary);
+    cursor: pointer;
+}
+
+.dw-checkbox--block .dw-checkbox__control {
+    margin-top: var(--dw-space-1);
+}
+
+.dw-checkbox__label {
+    min-width: 0;
+}
+
+.dw-checkbox.is-disabled,
+.dw-checkbox:has(.dw-checkbox__control:disabled) {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* ── DwRadioGroup（统一单选 / 分段选择） ── */
+
+.dw-radio-group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: var(--dw-space-1);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg-muted);
+    width: fit-content;
+}
+
+.dw-radio-group--list {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: var(--dw-gap-sm);
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+.dw-radio-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    padding: var(--dw-space-3) var(--dw-space-8);
+    border-radius: var(--dw-control-radius-sm);
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-font-size-control);
+    line-height: var(--dw-leading);
+    cursor: pointer;
+    transition: background var(--dw-duration) var(--dw-ease), color var(--dw-duration) var(--dw-ease), box-shadow 0.15s ease;
+}
+
+.dw-radio-group--list .dw-radio-option {
+    align-items: flex-start;
+    gap: var(--dw-gap);
+    width: 100%;
+    padding: var(--dw-space-4) var(--dw-space-5);
+    border: 1px solid var(--dw-border-light);
+    border-radius: var(--dw-control-radius);
+    background: var(--dw-bg-panel);
+    box-shadow: none;
+}
+
+.dw-radio-option__body {
+    display: inline-flex;
+    flex-direction: column;
+    gap: var(--dw-space-1);
+    min-width: 0;
+}
+
+.dw-radio-option__hint {
+    font-size: var(--dw-text-xs);
+    font-weight: 400;
+    color: var(--dw-text-muted);
+    line-height: var(--dw-leading);
+}
+
+.dw-radio-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.dw-radio-group--list .dw-radio-option input {
+    position: static;
+    opacity: 1;
+    pointer-events: auto;
+    flex-shrink: 0;
+    width: var(--dw-icon-size-sm);
+    height: var(--dw-icon-size-sm);
+    margin-top: var(--dw-space-1);
+    accent-color: var(--dw-primary);
+    cursor: pointer;
+}
+
+.dw-radio-option:has(input:checked) {
+    background: var(--dw-bg);
+    color: var(--dw-primary);
+    font-weight: 500;
+    box-shadow: var(--dw-shadow-sm);
+}
+
+.dw-radio-group--list .dw-radio-option:has(input:checked) {
+    border-color: color-mix(in srgb, var(--dw-primary) 35%, var(--dw-border-light));
+    background: color-mix(in srgb, var(--dw-primary) 6%, var(--dw-bg-panel));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+.dw-radio-group--list .dw-radio-option:has(input:checked) .dw-radio-option__label {
+    color: var(--dw-primary);
+    font-weight: 600;
+}
+
+.dw-radio-option.is-disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.dw-field--group .dw-radio-group {
+    width: fit-content;
+}
+
+.dw-field--group .dw-radio-group--list {
+    width: 100%;
+}
+
+.dw-field select,
+select.dw-input {
+    appearance: none;
+    padding-right: calc(var(--dw-space-12) + var(--dw-space-2));
+    background-color: var(--dw-bg-panel);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 6 8 9.5 11.5 6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 14px;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+select.dw-input--sm {
+    padding-right: calc(var(--dw-space-10) + var(--dw-space-2));
+    background-position: right 10px center;
+}
+
+/* ── DwSelect（统一下拉，视觉对齐 SearchInput） ── */
+
+.dw-select-host {
+    display: block;
+    width: 100%;
+    min-width: 0;
+}
+
+.dw-select {
+    position: relative;
+    width: 100%;
+}
+
+.dw-select__trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--dw-gap-sm);
+    box-sizing: border-box;
+    width: 100%;
+    height: var(--dw-select-trigger-h);
+    min-height: var(--dw-select-trigger-h);
+    max-height: var(--dw-select-trigger-h);
+    padding: 0 var(--dw-space-2) 0 var(--dw-control-pad-x);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-input-radius);
+    background: var(--dw-bg-panel);
+    color: var(--dw-text);
+    font-size: var(--dw-select-font);
+    line-height: var(--dw-leading);
+    font-weight: 400;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: none;
+    overflow: hidden;
+    transition: var(--dw-transition-colors), var(--dw-transition-shadow);
+}
+
+.dw-select__trigger:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--dw-text) 18%, var(--dw-border));
+}
+
+.dw-select.is-open .dw-select__trigger,
+.dw-select__trigger:focus-visible,
+.dw-select--combo:focus-within .dw-select__trigger {
+    outline: none;
+    border-color: var(--dw-focus-border);
+    background: var(--dw-bg);
+    box-shadow: var(--dw-focus-ring);
+}
+
+.dw-select.is-disabled .dw-select__trigger {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.dw-select__value {
+    flex: 1;
+    min-width: 0;
+    padding-right: var(--dw-space-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 400;
+    color: var(--dw-text);
+    line-height: var(--dw-leading);
+}
+
+.dw-select.is-placeholder .dw-select__value {
+    color: var(--dw-text-muted);
+    font-weight: 400;
+}
+
+.dw-select__actions {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    gap: 0;
+}
+
+/* Integrated clear / chevron — same footprint, no divider */
+.dw-select__icon-btn {
+    appearance: none;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-control-h-xs);
+    height: var(--dw-control-h-xs);
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--dw-radius-pill);
+    background: transparent;
+    color: var(--dw-text-muted);
+    cursor: pointer;
+    transition: background var(--dw-duration-fast) var(--dw-ease),
+        color var(--dw-duration-fast) var(--dw-ease);
+}
+
+.dw-select__icon-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--dw-text) 8%, transparent);
+    color: var(--dw-text);
+}
+
+.dw-select__icon-btn:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+
+.dw-select__icon-btn--static {
+    pointer-events: none;
+}
+
+/* Legacy affix alias — keep size variants working */
+.dw-select__affix {
+    appearance: none;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-control-h-xs);
+    height: var(--dw-control-h-xs);
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--dw-radius-pill);
+    background: transparent;
+    color: var(--dw-text-muted);
+    cursor: pointer;
+}
+
+.dw-select__chevron {
+    flex-shrink: 0;
+    width: var(--dw-icon-size-sm);
+    height: var(--dw-icon-size-sm);
+    color: inherit;
+    opacity: 0.8;
+    transition: transform var(--dw-duration) var(--dw-ease), color var(--dw-duration) var(--dw-ease), opacity var(--dw-duration) var(--dw-ease);
+}
+
+.dw-select.is-open .dw-select__chevron {
+    transform: rotate(180deg);
+    color: var(--dw-primary);
+    opacity: 1;
+}
+
+.dw-select__menu {
+    box-sizing: border-box;
+    z-index: var(--dw-z-dropdown);
+    margin: 0;
+    padding: var(--dw-space-1);
+    list-style: none;
+    min-width: 0;
+    width: max-content;
+    max-width: min(420px, 92vw);
+    max-height: 280px;
+    overflow-y: auto;
+    border: 1px solid color-mix(in srgb, var(--dw-border-light) 88%, var(--dw-border));
+    border-radius: var(--dw-menu-radius);
+    background: var(--dw-bg);
+    box-shadow: var(--dw-menu-shadow);
+}
+
+.dw-select__menu--portal {
+    position: fixed;
+    top: auto;
+    left: auto;
+    right: auto;
+    z-index: var(--dw-z-select-above-modal);
+}
+
+.dw-select__menu--searchable {
+    display: flex;
+    flex-direction: column;
+    padding: var(--dw-space-1);
+    gap: var(--dw-space-1);
+    overflow: hidden !important;
+}
+
+.dw-select__menu--combo {
+    display: flex;
+    flex-direction: column;
+    padding: var(--dw-space-1);
+    overflow: hidden !important;
+}
+
+/* Combobox: search field look, no vertical splitter */
+.dw-select--combo .dw-select__trigger {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-gap-sm);
+    width: 100%;
+    padding: 0 var(--dw-space-2) 0 var(--dw-space-4);
+    cursor: text;
+}
+
+.dw-select--combo .dw-select__search-icon {
+    flex-shrink: 0;
+    opacity: 0.55;
+}
+
+.dw-select--combo.is-open .dw-select__search-icon,
+.dw-select--combo:focus-within .dw-select__search-icon {
+    opacity: 0.78;
+}
+
+.dw-select__combo-input {
+    flex: 1;
+    box-sizing: border-box;
+    min-width: 0;
+    width: 0;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--dw-text);
+    font-size: inherit;
+    line-height: var(--dw-leading);
+    font-family: inherit;
+}
+
+.dw-select__combo-input::placeholder {
+    color: var(--dw-text-muted);
+}
+
+.dw-select__menu-footer {
+    flex-shrink: 0;
+    margin: var(--dw-space-1) var(--dw-space-2) 0;
+    padding: var(--dw-space-2) var(--dw-space-2) var(--dw-space-1);
+    border-top: 1px solid color-mix(in srgb, var(--dw-border) 70%, transparent);
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-xs);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+    text-align: right;
+    opacity: 0.9;
+}
+
+.dw-select__search {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-gap-sm);
+    flex-shrink: 0;
+    box-sizing: border-box;
+    min-height: var(--dw-control-h-sm);
+    padding: 0 var(--dw-space-3) 0 var(--dw-space-4);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-input-radius);
+    background: var(--dw-bg-panel);
+    color: var(--dw-text-muted);
+}
+
+.dw-select__search:focus-within {
+    border-color: var(--dw-focus-border);
+    box-shadow: var(--dw-focus-ring);
+    background: var(--dw-bg);
+}
+
+.dw-select__search-icon {
+    flex-shrink: 0;
+    opacity: 0.72;
+}
+
+.dw-select__search-input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--dw-text);
+    font-size: var(--dw-text-sm);
+    line-height: 1;
+}
+
+.dw-select__search-input::placeholder {
+    color: var(--dw-text-muted);
+}
+
+.dw-select__search-input[type='search']::-webkit-search-decoration,
+.dw-select__search-input[type='search']::-webkit-search-cancel-button,
+.dw-select__search-input[type='search']::-webkit-search-results-button,
+.dw-select__search-input[type='search']::-webkit-search-results-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.dw-select__search-meta {
+    flex-shrink: 0;
+    margin-left: var(--dw-space-1);
+    padding-left: var(--dw-space-3);
+    border-left: 1px solid color-mix(in srgb, var(--dw-border) 80%, transparent);
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-xs);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.dw-select__viewport {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    max-height: 240px;
+}
+
+.dw-select__empty {
+    margin: 0;
+    padding: var(--dw-space-5) var(--dw-space-4);
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-sm);
+    text-align: center;
+}
+
+.dw-select__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--dw-gap-md);
+    width: 100%;
+    min-height: calc(var(--dw-control-h) - 2px);
+    padding: 0 var(--dw-space-4);
+    border: none;
+    border-radius: var(--dw-menu-item-radius);
+    background: transparent;
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-select-font);
+    line-height: var(--dw-leading);
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--dw-duration-fast) var(--dw-ease), color var(--dw-duration-fast) var(--dw-ease);
+}
+
+.dw-select__item:hover:not(:disabled),
+.dw-select__item[data-highlighted]:not([data-disabled]) {
+    background: var(--dw-bg-hover);
+    color: var(--dw-text);
+    outline: none;
+}
+
+.dw-select__item.is-active {
+    background: var(--dw-primary-soft);
+    color: var(--dw-primary);
+    font-weight: 500;
+}
+
+.dw-select__item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.dw-select__item-label {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.dw-select__menu .dw-select__item-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dw-select__check {
+    flex-shrink: 0;
+    color: var(--dw-primary);
+}
+
+.dw-select-menu-enter-active,
+.dw-select-menu-leave-active {
+    transition: opacity var(--dw-duration) var(--dw-ease), transform var(--dw-duration) var(--dw-ease);
+}
+
+.dw-select-menu-enter-from,
+.dw-select-menu-leave-to {
+    opacity: 0;
+    transform: translateY(-4px);
+}
+
+/* sm — 与 .dw-input--sm / 工具栏密级同高 */
+.dw-select--sm .dw-select__trigger {
+    height: var(--dw-select-trigger-h-sm);
+    min-height: var(--dw-select-trigger-h-sm);
+    max-height: var(--dw-select-trigger-h-sm);
+    padding: 0 var(--dw-space-2) 0 var(--dw-control-pad-x-sm);
+    font-size: var(--dw-font-size-control);
+    box-sizing: border-box;
+    border-radius: var(--dw-input-radius);
+}
+
+.dw-select--sm .dw-select__icon-btn,
+.dw-select--sm .dw-select__affix {
+    width: 1.35rem;
+    height: 1.35rem;
+}
+
+.dw-select--sm .dw-select__item {
+    min-height: var(--dw-control-h-sm);
+    padding: 0 var(--dw-space-4);
+    font-size: var(--dw-font-size-control);
+}
+
+/* pill — 工具栏圆角 */
+.dw-select--pill {
+    width: auto;
+}
+
+.dw-select--pill .dw-select__trigger {
+    display: inline-flex;
+    width: auto;
+    max-width: 180px;
+    height: var(--dw-control-h);
+    min-height: var(--dw-control-h);
+    max-height: var(--dw-control-h);
+    padding: 0 var(--dw-space-3) 0 var(--dw-space-6);
+    border-radius: var(--dw-radius-pill);
+    background: var(--dw-bg-muted);
+    font-size: var(--dw-font-size-control);
+    box-shadow: none;
+}
+
+.dw-select--pill .dw-select__menu {
+    min-width: 100%;
+}
+
+.dw-select--pill .dw-select__item {
+    font-size: var(--dw-font-size-control);
+}
+
+/* compact — 分页等超窄 */
+.dw-select--compact {
+    width: auto;
+}
+
+.dw-select--compact .dw-select__trigger {
+    display: inline-flex;
+    width: auto;
+    max-width: 80px;
+    height: var(--dw-control-h-sm);
+    min-height: var(--dw-control-h-sm);
+    max-height: var(--dw-control-h-sm);
+    padding: 0 var(--dw-space-2) 0 var(--dw-space-5);
+    border-radius: var(--dw-control-radius-sm);
+    background: var(--dw-bg-muted);
+    font-size: var(--dw-font-size-control);
+    box-shadow: none;
+}
+
+.dw-select--compact .dw-select__icon-btn,
+.dw-select--compact .dw-select__affix {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.dw-select--compact .dw-select__chevron {
+    width: var(--dw-icon-size-xs);
+    height: var(--dw-icon-size-xs);
+}
+
+.dw-select--compact .dw-select__menu {
+    min-width: max(100%, 88px);
+}
+
+.dw-select--compact .dw-select__item {
+    font-size: var(--dw-font-size-control);
+    min-height: var(--dw-control-h-sm);
+}
+
+/* inline — 嵌入组合控件（DataGrid 筛选等） */
+.dw-select--inline {
+    width: auto;
+    height: 100%;
+}
+
+.dw-select--inline .dw-select__trigger {
+    height: 100%;
+    min-height: var(--dw-control-h-xs);
+    padding: 0 var(--dw-space-2) 0 var(--dw-space-4);
+    border: none;
+    border-radius: var(--dw-control-radius-sm);
+    background: transparent;
+    font-size: var(--dw-text-sm);
+    font-weight: 600;
+    font-family: var(--dw-mono);
+    box-shadow: none;
+}
+
+.dw-select--inline .dw-select__value {
+    font-weight: 600;
+}
+
+.dw-select--inline .dw-select__icon-btn,
+.dw-select--inline .dw-select__affix {
+    width: auto;
+    min-width: auto;
+    height: auto;
+    padding: 0 var(--dw-space-2) 0 0;
+    border-radius: 0;
+}
+
+.dw-select--inline .dw-select__trigger:hover:not(:disabled),
+.dw-select--inline.is-open .dw-select__trigger {
+    background: color-mix(in srgb, var(--dw-primary-soft) 40%, transparent);
+    border-color: transparent;
+    box-shadow: none;
+}
+
+.dw-select--inline .dw-select__chevron {
+    width: var(--dw-icon-size-xs);
+    height: var(--dw-icon-size-xs);
+}
+
+.dw-select--inline .dw-select__menu {
+    left: 0;
+    right: auto;
+    min-width: max(160px, 100%);
+}
+
+.dw-select--inline .dw-select__item {
+    min-height: var(--dw-tab-height);
+    font-size: var(--dw-text-sm);
+    font-family: var(--dw-mono);
+}
+
+.dw-search {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-gap-sm);
+    box-sizing: border-box;
+    width: 100%;
+    height: var(--dw-input-height);
+    min-height: var(--dw-input-height);
+    max-height: var(--dw-input-height);
+    padding: 0 var(--dw-space-4) 0 var(--dw-control-pad-x);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-input-radius);
+    background: var(--dw-bg-panel);
+    color: var(--dw-text-muted);
+    transition: var(--dw-transition-colors), var(--dw-transition-shadow);
+}
+
+/* Toolbar companion for .dw-segment / sm controls */
+.dw-search--sm {
+    height: var(--dw-input-height-sm);
+    min-height: var(--dw-input-height-sm);
+    max-height: var(--dw-input-height-sm);
+    border-radius: var(--dw-input-radius);
+}
+
+.dw-search__icon {
+    flex-shrink: 0;
+    opacity: 0.72;
+}
+
+.dw-search input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--dw-text);
+    font-size: var(--dw-text-sm);
+    line-height: 1;
+}
+
+.dw-search input::placeholder {
+    color: var(--dw-text-muted);
+}
+
+.dw-search input[type='search']::-webkit-search-decoration,
+.dw-search input[type='search']::-webkit-search-cancel-button,
+.dw-search input[type='search']::-webkit-search-results-button,
+.dw-search input[type='search']::-webkit-search-results-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.dw-search__clear {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-control-h-xs);
+    height: var(--dw-control-h-xs);
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--dw-radius-pill);
+    background: transparent;
+    color: var(--dw-text-muted);
+    cursor: pointer;
+}
+
+.dw-search__clear:hover {
+    background: color-mix(in srgb, var(--dw-text) 8%, transparent);
+    color: var(--dw-text);
+}
+
+.dw-search__suffix {
+    flex-shrink: 0;
+    margin-left: var(--dw-space-1);
+    padding-left: var(--dw-space-4);
+    border-left: 1px solid color-mix(in srgb, var(--dw-border) 80%, transparent);
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-xs);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.dw-search:hover {
+    border-color: color-mix(in srgb, var(--dw-text) 18%, var(--dw-border));
+}
+
+.dw-search:focus-within {
+    border-color: var(--dw-focus-border);
+    box-shadow: var(--dw-focus-ring);
+    background: var(--dw-bg);
+}
+
+.dw-search.is-disabled,
+.dw-search.is-disabled:hover,
+.dw-search.is-disabled:focus-within {
+    opacity: 0.55;
+    border-color: var(--dw-border);
+    box-shadow: none;
+    pointer-events: none;
+}
+
+.dw-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dw-gap-sm);
+    max-width: 100%;
+    padding: var(--dw-space-2) var(--dw-space-5);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-chip-radius);
+    background: var(--dw-bg-panel);
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-xs);
+    line-height: var(--dw-leading-snug);
+}
+
+.dw-chip__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dw-chip__remove {
+    flex-shrink: 0;
+    padding: 0 var(--dw-space-1);
+    border: none;
+    background: none;
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-xl);
+    line-height: 1;
+    cursor: pointer;
+}
+
+.dw-chip__remove:hover {
+    color: var(--dw-text);
+}
+
+.dw-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    min-width: var(--dw-control-h-xs);
+    height: var(--dw-control-h-xs);
+    padding: 0 var(--dw-space-3);
+    border-radius: var(--dw-radius-pill);
+    background: var(--dw-primary);
+    color: var(--dw-on-accent);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    line-height: var(--dw-control-h-xs);
+}
+
+.dw-badge--soft {
+    background: var(--dw-primary-soft);
+    border: 1px solid color-mix(in srgb, var(--dw-primary) 22%, transparent);
+    color: var(--dw-primary);
+    font-weight: 500;
+}
+
+.dw-empty {
+    padding: var(--dw-space-10) var(--dw-space-7);
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-sm);
+    line-height: var(--dw-leading-relaxed);
+    text-align: center;
+}
+
+.dw-page-head {
+    flex-shrink: 0;
+    padding: 18px var(--dw-space-10) var(--dw-space-7);
+    border-bottom: 1px solid var(--dw-border-light);
+    background: radial-gradient(ellipse 70% 80% at 0% 0%, color-mix(in srgb, var(--dw-primary) 7%, transparent), transparent),
+    var(--dw-bg);
+}
+
+.dw-page-head__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-space-7);
+}
+
+.dw-page-head__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-density-lg);
+    height: var(--dw-density-lg);
+    border-radius: var(--dw-panel-radius);
+    background: linear-gradient(135deg, var(--dw-primary) 0%, var(--dw-primary) 100%);
+    color: var(--dw-on-accent);
+    box-shadow: var(--dw-btn-elev-shadow-hover);
+}
+
+.dw-page-head__title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-gap-md);
+}
+
+.dw-page-head h1 {
+    margin: 0;
+    font-size: var(--dw-text-2xl);
+    font-weight: 600;
+}
+
+.dw-page-head p {
+    margin: var(--dw-space-2) 0 0;
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-md);
+}
+
+.dw-page-head__extra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--dw-gap);
+    margin-top: var(--dw-space-6);
+    min-height: var(--dw-btn-height);
+}
+
+.dw-page-head__extra .dw-page-head__hint {
+    margin: 0;
+}
+
+.dw-page-head__hint {
+    margin: var(--dw-space-5) 0 0;
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-sm);
+}
+
+.dw-composer-wrap {
+    flex-shrink: 0;
+    padding: var(--dw-space-7) var(--dw-space-10) var(--dw-space-8);
+    border-top: 1px solid var(--dw-border-light);
+    background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--dw-bg-panel) 92%, var(--dw-primary) 8%) 100%);
+}
+
+[data-theme='dark'] .dw-composer-wrap {
+    background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--dw-bg-panel) 97%, var(--dw-primary) 3%) 100%);
+}
+
+.dw-composer-targets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dw-gap);
+    margin-bottom: var(--dw-space-6);
+}
+
+.dw-composer-shell {
+    position: relative;
+    border-radius: var(--dw-panel-radius);
+    padding: 1px;
+    background: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--dw-border) 88%, transparent),
+            color-mix(in srgb, var(--dw-primary) 18%, var(--dw-border))
+    );
+    box-shadow: var(--dw-composer-shell-shadow);
+    transition: box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.dw-composer-shell:focus-within {
+    background: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--dw-primary) 42%, var(--dw-border)),
+            color-mix(in srgb, var(--dw-primary) 72%, transparent)
+    );
+    box-shadow: var(--dw-composer-focus-shadow);
+}
+
+.dw-composer-shell.is-sending {
+    opacity: 0.92;
+}
+
+.dw-composer {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) 30px;
+    align-items: center;
+    gap: var(--dw-gap);
+    padding: var(--dw-space-4) var(--dw-space-4) var(--dw-space-4) var(--dw-space-5);
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg);
+}
+
+.dw-composer.is-multiline {
+    align-items: end;
+    padding-top: var(--dw-space-5);
+    padding-bottom: var(--dw-space-4);
+}
+
+.dw-composer-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 26px;
+    height: var(--dw-control-h-sm);
+    border-radius: var(--dw-control-radius);
+    background: linear-gradient(
+            145deg,
+            color-mix(in srgb, var(--dw-primary) 16%, var(--dw-bg-muted)),
+            color-mix(in srgb, var(--dw-primary) 8%, var(--dw-bg))
+    );
+    color: var(--dw-primary);
+    box-shadow: var(--dw-surface-inset-highlight);
+}
+
+.dw-composer.is-multiline .dw-composer-badge {
+    width: 30px;
+    height: var(--dw-control-h-sm);
+    margin-bottom: 0;
+}
+
+.dw-composer-input-wrap {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+
+.dw-composer.is-multiline .dw-composer-input-wrap {
+    align-items: stretch;
+}
+
+.dw-composer-input {
+    display: block;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--dw-text);
+    font-size: var(--dw-text-xl);
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.dw-composer-input--single {
+    height: var(--dw-control-h-sm);
+    line-height: var(--dw-control-h-sm);
+}
+
+.dw-composer-input--multi {
+    min-height: var(--dw-control-h-sm);
+    max-height: 128px;
+    padding: 0;
+    line-height: var(--dw-leading-relaxed);
+    resize: none;
+    overflow-y: auto;
+}
+
+.dw-composer.is-multiline .dw-send-btn {
+    align-self: end;
+}
+
+.dw-composer-input::placeholder {
+    color: var(--dw-text-muted);
+}
+
+.dw-composer-input:disabled {
+    cursor: not-allowed;
+    opacity: 0.72;
+}
+
+.dw-composer-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--dw-gap-sm);
+    margin: var(--dw-space-5) 0 0;
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-xs);
+    line-height: var(--dw-leading);
+}
+
+.dw-composer-hint-item {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dw-space-2);
+}
+
+.dw-composer-hint-dot {
+    opacity: 0.45;
+}
+
+.dw-composer-hint kbd {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--dw-icon-size-lg);
+    padding: 0 var(--dw-space-3);
+    border: 1px solid var(--dw-border-light);
+    border-radius: var(--dw-control-radius-sm);
+    background: var(--dw-bg-muted);
+    color: var(--dw-text-secondary);
+    font-family: inherit;
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    box-shadow: var(--dw-kbd-elev-shadow);
+}
+
+.dw-send-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 30px;
+    height: var(--dw-control-h-sm);
+    border: none;
+    border-radius: var(--dw-control-radius);
+    background: linear-gradient(
+            145deg,
+            color-mix(in srgb, var(--dw-primary) 92%, var(--dw-on-accent) 8%),
+            var(--dw-primary)
+    );
+    color: var(--dw-on-accent);
+    cursor: pointer;
+    box-shadow: var(--dw-btn-elev-shadow);
+    transition: transform var(--dw-duration) var(--dw-ease),
+    box-shadow 0.15s ease,
+    filter 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.dw-send-btn:disabled {
+    opacity: 0.38;
+    cursor: default;
+    box-shadow: none;
+}
+
+.dw-send-btn:not(:disabled):hover {
+    filter: brightness(1.04);
+    box-shadow: var(--dw-btn-elev-shadow-hover);
+}
+
+.dw-send-btn:not(:disabled):active {
+    transform: scale(0.96);
+}
+
+.dw-send-spinner {
+    width: var(--dw-icon-size-sm);
+    height: var(--dw-icon-size-sm);
+    border: 2px solid rgba(255, 255, 255, 0.28);
+    border-top-color: var(--dw-on-accent);
+    border-radius: 50%;
+    animation: dw-send-spin 0.7s linear infinite;
+}
+
+@keyframes dw-send-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

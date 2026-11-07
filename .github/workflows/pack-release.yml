@@ -1,0 +1,53 @@
+name: Pack release (sign .dpk)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'pack-v*'
+
+concurrency:
+  group: pack-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sign-sample-packs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Build modules and sign sample packs
+        run: |
+          bash scripts/pack/sign-all-samples.sh
+      - name: Assert Offline AI pack artifact (Wave 30)
+        run: |
+          test -f dist/packs/datawise-pack-ai-offline-ci.dpk
+          ls -la dist/packs/datawise-pack-ai-offline-ci.dpk
+      - name: Entitlement / FE pack scans + security retest
+        run: |
+          bash scripts/pack/security-retest.sh
+      - name: Upload signed packs + public key (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: datawise-packs
+          path: |
+            dist/packs/*.dpk
+            dist/certs/pack-ci.pub.pem
+          if-no-files-found: error
+      - name: Publish .dpk to GitHub Release (D-03)
+        if: startsWith(github.ref, 'refs/tags/pack-v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # Create release if missing; upload signed packs as Release assets (not only CI artifacts).
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --notes "Signed extension packs ($TAG)."
+          fi
+          gh release upload "$TAG" dist/packs/*.dpk dist/certs/pack-ci.pub.pem --clobber

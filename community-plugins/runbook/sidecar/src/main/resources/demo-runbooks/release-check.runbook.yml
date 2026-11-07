@@ -1,0 +1,17 @@
+id: release-check
+title: 发布检查
+tags: [release]
+steps:
+  - id: note
+    type: note
+    body: 发布前核对健康检查与变更窗口。HTTP 步骤可改成你的健康地址。
+  - id: http
+    type: http
+    method: GET
+    url: https://example.com
+  - id: checklist
+    type: checklist
+    items:
+      - 变更窗口已确认
+      - 回滚步骤已写在备注里
+      - 值班人已知晓

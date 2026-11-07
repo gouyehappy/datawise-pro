@@ -1,0 +1,26 @@
+id: daily-ops
+title: 日常值班巡检
+concurrency: 4
+targets:
+  - id: dns
+    type: tcp
+    host: 1.1.1.1
+    port: 443
+  - id: example
+    type: http
+    url: https://example.com
+  - id: db
+    type: sql_ping
+    connectionHint: 选择一条 SQL 连接
+checks:
+  - id: tcp-up
+    type: tcp_connect
+    target: dns
+  - id: http-200
+    type: http_status
+    target: example
+    expect: 200
+  - id: sql-ok
+    type: sql_readonly
+    target: db
+    sql: SELECT 1 AS ok

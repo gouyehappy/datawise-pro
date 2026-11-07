@@ -1,0 +1,25 @@
+/* Global: Monaco injects decoration class names into the editor DOM. */
+
+.dw-git-gutter-added,
+.dw-git-gutter-modified,
+.dw-git-gutter-deleted {
+  width: 4px !important;
+  margin-left: 4px;
+  border-radius: 1px;
+}
+
+.dw-git-gutter-added { background: var(--dw-success) !important; }
+.dw-git-gutter-modified { background: var(--dw-warning) !important; }
+.dw-git-gutter-deleted { background: var(--dw-danger) !important; }
+
+.dw-git-line-added {
+  border-left: 3px solid var(--dw-success);
+}
+
+.dw-git-line-modified {
+  border-left: 3px solid var(--dw-warning);
+}
+
+.dw-git-line-deleted {
+  border-left: 3px solid var(--dw-danger);
+}

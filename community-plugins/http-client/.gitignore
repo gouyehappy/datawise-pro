@@ -1,0 +1,7 @@
+.dwp-staging/
+dist/
+.signing/
+backend/datawise-plugin-http-client
+backend/datawise-plugin-http-client.exe
+backend/*.exe
+*.dwp

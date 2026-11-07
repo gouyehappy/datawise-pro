@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  数据库连接配置示例（复制为 connections.xml 后按需修改）。
+  分组可嵌套；每个 connection 归属一个 group。
+-->
+<datawise-connections version="1">
+  <group id="group-default" label="默认组" sort-order="0" expanded="true" user-id="1">
+    <connection id="conn-example" name="Local MySQL" db-type="mysql" sort-order="0" user-id="1">
+      <host>127.0.0.1</host>
+      <port>3306</port>
+      <auth-type>USER</auth-type>
+      <username>root</username>
+      <!-- 密码由后端 AES 加密存储，格式 dwenc:v1:...；首次保存连接时自动加密 -->
+      <password></password>
+      <database>demo</database>
+      <ssh-enabled>false</ssh-enabled>
+    </connection>
+  </group>
+</datawise-connections>

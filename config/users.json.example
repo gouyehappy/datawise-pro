@@ -1,0 +1,25 @@
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "passwordHash": "$2a$10$PVBxsdqQtjLCo2DCcm5kt.efYZNzqA9qq9lsDWZ2zRNKRL4Hw54D.",
+    "displayName": "Admin",
+    "email": "admin@datawise.local",
+    "guest": false
+  },
+  {
+    "id": 2,
+    "username": "demo",
+    "passwordHash": "$2a$10$PVBxsdqQtjLCo2DCcm5kt.efYZNzqA9qq9lsDWZ2zRNKRL4Hw54D.",
+    "displayName": "Demo User",
+    "email": "demo@datawise.local",
+    "guest": false
+  },
+  {
+    "id": 3,
+    "username": "guest",
+    "displayName": "Guest",
+    "email": "guest@datawise.local",
+    "guest": true
+  }
+]

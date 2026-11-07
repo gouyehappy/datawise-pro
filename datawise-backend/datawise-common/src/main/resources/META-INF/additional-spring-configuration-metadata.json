@@ -1,0 +1,39 @@
+{
+  "groups": [
+    {
+      "name": "datawise.sse",
+      "type": "org.apache.datawise.backend.sse.SseProperties",
+      "description": "Optional shared SSE pub/sub bus."
+    },
+    {
+      "name": "datawise.sse.jdbc",
+      "type": "org.apache.datawise.backend.sse.SseProperties$Jdbc",
+      "description": "JDBC polling bus settings (when bus-type=jdbc)."
+    }
+  ],
+  "properties": [
+    {
+      "name": "datawise.sse.bus-type",
+      "type": "org.apache.datawise.backend.sse.SseProperties$BusType",
+      "defaultValue": "in-memory",
+      "description": "SSE bus backend: in-memory (default) or jdbc (requires metadata DataSource)."
+    },
+    {
+      "name": "datawise.sse.instance-id",
+      "type": "java.lang.String",
+      "description": "Optional publish origin id; empty = spring.application.name@host:pid."
+    },
+    {
+      "name": "datawise.sse.jdbc.poll-interval",
+      "type": "java.time.Duration",
+      "defaultValue": "500ms",
+      "description": "How often JDBC bus polls dw_sse_events for new rows."
+    },
+    {
+      "name": "datawise.sse.jdbc.retention",
+      "type": "java.time.Duration",
+      "defaultValue": "5m",
+      "description": "Delete JDBC SSE events older than this retention window."
+    }
+  ]
+}

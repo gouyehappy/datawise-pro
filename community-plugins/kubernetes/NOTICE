@@ -1,0 +1,12 @@
+DataWise Kubernetes community plugin
+Copyright 2026 DataWise contributors
+
+This product includes software developed from:
+  https://github.com/eryajf/dbx-plugin-k8s
+  Copyright eryajf and contributors
+  Licensed under the Apache License, Version 2.0
+
+That upstream work acknowledges Kite / Kite Desktop. See upstream README.
+
+Portions of the Kubernetes client stack are copyright The Kubernetes Authors
+and distributed under the Apache License, Version 2.0.

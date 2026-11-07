@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "packId": "pack.connector.enterprise",
+  "version": "1.0.0-dev",
+  "minCoreVersion": "4.1.0",
+  "maxCoreVersion": "4.99.99",
+  "capabilities": ["connector.enterprise"],
+  "plugins": [],
+  "extensionPoints": ["marketplace.connector.enterprise"],
+  "requiresRestart": false,
+  "channel": "stable"
+}

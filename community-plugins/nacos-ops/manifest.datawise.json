@@ -1,0 +1,268 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.nacos-ops",
+  "name": "Nacos Ops",
+  "version": "0.5.12",
+  "publisher": "datawise-community",
+  "description": "Nacos / rNacos ops workbench: namespaces, config publish, and service discovery.",
+  "license": "Apache-2.0",
+  "source": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/nacos-ops",
+  "homepage": "https://github.com/phenixan/datawise-cli",
+  "icon": "assets/plugin.svg",
+  "tags": ["nacos", "config", "discovery", "ops"],
+  "permissions": ["host.workbench", "host.events", "host.clipboard"],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.6"
+  },
+  "entrypoints": {
+    "backend": {
+      "transport": "stdio-jsonl",
+      "executable": "bin/windows-x86_64/datawise-plugin-nacos-ops.exe"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.nacos-ops.connection",
+      "label": "Nacos",
+      "description": "Connect to a Nacos or rNacos console for config and discovery ops.",
+      "icon": "assets/plugin.svg",
+      "workbench": "io.datawise.community.nacos-ops.workbench",
+      "capabilities": ["test", "connect", "disconnect"],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Display name",
+          "type": "text",
+          "binding": "name",
+          "default": "Nacos"
+        },
+        {
+          "key": "connect_mode",
+          "label": "Connect by",
+          "type": "select",
+          "binding": "config",
+          "required": true,
+          "default": "url",
+          "options": [
+            { "label": "URL", "value": "url" },
+            { "label": "Host / Port", "value": "host" }
+          ]
+        },
+        {
+          "key": "base_url",
+          "label": "Console URL",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "http://127.0.0.1:8848/nacos",
+          "description": "Full Nacos console URL. Protocol, host, port and context path are parsed automatically.",
+          "visible_when": { "field": "connect_mode", "one_of": ["url"] },
+          "required_when": { "field": "connect_mode", "one_of": ["url"] }
+        },
+        {
+          "key": "protocol",
+          "label": "Protocol",
+          "type": "select",
+          "binding": "config",
+          "default": "http",
+          "options": [
+            { "label": "HTTP", "value": "http" },
+            { "label": "HTTPS", "value": "https" }
+          ],
+          "visible_when": { "field": "connect_mode", "one_of": ["host"] },
+          "required_when": { "field": "connect_mode", "one_of": ["host"] }
+        },
+        {
+          "key": "host",
+          "label": "Host",
+          "type": "text",
+          "binding": "host",
+          "placeholder": "127.0.0.1",
+          "visible_when": { "field": "connect_mode", "one_of": ["host"] },
+          "required_when": { "field": "connect_mode", "one_of": ["host"] }
+        },
+        {
+          "key": "port",
+          "label": "Port",
+          "type": "number",
+          "binding": "port",
+          "default": 8848,
+          "visible_when": { "field": "connect_mode", "one_of": ["host"] },
+          "required_when": { "field": "connect_mode", "one_of": ["host"] }
+        },
+        {
+          "key": "context_path",
+          "label": "Context path",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "/nacos or empty for v3",
+          "visible_when": { "field": "connect_mode", "one_of": ["host"] }
+        },
+        {
+          "key": "auth_mode",
+          "label": "Auth mode",
+          "type": "select",
+          "binding": "config",
+          "required": true,
+          "default": "password",
+          "options": [
+            { "label": "Username / Password", "value": "password" },
+            { "label": "AccessKey / SecretKey", "value": "access_key" }
+          ]
+        },
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "binding": "user",
+          "placeholder": "nacos (empty = anonymous)",
+          "visible_when": { "field": "auth_mode", "one_of": ["password"] }
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "password",
+          "binding": "password",
+          "visible_when": { "field": "auth_mode", "one_of": ["password"] }
+        },
+        {
+          "key": "access_key",
+          "label": "Access Key",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "AK",
+          "visible_when": { "field": "auth_mode", "one_of": ["access_key"] },
+          "required_when": { "field": "auth_mode", "one_of": ["access_key"] }
+        },
+        {
+          "key": "secret_key",
+          "label": "Secret Key",
+          "type": "password",
+          "binding": "config",
+          "visible_when": { "field": "auth_mode", "one_of": ["access_key"] },
+          "required_when": { "field": "auth_mode", "one_of": ["access_key"] }
+        },
+        {
+          "key": "implementation",
+          "label": "Implementation",
+          "type": "select",
+          "binding": "config",
+          "required": true,
+          "default": "nacos",
+          "options": [
+            { "label": "Nacos", "value": "nacos" },
+            { "label": "rNacos", "value": "rnacos" }
+          ]
+        },
+        {
+          "key": "version_mode",
+          "label": "API version",
+          "type": "select",
+          "binding": "config",
+          "required": true,
+          "default": "auto",
+          "options": [
+            { "label": "Auto", "value": "auto" },
+            { "label": "v2", "value": "v2" },
+            { "label": "v3", "value": "v3" }
+          ],
+          "visible_when": { "field": "implementation", "one_of": ["nacos"] }
+        },
+        {
+          "key": "namespace",
+          "label": "Default namespace",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "public / empty"
+        },
+        {
+          "key": "read_only",
+          "label": "Read-only",
+          "type": "boolean",
+          "binding": "config",
+          "default": false
+        },
+        {
+          "key": "insecure_skip_tls",
+          "label": "Skip TLS verify",
+          "type": "boolean",
+          "binding": "config",
+          "default": false
+        },
+        {
+          "key": "connect_timeout_secs",
+          "label": "Connect timeout (s)",
+          "type": "number",
+          "binding": "config",
+          "default": 20
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.nacos-ops.workbench",
+      "label": "Nacos Ops",
+      "description": "Configs, publish, and service discovery for Nacos.",
+      "icon": "assets/plugin.svg"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Nacos 运维",
+      "description": "Nacos / rNacos 运维台：命名空间、配置发布、服务发现。",
+      "contributions": {
+        "io.datawise.community.nacos-ops.connection": {
+          "label": "Nacos",
+          "description": "连接 Nacos / rNacos 控制台，管理配置与服务发现。",
+          "fields": {
+            "display_name": { "label": "显示名称" },
+            "connect_mode": {
+              "label": "连接方式",
+              "options": { "url": "完整 URL", "host": "主机/端口" }
+            },
+            "base_url": {
+              "label": "控制台 URL",
+              "description": "填写完整 Nacos 控制台地址，自动解析协议、主机、端口与上下文路径。"
+            },
+            "protocol": {
+              "label": "协议",
+              "options": { "http": "HTTP", "https": "HTTPS" }
+            },
+            "host": { "label": "主机" },
+            "port": { "label": "端口" },
+            "context_path": { "label": "上下文路径" },
+            "auth_mode": {
+              "label": "鉴权方式",
+              "options": { "password": "用户名/密码", "access_key": "AccessKey/SecretKey" }
+            },
+            "username": { "label": "用户名" },
+            "password": { "label": "密码" },
+            "access_key": { "label": "Access Key" },
+            "secret_key": { "label": "Secret Key" },
+            "implementation": {
+              "label": "实现",
+              "options": { "nacos": "Nacos", "rnacos": "rNacos" }
+            },
+            "version_mode": {
+              "label": "API 版本",
+              "options": { "auto": "自动", "v2": "v2", "v3": "v3" }
+            },
+            "namespace": { "label": "默认命名空间" },
+            "read_only": { "label": "只读模式" },
+            "insecure_skip_tls": { "label": "跳过 TLS 校验" },
+            "connect_timeout_secs": { "label": "连接超时(秒)" }
+          }
+        },
+        "io.datawise.community.nacos-ops.workbench": {
+          "label": "Nacos 运维",
+          "description": "配置发布与服务发现。"
+        }
+      }
+    }
+  }
+}

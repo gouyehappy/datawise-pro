@@ -1,0 +1,6 @@
+# SQL Server / DB2 函数扩展
+
+[functions]
+DATEDIFF | (datepart, startdate, enddate) | int
+DATEADD | (datepart, number, date) | datetime
+ISNULL | (check_expression, replacement) | any

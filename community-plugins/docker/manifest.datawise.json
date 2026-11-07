@@ -1,0 +1,240 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.docker",
+  "name": "Docker",
+  "version": "0.1.0",
+  "publisher": "datawise-community",
+  "description": "Connect to Docker Engine and manage containers, images, volumes, and networks from DataWise. Ported from Ezreal-byte/dbx-docker-plugin.",
+  "license": "Apache-2.0",
+  "source": "https://github.com/Ezreal-byte/dbx-docker-plugin",
+  "homepage": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/docker",
+  "icon": "assets/plugin.svg",
+  "tags": ["docker", "containers", "ops", "workbench"],
+  "permissions": [
+    "host.workbench",
+    "host.events",
+    "host.binary",
+    "host.clipboard"
+  ],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.3"
+  },
+  "entrypoints": {
+    "backend": {
+      "transport": "stdio-framed",
+      "executable": "bin/windows-x86_64/datawise-plugin-docker.exe"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.docker.connection",
+      "label": "Docker Engine",
+      "description": "Connect to a Docker Engine over HTTP(S), Unix socket, or SSH nc.",
+      "icon": "assets/plugin.svg",
+      "workbench": "io.datawise.community.docker.workbench",
+      "capabilities": ["test", "connect", "disconnect"],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Connection name",
+          "type": "text",
+          "default": "Docker",
+          "binding": "name",
+          "required": true
+        },
+        {
+          "key": "protocol",
+          "label": "Protocol",
+          "type": "select",
+          "binding": "config",
+          "default": "http",
+          "options": [
+            { "label": "HTTP (TCP)", "value": "http" },
+            { "label": "HTTPS (TCP + TLS)", "value": "https" },
+            { "label": "Unix socket (local)", "value": "unix" },
+            { "label": "Unix socket over SSH (nc)", "value": "unix-over-nc" },
+            { "label": "Unix socket over SSH (sudo nc)", "value": "unix-over-nc-sudo" }
+          ]
+        },
+        {
+          "key": "host",
+          "label": "Host",
+          "type": "text",
+          "binding": "host",
+          "placeholder": "127.0.0.1 (required for HTTP/HTTPS)",
+          "visible_when": { "field": "protocol", "one_of": ["http", "https"] }
+        },
+        {
+          "key": "port",
+          "label": "Port",
+          "type": "number",
+          "binding": "port",
+          "placeholder": "2375 / 2376",
+          "visible_when": { "field": "protocol", "one_of": ["http", "https"] }
+        },
+        {
+          "key": "socket_path",
+          "label": "Socket path",
+          "type": "text",
+          "binding": "config",
+          "default": "/var/run/docker.sock",
+          "visible_when": { "field": "protocol", "one_of": ["unix", "unix-over-nc", "unix-over-nc-sudo"] }
+        },
+        {
+          "key": "api_version",
+          "label": "API version",
+          "type": "text",
+          "binding": "config",
+          "default": "auto",
+          "placeholder": "auto or 1.44"
+        },
+        {
+          "key": "allow_insecure_remote_http",
+          "label": "Allow insecure remote HTTP",
+          "type": "boolean",
+          "binding": "config",
+          "default": false,
+          "visible_when": { "field": "protocol", "one_of": ["http"] }
+        },
+        {
+          "key": "ca_cert_path",
+          "label": "CA certificate path (HTTPS)",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "C:/certs/ca.pem",
+          "visible_when": { "field": "protocol", "one_of": ["https"] }
+        },
+        {
+          "key": "client_cert_path",
+          "label": "Client certificate path (HTTPS)",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "C:/certs/cert.pem",
+          "visible_when": { "field": "protocol", "one_of": ["https"] }
+        },
+        {
+          "key": "client_key_path",
+          "label": "Client key path (HTTPS)",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "C:/certs/key.pem",
+          "visible_when": { "field": "protocol", "one_of": ["https"] }
+        },
+        {
+          "key": "ssh_host",
+          "label": "SSH host (nc mode)",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "server.example.com",
+          "visible_when": { "field": "protocol", "one_of": ["unix-over-nc", "unix-over-nc-sudo"] }
+        },
+        {
+          "key": "ssh_port",
+          "label": "SSH port",
+          "type": "number",
+          "binding": "config",
+          "default": 22,
+          "visible_when": { "field": "protocol", "one_of": ["unix-over-nc", "unix-over-nc-sudo"] }
+        },
+        {
+          "key": "ssh_username",
+          "label": "SSH username",
+          "type": "text",
+          "binding": "config",
+          "visible_when": { "field": "protocol", "one_of": ["unix-over-nc", "unix-over-nc-sudo"] }
+        },
+        {
+          "key": "ssh_password",
+          "label": "SSH password",
+          "type": "password",
+          "binding": "secret",
+          "visible_when": { "field": "protocol", "one_of": ["unix-over-nc", "unix-over-nc-sudo"] }
+        },
+        {
+          "key": "ssh_private_key_path",
+          "label": "SSH private key path",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "C:/Users/you/.ssh/id_rsa",
+          "visible_when": { "field": "protocol", "one_of": ["unix-over-nc", "unix-over-nc-sudo"] }
+        },
+        {
+          "key": "ssh_known_hosts_path",
+          "label": "SSH known_hosts path",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "Defaults to ~/.ssh/known_hosts",
+          "visible_when": { "field": "protocol", "one_of": ["unix-over-nc", "unix-over-nc-sudo"] }
+        },
+        {
+          "key": "read_only",
+          "label": "Read-only mode",
+          "type": "boolean",
+          "binding": "config",
+          "default": false
+        },
+        {
+          "key": "is_production",
+          "label": "Production environment",
+          "type": "boolean",
+          "binding": "config",
+          "default": false
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.docker.workbench",
+      "label": "Docker workbench",
+      "icon": "assets/plugin.svg"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Docker",
+      "description": "连接 Docker Engine，在 DataWise 中管理容器、镜像、卷与网络。移植自 Ezreal-byte/dbx-docker-plugin。",
+      "contributions": {
+        "io.datawise.community.docker.connection": {
+          "label": "Docker Engine",
+          "description": "通过 HTTP(S)、Unix Socket 或 SSH nc 连接 Docker Engine。",
+          "fields": {
+            "display_name": { "label": "连接名称" },
+            "protocol": {
+              "label": "协议",
+              "options": {
+                "http": "HTTP (TCP)",
+                "https": "HTTPS (TCP + TLS)",
+                "unix": "Unix Socket（本机）",
+                "unix-over-nc": "Unix Socket over SSH (nc)",
+                "unix-over-nc-sudo": "Unix Socket over SSH (sudo nc)"
+              }
+            },
+            "host": { "label": "主机", "placeholder": "127.0.0.1（HTTP/HTTPS 必填）" },
+            "port": { "label": "端口", "placeholder": "2375 / 2376" },
+            "socket_path": { "label": "Socket 路径" },
+            "api_version": { "label": "API 版本", "placeholder": "auto 或 1.44" },
+            "allow_insecure_remote_http": { "label": "允许不安全的远程 HTTP" },
+            "ca_cert_path": { "label": "CA 证书路径 (HTTPS)" },
+            "client_cert_path": { "label": "客户端证书路径 (HTTPS)" },
+            "client_key_path": { "label": "客户端私钥路径 (HTTPS)" },
+            "ssh_host": { "label": "SSH 主机 (nc 模式)" },
+            "ssh_port": { "label": "SSH 端口" },
+            "ssh_username": { "label": "SSH 用户名" },
+            "ssh_password": { "label": "SSH 密码" },
+            "ssh_private_key_path": { "label": "SSH 私钥路径" },
+            "ssh_known_hosts_path": { "label": "SSH known_hosts 路径", "placeholder": "默认 ~/.ssh/known_hosts" },
+            "read_only": { "label": "只读模式" },
+            "is_production": { "label": "生产环境" }
+          }
+        },
+        "io.datawise.community.docker.workbench": { "label": "Docker 工作台" }
+      }
+    }
+  }
+}

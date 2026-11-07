@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <title>sql-editor demo</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            width: 960px;
+            height: 600px;
+            overflow: hidden;
+            background: #0d1117;
+            font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+            color: #c9d1d9;
+        }
+
+        .shell {
+            width: 960px;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .55);
+        }
+
+        .titlebar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            font-size: 13px;
+        }
+
+        .dots {
+            display: flex;
+            gap: 6px;
+            margin-right: 8px;
+        }
+
+        .dots span {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .dots span:nth-child(1) {
+            background: #ff5f57;
+        }
+
+        .dots span:nth-child(2) {
+            background: #febc2e;
+        }
+
+        .dots span:nth-child(3) {
+            background: #28c840;
+        }
+
+        .brand {
+            color: #58a6ff;
+            font-weight: 600;
+        }
+
+        .pill {
+            margin-left: auto;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #58a6ff;
+            background: rgba(88, 166, 255, .12);
+            border: 1px solid rgba(88, 166, 255, .25);
+        }
+
+        .hintbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 14px;
+            font-size: 12px;
+            background: rgba(88, 166, 255, .06);
+            border-bottom: 1px solid #21262d;
+            color: #8b949e;
+        }
+
+        .badge {
+            padding: 1px 7px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #58a6ff;
+            background: rgba(88, 166, 255, .15);
+        }
+
+        .chips {
+            display: flex;
+            gap: 4px;
+            margin-left: 4px;
+            flex-wrap: wrap;
+        }
+
+        .chip {
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #c9d1d9;
+            background: #21262d;
+            border: 1px solid #30363d;
+        }
+
+        .editor {
+            flex: 1;
+            display: flex;
+            background: #1e1e1e;
+            position: relative;
+            min-height: 0;
+        }
+
+        .gutter {
+            width: 36px;
+            padding: 10px 0;
+            text-align: right;
+            padding-right: 8px;
+            color: #6e7681;
+            font-size: 11px;
+            line-height: 18px;
+            background: #1e1e1e;
+            border-right: 1px solid #2d2d2d;
+            user-select: none;
+        }
+
+        .code-wrap {
+            flex: 1;
+            position: relative;
+            padding: 10px 12px;
+            overflow: hidden;
+        }
+
+        .code {
+            font-size: 11px;
+            line-height: 18px;
+            white-space: pre;
+        }
+
+        .kw {
+            color: #c586c0;
+        }
+
+        .id {
+            color: #9cdcfe;
+        }
+
+        .tbl {
+            color: #4ec9b0;
+        }
+
+        .num {
+            color: #b5cea8;
+        }
+
+        .str {
+            color: #ce9178;
+        }
+
+        .fn {
+            color: #dcdcaa;
+        }
+
+        .cmt {
+            color: #6a9955;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 2px;
+            height: 13px;
+            background: #aeafad;
+            vertical-align: text-bottom;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        .popup {
+            position: absolute;
+            min-width: 260px;
+            max-width: 380px;
+            background: #252526;
+            border: 1px solid #454545;
+            border-radius: 6px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, .45);
+            font-size: 11px;
+            overflow: hidden;
+            opacity: 0;
+            transform: translateY(4px);
+            transition: opacity .15s, transform .15s;
+            z-index: 2;
+        }
+
+        .popup.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .popup-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 10px;
+        }
+
+        .popup-item.active {
+            background: #094771;
+        }
+
+        .icon {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .icon-snippet {
+            background: #3794ff;
+            color: #fff;
+        }
+
+        .icon-field {
+            background: #519aba;
+            color: #fff;
+        }
+
+        .icon-kw {
+            background: #a074c4;
+            color: #fff;
+        }
+
+        .icon-table {
+            background: #4ec9b0;
+            color: #1e1e1e;
+        }
+
+        .icon-fk {
+            background: #dcdcaa;
+            color: #1e1e1e;
+        }
+
+        .detail {
+            margin-left: auto;
+            color: #858585;
+            font-size: 10px;
+            padding-left: 6px;
+        }
+
+        .footer {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            background: #161b22;
+            border-top: 1px solid #30363d;
+            font-size: 12px;
+            color: #8b949e;
+            min-height: 52px;
+        }
+
+        .footer-text {
+            flex: 1;
+            line-height: 1.5;
+        }
+
+        .footer-text strong {
+            color: #e6edf3;
+            font-weight: 600;
+        }
+
+        .step {
+            flex-shrink: 0;
+            font-size: 10px;
+            font-weight: 700;
+            color: #58a6ff;
+            background: rgba(88, 166, 255, .1);
+            border: 1px solid rgba(88, 166, 255, .25);
+            border-radius: 4px;
+            padding: 2px 8px;
+        }
+
+        .keys {
+            display: flex;
+            gap: 5px;
+            flex-shrink: 0;
+        }
+
+        .key {
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #f0f6fc;
+            background: linear-gradient(180deg, #3d444d 0%, #2d333b 100%);
+            border: 1px solid #545d68;
+            box-shadow: 0 1px 0 #0d1117;
+            white-space: nowrap;
+        }
+
+        .key.plus {
+            background: none;
+            border: none;
+            box-shadow: none;
+            color: #6e7681;
+            padding: 0 2px;
+            font-weight: 400;
+        }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <div class="titlebar">
+        <div class="dots"><span></span><span></span><span></span></div>
+        <span class="brand">@datawise/sql-editor</span>
+        <span style="color:#484f58">区域销售分析 · CTE + 窗口函数</span>
+        <span class="pill" id="dialect-pill">MYSQL</span>
+    </div>
+    <div class="hintbar">
+        <span class="badge" id="stmt-badge">SELECT</span>
+        <span id="hint-text">语法驱动补全</span>
+        <div class="chips" id="hint-chips"></div>
+    </div>
+    <div class="editor">
+        <div class="gutter" id="gutter">1</div>
+        <div class="code-wrap">
+            <div class="code" id="code"></div>
+            <div class="popup" id="popup"></div>
+        </div>
+    </div>
+    <div class="footer">
+        <span class="step" id="step-label">1 / 16</span>
+        <div class="footer-text" id="caption">从空编辑器开始编写复杂分析 SQL</div>
+        <div class="keys" id="keys"></div>
+    </div>
+</div>
+<script>
+    const K = '<span class="kw">', KE = '</span>'
+    const I = '<span class="id">', IE = '</span>'
+    const T = '<span class="tbl">', TE = '</span>'
+    const N = '<span class="num">', NE = '</span>'
+    const S = '<span class="str">', SE = '</span>'
+    const F = '<span class="fn">', FE = '</span>'
+    const M = '<span class="cmt">', ME = '</span>'
+    const C = '<span class="cursor"></span>'
+
+    function gutter(n) {
+        return Array.from({length: n}, (_, i) => i + 1).join('<br>')
+    }
+
+    function keysHtml(keys) {
+        if (!keys?.length) return ''
+        return keys.map((k, i) =>
+            (i ? '<span class="key plus">+</span>' : '') + `<span class="key">${k}</span>`
+        ).join('')
+    }
+
+    const frames = [
+        {
+            step: '1 / 16', stmt: '—', chips: [],
+            lines: [C],
+            hint: '空编辑器 · 语句类型自动识别',
+            cap: '准备编写 <strong>CTE + 多表 JOIN + 窗口函数</strong> 的区域销售分析查询',
+            keys: [],
+        },
+        {
+            step: '2 / 16', stmt: 'WITH', chips: ['cte'],
+            lines: [K + 'WITH' + KE + ' ' + C],
+            hint: '语句开头 · 关键字来自 parser',
+            cap: '输入 <strong>WITH</strong> 开始公共表表达式，grammar 识别为语句级阶段',
+            keys: ['WITH'],
+            popup: {
+                x: 14, y: 6, items: [
+                    {icon: 'K', type: 'kw', label: 'WITH', detail: '关键字', active: true},
+                    {icon: 'S', type: 'snippet', label: 'cte', detail: 'WITH … AS (SELECT …)'},
+                ]
+            },
+        },
+        {
+            step: '3 / 16', stmt: 'WITH', chips: [],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                '  ' + K + 'SELECT' + KE + C,
+            ],
+            hint: 'CTE 体内 · SELECT 列表',
+            cap: '定义 CTE <strong>monthly_sales</strong>，光标进入 SELECT 列表',
+            keys: ['Tab'],
+            gutter: gutter(2),
+        },
+        {
+            step: '4 / 16', stmt: 'SELECT', chips: ['cnt', 'case'],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                '  ' + K + 'SELECT' + KE,
+                '    ' + F + 'DATE_TRUNC' + FE + '(' + S + "'month'" + SE + ', ' + I + 'ord.created_at' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'month' + IE + ',',
+                '    ' + I + 'us.region' + IE + ',',
+                '    ' + I + 'ord.id' + IE + ' ' + K + 'AS' + KE + ' ' + I + 'order_id' + IE + ',',
+                '    ' + F + 'SUM' + FE + '(' + I + 'oi.amount' + IE + ' * ' + I + 'oi.qty' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'revenue' + IE,
+                '  ' + K + 'FROM' + KE + ' ' + C,
+            ],
+            hint: 'SELECT 聚合列已就绪 · FROM 槽位',
+            cap: '补全 <strong>DATE_TRUNC / SUM</strong> 等函数与别名，进入 FROM 选表',
+            keys: ['␣'],
+            gutter: gutter(6),
+        },
+        {
+            step: '5 / 16', stmt: 'FROM', chips: ['JOIN'],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                '  ' + K + 'SELECT' + KE,
+                '    ' + F + 'DATE_TRUNC' + FE + '(' + S + "'month'" + SE + ', ' + I + 'ord.created_at' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'month' + IE + ',',
+                '    ' + I + 'us.region' + IE + ',',
+                '    ' + I + 'ord.id' + IE + ' ' + K + 'AS' + KE + ' ' + I + 'order_id' + IE + ',',
+                '    ' + F + 'SUM' + FE + '(' + I + 'oi.amount' + IE + ' * ' + I + 'oi.qty' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'revenue' + IE,
+                '  ' + K + 'FROM' + KE + ' ' + C,
+            ],
+            hint: 'FROM 后 · Schema 表名补全',
+            cap: '<strong>FROM ␣</strong> 弹出物理表，带业务说明与自动别名',
+            keys: ['↑', '↓', 'Enter'],
+            popup: {
+                x: 72, y: 88, items: [
+                    {icon: 'T', type: 'table', label: 'orders ord', detail: '订单主表', active: true},
+                    {icon: 'T', type: 'table', label: 'users us', detail: '用户维度'},
+                    {icon: 'T', type: 'table', label: 'order_items oi', detail: '订单明细'},
+                    {icon: 'T', type: 'table', label: 'products p', detail: '商品目录'},
+                ]
+            },
+            gutter: gutter(6),
+        },
+        {
+            step: '6 / 16', stmt: 'JOIN', chips: ['ij', 'lf'],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                '  ' + K + 'SELECT' + KE,
+                '    ' + F + 'DATE_TRUNC' + FE + '(' + S + "'month'" + SE + ', ' + I + 'ord.created_at' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'month' + IE + ',',
+                '    ' + I + 'us.region' + IE + ',',
+                '    ' + I + 'ord.id' + IE + ' ' + K + 'AS' + KE + ' ' + I + 'order_id' + IE + ',',
+                '    ' + F + 'SUM' + FE + '(' + I + 'oi.amount' + IE + ' * ' + I + 'oi.qty' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'revenue' + IE,
+                '  ' + K + 'FROM' + KE + ' ' + T + 'orders' + TE + ' ' + I + 'ord' + IE,
+                '  ' + K + 'INNER JOIN' + KE + ' ' + C,
+            ],
+            hint: '外键 ord.user_id → users',
+            cap: '<strong>FK 感知 JOIN</strong>：推荐 users 并预填 ON 条件',
+            keys: ['Enter'],
+            popup: {
+                x: 118, y: 108, items: [
+                    {icon: 'R', type: 'fk', label: 'users us', detail: 'FK ord.user_id → us.id', active: true},
+                    {icon: 'T', type: 'table', label: 'order_items oi', detail: 'FK oi.order_id'},
+                ]
+            },
+            gutter: gutter(7),
+        },
+        {
+            step: '7 / 16', stmt: 'JOIN', chips: ['lf', 'eq'],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                '  ' + K + 'SELECT' + KE,
+                '    ' + F + 'DATE_TRUNC' + FE + '(' + S + "'month'" + SE + ', ' + I + 'ord.created_at' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'month' + IE + ',',
+                '    ' + I + 'us.region' + IE + ',',
+                '    ' + I + 'ord.id' + IE + ' ' + K + 'AS' + KE + ' ' + I + 'order_id' + IE + ',',
+                '    ' + F + 'SUM' + FE + '(' + I + 'oi.amount' + IE + ' * ' + I + 'oi.qty' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'revenue' + IE,
+                '  ' + K + 'FROM' + KE + ' ' + T + 'orders' + TE + ' ' + I + 'ord' + IE,
+                '  ' + K + 'INNER JOIN' + KE + ' ' + T + 'users' + TE + ' ' + I + 'us' + IE,
+                '    ' + K + 'ON' + KE + ' ' + I + 'ord.user_id = us.id' + IE,
+                '  ' + K + 'LEFT JOIN' + KE + ' ' + T + 'order_items' + TE + ' ' + I + 'oi' + IE,
+                '    ' + K + 'ON' + KE + ' ' + I + 'oi.order_id = ord.id' + IE + C,
+            ],
+            hint: '三表 JOIN 完成 · ord / us / oi',
+            cap: '快捷芯片 <strong>lf</strong> 插入 LEFT JOIN，别名全局唯一',
+            keys: ['lf', 'Tab'],
+            gutter: gutter(10),
+        },
+        {
+            step: '8 / 16', stmt: 'WHERE', chips: ['AND', 'dt30', 'in'],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                '  ' + K + 'SELECT' + KE,
+                '    ' + F + 'DATE_TRUNC' + FE + '(' + S + "'month'" + SE + ', ' + I + 'ord.created_at' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'month' + IE + ',',
+                '    ' + I + 'us.region' + IE + ',',
+                '    ' + I + 'ord.id' + IE + ' ' + K + 'AS' + KE + ' ' + I + 'order_id' + IE + ',',
+                '    ' + F + 'SUM' + FE + '(' + I + 'oi.amount' + IE + ' * ' + I + 'oi.qty' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'revenue' + IE,
+                '  ' + K + 'FROM' + KE + ' ' + T + 'orders' + TE + ' ' + I + 'ord' + IE,
+                '  ' + K + 'INNER JOIN' + KE + ' ' + T + 'users' + TE + ' ' + I + 'us' + IE,
+                '    ' + K + 'ON' + KE + ' ' + I + 'ord.user_id = us.id' + IE,
+                '  ' + K + 'LEFT JOIN' + KE + ' ' + T + 'order_items' + TE + ' ' + I + 'oi' + IE,
+                '    ' + K + 'ON' + KE + ' ' + I + 'oi.order_id = ord.id' + IE,
+                '  ' + K + 'WHERE' + KE + ' ' + I + 'ord.' + IE + C,
+            ],
+            hint: 'WHERE 谓词 · 列名 + 值模板',
+            cap: '<strong>ord.</strong> 列出订单字段；<strong>= ␣</strong> 后按类型提示字面量',
+            keys: ['.', '␣'],
+            popup: {
+                x: 88, y: 168, items: [
+                    {icon: 'F', type: 'field', label: 'status', detail: 'ord · varchar', active: true},
+                    {icon: 'F', type: 'field', label: 'created_at', detail: 'ord · datetime'},
+                    {icon: 'K', type: 'kw', label: 'AND', detail: '关键字'},
+                ]
+            },
+            gutter: gutter(11),
+        },
+        {
+            step: '9 / 16', stmt: 'WHERE', chips: ['AND'],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                '  ' + K + 'SELECT' + KE,
+                '    ' + F + 'DATE_TRUNC' + FE + '(' + S + "'month'" + SE + ', ' + I + 'ord.created_at' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'month' + IE + ',',
+                '    ' + I + 'us.region' + IE + ',',
+                '    ' + I + 'ord.id' + IE + ' ' + K + 'AS' + KE + ' ' + I + 'order_id' + IE + ',',
+                '    ' + F + 'SUM' + FE + '(' + I + 'oi.amount' + IE + ' * ' + I + 'oi.qty' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'revenue' + IE,
+                '  ' + K + 'FROM' + KE + ' ' + T + 'orders' + TE + ' ' + I + 'ord' + IE,
+                '  ' + K + 'INNER JOIN' + KE + ' ' + T + 'users' + TE + ' ' + I + 'us' + IE,
+                '    ' + K + 'ON' + KE + ' ' + I + 'ord.user_id = us.id' + IE,
+                '  ' + K + 'LEFT JOIN' + KE + ' ' + T + 'order_items' + TE + ' ' + I + 'oi' + IE,
+                '    ' + K + 'ON' + KE + ' ' + I + 'oi.order_id = ord.id' + IE,
+                '  ' + K + 'WHERE' + KE + ' ' + I + 'ord.status' + IE + ' = ' + S + "'paid'" + SE + C,
+            ],
+            hint: '= 后按列类型提示值',
+            cap: 'varchar 列提示 <strong>字符串模板</strong>，不再重复已输入关键字',
+            keys: ['Enter'],
+            popup: {
+                x: 200, y: 168, items: [
+                    {icon: 'K', type: 'kw', label: "'abc'", detail: '字符串模板', active: true},
+                    {icon: 'K', type: 'kw', label: 'AND', detail: '关键字'},
+                ]
+            },
+            gutter: gutter(11),
+        },
+        {
+            step: '10 / 16', stmt: 'GROUP BY', chips: ['grp', 'cnt'],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                '  ' + K + 'SELECT' + KE,
+                '    ' + F + 'DATE_TRUNC' + FE + '(' + S + "'month'" + SE + ', ' + I + 'ord.created_at' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'month' + IE + ',',
+                '    ' + I + 'us.region' + IE + ',',
+                '    ' + I + 'ord.id' + IE + ' ' + K + 'AS' + KE + ' ' + I + 'order_id' + IE + ',',
+                '    ' + F + 'SUM' + FE + '(' + I + 'oi.amount' + IE + ' * ' + I + 'oi.qty' + IE + ') ' + K + 'AS' + KE + ' ' + I + 'revenue' + IE,
+                '  ' + K + 'FROM' + KE + ' ' + T + 'orders' + TE + ' ' + I + 'ord' + IE,
+                '  ' + K + 'INNER JOIN' + KE + ' ' + T + 'users' + TE + ' ' + I + 'us' + IE,
+                '    ' + K + 'ON' + KE + ' ' + I + 'ord.user_id = us.id' + IE,
+                '  ' + K + 'LEFT JOIN' + KE + ' ' + T + 'order_items' + TE + ' ' + I + 'oi' + IE,
+                '    ' + K + 'ON' + KE + ' ' + I + 'oi.order_id = ord.id' + IE,
+                '  ' + K + 'WHERE' + KE + ' ' + I + 'ord.status' + IE + ' = ' + S + "'paid'" + SE,
+                '    ' + K + 'AND' + KE + ' ' + I + 'ord.created_at' + IE + ' >= ' + S + "'2024-01-01'" + SE,
+                '  ' + K + 'GROUP BY' + KE + ' ' + N + '1' + NE + ', ' + N + '2' + NE + ', ' + N + '3' + NE,
+                ')',
+                K + 'ranked' + KE + ' ' + K + 'AS' + KE + ' (',
+                '  ' + K + 'SELECT' + KE + C,
+            ],
+            hint: '第一个 CTE 闭合 · 第二个 CTE',
+            cap: '完成 <strong>GROUP BY</strong> 后进入嵌套 CTE <strong>ranked</strong>',
+            keys: ['grp'],
+            gutter: gutter(15),
+        },
+        {
+            step: '11 / 16', stmt: 'SELECT', chips: ['cnt'],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                M + '  …' + ME,
+                ')',
+                K + 'ranked' + KE + ' ' + K + 'AS' + KE + ' (',
+                '  ' + K + 'SELECT' + KE,
+                '    ' + I + 'month' + IE + ', ' + I + 'region' + IE + ', ' + I + 'revenue' + IE + ',',
+                '    ' + F + 'ROW_NUMBER' + FE + '() ' + K + 'OVER' + KE + ' (',
+                '      ' + K + 'PARTITION BY' + KE + ' ' + I + 'region' + IE,
+                '      ' + K + 'ORDER BY' + KE + ' ' + I + 'revenue' + IE + ' ' + K + 'DESC' + KE,
+                '    ) ' + K + 'AS' + KE + ' ' + I + 'rn' + IE + C,
+                '  ' + K + 'FROM' + KE + ' ' + I + 'monthly_sales' + IE,
+                ')',
+            ],
+            hint: '窗口函数 · OVER 子句',
+            cap: '补全 <strong>ROW_NUMBER() OVER (…)</strong> 窗口排名',
+            keys: ['OVER'],
+            gutter: gutter(11),
+        },
+        {
+            step: '12 / 16', stmt: 'SELECT', chips: ['*'],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                M + '  …' + ME,
+                ')',
+                K + 'ranked' + KE + ' ' + K + 'AS' + KE + ' (',
+                M + '  …' + ME,
+                ')',
+                K + 'SELECT' + KE + C,
+            ],
+            hint: '主查询 · 引用 CTE 列',
+            cap: '外层 <strong>SELECT</strong> 从 ranked 取列，grammar 识别 clause 阶段',
+            keys: ['Ctrl', 'Space'],
+            popup: {
+                x: 14, y: 168, items: [
+                    {icon: 'F', type: 'field', label: 'r.month', detail: 'CTE ranked', active: true},
+                    {icon: 'F', type: 'field', label: 'r.region', detail: 'CTE ranked'},
+                    {icon: 'F', type: 'field', label: 'r.revenue', detail: '聚合列'},
+                ]
+            },
+            gutter: gutter(7),
+        },
+        {
+            step: '13 / 16', stmt: 'SELECT', chips: [],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                M + '  …' + ME,
+                ')',
+                K + 'ranked' + KE + ' ' + K + 'AS' + KE + ' (',
+                M + '  …' + ME,
+                ')',
+                K + 'SELECT' + KE,
+                '  ' + I + 'r.month' + IE + ',',
+                '  ' + I + 'r.region' + IE + ',',
+                '  ' + I + 'r.revenue' + IE + ',',
+                '  ' + F + 'ROUND' + FE + '(' + I + 'r.revenue' + IE + ' / ' + F + 'SUM' + FE + '(' + I + 'r.revenue' + IE + ') ' + K + 'OVER' + KE + ' (',
+                '    ' + K + 'PARTITION BY' + KE + ' ' + I + 'r.month' + IE,
+                '  ), ' + N + '4' + NE + ') ' + K + 'AS' + KE + ' ' + I + 'share' + IE,
+                K + 'FROM' + KE + ' ' + I + 'ranked' + IE + ' ' + I + 'r' + IE,
+                K + 'WHERE' + KE + ' ' + I + 'r.rn' + IE + ' <= ' + N + '5' + NE + C,
+            ],
+            hint: '嵌套窗口 · 占比计算',
+            cap: '窗口函数内再嵌套 <strong>SUM() OVER</strong> 计算月度占比',
+            keys: [],
+            gutter: gutter(13),
+        },
+        {
+            step: '14 / 16', stmt: 'ORDER BY', chips: ['ord', 'desc'],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                M + '  …' + ME,
+                ')',
+                K + 'ranked' + KE + ' ' + K + 'AS' + KE + ' (',
+                M + '  …' + ME,
+                ')',
+                K + 'SELECT' + KE,
+                '  ' + I + 'r.month' + IE + ', ' + I + 'r.region' + IE + ', ' + I + 'r.revenue' + IE + ',',
+                '  ' + F + 'ROUND' + FE + '(…) ' + K + 'AS' + KE + ' ' + I + 'share' + IE,
+                K + 'FROM' + KE + ' ' + I + 'ranked' + IE + ' ' + I + 'r' + IE,
+                K + 'WHERE' + KE + ' ' + I + 'r.rn' + IE + ' <= ' + N + '5' + NE,
+                K + 'ORDER BY' + KE + ' ' + C,
+            ],
+            hint: 'ORDER BY · 片段 ord',
+            cap: '片段 <strong>ord</strong> 快速插入排序列与 ASC/DESC',
+            keys: ['ord', 'Tab'],
+            popup: {
+                x: 108, y: 196, items: [
+                    {icon: 'S', type: 'snippet', label: 'ord', detail: 'ORDER BY … ASC|DESC', active: true},
+                    {icon: 'F', type: 'field', label: 'r.revenue', detail: '排序列'},
+                ]
+            },
+            gutter: gutter(10),
+        },
+        {
+            step: '15 / 16', stmt: 'ORDER BY', chips: ['lim'],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                M + '  …' + ME,
+                ')',
+                K + 'ranked' + KE + ' ' + K + 'AS' + KE + ' (',
+                M + '  …' + ME,
+                ')',
+                K + 'SELECT' + KE,
+                '  ' + I + 'r.month' + IE + ', ' + I + 'r.region' + IE + ', ' + I + 'r.revenue' + IE + ',',
+                '  ' + F + 'ROUND' + FE + '(…) ' + K + 'AS' + KE + ' ' + I + 'share' + IE,
+                K + 'FROM' + KE + ' ' + I + 'ranked' + IE + ' ' + I + 'r' + IE,
+                K + 'WHERE' + KE + ' ' + I + 'r.rn' + IE + ' <= ' + N + '5' + NE,
+                K + 'ORDER BY' + KE + ' ' + I + 'r.month' + IE + ' ' + K + 'DESC' + KE + ', ' + I + 'r.revenue' + IE + ' ' + K + 'DESC' + KE,
+                K + 'LIMIT' + KE + ' ' + N + '100' + NE + ';' + C,
+            ],
+            hint: 'LIMIT 收尾',
+            cap: '完整分析查询：<strong>双 CTE · 三表 JOIN · 双层窗口 · Top-N</strong>',
+            keys: ['lim'],
+            gutter: gutter(12),
+        },
+        {
+            step: '16 / 16', stmt: 'SELECT', chips: [],
+            lines: [
+                K + 'WITH' + KE + ' ' + I + 'monthly_sales' + IE + ' ' + K + 'AS' + KE + ' (',
+                M + '  …' + ME,
+                ')',
+                K + 'ranked' + KE + ' ' + K + 'AS' + KE + ' (',
+                M + '  …' + ME,
+                ')',
+                K + 'SELECT' + KE,
+                '  ' + I + 'r.month' + IE + ', ' + I + 'r.region' + IE + ', ' + I + 'r.revenue' + IE + ',',
+                '  ' + F + 'ROUND' + FE + '(…) ' + K + 'AS' + KE + ' ' + I + 'share' + IE,
+                K + 'FROM' + KE + ' ' + I + 'ranked' + IE + ' ' + I + 'r' + IE,
+                K + 'WHERE' + KE + ' ' + I + 'r.rn' + IE + ' <= ' + N + '5' + NE,
+                K + 'ORDER BY' + KE + ' ' + I + 'r.month' + IE + ' ' + K + 'DESC' + KE + ', ' + I + 'r.revenue' + IE + ' ' + K + 'DESC' + KE,
+                K + 'LIMIT' + KE + ' ' + N + '100' + NE + ';',
+            ],
+            hint: '语法驱动 · Schema 感知 · 多方言',
+            cap: '<strong>@datawise/sql-editor</strong> — Vue 3 + Monaco 可嵌入 SQL 编辑器组件',
+            keys: [],
+            gutter: gutter(12),
+        },
+    ]
+
+    window.renderFrame = (index) => {
+        const f = frames[index % frames.length]
+        document.getElementById('code').innerHTML = f.lines.join('<br>')
+        document.getElementById('hint-text').textContent = f.hint
+        document.getElementById('caption').innerHTML = f.cap
+        document.getElementById('step-label').textContent = f.step
+        document.getElementById('gutter').innerHTML = f.gutter || gutter(f.lines.length)
+        document.getElementById('stmt-badge').textContent = f.stmt || 'SELECT'
+        document.getElementById('dialect-pill').textContent = f.dialect || 'MYSQL'
+        document.getElementById('keys').innerHTML = keysHtml(f.keys)
+        document.getElementById('hint-chips').innerHTML = (f.chips || []).map((c) => `<span class="chip">${c}</span>`).join('')
+        const popup = document.getElementById('popup')
+        if (f.popup) {
+            popup.className = 'popup show'
+            popup.style.left = f.popup.x + 'px'
+            popup.style.top = f.popup.y + 'px'
+            popup.innerHTML = f.popup.items.map((it) =>
+                `<div class="popup-item${it.active ? ' active' : ''}">` +
+                `<span class="icon icon-${it.type}">${it.icon}</span><span>${it.label}</span>` +
+                `<span class="detail">${it.detail}</span></div>`
+            ).join('')
+        } else {
+            popup.className = 'popup'
+            popup.innerHTML = ''
+        }
+    }
+    window.frames = frames
+    window.renderFrame(0)
+</script>
+</body>
+</html>

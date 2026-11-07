@@ -1,0 +1,424 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.kubernetes",
+  "name": "Kubernetes Manager",
+  "version": "0.1.14",
+  "publisher": "datawise-community",
+  "description": "Connect to Kubernetes clusters and manage resources from DataWise. Ported from eryajf/dbx-plugin-k8s.",
+  "license": "Apache-2.0",
+  "source": "https://github.com/eryajf/dbx-plugin-k8s",
+  "homepage": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/kubernetes",
+  "icon": "assets/plugin.png",
+  "tags": [
+    "kubernetes",
+    "k8s",
+    "workbench",
+    "ops"
+  ],
+  "permissions": [
+    "host.workbench",
+    "host.events",
+    "host.clipboard"
+  ],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.1"
+  },
+  "entrypoints": {
+    "backend": {
+      "transport": "stdio-jsonl",
+      "executable": "bin/windows-x86_64/datawise-plugin-kubernetes.exe"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.kubernetes.connection",
+      "label": "Kubernetes cluster",
+      "description": "Connect with kubeconfig, bearer token, or client certificate.",
+      "icon": "assets/plugin.png",
+      "workbench": "io.datawise.community.kubernetes.workbench",
+      "capabilities": [
+        "test",
+        "connect",
+        "disconnect"
+      ],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Connection name",
+          "type": "text",
+          "default": "Kubernetes cluster",
+          "binding": "name",
+          "required": true
+        },
+        {
+          "key": "auth_mode",
+          "label": "Authentication",
+          "type": "select",
+          "default": "kubeconfig",
+          "binding": "config",
+          "options": [
+            {
+              "label": "Kubeconfig",
+              "value": "kubeconfig"
+            },
+            {
+              "label": "API Server + Token",
+              "value": "token"
+            },
+            {
+              "label": "API Server + Client Certificate",
+              "value": "client_cert"
+            }
+          ],
+          "description": "Choose how to authenticate; fields below update for the selected mode."
+        },
+        {
+          "key": "kubeconfig_path",
+          "label": "Kubeconfig file",
+          "type": "text",
+          "binding": "config",
+          "picker": {
+            "kind": "file",
+            "accept": [
+              ".yaml",
+              ".yml"
+            ],
+            "content_field": "kubeconfig"
+          },
+          "visible_when": {
+            "field": "auth_mode",
+            "one_of": [
+              "kubeconfig"
+            ]
+          },
+          "placeholder": "Choose a local kubeconfig file",
+          "description": "Pick a file (desktop stores the path; web fills the YAML box below)."
+        },
+        {
+          "key": "kubeconfig",
+          "label": "Kubeconfig",
+          "type": "textarea",
+          "binding": "secret",
+          "visible_when": {
+            "field": "auth_mode",
+            "one_of": [
+              "kubeconfig"
+            ]
+          },
+          "description": "File or pasted YAML — at least one is required. Stored as a secret."
+        },
+        {
+          "key": "server",
+          "label": "API Server",
+          "type": "text",
+          "binding": "config",
+          "visible_when": {
+            "field": "auth_mode",
+            "one_of": [
+              "token",
+              "client_cert"
+            ]
+          },
+          "required_when": {
+            "field": "auth_mode",
+            "one_of": [
+              "token",
+              "client_cert"
+            ]
+          },
+          "placeholder": "https://kubernetes.example.com:6443",
+          "description": "Kubernetes API Server URL (https://host:6443)."
+        },
+        {
+          "key": "token",
+          "label": "Bearer token",
+          "type": "password",
+          "binding": "secret",
+          "visible_when": {
+            "field": "auth_mode",
+            "one_of": [
+              "token"
+            ]
+          },
+          "required_when": {
+            "field": "auth_mode",
+            "one_of": [
+              "token"
+            ]
+          },
+          "description": "Service account or user bearer token."
+        },
+        {
+          "key": "ca_cert",
+          "label": "CA certificate (PEM)",
+          "type": "textarea",
+          "binding": "secret",
+          "visible_when": {
+            "field": "auth_mode",
+            "one_of": [
+              "token",
+              "client_cert"
+            ]
+          },
+          "description": "Optional cluster CA for TLS verification."
+        },
+        {
+          "key": "client_cert",
+          "label": "Client certificate (PEM)",
+          "type": "textarea",
+          "binding": "secret",
+          "visible_when": {
+            "field": "auth_mode",
+            "one_of": [
+              "client_cert"
+            ]
+          },
+          "required_when": {
+            "field": "auth_mode",
+            "one_of": [
+              "client_cert"
+            ]
+          },
+          "description": "Client certificate in PEM format."
+        },
+        {
+          "key": "client_key",
+          "label": "Client key (PEM)",
+          "type": "textarea",
+          "binding": "secret",
+          "visible_when": {
+            "field": "auth_mode",
+            "one_of": [
+              "client_cert"
+            ]
+          },
+          "required_when": {
+            "field": "auth_mode",
+            "one_of": [
+              "client_cert"
+            ]
+          },
+          "description": "Client private key in PEM format."
+        },
+        {
+          "key": "show_advanced",
+          "label": "Show advanced options",
+          "type": "boolean",
+          "default": false,
+          "binding": "config",
+          "description": "Context, timeout, namespace, Prometheus, and TLS options."
+        },
+        {
+          "key": "context",
+          "label": "Kubeconfig context",
+          "type": "text",
+          "binding": "config",
+          "visible_when": {
+            "all_of": [
+              {
+                "field": "show_advanced",
+                "one_of": [
+                  "true"
+                ]
+              },
+              {
+                "field": "auth_mode",
+                "one_of": [
+                  "kubeconfig"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "key": "allow_exec",
+          "label": "Allow kubeconfig exec credentials",
+          "type": "boolean",
+          "default": false,
+          "binding": "config",
+          "visible_when": {
+            "all_of": [
+              {
+                "field": "show_advanced",
+                "one_of": [
+                  "true"
+                ]
+              },
+              {
+                "field": "auth_mode",
+                "one_of": [
+                  "kubeconfig"
+                ]
+              }
+            ]
+          },
+          "description": "Only enable for trusted kubeconfig files."
+        },
+        {
+          "key": "timeout_s",
+          "label": "Timeout (seconds)",
+          "type": "number",
+          "default": 30,
+          "binding": "config",
+          "visible_when": {
+            "field": "show_advanced",
+            "one_of": [
+              "true"
+            ]
+          }
+        },
+        {
+          "key": "prometheus_url",
+          "label": "Prometheus URL",
+          "type": "text",
+          "binding": "config",
+          "visible_when": {
+            "field": "show_advanced",
+            "one_of": [
+              "true"
+            ]
+          },
+          "placeholder": "http://prometheus.example.com:9090",
+          "description": "Optional Prometheus endpoint used for resource and network monitoring metrics."
+        },
+        {
+          "key": "insecure_skip_tls_verify",
+          "label": "Skip TLS verification",
+          "type": "boolean",
+          "default": false,
+          "binding": "config",
+          "visible_when": {
+            "all_of": [
+              {
+                "field": "show_advanced",
+                "one_of": [
+                  "true"
+                ]
+              },
+              {
+                "field": "auth_mode",
+                "one_of": [
+                  "token",
+                  "client_cert"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "key": "namespace",
+          "label": "Default namespace",
+          "type": "text",
+          "default": "default",
+          "binding": "config",
+          "visible_when": {
+            "field": "show_advanced",
+            "one_of": [
+              "true"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.kubernetes.workbench",
+      "label": "Kubernetes Workbench",
+      "description": "Browse and operate Kubernetes resources.",
+      "icon": "assets/plugin.png"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Kubernetes 管理",
+      "description": "在 DataWise 中管理 Kubernetes 集群、工作负载和资源。",
+      "contributions": {
+        "io.datawise.community.kubernetes.connection": {
+          "label": "Kubernetes 集群",
+          "fields": {
+            "display_name": {
+              "label": "连接名称"
+            },
+            "auth_mode": {
+              "label": "认证方式",
+              "description": "选择连接集群所使用的认证方式。",
+              "options": {
+                "kubeconfig": "Kubeconfig",
+                "token": "API Server + Token",
+                "client_cert": "API Server + 客户端证书"
+              }
+            },
+            "kubeconfig_path": {
+              "label": "配置文件",
+              "placeholder": "选择本地 Kubeconfig 文件",
+              "description": "点击选择本地 kubeconfig 文件：桌面端记录文件路径，网页端会自动把文件内容填入下方输入框。"
+            },
+            "kubeconfig": {
+              "label": "Kubeconfig",
+              "description": "文件或内容至少填写一项；Kubeconfig YAML 会存入 DataWise 密钥库。"
+            },
+            "server": {
+              "label": "API Server",
+              "placeholder": "https://kubernetes.example.com:6443",
+              "description": "填写 Kubernetes API Server 地址。"
+            },
+            "token": {
+              "label": "Token",
+              "description": "填写用于访问集群的 Bearer Token。"
+            },
+            "ca_cert": {
+              "label": "CA 证书",
+              "description": "可选：用于 TLS 校验的集群 CA 证书。"
+            },
+            "client_cert": {
+              "label": "客户端证书",
+              "description": "填写 PEM 格式的客户端证书。"
+            },
+            "client_key": {
+              "label": "客户端私钥",
+              "description": "填写 PEM 格式的客户端私钥。"
+            },
+            "show_advanced": {
+              "label": "显示高级选项",
+              "description": "显示 Context、超时、命名空间和 TLS 等可选配置。"
+            },
+            "context": {
+              "label": "Context",
+              "description": "留空时使用 kubeconfig 当前 Context。"
+            },
+            "timeout_s": {
+              "label": "超时（秒）",
+              "description": "连接和请求的最长等待时间。"
+            },
+            "insecure_skip_tls_verify": {
+              "label": "跳过 TLS",
+              "description": "仅在使用自签名证书且确认风险时启用。"
+            },
+            "allow_exec": {
+              "label": "允许 exec",
+              "description": "仅对可信 kubeconfig 启用。"
+            },
+            "namespace": {
+              "label": "命名空间",
+              "description": "未填写时使用 default。"
+            },
+            "prometheus_url": {
+              "label": "Prometheus",
+              "placeholder": "http://prometheus.example.com:9090",
+              "description": "可选。配置后，概览和资源详情中的监控指标将从该 Prometheus 获取。"
+            }
+          }
+        },
+        "io.datawise.community.kubernetes.workbench": {
+          "label": "Kubernetes 工作台"
+        }
+      }
+    }
+  }
+}

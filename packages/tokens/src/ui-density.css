@@ -1,0 +1,58 @@
+/**
+ * Shell UI density — loaded AFTER skins, BEFORE ui-text-scale.
+ *
+ * Contract:
+ * - Preference: ThemePreferences.uiDensity → html[data-ui-density]
+ * - Tokens: override --dw-density-* (control heights alias in)
+ * - Light spacing tweak so compact/spacious feel consistent
+ * - md = skin / :root baseline (no override)
+ *
+ * Do not add parallel icon/radius/tab-height settings — use these tokens.
+ */
+
+html[data-ui-density='sm'] {
+    --dw-density-md: clamp(26px, 2.9vmin, 30px);
+    --dw-density-sm: clamp(22px, 2.5vmin, 24px);
+    --dw-density-xs: clamp(18px, 2.1vmin, 20px);
+    --dw-density-lg: clamp(30px, 3.4vmin, 36px);
+    --dw-density-xl: clamp(40px, 4.6vmin, 48px);
+
+    --dw-space-3: 6px;
+    --dw-space-4: 8px;
+    --dw-space-5: 10px;
+    --dw-space-6: 12px;
+}
+
+html[data-ui-density='md'] {
+    /* skin / variables.css baseline */
+}
+
+html[data-ui-density='lg'] {
+    --dw-density-md: clamp(34px, 3.7vmin, 38px);
+    --dw-density-sm: clamp(30px, 3.3vmin, 32px);
+    --dw-density-xs: clamp(26px, 2.9vmin, 28px);
+    --dw-density-lg: clamp(40px, 4.4vmin, 46px);
+    --dw-density-xl: clamp(56px, 6.2vmin, 64px);
+
+    --dw-space-3: 10px;
+    --dw-space-4: 12px;
+    --dw-space-5: 14px;
+    --dw-space-6: 16px;
+}
+
+/* IDE skin is already tight — keep compact delta smaller so sm does not collapse. */
+html[data-ui-skin='ide'][data-ui-density='sm'] {
+    --dw-density-md: 24px;
+    --dw-density-sm: 20px;
+    --dw-density-xs: 18px;
+    --dw-density-lg: 28px;
+    --dw-density-xl: 40px;
+}
+
+html[data-ui-skin='ide'][data-ui-density='lg'] {
+    --dw-density-md: 32px;
+    --dw-density-sm: 28px;
+    --dw-density-xs: 24px;
+    --dw-density-lg: 36px;
+    --dw-density-xl: 52px;
+}

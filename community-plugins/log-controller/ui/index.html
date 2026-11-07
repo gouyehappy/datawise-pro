@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Log Controller</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="chrome">
+      <div class="chrome__brand">
+        <span class="chrome__mark" aria-hidden="true"></span>
+        <div class="chrome__identity">
+          <span class="chrome__title" id="serviceTitle">日志查询</span>
+          <span class="chrome__sub" id="chromeSub">工作台</span>
+        </div>
+      </div>
+      <button type="button" class="chrome__config" id="btnOpenSession" title="修改查询配置">
+        <span class="chrome__config-label">配置</span>
+        <span class="chrome__path" id="chromePath">等待配置…</span>
+        <span class="chrome__meta" id="chromeMeta"></span>
+        <svg class="chrome__config-chev" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4.2 9.8 8 6 11.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span class="badge" id="healthBadge">idle</span>
+      <div class="chrome__actions">
+        <button type="button" class="dw-btn dw-btn--primary" id="btnSearch">查询</button>
+      </div>
+    </header>
+
+    <div class="body">
+      <aside class="sidebar">
+        <div class="sidebar__head">
+          <h2>实例 <span class="count" id="serverCount">0</span></h2>
+          <div class="sidebar__tools">
+            <button type="button" class="dw-text-btn host-all is-active" id="btnAllHosts" title="看全部实例">全部</button>
+            <button type="button" class="dw-text-btn" id="btnHostMulti" aria-pressed="false" title="打开后可以同时看多台实例">多选</button>
+            <button type="button" class="dw-text-btn" id="btnAddServer">添加</button>
+          </div>
+        </div>
+        <div class="scene-row">
+          <div class="picker scene-picker" id="scenePicker">
+            <input type="hidden" id="sceneId" value="" />
+            <button type="button" class="picker__btn" id="sceneBtn" aria-haspopup="listbox" aria-expanded="false">
+              <span id="sceneLabel">场景</span>
+              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4.2 6.2 8 10l3.8-3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <ul class="picker__menu" id="sceneMenu" role="listbox" hidden></ul>
+          </div>
+          <button type="button" class="dw-text-btn" id="btnSaveScene" title="把当前实例勾选和筛选存成场景">存</button>
+          <button type="button" class="dw-text-btn" id="btnDelScene" title="删除当前场景">删</button>
+        </div>
+        <ul class="server-list" id="serverList"></ul>
+        <div class="health-rail" id="healthRail" hidden>
+          <div class="health-rail__head">
+            <button type="button" class="side-fold__tog" data-fold="health" aria-expanded="true">留意</button>
+            <button type="button" class="dw-text-btn" id="btnReconnectBad" title="重连超时或连不上的实例">重连异常</button>
+          </div>
+          <div class="health-rail__body" id="healthBody"></div>
+        </div>
+        <div class="side-fold" id="statsFold" hidden>
+          <button type="button" class="side-fold__tog" data-fold="stats" aria-expanded="true">统计</button>
+          <div class="side-fold__body">
+            <div class="side-stats" id="sideStats"></div>
+          </div>
+        </div>
+        <div class="side-fold" id="insightFold" hidden>
+          <button type="button" class="side-fold__tog" data-fold="insight" aria-expanded="true">洞察</button>
+          <div class="side-fold__body">
+            <div class="insight" id="insightRail">
+              <div class="insight__body" id="insightBody"></div>
+            </div>
+          </div>
+        </div>
+        <div class="side-fold" id="bookmarkFold">
+          <div class="side-fold__row">
+            <button type="button" class="side-fold__tog" data-fold="bookmarks" aria-expanded="true">书签</button>
+            <button type="button" class="dw-text-btn" id="btnAddBookmark" title="记下当前阅读位置">记下这里</button>
+          </div>
+          <div class="side-fold__body">
+            <div class="bookmark-rail" id="bookmarkRail">
+              <div class="bookmark-rail__body" id="bookmarkBody"></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="main">
+        <nav class="tabs" id="resourceTabs">
+          <button type="button" class="tab is-active" data-tab="logs">日志<span class="tab__count" id="logTabCount"></span></button>
+          <button type="button" class="tab" data-tab="files">文件<span class="tab__count" id="fileTabCount"></span></button>
+        </nav>
+
+        <div class="pathbar">
+          <div class="path-field">
+            <div class="crumbs" id="crumbs"></div>
+            <button type="button" class="file-pick" id="btnFilePick" title="切换当前日志文件">当前文件</button>
+            <button type="button" class="path-copy" id="btnCopyPath" title="复制日志目录" aria-label="复制日志目录">
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <rect x="5" y="3.4" width="7.2" height="9.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M4.2 11.6H3.6A1.2 1.2 0 0 1 2.4 10.4V3.2A1.2 1.2 0 0 1 3.6 2h6.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <label class="path-search">
+              <svg class="path-search__icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                <circle cx="7" cy="7" r="3.4" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M9.6 9.6 12.4 12.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              <input type="search" id="keyword" class="pathbar__filter" placeholder="多个关键字用逗号或 | ，需同时包含" autocomplete="off" aria-label="关键字" />
+              <button type="button" class="pathbar__clear hidden" id="btnClearKeyword" title="清除" aria-label="清除关键字">×</button>
+              <div class="kw-history hidden" id="kwHistory" role="listbox"></div>
+            </label>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="query-launch">
+          <button type="button" class="chip" id="btnQueryOpts" aria-expanded="false">筛选</button>
+          <div class="query-pop hidden" id="queryPop">
+            <section class="qcard">
+              <div class="qcard__head">匹配</div>
+              <div class="qrow">
+                <span>关系</span>
+                <div class="seg seg--join" id="joinModes" role="tablist" aria-label="关键字关系">
+                  <button type="button" class="chip is-active" data-join="and">同时包含</button>
+                  <button type="button" class="chip" data-join="or">任一包含</button>
+                </div>
+              </div>
+              <div class="qrow">
+                <span>方式</span>
+              <div class="seg" id="matchModes" role="tablist" aria-label="匹配模式">
+                <button type="button" class="chip is-active" data-mode="contains" title="子串包含">包含</button>
+                <button type="button" class="chip" data-mode="whole" title="整词匹配">整词</button>
+                <button type="button" class="chip" data-mode="exact" title="整行精确等于关键字">精准</button>
+                <button type="button" class="chip" data-mode="regex" title="正则写在上方搜索框">正则</button>
+              </div>
+              </div>
+              <p class="qhint hidden" id="regexHint"></p>
+              <div class="qchecks">
+                <label class="qcheck" title="忽略大小写">
+                  <input type="checkbox" id="ignoreCase" checked />
+                  <span>忽略大小写</span>
+                </label>
+                <label class="qcheck" title="在远端用 grep 搜索，适合大文件">
+                  <input type="checkbox" id="remoteGrep" checked />
+                  <span>远端搜索</span>
+                </label>
+              </div>
+            </section>
+            <section class="qcard">
+              <label class="exclude-field" title="匹配这些词的行会被丢掉，多个用逗号或 | 分隔">
+                <span class="qcard__head">排除</span>
+                <input type="search" id="exclude" placeholder="多个词用逗号或 | ，命中即丢掉" autocomplete="off" />
+              </label>
+            </section>
+            <section class="qcard">
+              <div class="qcard__head">级别</div>
+              <div class="levels levels--extra" id="levelExtra">
+                <button type="button" class="chip" data-level="INFO" aria-pressed="false">INFO</button>
+                <button type="button" class="chip" data-level="DEBUG" aria-pressed="false">DEBUG</button>
+                <button type="button" class="chip" id="btnLevelMulti" aria-pressed="false" title="打开后可以同时选择多个级别">多选</button>
+              </div>
+            </section>
+            <section class="qcard">
+              <div class="qcard__head">时间</div>
+              <div class="time-box">
+                <div class="time-presets">
+                  <button type="button" class="chip" data-mins="5">5 分钟</button>
+                  <button type="button" class="chip" data-mins="15">15 分钟</button>
+                  <button type="button" class="chip" data-mins="60">1 小时</button>
+                  <button type="button" class="chip" data-mins="360">6 小时</button>
+                  <button type="button" class="chip" data-span="today">今天</button>
+                </div>
+                <div class="time-range">
+                  <label>
+                    <span>从</span>
+                    <input type="datetime-local" id="timeFrom" step="1" aria-label="开始时间" />
+                  </label>
+                  <label>
+                    <span>至</span>
+                    <input type="datetime-local" id="timeTo" step="1" aria-label="结束时间" />
+                  </label>
+                </div>
+              </div>
+            </section>
+            <div class="qfoot">
+              <button type="button" class="dw-text-btn" id="btnQueryReset">清空</button>
+              <button type="button" class="dw-btn dw-btn--primary" id="btnTimeRange">查这一段</button>
+            </div>
+          </div>
+          </div>
+          <div class="levels" id="levelChips" role="group" aria-label="级别">
+            <button type="button" class="chip is-active" data-level="ALL" aria-pressed="true">全部</button>
+            <button type="button" class="chip" data-level="ERROR" aria-pressed="false">ERROR</button>
+            <button type="button" class="chip" data-level="WARN" aria-pressed="false">WARN</button>
+          </div>
+          <span class="toolbar__gap"></span>
+          <button type="button" class="dw-btn" id="btnTail" title="只看每台机器最新的一段">尾部</button>
+          <button type="button" class="dw-btn dw-btn--live" id="btnFollow" title="持续拉取新日志">跟随</button>
+          <button type="button" class="dw-text-btn" id="btnCopyVisible" disabled>复制</button>
+          <label class="mini-num" title="尾部 / 跟随窗口行数，默认 200">
+            <span>行</span>
+            <input type="number" id="maxLines" min="50" max="20000" step="50" value="200" />
+          </label>
+          <div class="more-menu" id="moreMenu">
+            <button type="button" class="chip" id="btnMore" aria-expanded="false" title="更多选项">更多</button>
+            <div class="more-menu__panel hidden" id="morePanel" role="menu">
+              <div class="more-sec">查看</div>
+              <button type="button" class="more-item is-toggle is-active" id="btnContext" aria-pressed="true" title="筛选时保留命中行前后的日志"><i></i><span>命中前后也留下</span></button>
+              <button type="button" class="more-item is-toggle" id="btnUniqueOnly" aria-pressed="false" title="只看只在一台机器上出现的日志"><i></i><span>只看一台有的</span></button>
+              <button type="button" class="more-item is-toggle is-active" id="btnWrap" aria-pressed="true" title="长日志自动折行"><i></i><span>长行自动折行</span></button>
+              <button type="button" class="more-item" id="btnPrevError" title="跳到上一条错误（Shift+F8）">上一条错误</button>
+              <button type="button" class="more-item" id="btnNextError" title="跳到下一条错误（F8）">下一条错误</button>
+              <button type="button" class="more-item" id="btnClearFilters" title="清空关键字、级别、实例、时间等筛选">清空当前筛选</button>
+              <div class="more-sec">对照 / 带走</div>
+              <button type="button" class="more-item" id="btnProbeAll" title="探测各实例是否可读">探测全部实例</button>
+              <button type="button" class="more-item" id="btnCompare" title="左右对照两台实例">左右对照两台</button>
+              <button type="button" class="more-item" id="btnListFiles" title="扫描各实例日志文件">刷新文件列表</button>
+              <button type="button" class="more-item" id="btnDownload" disabled title="把当前窗口存成日志文件">存成日志文件</button>
+              <button type="button" class="more-item" id="btnExport" disabled title="复制成可贴到问题单的说明">复制问题单说明</button>
+              <button type="button" class="more-item" id="btnExportMutes" title="把屏蔽规则复制出来">复制屏蔽规则</button>
+              <button type="button" class="more-item" id="btnImportMutes" title="粘贴之前复制的屏蔽规则">粘贴屏蔽规则</button>
+              <div class="more-sec">跟随</div>
+              <button type="button" class="more-item is-toggle" id="btnFollowKeyword" aria-pressed="false" title="跟随时远端也按关键字过滤">
+                <i></i><span>跟随也带关键字</span>
+              </button>
+              <button type="button" class="more-item is-pace" id="btnFollowPace" data-pace="2" title="点一下切换刷新间隔">
+                <span>刷新间隔</span><em id="followPaceValue">2 秒</em>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-pop hidden" id="filePop" role="dialog" aria-label="选择日志文件"></div>
+        <div class="mute-pop hidden" id="muteImportPop" role="dialog" aria-label="导入屏蔽">
+          <div class="compare-pop__head">
+            <strong>粘贴屏蔽规则</strong>
+            <button type="button" class="dw-text-btn" id="btnMuteImportClose">关闭</button>
+          </div>
+          <textarea id="muteImportText" rows="6" placeholder="粘贴之前复制出来的 JSON"></textarea>
+          <button type="button" class="dw-btn dw-btn--primary" id="btnMuteImportApply">导入</button>
+        </div>
+        <div class="mute-pop hidden" id="peerPop" role="dialog" aria-label="其它实例">
+          <div class="compare-pop__head">
+            <strong>其它实例</strong>
+            <button type="button" class="dw-text-btn" id="btnPeerClose">关闭</button>
+          </div>
+          <div class="peer-body" id="peerBody"></div>
+          <button type="button" class="dw-btn dw-btn--primary" id="btnPeerSearch">用这条再查一遍</button>
+        </div>
+        <div class="compare-pop hidden" id="compareBar" role="dialog" aria-label="左右对照">
+          <div class="compare-pop__head">
+            <strong>左右对照</strong>
+            <button type="button" class="dw-text-btn" id="btnCompareClose">关闭</button>
+          </div>
+          <label class="compare-pop__field">
+            <span>左侧</span>
+            <select id="compareLeft" aria-label="左侧实例"></select>
+          </label>
+          <label class="compare-pop__field">
+            <span>右侧</span>
+            <select id="compareRight" aria-label="右侧实例"></select>
+          </label>
+          <button type="button" class="dw-btn dw-btn--primary" id="btnCompareApply">开始对照</button>
+        </div>
+
+        <div class="status-bar" id="statusBar" role="status" aria-live="polite">
+          <span class="status-bar__dot" aria-hidden="true"></span>
+          <span class="status-bar__text" id="statusLine">就绪</span>
+          <button type="button" class="dw-text-btn status-bar__cancel hidden" id="btnCancelSearch">取消</button>
+        </div>
+
+        <div class="filter-bar hidden" id="filterBar" aria-label="当前筛选"></div>
+        <div class="histo hidden" id="errorHisto" aria-label="错误分布"></div>
+        <div class="trace-panel hidden" id="tracePanel">
+          <div class="trace-panel__head">
+            <div class="trace-panel__title">
+              <span>链路</span>
+              <strong id="traceTitle"></strong>
+            </div>
+            <span class="trace-panel__meta" id="traceMeta"></span>
+            <button type="button" class="dw-text-btn" id="btnTraceErrors" aria-pressed="false">只看错误</button>
+            <button type="button" class="dw-text-btn" id="btnCopyTrace">复制链路</button>
+            <button type="button" class="dw-text-btn" id="btnCloseTrace">关闭</button>
+          </div>
+          <div class="trace-panel__body" id="traceBody"></div>
+        </div>
+        <div class="cluster-bar hidden" id="clusterBar" aria-label="异常聚类"></div>
+        <div class="pin-strip hidden" id="pinStrip" aria-label="钉住的日志"></div>
+
+        <div class="panel is-active" id="panel-logs">
+          <div class="list-pane" id="logPane">
+            <div class="empty" id="emptyState">
+              <strong>合并查看多实例日志</strong>
+              <p>点「尾部」看最近 N 行，或「跟随」像 <code>tail -200f</code> 一样持续刷出新日志。点时间可看附近 30 秒，钉住关键行方便对照。</p>
+            </div>
+            <div class="log-stream hidden" id="logStream" role="log" aria-live="polite"></div>
+            <div class="compare-split hidden" id="compareSplit">
+              <div class="compare-pane" id="comparePaneL"></div>
+              <div class="compare-pane" id="comparePaneR"></div>
+            </div>
+            <button type="button" class="jump-older hidden" id="btnOlder" title="再读更早的一段">更早</button>
+            <button type="button" class="jump-bottom hidden" id="btnJumpBottom" title="滚到底部并继续跟随">↓ 最新</button>
+          </div>
+        </div>
+
+        <div class="panel" id="panel-files">
+          <div class="list-pane" id="filePane">
+            <div class="empty" id="fileEmpty">
+              <strong>还没有文件列表</strong>
+              <p>点「刷新文件」扫描各实例上的共享日志目录。</p>
+            </div>
+            <div class="selection-bar hidden" id="fileSelection">
+              <span id="fileSelectionCount">已选 0 个文件</span>
+              <button type="button" class="dw-btn dw-btn--primary" id="btnTailSelected">拉取所选</button>
+              <button type="button" class="dw-text-btn" id="btnClearFiles">清除</button>
+            </div>
+            <table class="table hidden" id="fileTable">
+              <thead>
+                <tr>
+                  <th class="col-check"></th>
+                  <th>名称</th>
+                  <th class="col-host">实例</th>
+                  <th class="col-size">大小</th>
+                  <th class="col-path">路径</th>
+                </tr>
+              </thead>
+              <tbody id="fileBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <dialog class="dlg dlg--session" id="sessionDialog">
+    <div class="dlg__form">
+      <header class="dlg__head">
+        <h3>查询配置</h3>
+        <p class="dlg__lede">这里只放目录、默认登录和跳板。服务器在左侧添加，每台可以选不同的跳板和账号。</p>
+      </header>
+
+      <section class="dlg-card">
+        <h4><span class="dlg-step">1</span>日志目录</h4>
+        <label class="field">
+          <span>共享目录</span>
+          <input type="text" id="sessLogDir" placeholder="例如 /var/log/app" spellcheck="false" />
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>服务名 <em>可选</em></span>
+            <input type="text" id="sessService" placeholder="可选，便于识别" />
+          </label>
+          <label class="field field--narrow">
+            <span>文件</span>
+            <input type="text" id="sessLogGlob" placeholder="*.log" value="*.log" spellcheck="false" />
+          </label>
+        </div>
+      </section>
+
+      <section class="dlg-card">
+        <h4><span class="dlg-step">2</span>默认登录</h4>
+        <p class="field__note">留空也可以。某台机器账号不同时，在左侧添加实例里单独填写。</p>
+        <div class="field-row">
+          <label class="field">
+            <span>用户名</span>
+            <input type="text" id="sessUser" placeholder="登录用户名" autocomplete="username" />
+          </label>
+          <label class="field">
+            <span>密码</span>
+            <span class="field__secret">
+              <input type="password" id="sessPassword" placeholder="密码或私钥二选一" autocomplete="off" />
+              <button type="button" class="field__eye" id="btnTogglePassword" title="显示密码" aria-label="显示密码">显示</button>
+            </span>
+          </label>
+        </div>
+        <p class="field__note hidden" id="sessPasswordNote">已保存密码。这一栏留空表示继续用原来的。</p>
+        <details class="dlg-more" id="sessKeyBox">
+          <summary>使用私钥</summary>
+          <label class="field">
+            <span>PEM</span>
+            <textarea id="sessPrivateKey" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" spellcheck="false"></textarea>
+          </label>
+        </details>
+      </section>
+
+      <section class="dlg-card">
+        <h4><span class="dlg-step">3</span>跳板机</h4>
+        <p class="field__note">可添加多台跳板，左侧添加实例时再选择。</p>
+        <ul class="jump-list" id="jumpList"></ul>
+        <button type="button" class="dw-text-btn" id="btnAddJump">添加跳板</button>
+      </section>
+
+      <footer class="dlg__foot">
+        <p class="dlg__preview" id="sessionHint">填写目录和登录后即可测试。</p>
+        <div class="dlg__bar">
+          <button type="button" class="dw-btn" id="btnTestSession">测试连接</button>
+          <div class="dlg__actions">
+            <button type="button" class="dw-text-btn" id="btnCancelSession">取消</button>
+            <button type="button" class="dw-btn dw-btn--primary" id="btnApplySession">应用并拉取</button>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </dialog>
+
+  <dialog class="dlg" id="jumpDialog">
+    <div class="dlg__form">
+      <h3 id="jumpDialogTitle">添加跳板</h3>
+      <p class="dlg__lede">填写 JumpServer / 堡垒机地址。添加实例时再选择是否经过它。</p>
+      <input type="hidden" id="editJumpId" />
+      <label class="field">
+        <span>显示名 <em>可选</em></span>
+        <input type="text" id="jmpLabel" placeholder="可选，便于区分" />
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>地址</span>
+          <input type="text" id="jmpHost" placeholder="跳板机地址" spellcheck="false" />
+        </label>
+        <label class="field field--narrow">
+          <span>端口</span>
+          <input type="number" id="jmpPort" min="1" max="65535" value="2222" />
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span>用户名</span>
+          <input type="text" id="jmpUser" placeholder="跳板登录账号" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>密码</span>
+          <input type="password" id="jmpPassword" placeholder="跳板登录密码" autocomplete="off" />
+        </label>
+      </div>
+      <p class="field__note hidden" id="jmpPasswordNote">已保存密码。这一栏留空表示继续用原来的。</p>
+      <div class="dlg__actions">
+        <button type="button" class="dw-text-btn" id="btnCancelJump">取消</button>
+        <button type="button" class="dw-btn dw-btn--primary" id="btnSaveJump">保存</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="dlg" id="serverDialog">
+    <div class="dlg__form">
+      <h3 id="serverDialogTitle">添加实例</h3>
+      <p class="dlg__lede" id="serverDialogLede">先把地址加进左侧列表。要不要参与查询，添加后再勾选。</p>
+      <input type="hidden" id="editServerId" />
+      <label class="field">
+        <span>主机 IP</span>
+        <input type="text" id="srvHost" placeholder="服务器地址" spellcheck="false" />
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>SSH 端口</span>
+          <input type="number" id="srvPort" min="1" max="65535" value="22" />
+        </label>
+        <label class="field">
+          <span>显示名</span>
+          <input type="text" id="srvLabel" placeholder="可选，默认显示地址" />
+        </label>
+      </div>
+      <label class="field">
+        <span>经过跳板</span>
+        <div class="picker" id="srvJumpPicker">
+          <input type="hidden" id="srvJump" value="" />
+          <button type="button" class="picker__btn" id="srvJumpBtn" aria-haspopup="listbox" aria-expanded="false">
+            <span id="srvJumpLabel">直连</span>
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.2 6.2 8 10l3.8-3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <ul class="picker__menu" id="srvJumpMenu" role="listbox" hidden></ul>
+        </div>
+      </label>
+      <label class="field">
+        <span>日志目录 <em>可选</em></span>
+        <input type="text" id="srvLogDir" placeholder="留空则用配置里的目录" spellcheck="false" />
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>用户名 <em>可选</em></span>
+          <input type="text" id="srvUser" placeholder="留空则用默认登录" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>密码 <em>可选</em></span>
+          <input type="password" id="srvPassword" placeholder="留空则用默认密码" autocomplete="off" />
+        </label>
+      </div>
+      <p class="dlg__preview" id="serverPreview">需要跳板或不同账号时，在上面单独填写</p>
+      <div class="dlg__bar">
+        <button type="button" class="dw-btn" id="btnTestServer">测试连接</button>
+        <div class="dlg__actions">
+          <button type="button" class="dw-text-btn" id="btnCancelServer">取消</button>
+          <button type="button" class="dw-btn dw-btn--primary" id="btnSaveServer">添加</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="dlg dlg--name" id="nameDialog">
+    <div class="dlg__form">
+      <h3 id="nameDialogTitle">保存场景</h3>
+      <p class="dlg__lede" id="nameDialogLede">记下当前勾选的实例和筛选，之后可以一键切回来。</p>
+      <label class="field" id="nameDialogField">
+        <span>场景名称</span>
+        <input type="text" id="nameDialogInput" maxlength="28" autocomplete="off" />
+      </label>
+      <div class="dlg__bar">
+        <span></span>
+        <div class="dlg__actions">
+          <button type="button" class="dw-text-btn" id="btnCancelName">取消</button>
+          <button type="button" class="dw-btn dw-btn--primary" id="btnConfirmName">保存</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="log-format.js"></script>
+  <script src="app.js"></script>
+  <script src="dw-split-pane.js"></script>
+  <script>
+    DwSplitPane.mount({
+      root: '.body',
+      start: '.sidebar',
+      end: '.main',
+      storageKey: 'dw.split.log-controller',
+      defaultRatio: 'sidebar',
+      defaultWidth: 248,
+      minWidth: 200,
+      maxWidth: 420,
+      stackBelow: 860,
+    })
+  </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+id: connection-saturation
+title: 连接打满排查
+tags: [db, connections]
+steps:
+  - id: note
+    type: note
+    body: 选一条已有 SQL 连接，打开控制台查看会话，不要在高峰直接杀连接。
+  - id: open-sql
+    type: open_sql
+    sql: |
+      SELECT 1 AS ping
+  - id: copy
+    type: copy_command
+    command: "SHOW PROCESSLIST"
+  - id: checklist
+    type: checklist
+    items:
+      - 已确认来源应用
+      - 已决定是否扩连接或限流

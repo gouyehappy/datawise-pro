@@ -1,0 +1,141 @@
+---
+description: Ship a desktop release — bump X.Y.Z, merge main, tag vX.Y.Z, trigger GitHub packaging
+alwaysApply: false
+---
+
+# Release: version bump → tag → GitHub package
+
+When the user asks to bump version / tag / release / 打包 (e.g. `v4.1.2`), follow this sequence.
+Do **not** invent other bump scripts. Version is bare `X.Y.Z`; the git tag is `vX.Y.Z`.
+
+## Preconditions
+
+- Working tree clean (or only intentional release edits).
+- Target version agreed (ask if missing). Refuse if `vX.Y.Z` already exists locally or on `origin`.
+- Prefer shipping from `main` after `dev` is fast-forwarded into it.
+
+## 1. Land product/CI commits first
+
+Commit remaining fixes on `dev` (or the agreed branch). Keep the version-bump commit separate from those fixes.
+
+```bash
+git checkout main
+git merge --ff-only dev
+```
+
+If `--ff-only` fails, stop and ask — do not force-merge.
+
+## 2. Validate before bump / tag (required gate)
+
+Do **not** bump version or push `vX.Y.Z` until the commit about to be tagged is green.
+
+### Preferred — GitHub Actions on that SHA
+
+Confirm both succeeded on `main` (tip after step 1):
+
+| Workflow | Must pass |
+| --- | --- |
+| **Frontend tests** | yes |
+| **Backend tests** | yes |
+
+If Actions are still running, wait. If either failed, fix and re-run this gate — do not tag.
+
+### Local fallback (when CI unavailable or user asks to run locally)
+
+Mirror the CI jobs (from repo root):
+
+```bash
+# Frontend (same core as frontend-tests.yml)
+cd datawise-frontend
+npm ci --prefix ../sql-editor --ignore-scripts
+npm ci
+npm run typecheck
+npm run test
+npm run test:e2e:analysis
+npm run test:e2e -- e2e/core-paths.spec.ts e2e/workspace-main-path.spec.ts
+
+# Backend (same as backend-tests.yml)
+cd ../datawise-backend
+mvn -B test -DskipITs
+```
+
+Any failure → stop; do not bump or tag.
+
+### 例外（用户选择 1A + 2A）
+若你要求“本地跑 CI 同款门禁”（1A），但本地不绿：
+- 仍以 **GitHub Actions 对待打 tag 的同一 SHA** 为准；
+- 如果你能确认 **Frontend tests 与 Backend tests 都已通过**，则允许继续 bump/tag（即使本地门禁失败）。
+
+### Out of release gate (unless user explicitly requires)
+
+- `npm run test:e2e:backend` (real Spring Boot smoke) — scheduled / optional, not part of default packaging gate.
+
+## 3. Align versions (required)
+
+From repo root:
+
+```bash
+node datawise-frontend/scripts/desktop/align-release-version.mjs X.Y.Z
+```
+
+(`cd datawise-frontend && node scripts/desktop/align-release-version.mjs X.Y.Z` is equivalent.)
+
+Updates:
+
+- `datawise-frontend/package.json` + `package-lock.json` (`npm version --no-git-tag-version`)
+- `datawise-desktop/pom.xml`
+- every `datawise-backend/**/pom.xml` with literal `org.apache.datawise` versions
+
+Does **not** touch `datawise-desktop/installer/ui/package.json`. Change **only** its top-level `"version"` string (e.g. `"4.1.1"` → `"4.1.2"`). Never rewrite that file with PowerShell `ConvertTo-Json` or similar — encoding breaks characters like `©`.
+
+### Verify before commit
+
+These must all show `X.Y.Z`:
+
+- `datawise-frontend/package.json`
+- `datawise-backend/pom.xml` (`datawise-backend` artifact)
+- `datawise-desktop/pom.xml` (`datawise-desktop` artifact)
+- `datawise-desktop/installer/ui/package.json`
+
+Root `package.json` may stay older — leave it unless the user asks.
+
+```bash
+git add datawise-frontend/package.json datawise-frontend/package-lock.json \
+  datawise-desktop/pom.xml datawise-desktop/installer/ui/package.json datawise-backend
+git commit -m "chore(release): bump version to X.Y.Z"
+```
+
+Version-only bump does not require re-running the full gate; gate applies to the **code tip** before this commit. If the bump commit is pushed with other code changes, re-check CI on that SHA before tagging.
+
+## 4. Push branches, then tag
+
+Tag **only** after the bump commit is on `main` and the gate in §2 is satisfied for the tagged tip. Use an annotated tag.
+
+```bash
+git checkout main
+git merge --ff-only dev    # if the bump was committed on dev
+git push origin main
+git push origin dev        # when remotes should stay aligned
+git tag -a vX.Y.Z -m "Release X.Y.Z"
+git push origin vX.Y.Z
+```
+
+Pushing `v*` starts `.github/workflows/desktop-release.yml` (Windows zip+Setup.exe, Linux zip+deb, macOS zip+DMG → GitHub Releases). CI also runs `align-release-version.mjs --from-env`; local bump still keeps sources consistent.
+
+## 5. Confirm
+
+- Actions: Desktop release run for `vX.Y.Z`
+- Release: `https://github.com/<owner>/datawise-cli/releases/tag/vX.Y.Z` (from `DATAWISE_GITHUB_REPO` / `repo.meta.json`)
+- Assets include portable zip + `size-report-core.json` (CI publish uploads the ledger)
+- Walk `_private/docs/design/DESKTOP_RELEASE_CHECKLIST.md` smoke items (or ask the user to)
+
+Multi-OS publish often takes tens of minutes. Report the Actions URL; do not claim assets are ready until jobs finish.
+
+## Do not
+
+- Tag or package while Frontend / Backend CI is red or still running
+- Bump only frontend or only desktop (Maven desktop/backend mismatch breaks tag CI)
+- Create `vX.Y.Z` before the bump commit is on `origin/main`
+- `git commit --amend` / force-push / move or delete tags unless the user explicitly asks
+- Rewrite installer `package.json` via shell JSON serializers
+- Block release on real-backend e2e unless the user requires it

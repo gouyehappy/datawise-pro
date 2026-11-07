@@ -1,0 +1,115 @@
+/**
+ * 全局样式统一入口（分层加载，便于按「插件」扩展）
+ *
+ * 1. tokens     核心令牌（variables / radii / typography / space / surface）
+ * 2. chrome     壳层工作台
+ * 3. atoms      基础控件
+ * 4. features   业务大页样式
+ * 5. skins      款式覆盖（data-ui-skin）— 须在 feature CSS 之后
+ * 6. density    界面疏密（data-ui-density）
+ * 7. text-scale 界面文字档位（data-ui-text-scale，须在 skins 之后）
+ * 8. plugins    可复用壳层配方（soft-card / inset-split / seam / dock）
+ *
+ * 字号约定：docs/UI_TEXT_SCALE.md
+ * 壳层配方：.cursor/rules/frontend-chrome-plugins.mdc
+ */
+/* Design tokens core — skins/density/text-scale load after feature CSS */
+@import '@datawise/tokens/index.css';
+
+@import './scrollbars.css';
+@import './tool-stripe.css';
+@import './tool-window.css';
+@import './module-workbench.css';
+@import './tab-bar.css';
+@import './panels.css';
+@import './workbench-page.css';
+@import './panel-resize.css';
+@import './status.css';
+@import './buttons.css';
+@import '@datawise/ui/styles/cards.css';
+@import './icons.css';
+@import './forms.css';
+@import './menus.css';
+@import './context-menu.css';
+@import './modals.css';
+
+@import './module-page.css';
+@import './settings-panel.css';
+@import './shortcut-panel.css';
+@import './admin-diagnosis-panel.css';
+@import './migration-wizard.css';
+@import './migration-panel.css';
+@import './resizable-table.css';
+
+/* Skins / density / text-scale after feature CSS so overrides win */
+@import '@datawise/tokens/skins/index.css';
+@import '@datawise/tokens/ui-density.css';
+@import '@datawise/tokens/ui-text-scale.css';
+
+/* Layout / chrome plugins — prefer these over ad-hoc panel radius in features */
+@import '@datawise/tokens/plugins/soft-card.css';
+@import './plugins/soft-card-host-aliases.css';
+@import '@datawise/tokens/plugins/inset-split.css';
+@import '@datawise/tokens/plugins/seam-collapse.css';
+@import './plugins/dock-inplace.css';
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: var(--dw-font);
+    font-size: var(--dw-font-size);
+    line-height: var(--dw-leading);
+    color: var(--dw-text);
+    background: var(--dw-bg-chrome);
+    /* Windows ClearType 下中文更清晰；勿强制 antialiased（易发灰发虚） */
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+    text-rendering: optimizeLegibility;
+    font-optical-sizing: auto;
+}
+
+button {
+    font: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: inherit;
+    transition: background var(--dw-duration-fast) var(--dw-ease),
+        color var(--dw-duration-fast) var(--dw-ease),
+        border-color var(--dw-duration-fast) var(--dw-ease),
+        box-shadow var(--dw-duration-fast) var(--dw-ease),
+        filter var(--dw-duration-fast) var(--dw-ease),
+        opacity var(--dw-duration-fast) var(--dw-ease);
+}
+
+/* 全站底线：任意 button 悬停/按下都有可见反馈（:where 零特异度，专用类可覆盖） */
+:where(button):not(:disabled):hover {
+    box-shadow: inset 0 0 0 999px var(--dw-btn-hover-wash);
+}
+
+:where(button):not(:disabled):active {
+    box-shadow: inset 0 0 0 999px var(--dw-btn-active-wash);
+}
+
+:where(button):disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}

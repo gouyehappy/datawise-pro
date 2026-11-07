@@ -1,0 +1,147 @@
+/**
+ * 弹出菜单共享样式 — 对齐 IDEA New UI
+ * 面板圆角 / 固定图标 gutter / 行悬停（灰）与焦点（主色）
+ */
+
+.dw-dropdown-shell {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: var(--dw-z-dropdown);
+    display: flex;
+    align-items: flex-start;
+}
+
+.dw-dropdown-panel,
+.dw-menu-panel {
+    flex-shrink: 0;
+    border: 1px solid var(--dw-menu-border);
+    border-radius: var(--dw-menu-radius);
+    background: var(--dw-bg-panel);
+    box-shadow: var(--dw-menu-shadow);
+    overflow: hidden;
+}
+
+.dw-dropdown-panel--primary {
+    min-width: 200px;
+    padding: var(--dw-menu-pad-y) var(--dw-menu-pad-x);
+    box-sizing: border-box;
+}
+
+.dw-dropdown-item,
+.dw-menu-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: var(--dw-menu-item-h);
+    padding: 0 var(--dw-menu-item-pad-end) 0 0;
+    border: none;
+    border-radius: var(--dw-menu-item-radius);
+    background: transparent;
+    text-align: left;
+    color: var(--dw-text);
+    transition: background 100ms ease, color 100ms ease;
+}
+
+.dw-dropdown-item:hover,
+.dw-menu-item:hover {
+    background: var(--dw-menu-hover);
+}
+
+.dw-dropdown-item:focus {
+    outline: none;
+}
+
+.dw-dropdown-item:focus-visible,
+.dw-menu-item:focus-visible,
+.dw-dropdown-item.is-active,
+.dw-menu-item.is-active,
+.dw-menu-item[data-highlighted] {
+    background: var(--dw-menu-active);
+    color: var(--dw-text);
+    outline: none;
+}
+
+.dw-menu-gutter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--dw-menu-gutter);
+    color: var(--dw-text-secondary);
+}
+
+.dw-dropdown-item__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--dw-menu-gutter);
+    height: var(--dw-menu-item-h);
+    border-radius: 0;
+    background: transparent;
+    color: var(--dw-text-secondary);
+}
+
+.dw-dropdown-item:hover .dw-dropdown-item__icon,
+.dw-dropdown-item.is-active .dw-dropdown-item__icon {
+    background: transparent;
+    color: inherit;
+}
+
+.dw-dropdown-item__label,
+.dw-menu-item__label {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--dw-font-size-menu);
+    font-weight: 400;
+    line-height: var(--dw-leading-tight);
+}
+
+.dw-dropdown-item__chevron {
+    flex-shrink: 0;
+    color: var(--dw-text-secondary);
+    opacity: 0.85;
+}
+
+.dw-dropdown-item__shortcut,
+.dw-menu-item__shortcut {
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 0 2px 0 12px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    font-family: inherit;
+    font-size: var(--dw-font-size-menu-caption);
+    line-height: 1;
+    color: var(--dw-text-muted);
+}
+
+.dw-dropdown-item.is-active .dw-dropdown-item__chevron {
+    color: inherit;
+    opacity: 0.85;
+    transform: none;
+}
+
+.dw-dropdown-panel--flyout-host {
+    overflow: visible;
+}
+
+.dw-dropdown-divider,
+.dw-menu-divider {
+    height: 1px;
+    margin: 4px 0;
+    background: color-mix(in srgb, var(--dw-text) 8%, transparent);
+}
+
+.dw-menu-section-head {
+    padding: 8px var(--dw-menu-item-pad-end) 4px var(--dw-menu-gutter);
+    font-size: var(--dw-font-size-menu-caption);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--dw-text-muted);
+}

@@ -1,0 +1,122 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.data-diff",
+  "name": "Data Diff",
+  "version": "0.2.0",
+  "publisher": "datawise-community",
+  "icon": "assets/plugin.svg",
+  "description": "Compare row counts and sampled keys between two DataWise SQL connections (dev vs staging). Optional JDBC fallback remains on the sidecar.",
+  "license": "Apache-2.0",
+  "tags": ["diff", "qa", "migration", "jdbc"],
+  "permissions": ["host.workbench", "host.events", "host.clipboard", "host.sql"],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.5"
+  },
+  "entrypoints": {
+    "backend": {
+      "executable": "bin/data-diff-plugin.jar",
+      "transport": "stdio-jsonl"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.data-diff.connection",
+      "label": "Data diff workspace",
+      "icon": "assets/plugin.svg",
+      "capabilities": ["test", "connect"],
+      "fields": [
+        {
+          "key": "leftJdbcUrl",
+          "label": "Left JDBC URL",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "jdbc:postgresql://dev-host:5432/app"
+        },
+        {
+          "key": "leftUser",
+          "label": "Left user",
+          "type": "text",
+          "binding": "user",
+        },
+        {
+          "key": "leftPassword",
+          "label": "Left password",
+          "type": "password",
+          "binding": "password"
+        },
+        {
+          "key": "rightJdbcUrl",
+          "label": "Right JDBC URL",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "jdbc:postgresql://stg-host:5432/app"
+        },
+        {
+          "key": "rightUser",
+          "label": "Right user",
+          "type": "text",
+          "binding": "config"
+        },
+        {
+          "key": "rightPassword",
+          "label": "Right password",
+          "type": "password",
+          "binding": "secret"
+        },
+        {
+          "key": "defaultTable",
+          "label": "Default table (optional)",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "public.orders"
+        }
+      ],
+      "workbench": "io.datawise.community.data-diff.workbench"
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.data-diff.workbench",
+      "label": "Data diff workbench"
+    },
+    {
+      "type": "context-menu",
+      "id": "io.datawise.community.data-diff.open",
+      "label": "Open data diff",
+      "menu": "connection"
+    },
+    {
+      "type": "result-view",
+      "id": "io.datawise.community.data-diff.result",
+      "label": "Compare with other env…"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "跨环境数据对比",
+      "description": "对比两个 JDBC 环境的行数与抽样行差异（开发 vs 预发），发布前快速核对。",
+      "contributions": {
+        "io.datawise.community.data-diff.connection": {
+          "label": "数据对比工作区",
+          "fields": {
+            "leftJdbcUrl": { "label": "左侧 JDBC URL" },
+            "leftUser": { "label": "左侧用户" },
+            "leftPassword": { "label": "左侧密码" },
+            "rightJdbcUrl": { "label": "右侧 JDBC URL" },
+            "rightUser": { "label": "右侧用户" },
+            "rightPassword": { "label": "右侧密码" },
+            "defaultTable": { "label": "默认表（可选）" }
+          }
+        },
+        "io.datawise.community.data-diff.workbench": { "label": "数据对比工作台" },
+        "io.datawise.community.data-diff.open": { "label": "打开数据对比" },
+        "io.datawise.community.data-diff.result": { "label": "与另一环境对比…" }
+      }
+    }
+  }
+}

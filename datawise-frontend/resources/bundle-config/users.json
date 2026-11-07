@@ -1,0 +1,9 @@
+[
+  {
+    "id": 1,
+    "username": "guest",
+    "displayName": "Guest",
+    "email": "guest@datawise.local",
+    "guest": true
+  }
+]

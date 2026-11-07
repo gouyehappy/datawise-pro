@@ -1,0 +1,3513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Git Ops</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      /* Dark defaults: derive borders from fg so host ultra-faint borders stay readable */
+      --bg: var(--color-background, #0f1419);
+      --surface: var(--color-muted, #161c24);
+      --panel: var(--color-popover, #1c2430);
+      --fg: var(--color-foreground, #e8e8ec);
+      --muted: var(--color-muted-foreground, #b0b4bc);
+      --faint: color-mix(in srgb, var(--muted) 82%, var(--fg));
+      --line: color-mix(in srgb, var(--fg) 16%, transparent);
+      --line-strong: color-mix(in srgb, var(--fg) 24%, transparent);
+      --accent: var(--color-primary, #3b82f6);
+      --accent-ink: var(--color-primary-foreground, #fff);
+      --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+      --accent-hi: color-mix(in srgb, var(--accent) 78%, #fff);
+      --ok: var(--color-success, #4ade80);
+      --warn: var(--color-warning, #fbbf24);
+      --bad: var(--color-destructive, #f87171);
+      --hover: color-mix(in srgb, var(--fg) 10%, transparent);
+      --fill: color-mix(in srgb, var(--fg) 7%, transparent);
+      --scroll: color-mix(in srgb, var(--fg) 26%, transparent);
+      --shadow: 0 18px 48px color-mix(in srgb, #000 50%, transparent);
+      --mono: var(--font-mono, ui-monospace, Consolas, monospace);
+      --sans: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+      --radius: var(--radius-md, 8px);
+      --tree: 220px;
+      --files: 310px;
+      --ease: cubic-bezier(.22, 1, .36, 1);
+      --t: .16s var(--ease);
+      font-family: var(--sans);
+      font-size: var(--dw-font-size, calc(13.5px * var(--dw-ui-text-scale, 1)));
+    }
+    :root[data-theme="dark"], :root[data-dw-theme="dark"] {
+      color-scheme: dark;
+      /* Keep host colors, but never let borders/text wash out */
+      --fg: color-mix(in srgb, var(--color-foreground, #e8e8ec) 88%, #fff);
+      --muted: color-mix(in srgb, var(--color-muted-foreground, #b0b4bc) 70%, var(--fg));
+      --faint: color-mix(in srgb, var(--muted) 78%, var(--fg));
+      --line: color-mix(in srgb, var(--fg) 16%, transparent);
+      --line-strong: color-mix(in srgb, var(--fg) 24%, transparent);
+      --hover: color-mix(in srgb, var(--fg) 11%, transparent);
+      --fill: color-mix(in srgb, var(--fg) 8%, transparent);
+      --scroll: color-mix(in srgb, var(--fg) 28%, transparent);
+      --accent-hi: color-mix(in srgb, var(--color-primary, #3b82f6) 72%, #fff);
+      --accent-soft: color-mix(in srgb, var(--color-primary, #3b82f6) 20%, transparent);
+    }
+    :root[data-theme="light"], :root[data-dw-theme="light"] {
+      color-scheme: light;
+      --bg: var(--color-background, #fafafa);
+      --surface: var(--color-muted, #f4f4f5);
+      --panel: var(--color-popover, #ffffff);
+      --fg: var(--color-foreground, #18181b);
+      --muted: var(--color-muted-foreground, #71717a);
+      --faint: color-mix(in srgb, var(--muted) 88%, transparent);
+      --line: var(--color-border, #e4e4e7);
+      --line-strong: color-mix(in srgb, var(--fg) 14%, transparent);
+      --hover: color-mix(in srgb, var(--fg) 5%, transparent);
+      --fill: color-mix(in srgb, var(--fg) 3.5%, transparent);
+      --scroll: color-mix(in srgb, var(--fg) 16%, transparent);
+      --accent: var(--color-primary, #2563eb);
+      --accent-hi: var(--color-primary, #2563eb);
+      --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+      --shadow: 0 18px 48px color-mix(in srgb, #000 10%, transparent);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      :root { --t: 0s linear; }
+      *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
+    }
+    * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--scroll) transparent; }
+    *::-webkit-scrollbar { width: 7px; height: 7px; }
+    *::-webkit-scrollbar-thumb {
+      background: var(--scroll); border-radius: 99px; border: 2px solid transparent; background-clip: padding-box;
+    }
+    html, body { height: 100%; margin: 0; }
+    body {
+      color: var(--fg); background: var(--bg); overflow: hidden;
+      text-rendering: optimizeLegibility;
+    }
+    /* Dark: subpixel AA reads sharper on Windows than grayscale antialiased */
+    :root[data-theme="dark"] body,
+    :root[data-dw-theme="dark"] body {
+      -webkit-font-smoothing: auto;
+    }
+    :root[data-theme="light"] body,
+    :root[data-dw-theme="light"] body {
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, textarea { font: 500 var(--dw-font-size) var(--sans); color: var(--fg); }
+    button { cursor: pointer; border: 0; background: transparent; transition: background var(--t), color var(--t), border-color var(--t), filter var(--t), transform .12s var(--ease); }
+    button:disabled { opacity: .38; cursor: not-allowed; }
+    button:active:not(:disabled) { transform: translateY(0.5px); }
+
+    .app { display: flex; flex-direction: column; height: 100%; background: var(--bg); overflow: hidden; }
+    .app > .top { flex-shrink: 0; }
+
+    .top {
+      flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+      padding: 0 10px; height: 40px; position: relative; z-index: 40;
+      border-bottom: 1px solid var(--line);
+      overflow: visible;
+      background: var(--bg);
+    }
+    .top .actions { flex-shrink: 0; gap: 4px; }
+    .top-id { display: flex; align-items: center; gap: 6px; min-width: 0; flex-shrink: 1; }
+    .picker { position: relative; flex-shrink: 1; min-width: 0; z-index: 50; }
+    .repo-btn {
+      display: inline-flex; align-items: center; gap: 6px; height: 28px;
+      padding: 0 8px 0 6px; max-width: min(240px, 34vw);
+      border-radius: 6px; border: 1px solid var(--line);
+      background: transparent; color: var(--fg);
+      transition: border-color var(--t), background var(--t);
+    }
+    .repo-btn:hover, .picker.open .repo-btn {
+      border-color: var(--line-strong);
+      background: var(--hover);
+    }
+    .picker.open .repo-btn { background: var(--fill); }
+    .repo-ico {
+      width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0;
+      display: grid; place-items: center;
+      background: var(--fill); color: var(--muted);
+    }
+    .repo-ico svg { width: 11px; height: 11px; }
+    .repo-ico.is-dirty { color: var(--warn); }
+    .repo-text {
+      display: inline-flex; align-items: baseline; gap: 6px;
+      min-width: 0; text-align: left; line-height: 1;
+    }
+    .repo-name {
+      font: 650 var(--dw-font-size) var(--sans); max-width: 120px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .repo-sub {
+      font: 500 var(--dw-text-xs) var(--mono); color: var(--accent-hi); max-width: 100px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .repo-caret {
+      width: 10px; height: 10px; flex-shrink: 0; opacity: .4; color: var(--muted);
+      background: currentColor;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+      transition: transform .16s var(--ease);
+    }
+    .picker.open .repo-caret { transform: rotate(180deg); opacity: .65; }
+    .pick-panel {
+      display: none; position: absolute; z-index: 80; top: calc(100% + 6px); left: 0;
+      width: min(360px, 72vw); max-height: min(420px, 70vh); border-radius: 12px;
+      border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow);
+      overflow: hidden; flex-direction: column; animation: pop .16s var(--ease);
+    }
+    .picker.open .pick-panel { display: flex; }
+    .pick-head {
+      padding: 10px 12px 0; font: 650 var(--dw-text-xs) var(--sans); color: var(--faint);
+      letter-spacing: .04em; text-transform: uppercase;
+    }
+    .pick-search {
+      margin: 8px 10px 6px; height: 32px; padding: 0 11px; border-radius: 8px;
+      border: 1px solid var(--line); background: var(--bg); outline: none; width: calc(100% - 20px);
+      transition: border-color var(--t), box-shadow var(--t);
+    }
+    .pick-search:focus {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .pick-list { flex: 1; overflow: auto; padding: 2px 8px 8px; min-height: 48px; }
+    .pick-row {
+      width: 100%; text-align: left; padding: 9px 10px; border-radius: 9px;
+      display: flex; align-items: flex-start; gap: 9px; transition: background var(--t);
+    }
+    .pick-row:hover { background: var(--hover); }
+    .pick-row.on { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    .pick-row .pr-ico {
+      width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; margin-top: 1px;
+      display: grid; place-items: center; background: var(--fill); color: var(--muted);
+    }
+    .pick-row.on .pr-ico { background: var(--accent-soft); color: var(--accent-hi); }
+    .pick-row .pr-body { min-width: 0; flex: 1; }
+    .pick-row .pr-name {
+      display: flex; align-items: center; gap: 6px; font: 650 var(--dw-font-size) var(--sans); color: var(--fg);
+    }
+    .pick-row .pr-name .cur {
+      font: 650 var(--dw-text-2xs) var(--sans); color: var(--accent-hi); padding: 1px 5px; border-radius: 999px;
+      background: var(--accent-soft);
+    }
+    .pick-row .pr-meta {
+      font: 400 var(--dw-text-xs) var(--mono); color: var(--faint); margin-top: 3px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pick-foot { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--line); }
+    .pick-foot .btn { flex: 1; }
+
+    .top-meta {
+      display: flex; align-items: center; gap: 5px; min-width: 0; flex: 1 1 0;
+      flex-wrap: nowrap; overflow: hidden;
+    }
+    .chip {
+      flex-shrink: 0; height: 22px; padding: 0 8px; border-radius: 999px;
+      border: 1px solid var(--line-strong); background: var(--fill);
+      font: 550 var(--dw-text-xs) var(--mono); color: var(--muted);
+      display: inline-flex; align-items: center; gap: 4px;
+      max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .chip.hash { color: var(--fg); font-weight: 650; }
+    .chip.sync { color: var(--muted); }
+    .chip.sync .a { color: var(--ok); }
+    .chip.sync .b { color: var(--warn); }
+    .chip.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 22%, var(--line)); }
+    .chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 24%, var(--line)); }
+    .chip.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 26%, var(--line)); }
+
+    .mode {
+      display: inline-flex; align-self: stretch; margin-left: 4px; gap: 2px;
+    }
+    .mode button {
+      position: relative; height: 100%; padding: 0 15px; color: var(--muted); font: 600 var(--dw-font-size) var(--sans);
+      border-radius: 0;
+    }
+    .mode button::after {
+      content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px;
+      border-radius: 2px 2px 0 0; background: transparent; transition: background var(--t), transform var(--t);
+      transform: scaleX(.6);
+    }
+    .mode button:hover { color: var(--fg); }
+    .mode button.on { color: var(--fg); }
+    .mode button.on::after { background: var(--accent); transform: scaleX(1); }
+
+    .spacer { flex: 1; min-width: 4px; }
+    .actions { display: flex; gap: 4px; align-items: center; }
+    .btn {
+      height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent;
+      display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+      font: 550 var(--dw-font-size) var(--sans); box-shadow: none;
+    }
+    .btn-primary {
+      background: color-mix(in srgb, var(--accent) 16%, transparent);
+      color: var(--accent-hi); border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+      box-shadow: none;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--accent) 24%, transparent);
+      border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+      filter: none;
+    }
+    .btn-quiet {
+      border-color: var(--line-strong); color: var(--muted); background: transparent;
+    }
+    .btn-quiet:hover:not(:disabled) { color: var(--fg); background: var(--hover); border-color: var(--line-strong); }
+    .btn-ghost { color: var(--muted); }
+    .btn-ghost:hover:not(:disabled) { color: var(--fg); background: var(--hover); }
+    .btn-danger { background: color-mix(in srgb, var(--bad) 10%, transparent); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 24%, transparent); }
+    .btn-xs { height: 24px; padding: 0 8px; font-size: var(--dw-text-xs); border-radius: 5px; }
+    .btn-sm { height: 26px; padding: 0 9px; font-size: var(--dw-text-xs); }
+    .btn-icon {
+      width: 28px; height: 28px; padding: 0; border-radius: 6px; border: 1px solid var(--line); color: var(--muted);
+      display: inline-grid; place-items: center; background: transparent;
+    }
+    .btn-icon:hover:not(:disabled) { color: var(--fg); background: var(--hover); }
+    .safe {
+      height: 28px; padding: 0 9px; border-radius: 6px; border: 1px solid var(--line);
+      color: var(--muted); font: 550 var(--dw-text-xs) var(--sans); background: transparent;
+    }
+    .safe.on {
+      border-color: color-mix(in srgb, var(--bad) 36%, var(--line)); color: var(--bad);
+      background: color-mix(in srgb, var(--bad) 8%, transparent);
+    }
+
+    .body {
+      flex: 1; min-height: 0; display: grid;
+      grid-template-columns: var(--tree) 6px 1fr;
+      grid-template-rows: 1fr;
+      background: var(--bg);
+    }
+    .body.files-mode {
+      grid-template-columns: var(--tree) 6px var(--files) 6px 1fr;
+      grid-template-rows: minmax(0, 1fr) auto;
+    }
+    .body.files-mode > .tree { grid-column: 1; grid-row: 1 / -1; }
+    .body.files-mode > .split-tree { grid-column: 2; grid-row: 1 / -1; }
+    .body.files-mode > .files { grid-column: 3; grid-row: 1; min-height: 0; }
+    .body.files-mode > .split { grid-column: 4; grid-row: 1; }
+    .body.files-mode > .diff-pane { grid-column: 5; grid-row: 1; min-height: 0; }
+    .body.files-mode > .composer { grid-column: 3 / -1; grid-row: 2; }
+    .body.hist-mode { grid-template-columns: var(--tree) 6px 1fr; }
+    .body.hist-mode > .tree { grid-column: 1; }
+    .body.hist-mode > .split-tree { grid-column: 2; }
+    .body.hist-mode > .hist { grid-column: 3; min-width: 0; }
+
+    .split, .split-tree {
+      cursor: col-resize; background: transparent; position: relative; z-index: 2;
+    }
+    .split::after, .split-tree::after {
+      content: ""; position: absolute; top: 12%; bottom: 12%; left: 50%; width: 1px;
+      transform: translateX(-50%); background: var(--line); border-radius: 99px;
+      transition: background var(--t), width var(--t), top var(--t), bottom var(--t);
+    }
+    .split:hover::after, .split.dragging::after,
+    .split-tree:hover::after, .split-tree.dragging::after {
+      width: 3px; top: 8%; bottom: 8%;
+      background: color-mix(in srgb, var(--accent) 65%, var(--line));
+    }
+
+    .tree {
+      min-height: 0; min-width: 0; overflow: hidden;
+      display: flex; flex-direction: column;
+      background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+      border-right: 0;
+    }
+    .tree-head {
+      flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+      padding: 10px 10px 6px 12px;
+    }
+    .tree-head .tree-title {
+      flex: 1; min-width: 0; font: 700 var(--dw-font-size) var(--sans); color: var(--fg);
+      letter-spacing: -.01em;
+    }
+    .tree-head .tree-add {
+      width: 26px; height: 26px; border-radius: 8px;
+      display: inline-grid; place-items: center; flex-shrink: 0;
+      color: var(--muted); border: 1px solid var(--line); background: var(--bg);
+    }
+    .tree-head .tree-add svg { width: 13px; height: 13px; }
+    .tree-head .tree-add:hover {
+      color: var(--accent-ink); background: var(--accent); border-color: var(--accent);
+    }
+    .tree-filter {
+      flex-shrink: 0; position: relative; margin: 0 10px 8px;
+    }
+    .tree-filter input {
+      width: 100%; height: 30px; padding: 0 10px 0 30px; border-radius: 8px;
+      border: 1px solid transparent; background: var(--fill); outline: none;
+      font: 500 var(--dw-font-size) var(--sans); color: var(--fg);
+      transition: border-color var(--t), box-shadow var(--t), background var(--t);
+    }
+    .tree-filter input::placeholder { color: var(--faint); }
+    .tree-filter input:hover { background: color-mix(in srgb, var(--fill) 70%, var(--hover)); }
+    .tree-filter input:focus {
+      border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+      background: var(--bg);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    input[type="search"] { -webkit-appearance: none; appearance: none; }
+    input[type="search"]::-webkit-search-decoration,
+    input[type="search"]::-webkit-search-results-button,
+    input[type="search"]::-webkit-search-results-decoration { display: none; }
+    input[type="search"]::-webkit-search-cancel-button {
+      -webkit-appearance: none; appearance: none;
+      width: 12px; height: 12px; margin-right: 2px; cursor: pointer;
+      background: currentColor; opacity: .35; border-radius: 50%;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center / 10px 10px no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center / 10px 10px no-repeat;
+    }
+    input[type="search"]::-webkit-search-cancel-button:hover { opacity: .7; }
+    .tree-filter::before {
+      content: ""; position: absolute; left: 10px; top: 50%; width: 12px; height: 12px;
+      transform: translateY(-50%); opacity: .34; color: var(--muted); background: currentColor; pointer-events: none;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .tree-scroll {
+      flex: 1; min-height: 0; overflow: auto;
+      padding: 0 6px 14px;
+    }
+    .tree details.sec { margin: 0 0 2px; }
+    .tree summary {
+      list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px;
+      padding: 6px 8px; border-radius: 7px; font: 650 var(--dw-text-xs) var(--sans);
+      color: var(--muted); user-select: none;
+      transition: background var(--t), color var(--t);
+    }
+    .tree summary::-webkit-details-marker { display: none; }
+    .tree summary:hover { background: var(--hover); color: var(--fg); }
+    .tree summary .sum-lab { flex: 1; min-width: 0; }
+    .tree summary .caret {
+      width: 14px; height: 14px; flex-shrink: 0; opacity: .55;
+      background: currentColor;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / 12px 12px no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / 12px 12px no-repeat;
+      transition: transform .16s var(--ease);
+    }
+    .tree details[open] > summary .caret { transform: rotate(90deg); }
+    .tree summary .cnt {
+      min-width: 18px; height: 17px; padding: 0 5px; border-radius: 6px;
+      background: transparent; font: 600 var(--dw-text-xs) var(--sans); color: var(--faint);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    /* Section children inset; each nest level steps further right (visible hierarchy) */
+    .t-list { padding: 0 0 4px 10px; }
+    .t-nest {
+      margin: 0;
+      padding-left: 14px;
+      border-left: 0;
+    }
+    .t-nest .t-nest { padding-left: 14px; }
+    .t-folder { margin: 0; }
+    .t-folder > summary.t-folder-lab {
+      list-style: none; cursor: pointer; display: flex; align-items: center; gap: 4px;
+      padding: 2px 6px 2px 2px; border-radius: 6px; font: 600 var(--dw-font-size) var(--sans);
+      color: var(--muted); user-select: none;
+      transition: background var(--t), color var(--t);
+    }
+    .t-folder > summary.t-folder-lab::-webkit-details-marker { display: none; }
+    .t-folder > summary.t-folder-lab:hover { background: var(--hover); color: var(--fg); }
+    .t-folder > summary.t-folder-lab .sum-lab { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .t-folder > summary.t-folder-lab .folder-ico { display: none; }
+    .t-folder > summary.t-folder-lab .caret {
+      width: 12px; height: 12px; opacity: .5;
+    }
+    .t-item {
+      width: 100%; text-align: left; display: flex; align-items: center; gap: 5px;
+      padding: 3px 6px 3px 2px; border-radius: 6px;
+      font: 500 var(--dw-font-size) var(--sans); color: var(--fg);
+      transition: background var(--t), color var(--t);
+    }
+    .t-item.remote .ico { display: none; }
+    .t-item:hover { background: var(--hover); }
+    /* Soft select — no left accent bar */
+    .t-item.sel:not(.cur) {
+      background: color-mix(in srgb, var(--fg) 6%, transparent);
+      box-shadow: none;
+    }
+    .t-item.cur {
+      color: var(--fg); background: color-mix(in srgb, var(--accent) 9%, transparent);
+      font-weight: 600; box-shadow: none;
+    }
+    .t-item.sel.cur {
+      background: color-mix(in srgb, var(--accent) 11%, transparent);
+    }
+    .t-item .ico {
+      width: 12px; height: 12px; flex-shrink: 0; opacity: .42; color: var(--muted);
+      background: currentColor;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3v12'/%3E%3Ccircle cx='18' cy='6' r='3'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Cpath d='M18 9a9 9 0 0 1-9 9'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3v12'/%3E%3Ccircle cx='18' cy='6' r='3'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Cpath d='M18 9a9 9 0 0 1-9 9'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .t-item.cur .ico { opacity: 1; color: var(--accent-hi); }
+    .t-item.stash .ico {
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8l-9-5-9 5v8l9 5 9-5z'/%3E%3Cpath d='M3.5 9.5L12 14l8.5-4.5M12 22V14'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8l-9-5-9 5v8l9 5 9-5z'/%3E%3Cpath d='M3.5 9.5L12 14l8.5-4.5M12 22V14'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .t-item.work .ico {
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/%3E%3Cpath d='M14 2v6h6M16 13H8M16 17H8M10 9H8'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/%3E%3Cpath d='M14 2v6h6M16 13H8M16 17H8M10 9H8'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .t-item.whist .ico {
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .t-item.work.dirty .br { color: var(--warn); }
+    .t-item .chg {
+      flex-shrink: 0; font: 650 var(--dw-text-2xs) var(--mono); color: var(--warn);
+      padding: 1px 6px; border-radius: 999px;
+      background: color-mix(in srgb, var(--warn) 14%, transparent);
+    }
+    .hist-toolbar .hist-ref {
+      flex-shrink: 0; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font: 650 var(--dw-text-xs) var(--mono); color: var(--accent-hi); padding: 0 4px;
+    }
+    .t-item .br {
+      flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .t-item .mark {
+      width: 14px; height: 14px; flex-shrink: 0; color: var(--accent-hi); background: currentColor;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 13l4 4L19 7'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 13l4 4L19 7'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    .t-item .track {
+      flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;
+      font: 650 var(--dw-text-2xs) var(--mono); color: var(--muted); opacity: .9;
+    }
+    .t-item .track .a { color: var(--ok); }
+    .t-item .track .b { color: var(--warn); }
+    .t-item .track .gone { color: var(--bad); }
+    .t-empty { padding: 6px 10px 10px 30px; font-size: var(--dw-text-xs); color: var(--faint); line-height: 1.45; }
+    .tree-hint {
+      margin: 28px 16px; padding: 0; font-size: var(--dw-font-size); color: var(--faint);
+      line-height: 1.6; text-align: center;
+    }
+
+    .files {
+      min-height: 0; display: flex; flex-direction: column;
+      background: var(--bg); border-right: 0;
+    }
+    .files-bar {
+      flex-shrink: 0; display: flex; align-items: center;
+      padding: 10px 10px 8px;
+      background: var(--bg);
+    }
+    .files-search {
+      position: relative; flex: 1; min-width: 0;
+    }
+    .files-search::before {
+      content: ""; position: absolute; left: 11px; top: 50%; width: 13px; height: 13px;
+      transform: translateY(-50%);
+      background: currentColor; opacity: .32; color: var(--muted);
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+      pointer-events: none;
+    }
+    .files-bar input {
+      width: 100%; height: 30px; padding: 0 12px 0 32px; border-radius: 8px;
+      border: 1px solid transparent; background: var(--fill); outline: none;
+      transition: border-color var(--t), box-shadow var(--t), background var(--t);
+    }
+    .files-bar input:hover { background: color-mix(in srgb, var(--fill) 70%, var(--hover)); }
+    .files-bar input:focus {
+      background: var(--bg);
+      border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .files-bar input::placeholder { color: var(--faint); }
+    .changes {
+      flex: 1; min-height: 0; display: flex; flex-direction: column;
+    }
+    .changes-split {
+      flex: 1; min-height: 0; display: flex; flex-direction: column;
+    }
+    .pane {
+      display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+    }
+    .pane.conflict {
+      flex: 0 0 auto; max-height: 28%;
+      border-bottom: 1px solid color-mix(in srgb, var(--bad) 28%, var(--line));
+      background: color-mix(in srgb, var(--bad) 4%, transparent);
+    }
+    .pane.conflict .sec-h .label { color: var(--bad); }
+    /* Fixed split: ratio only changes via drag, never by file count */
+    .pane.staged {
+      flex: 0 0 var(--files-split, 42%);
+      min-height: 72px;
+    }
+    .pane.unstaged {
+      flex: 1 1 0;
+      min-height: 72px;
+    }
+    .split-files {
+      flex: 0 0 5px; cursor: row-resize; position: relative; z-index: 2;
+      background: transparent;
+    }
+    .split-files::after {
+      content: ""; position: absolute; left: 8%; right: 8%; top: 50%; height: 1px;
+      transform: translateY(-50%); background: var(--line); border-radius: 99px;
+      transition: background var(--t), height var(--t), left var(--t), right var(--t);
+    }
+    .split-files:hover::after, .split-files.dragging::after {
+      height: 3px; left: 4%; right: 4%;
+      background: color-mix(in srgb, var(--fg) 28%, var(--line));
+    }
+    .btn.is-busy { opacity: .72; pointer-events: none; }
+    .btn.is-busy::after {
+      content: ""; width: 10px; height: 10px; margin-left: 6px; border-radius: 50%;
+      border: 1.5px solid currentColor; border-right-color: transparent;
+      display: inline-block; animation: spin .7s linear infinite; vertical-align: -1px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .sec-h {
+      flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+      padding: 6px 10px; min-height: 30px;
+      font: 600 var(--dw-font-size) var(--sans); color: var(--fg);
+      background: color-mix(in srgb, var(--surface) 70%, var(--bg));
+      border-bottom: 1px solid var(--line);
+    }
+    .sec-h .label { font-weight: 600; color: var(--fg); letter-spacing: 0; text-transform: none; }
+    .sec-h .cnt {
+      font: 500 var(--dw-text-xs) var(--sans); color: var(--muted); font-weight: 500;
+    }
+    .sec-h .acts { margin-left: auto; display: flex; gap: 2px; align-items: center; }
+    .sec-h .acts .btn {
+      height: 22px; padding: 0 8px; border-radius: 4px; font: 500 var(--dw-text-xs) var(--sans);
+      border: 0; background: transparent; color: var(--muted);
+    }
+    .sec-h .acts .btn:hover:not(:disabled) {
+      color: var(--fg); background: var(--hover);
+    }
+    .sec-h .acts .btn:disabled { opacity: .32; }
+    .sec-h .acts .btn.btn-danger {
+      color: var(--muted); background: transparent; border: 0;
+    }
+    .sec-h .acts .btn.btn-danger:hover:not(:disabled) {
+      color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, transparent);
+    }
+    .file-scroll {
+      flex: 1; min-height: 0; overflow: auto; padding: 2px 0 4px;
+    }
+    .file {
+      display: grid; grid-template-columns: 22px minmax(0, 1fr) 28px; gap: 6px; align-items: center;
+      width: 100%; text-align: left; padding: 4px 8px 4px 10px; margin: 0;
+      border-radius: 0; border: 0; background: transparent;
+      transition: background var(--t);
+    }
+    .file:hover { background: var(--hover); }
+    .file.sel { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+    .file.mark { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+    .file.sel.mark { background: color-mix(in srgb, var(--fg) 12%, transparent); }
+    .code {
+      width: 18px; height: 16px; border-radius: 3px; display: grid; place-items: center;
+      font: 700 var(--dw-text-2xs) var(--mono); letter-spacing: 0;
+      background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn);
+    }
+    .code.A { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+    .code.M, .code.R { color: color-mix(in srgb, #e67e22 90%, var(--warn)); background: color-mix(in srgb, #e67e22 14%, transparent); }
+    .code.D { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+    .code.U { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+    .code.? { color: var(--muted); background: var(--fill); }
+    .fpath {
+      min-width: 0; overflow: hidden;
+      font: 400 var(--dw-font-size) var(--mono); color: var(--fg);
+      white-space: nowrap; text-overflow: ellipsis;
+    }
+    .f-act { opacity: 0; transition: opacity var(--t); display: flex; justify-content: flex-end; }
+    .file:hover .f-act, .file.sel .f-act, .file.mark .f-act { opacity: 1; }
+    .f-act .btn {
+      width: 22px; height: 22px; padding: 0; border-radius: 4px; font: 600 14px/1 var(--sans);
+      border: 1px solid var(--line); background: transparent; color: var(--muted);
+      display: inline-grid; place-items: center;
+    }
+    .f-act .btn:hover {
+      color: var(--fg); background: var(--hover); border-color: color-mix(in srgb, var(--fg) 16%, var(--line));
+    }
+    .empty-soft {
+      display: grid; place-items: center; min-height: 48px; padding: 12px;
+      font: 500 var(--dw-font-size) var(--sans); color: var(--faint); text-align: center;
+    }
+
+    .composer {
+      flex-shrink: 0; display: flex; flex-direction: column; gap: 8px;
+      padding: 10px 14px 11px; border-top: 1px solid var(--line);
+      background: var(--bg);
+    }
+
+    .composer-top {
+      display: flex; align-items: center; gap: 10px; min-width: 0;
+    }
+    .conv {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; flex: 1;
+    }
+    .conv button {
+      height: 22px; padding: 0 7px; border-radius: 4px; border: 0;
+      font: 500 var(--dw-text-xs) var(--mono); color: var(--faint); background: transparent;
+    }
+    .conv button:hover { color: var(--fg); background: var(--hover); }
+    .conv button.on {
+      color: var(--fg); background: var(--fill);
+    }
+    .composer-top .chip {
+      height: 20px; padding: 0 8px; font-size: var(--dw-text-2xs); flex-shrink: 0;
+      background: transparent;
+    }
+    .composer-top .chip.idle { color: var(--faint); border-color: var(--line); }
+    .composer-top .chip.ready {
+      color: var(--fg);
+      border-color: color-mix(in srgb, var(--fg) 18%, var(--line));
+    }
+
+    .composer-body {
+      display: flex; align-items: stretch; gap: 8px; min-width: 0;
+    }
+    .composer textarea {
+      flex: 1; min-width: 0; min-height: 64px; max-height: 140px; resize: vertical;
+      padding: 9px 11px; border-radius: 6px; border: 1px solid var(--line);
+      background: var(--fill); outline: none;
+      font: 400 13px/1.45 var(--sans); overflow: auto;
+      transition: border-color var(--t), background var(--t), min-height var(--t), height var(--t), padding var(--t);
+    }
+    .composer textarea:focus {
+      border-color: color-mix(in srgb, var(--fg) 20%, var(--line));
+      background: var(--bg);
+      box-shadow: none;
+    }
+    .btn-commit {
+      flex-shrink: 0; align-self: stretch; min-width: 76px; padding: 0 16px;
+      border-radius: 6px; border: 1px solid color-mix(in srgb, var(--fg) 14%, var(--line));
+      background: color-mix(in srgb, var(--fg) 8%, transparent);
+      color: var(--fg); font: 600 var(--dw-font-size) var(--sans);
+      box-shadow: none;
+    }
+    .btn-commit:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--fg) 14%, transparent);
+      border-color: color-mix(in srgb, var(--fg) 24%, var(--line));
+    }
+    .btn-commit:disabled { opacity: .4; }
+
+    .composer-foot {
+      display: flex; align-items: center; gap: 12px; min-width: 0;
+      flex-wrap: wrap;
+    }
+    .composer-opts {
+      display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0;
+    }
+    .push-now {
+      display: inline-flex; align-items: center; gap: 6px;
+      font: 500 var(--dw-text-xs) var(--sans); color: var(--muted);
+      user-select: none; cursor: pointer;
+    }
+    .push-now:hover { color: var(--fg); }
+    .push-now input { width: 13px; height: 13px; margin: 0; accent-color: var(--muted); }
+    .composer-tools {
+      display: flex; align-items: center; gap: 2px; flex-shrink: 0; margin-left: auto;
+    }
+    .composer-tools .btn-link {
+      height: 24px; padding: 0 8px; border-radius: 4px; border: 0;
+      font: 500 var(--dw-text-xs) var(--sans); color: var(--muted); background: transparent;
+    }
+    .composer-tools .btn-link:hover { color: var(--fg); background: var(--hover); }
+    .composer-tools .btn-link.danger { color: var(--muted); }
+    .composer-tools .btn-link.danger:hover {
+      color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, transparent);
+    }
+    .composer-tools .hint {
+      margin-left: 6px; font: 500 var(--dw-text-xs) var(--mono); color: var(--faint);
+    }
+
+    .btn-split {
+      display: inline-flex; align-items: stretch; border-radius: 6px; overflow: hidden;
+      border: 1px solid var(--line); background: transparent;
+    }
+    .btn-split > .btn {
+      border: 0; border-radius: 0; height: 26px; background: transparent;
+    }
+    .btn-split > .btn:hover:not(:disabled) { background: var(--hover); }
+    .btn-split > .btn + .btn { border-left: 1px solid var(--line); padding: 0 7px; min-width: 24px; color: var(--muted); }
+    .btn-split.push-split {
+      border-color: var(--line);
+      background: transparent;
+    }
+    .btn-split.push-split > .btn-primary {
+      background: transparent; color: var(--fg); border-color: transparent;
+      box-shadow: none; font-weight: 550;
+    }
+    .btn-split.push-split > .btn-primary:hover:not(:disabled) {
+      background: var(--hover); filter: none;
+    }
+    .btn-split.push-split > .btn-primary + .btn-primary {
+      border-left-color: var(--line);
+      color: var(--muted); opacity: 1;
+    }
+
+    .diff-pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
+    .diff-h {
+      display: flex; align-items: center; gap: 8px; padding: 8px 14px; flex-shrink: 0;
+      border-bottom: 1px solid var(--line); min-height: 40px;
+      background: color-mix(in srgb, var(--surface) 30%, var(--bg));
+    }
+    .diff-h .lab {
+      font: 650 var(--dw-text-2xs) var(--sans); letter-spacing: .05em; text-transform: uppercase;
+      color: var(--muted); flex-shrink: 0; padding: 3px 8px; border-radius: 999px; background: var(--fill);
+    }
+    .diff-h .lab.staged { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+    .diff-h .lab.conflict { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+    .file.conflict .code { color: var(--bad); }
+    .diff-h .path {
+      font: 500 var(--dw-font-size) var(--mono); color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .diff-h .stats { font: 650 var(--dw-text-xs) var(--mono); flex-shrink: 0; }
+    .diff-h .stats .a { color: var(--ok); }
+    .diff-h .stats .d { color: var(--bad); margin-left: 7px; }
+    .diff-h .spacer { flex: 1; }
+    .diff-h .acts { display: flex; gap: 5px; flex-shrink: 0; }
+    .diff-body { flex: 1; overflow: auto; min-height: 0; }
+    .diff-body.is-fading > * { animation: rise .2s var(--ease); }
+    .diff-empty {
+      height: 100%; min-height: 200px; display: grid; place-items: center;
+      color: var(--faint); font: 500 var(--dw-font-size) var(--sans); text-align: center; padding: 28px; line-height: 1.6;
+    }
+    .diff-empty kbd {
+      font: 500 var(--dw-text-xs) var(--mono); padding: 2px 6px; border-radius: 5px;
+      border: 1px solid var(--line); background: var(--fill); color: var(--muted);
+    }
+    .diff {
+      margin: 0; padding: 8px 0 20px; white-space: pre;
+      font: 400 12.5px/1.62 var(--mono); color: color-mix(in srgb, var(--muted) 92%, var(--fg));
+    }
+    .diff .ln { display: block; padding: 0 16px 0 14px; border-left: 3px solid transparent; }
+    .diff .ln.add {
+      color: color-mix(in srgb, var(--ok) 82%, #fff);
+      background: color-mix(in srgb, var(--ok) 8%, transparent);
+      border-left-color: color-mix(in srgb, var(--ok) 42%, transparent);
+    }
+    .diff .ln.del {
+      color: color-mix(in srgb, var(--bad) 82%, #fff);
+      background: color-mix(in srgb, var(--bad) 8%, transparent);
+      border-left-color: color-mix(in srgb, var(--bad) 42%, transparent);
+    }
+    .diff .ln.hunk {
+      color: var(--accent-hi); background: var(--accent-soft);
+      border-left-color: color-mix(in srgb, var(--accent) 42%, transparent); font-weight: 600;
+    }
+    .diff .ln.meta { color: var(--faint); }
+    .hunk-bar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 6px 12px; margin: 8px 10px 0; border-radius: 8px;
+      background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+      font: 600 var(--dw-text-xs) var(--mono); color: var(--accent-hi);
+    }
+    .hunk-bar .hunk-meta { flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hunk-bar .acts { display: flex; gap: 5px; margin-left: auto; }
+
+    .hist {
+      min-height: 0; display: grid; overflow: hidden;
+      grid-template-rows: var(--hist-list, 42%) 6px minmax(0, 1fr);
+      animation: rise .18s var(--ease);
+    }
+    .hist-list { min-height: 0; overflow: auto; background: var(--bg); }
+    .hist-toolbar {
+      display: flex; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line);
+      position: sticky; top: 0; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); z-index: 1;
+    }
+    .hist-toolbar input {
+      flex: 1; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--surface); outline: none;
+    }
+    .hist-cols {
+      display: grid; grid-template-columns: 22px minmax(0, 1fr) 132px 110px 78px;
+      gap: 8px; padding: 6px 12px; font: 650 var(--dw-text-xs) var(--sans); color: var(--faint);
+      border-bottom: 1px solid var(--line); letter-spacing: .02em; position: sticky; top: 46px; z-index: 1;
+      background: var(--bg);
+    }
+    .hist-row {
+      width: 100%; text-align: left; padding: 0 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      display: grid; grid-template-columns: 22px minmax(0, 1fr) 132px 110px 78px; gap: 8px; align-items: center;
+      border-left: 2px solid transparent; min-height: 34px;
+      transition: background var(--t), border-color var(--t);
+    }
+    .hist-graph {
+      position: relative; height: 100%; min-height: 34px; display: grid; place-items: center;
+    }
+    .hist-graph .rail {
+      position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%);
+      background: color-mix(in srgb, var(--accent) 28%, var(--line));
+    }
+    .hist-graph.is-first .rail { top: 50%; }
+    .hist-graph.is-last .rail { bottom: 50%; }
+    .hist-graph .rail-fork {
+      display: none; position: absolute; left: 50%; top: 50%; width: 7px; height: 2px;
+      background: color-mix(in srgb, var(--ok) 55%, var(--line));
+    }
+    .hist-graph.is-merge .rail-fork { display: block; }
+    .hist-graph .node {
+      position: relative; z-index: 1; width: 9px; height: 9px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 0 2px var(--bg);
+    }
+    .hist-graph.is-merge .node {
+      width: 10px; height: 10px; border-radius: 3px; transform: rotate(45deg);
+      background: color-mix(in srgb, var(--ok) 70%, var(--accent));
+    }
+    .hist-graph.is-head .node {
+      box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent);
+      background: var(--accent-hi);
+    }
+    .hist-row.on .hist-graph .node {
+      box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 3px var(--accent);
+    }
+    .hist-row.is-head .hist-sub { font-weight: 650; }
+    .loading {
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      min-height: 120px; padding: 24px; color: var(--faint); font: 500 var(--dw-font-size) var(--sans);
+    }
+    .loading .spin {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 1.5px solid var(--line); border-top-color: var(--accent);
+      animation: spin .7s linear infinite; flex-shrink: 0;
+    }
+    .hist-row:hover { background: var(--hover); }
+    .hist-row.on { background: var(--accent-soft); border-left-color: var(--accent); }
+    .hist-row:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+      outline-offset: -2px;
+    }
+    .hist-sub { font: 500 var(--dw-font-size) var(--sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hist-date, .hist-author, .hist-hash {
+      font: 400 var(--dw-text-xs) var(--mono); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .hist-hash { color: var(--accent-hi); font-weight: 650; }
+    .split-hist {
+      cursor: row-resize; background: transparent; position: relative; z-index: 2;
+    }
+    .split-hist::after {
+      content: ""; position: absolute; left: 12%; right: 12%; top: 50%; height: 1px;
+      transform: translateY(-50%); background: var(--line); border-radius: 99px;
+    }
+    .split-hist:hover::after, .split-hist.dragging::after {
+      height: 3px; left: 8%; right: 8%;
+      background: color-mix(in srgb, var(--accent) 65%, var(--line));
+    }
+    .hist-detail {
+      min-height: 0; display: grid; overflow: hidden;
+      grid-template-columns: minmax(180px, 26%) 6px 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
+      border-top: 0; background: var(--surface);
+    }
+    .hist-commit {
+      grid-column: 1 / -1; padding: 10px 14px 8px; border-bottom: 1px solid var(--line);
+      background: var(--bg);
+    }
+    .hist-commit .hc-sub { margin: 0 0 6px; font: 650 var(--dw-font-size) var(--sans); color: var(--fg); }
+    .hist-commit .hc-meta {
+      display: flex; flex-wrap: wrap; gap: 8px 14px; font: 400 var(--dw-text-xs) var(--mono); color: var(--faint);
+    }
+    .hist-commit .hc-body {
+      margin: 8px 0 0; white-space: pre-wrap; font: 400 var(--dw-font-size) var(--sans); color: var(--muted); line-height: 1.5;
+      max-height: 72px; overflow: auto; padding-right: 4px; scrollbar-gutter: stable;
+    }
+    .hist-files {
+      grid-column: 1; grid-row: 2; min-height: 0; overflow: auto; border-right: 0;
+      padding: 6px;
+    }
+    .hist-files .hf-h {
+      padding: 4px 8px 6px; font: 650 var(--dw-text-xs) var(--sans); color: var(--faint); letter-spacing: .03em;
+    }
+    .hist-file {
+      width: 100%; text-align: left; display: flex; align-items: center; gap: 7px;
+      padding: 6px 8px; border-radius: 7px; font: 500 var(--dw-font-size) var(--sans); color: var(--fg);
+    }
+    .hist-file:hover { background: var(--hover); }
+    .hist-file.on { background: var(--accent-soft); color: var(--accent-hi); }
+    .hist-file .st {
+      flex-shrink: 0; width: 14px; text-align: center; font: 700 var(--dw-text-xs) var(--mono);
+    }
+    .hist-file .st.A { color: var(--ok); }
+    .hist-file .st.M { color: var(--accent-hi); }
+    .hist-file .st.D { color: var(--bad); }
+    .hist-file .st.R, .hist-file .st.C { color: var(--warn); }
+    .hist-file .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hist-diff {
+      grid-column: 3; grid-row: 2; min-height: 0; overflow: auto;
+      background: var(--bg); border-left: 1px solid var(--line);
+    }
+    .hist-diff .diff-body { min-height: 100%; }
+    .ws-sec { margin-bottom: 6px; }
+    .ws-lab {
+      padding: 4px 10px 2px; font: 650 var(--dw-text-2xs) var(--sans); color: var(--faint);
+      letter-spacing: .04em; text-transform: uppercase;
+    }
+
+    .empty { color: var(--faint); padding: 18px 12px; font: 500 var(--dw-font-size) var(--sans); text-align: center; }
+    .hero {
+      grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; gap: 10px; padding: 48px; background:
+        radial-gradient(720px 280px at 50% 28%, var(--accent-soft), transparent 70%),
+        var(--bg);
+      animation: rise .28s var(--ease);
+    }
+    .hero-ico {
+      width: 56px; height: 56px; border-radius: 16px; margin-bottom: 4px;
+      background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+      display: grid; place-items: center; color: var(--accent-hi);
+      box-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+    .hero h2 { margin: 0; font-size: var(--dw-text-xl); font-weight: 700; letter-spacing: -.025em; }
+    .hero p { margin: 0; max-width: 400px; color: var(--faint); font-size: var(--dw-font-size); line-height: 1.6; }
+    .hero .row { display: flex; gap: 8px; margin-top: 10px; }
+    .hero .row .btn { height: 36px; padding: 0 18px; font-size: var(--dw-font-size, calc(13.5px * var(--dw-ui-text-scale, 1))); border-radius: 10px; }
+    .hero .keys { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; max-width: 460px; }
+    .hero .keys span {
+      font: 500 var(--dw-text-xs) var(--sans); color: var(--muted); padding: 5px 9px; border-radius: 8px;
+      border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 80%, transparent);
+    }
+    .hero .keys kbd { font: 650 var(--dw-text-xs) var(--mono); color: var(--fg); }
+
+    .mask {
+      position: fixed; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center;
+      padding: 24px; background: color-mix(in srgb, #000 42%, transparent); backdrop-filter: blur(3px);
+    }
+    .mask.show { display: flex; }
+    .modal {
+      width: min(440px, 100%); border-radius: 14px; border: 1px solid var(--line);
+      background: var(--panel); box-shadow: var(--shadow); padding: 20px;
+      animation: pop .18s var(--ease);
+    }
+    .modal.modal-sm { width: min(420px, 100%); }
+    .modal.modal-err { width: min(480px, 100%); }
+    .modal h3 { margin: 0 0 4px; font-size: var(--dw-text-lg); font-weight: 700; letter-spacing: -.01em; }
+    .modal .hint { margin: 0 0 14px; color: var(--faint); font-size: var(--dw-font-size); line-height: 1.5; }
+    .modal.danger h3 { color: var(--bad); }
+    .modal .btn-danger-solid {
+      background: var(--bad); color: #fff; border-color: transparent;
+      box-shadow: 0 6px 16px color-mix(in srgb, var(--bad) 22%, transparent);
+    }
+    .modal .btn-danger-solid:hover:not(:disabled) { filter: brightness(1.06); }
+    .add-tabs {
+      display: flex; gap: 4px; margin: 0 0 14px; padding: 3px;
+      border-radius: 10px; background: color-mix(in srgb, var(--bg) 70%, var(--line));
+      border: 1px solid var(--line);
+    }
+    .add-tabs button {
+      flex: 1; height: 28px; border-radius: 8px; font: 650 var(--dw-font-size) var(--sans); color: var(--muted);
+    }
+    .add-tabs button.on {
+      background: var(--surface); color: var(--fg);
+      box-shadow: 0 1px 2px color-mix(in srgb, #000 8%, transparent);
+    }
+    .add-pane[hidden] { display: none !important; }
+    .field { margin-bottom: 11px; }
+    .field label { display: block; font: 600 var(--dw-text-xs) var(--sans); color: var(--muted); margin-bottom: 5px; }
+    .field input {
+      width: 100%; height: 34px; padding: 0 11px; border-radius: 9px; border: 1px solid var(--line);
+      background: var(--bg); outline: none; transition: border-color var(--t), box-shadow var(--t);
+    }
+    .field input:focus {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .modal-foot { display: flex; gap: 7px; justify-content: flex-end; margin-top: 4px; }
+    .toast {
+      position: fixed; right: 16px; bottom: 16px; z-index: 90; max-width: 340px;
+      padding: 11px 14px; border-radius: 12px; border: 1px solid var(--line);
+      background: var(--panel); box-shadow: var(--shadow); font: 500 var(--dw-font-size) var(--sans);
+      opacity: 0; transform: translateY(10px) scale(.98); transition: .22s var(--ease); pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: none; }
+
+    /* SourceTree-like remote progress — top banner under toolbar */
+    .prog {
+      flex-shrink: 0; display: none; flex-direction: column; gap: 5px;
+      padding: 8px 14px 9px;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--surface) 80%, var(--bg));
+      z-index: 30;
+    }
+    .prog.show { display: flex; }
+    .prog-top {
+      display: flex; align-items: baseline; gap: 10px; min-width: 0;
+    }
+    .prog-title {
+      flex: 1; min-width: 0; font: 650 var(--dw-font-size) var(--sans); color: var(--fg);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .prog-meta {
+      flex-shrink: 0; font: 550 var(--dw-text-xs) var(--mono); color: var(--muted);
+    }
+    .prog-detail {
+      font: 400 var(--dw-text-xs) var(--mono); color: var(--faint);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      min-height: 0;
+    }
+    .prog-detail:empty { display: none; }
+    .prog-track {
+      height: 3px; border-radius: 99px; background: var(--fill); overflow: hidden;
+    }
+    .prog-bar {
+      height: 100%; width: 30%; border-radius: 99px;
+      background: color-mix(in srgb, var(--fg) 50%, transparent);
+      transition: width .18s linear;
+    }
+    .prog.indeterminate .prog-bar {
+      width: 28%;
+      animation: prog-slide 1.05s var(--ease) infinite;
+    }
+    .prog.determinate .prog-bar { animation: none; }
+    @keyframes prog-slide {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(400%); }
+    }
+    .modal .err-detail {
+      margin: 0 0 14px; max-height: min(220px, 40vh); overflow: auto;
+      padding: 10px 11px; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--fill); color: var(--fg);
+      font: 450 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word;
+    }
+
+    .ctx {
+      position: fixed; z-index: 100; min-width: 200px; max-width: 280px; padding: 6px;
+      border-radius: 12px; border: 1px solid var(--line); background: var(--panel);
+      box-shadow: var(--shadow); display: none; animation: pop .14s var(--ease);
+    }
+    .ctx.show { display: block; }
+    .ctx button {
+      width: 100%; text-align: left; padding: 8px 11px; border-radius: 8px;
+      font: 500 var(--dw-font-size) var(--sans); color: var(--fg);
+    }
+    .ctx button:hover { background: var(--hover); }
+    .ctx button.danger { color: var(--bad); }
+    .ctx button.danger:hover { background: color-mix(in srgb, var(--bad) 10%, transparent); }
+    .ctx button:disabled { opacity: .35; }
+    .ctx .sep { height: 1px; margin: 4px 7px; background: var(--line); }
+    .ctx .cap {
+      padding: 5px 11px 3px; font: 650 var(--dw-text-2xs) var(--sans); letter-spacing: .07em;
+      text-transform: uppercase; color: var(--faint);
+    }
+    .help-hint {
+      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(8px);
+      z-index: 70; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line);
+      background: var(--panel); box-shadow: var(--shadow); font: 500 var(--dw-text-xs) var(--sans); color: var(--muted);
+      opacity: 0; pointer-events: none; transition: .22s var(--ease);
+    }
+    .help-hint.show { opacity: 1; transform: translateX(-50%); }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: none; }
+    }
+    @keyframes pop {
+      from { opacity: 0; transform: translateY(-4px) scale(.98); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @media (max-width: 1100px) {
+      .body.files-mode { grid-template-columns: var(--tree) 6px minmax(200px, 32%) 6px 1fr; }
+      .composer-foot { gap: 8px; }
+      .composer-tools { margin-left: 0; width: 100%; justify-content: flex-end; }
+    }
+
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="top-id">
+      <div class="picker" id="repoPicker">
+        <button type="button" class="repo-btn" id="repoTrigger" title="切换仓库" aria-haspopup="listbox" aria-expanded="false">
+          <span class="repo-ico" id="repoIco" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16V8H4z"/><path d="M8 8V4h8v4"/></svg>
+          </span>
+          <span class="repo-text">
+            <span class="repo-name" id="repoLab">选择仓库</span>
+            <span class="repo-sub" id="repoSub" hidden></span>
+          </span>
+          <i class="repo-caret" aria-hidden="true"></i>
+        </button>
+        <div class="pick-panel" id="repoPanel" role="listbox">
+          <div class="pick-head">仓库</div>
+          <input class="pick-search" id="repoQ" type="search" placeholder="筛选仓库…" autocomplete="off" />
+          <div class="pick-list" id="repoList"></div>
+          <div class="pick-foot">
+            <button type="button" class="btn btn-primary" id="btnOpenAdd">添加仓库</button>
+            <button type="button" class="btn btn-quiet" id="btnDemo">示例</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="top-meta" id="topMeta"></div>
+    <div class="spacer"></div>
+    <div class="actions">
+      <button type="button" class="btn-icon" id="btnRefresh" title="刷新 (R)" disabled>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>
+      </button>
+      <button type="button" class="btn btn-quiet" id="btnFetch" disabled title="Fetch">抓取</button>
+      <div class="btn-split" id="pullSplit">
+        <button type="button" class="btn btn-quiet" id="btnPull" disabled title="Pull">拉取</button>
+        <button type="button" class="btn btn-quiet" id="btnPullMore" disabled title="拉取选项">▾</button>
+      </div>
+      <div class="btn-split push-split" id="pushSplit">
+        <button type="button" class="btn btn-primary" id="btnPush" disabled title="Push">推送</button>
+        <button type="button" class="btn btn-primary" id="btnPushMore" disabled title="推送目标">▾</button>
+      </div>
+      <button type="button" class="safe" id="safeBtn">安全模式</button>
+    </div>
+  </header>
+  <div class="prog" id="prog" aria-live="polite" aria-busy="false">
+    <div class="prog-top">
+      <span class="prog-title" id="progTitle">进行中…</span>
+      <span class="prog-meta" id="progMeta"></span>
+    </div>
+    <div class="prog-detail" id="progDetail"></div>
+    <div class="prog-track"><div class="prog-bar" id="progBar"></div></div>
+  </div>
+
+  <div class="body" id="body"></div>
+</div>
+
+<div class="mask" id="addMask">
+  <div class="modal">
+    <h3>添加仓库</h3>
+    <p class="hint" id="addHint">打开本机已有仓库，或克隆 / 初始化新仓库。</p>
+    <div class="add-tabs" id="addTabs" role="tablist">
+      <button type="button" class="on" data-add-mode="path">本地路径</button>
+      <button type="button" data-add-mode="clone">克隆</button>
+      <button type="button" data-add-mode="init">初始化</button>
+    </div>
+    <div class="add-pane" data-add-pane="path">
+      <div class="field"><label>路径</label><input id="addPath" placeholder="E:\work\my-repo" /></div>
+      <div class="field"><label>名称（可选）</label><input id="addName" placeholder="文件夹名" /></div>
+    </div>
+    <div class="add-pane" data-add-pane="clone" hidden>
+      <div class="field"><label>仓库 URL</label><input id="cloneUrl" placeholder="https://github.com/org/repo.git" /></div>
+      <div class="field"><label>放到文件夹</label><input id="clonePath" placeholder="E:\work" /></div>
+      <div class="field"><label>目录名（可选）</label><input id="cloneName" placeholder="默认从 URL 推断" /></div>
+    </div>
+    <div class="add-pane" data-add-pane="init" hidden>
+      <div class="field"><label>新仓库路径</label><input id="initPath" placeholder="E:\work\new-repo" /></div>
+      <div class="field"><label>名称（可选）</label><input id="initName" placeholder="文件夹名" /></div>
+      <div class="field"><label>初始分支</label><input id="initBranch" placeholder="main" value="main" /></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-quiet" id="addCancel">取消</button>
+      <button type="button" class="btn btn-primary" id="addConfirm">添加并打开</button>
+    </div>
+  </div>
+</div>
+<div class="mask" id="promptMask">
+  <div class="modal modal-sm">
+    <h3 id="promptTitle">输入</h3>
+    <p class="hint" id="promptHint" hidden></p>
+    <div class="field"><label id="promptLabel">名称</label><input id="promptInput" autocomplete="off" spellcheck="false" /></div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-quiet" id="promptCancel">取消</button>
+      <button type="button" class="btn btn-primary" id="promptOk">确定</button>
+    </div>
+  </div>
+</div>
+<div class="mask" id="confirmMask">
+  <div class="modal modal-sm" id="confirmModal">
+    <h3 id="confirmTitle">确认</h3>
+    <p class="hint" id="confirmMsg"></p>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-quiet" id="confirmCancel">取消</button>
+      <button type="button" class="btn btn-primary" id="confirmOk">确定</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="ctx" id="ctx" role="menu"></div>
+
+<script>
+(function () {
+  let connectionId = ''
+  let connectionSnapshot = null
+  let repos = []
+  let activeRepoId = ''
+  let repoQuery = ''
+  let view = 'working' // working | history — 默认文件状态；点分支看历史
+  let historyRef = ''
+  let selectedCommitPath = ''
+  let histListPct = 42
+  let allowDangerous = false
+  let statusData = null
+  let branchData = null
+  let remotesData = null
+  let stashItems = []
+  let logData = null
+  let selectedPath = ''
+  let selectedKind = 'unstaged'
+  let selectedRev = ''
+  let commitMsg = ''
+  let logQuery = ''
+  let fileFilter = ''
+  let lastDiff = ''
+  let lastDiffStats = { add: 0, del: 0 }
+  let lastHunks = [] // { id, header, patch }
+  let toastTimer = null
+  let helpTimer = null
+  let busy = false
+  let progTimer = null
+  let progStartedAt = 0
+  let progActive = false
+  let addMode = 'path' // path | clone | init
+  let treeOpen = { workspace: true, branches: true, remotes: true, stash: false }
+  let treeFilter = ''
+  let folderOpen = {}
+  let selectedRef = ''
+  let treeWidth = 220
+  let filesWidth = 300
+  let filesSplitPct = 42
+  const ICO_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
+
+  const $ = (id) => document.getElementById(id)
+  const body = $('body')
+
+  function ready() { return window.datawisePlugin && window.datawisePlugin.invoke }
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+  }
+  function toast(m) {
+    const t = $('toast'); t.textContent = m; t.classList.add('show')
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400)
+  }
+
+  function formatElapsed(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000))
+    if (s < 60) return s + 's'
+    const m = Math.floor(s / 60)
+    return m + 'm ' + (s % 60) + 's'
+  }
+
+  function showProgress(title) {
+    const el = $('prog')
+    if (!el) return
+    progActive = true
+    progStartedAt = Date.now()
+    el.classList.add('show', 'indeterminate')
+    el.classList.remove('determinate')
+    el.setAttribute('aria-busy', 'true')
+    if ($('progTitle')) $('progTitle').textContent = title || '进行中…'
+    if ($('progDetail')) $('progDetail').textContent = ''
+    if ($('progMeta')) $('progMeta').textContent = '0s'
+    if ($('progBar')) $('progBar').style.width = ''
+    clearInterval(progTimer)
+    progTimer = setInterval(() => {
+      if ($('progMeta') && progActive) $('progMeta').textContent = formatElapsed(Date.now() - progStartedAt)
+    }, 400)
+  }
+
+  function updateProgress(p) {
+    if (!progActive || !p) return
+    const el = $('prog')
+    if (!el) return
+    if (p.message && $('progTitle')) $('progTitle').textContent = p.message
+    if (p.detail && $('progDetail')) $('progDetail').textContent = p.detail
+    const pct = typeof p.percent === 'number' ? p.percent : null
+    if (pct != null && pct >= 0) {
+      el.classList.remove('indeterminate')
+      el.classList.add('determinate')
+      if ($('progBar')) $('progBar').style.width = Math.max(2, Math.min(100, pct)) + '%'
+      if ($('progMeta')) {
+        $('progMeta').textContent = Math.round(pct) + '% · ' + formatElapsed(Date.now() - progStartedAt)
+      }
+    }
+    if (p.phase === 'done' || p.phase === 'error') {
+      // keep bar visible until withBusy finally hides it
+      if (pct == null && $('progBar')) {
+        el.classList.remove('indeterminate')
+        el.classList.add('determinate')
+        $('progBar').style.width = '100%'
+      }
+    }
+  }
+
+  function hideProgress() {
+    progActive = false
+    clearInterval(progTimer)
+    progTimer = null
+    const el = $('prog')
+    if (!el) return
+    el.classList.remove('show', 'indeterminate', 'determinate')
+    el.setAttribute('aria-busy', 'false')
+    if ($('progBar')) $('progBar').style.width = ''
+  }
+
+  function wireProgressEvents() {
+    const api = window.datawisePlugin
+    if (!api?.onEvent) return
+    api.onEvent((evt) => {
+      if (!evt || evt.method !== 'git/progress') return
+      updateProgress(evt.params || {})
+    })
+  }
+  async function recall(k) { try { return await window.datawisePlugin.storage.get(k) } catch { return null } }
+  async function remember(k, v) { try { await window.datawisePlugin.storage.set(k, v) } catch {} }
+  async function invoke(method, params = {}) {
+    const p = Object.assign({ connectionId }, params)
+    if (activeRepoId && !p.repoId) p.repoId = activeRepoId
+    if (connectionSnapshot && !p.connection) p.connection = connectionSnapshot
+    return window.datawisePlugin.invoke(method, p)
+  }
+  async function copy(text) {
+    try {
+      if (window.datawisePlugin.clipboard) await window.datawisePlugin.clipboard.writeText(String(text || ''))
+      else await navigator.clipboard.writeText(String(text || ''))
+      toast('已复制')
+    } catch { toast('复制失败') }
+  }
+  function setDanger(on) {
+    allowDangerous = !!on
+    remember('git.allowDangerous', allowDangerous ? '1' : '0')
+    $('safeBtn').className = 'safe' + (allowDangerous ? ' on' : '')
+    $('safeBtn').textContent = allowDangerous ? '危险模式 ON' : '安全模式'
+    toast(allowDangerous ? '危险模式已开' : '已回安全模式')
+  }
+  async function confirmDanger(msg) {
+    if (!allowDangerous) { toast('请先开启危险模式'); return false }
+    return confirmText('危险操作', msg, { danger: true, ok: '继续' })
+  }
+  function activeRepo() { return repos.find(r => r.id === activeRepoId) || null }
+
+  /* —— context menu —— */
+  function hideCtx() { $('ctx').classList.remove('show'); $('ctx').innerHTML = '' }
+  function showCtx(e, items) {
+    e.preventDefault()
+    e.stopPropagation()
+    const menu = $('ctx')
+    const actions = []
+    const rows = []
+    for (const it of items) {
+      if (it === '|') { rows.push('<div class="sep"></div>'); continue }
+      if (it.cap) { rows.push('<div class="cap">' + esc(it.cap) + '</div>'); continue }
+      const idx = actions.length
+      actions.push(it)
+      rows.push(
+        '<button type="button" class="' + (it.danger ? 'danger' : '') + '"'
+        + (it.disabled ? ' disabled' : '') + ' data-i="' + idx + '">'
+        + esc(it.label) + '</button>'
+      )
+    }
+    menu.innerHTML = rows.join('')
+    menu.classList.add('show')
+    const pad = 8
+    let x = e.clientX, y = e.clientY
+    menu.style.left = '0px'; menu.style.top = '0px'
+    const w = menu.offsetWidth, h = menu.offsetHeight
+    if (x + w > window.innerWidth - pad) x = window.innerWidth - w - pad
+    if (y + h > window.innerHeight - pad) y = window.innerHeight - h - pad
+    menu.style.left = Math.max(pad, x) + 'px'
+    menu.style.top = Math.max(pad, y) + 'px'
+    menu.querySelectorAll('button').forEach((btn) => {
+      btn.onclick = async () => {
+        hideCtx()
+        const it = actions[Number(btn.dataset.i)]
+        if (!it || !it.run) return
+        try { await it.run() } catch (err) { toast(String(err?.message || err)) }
+      }
+    })
+  }
+  document.addEventListener('click', hideCtx)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return
+    hideCtx()
+    closePicker()
+    if ($('promptMask')?.classList.contains('show')) closePrompt(null)
+    if ($('confirmMask')?.classList.contains('show')) closeConfirm(false)
+  })
+  window.addEventListener('blur', hideCtx)
+
+  let promptResolver = null
+  function closePrompt(value) {
+    $('promptMask').classList.remove('show')
+    const resolve = promptResolver
+    promptResolver = null
+    if (resolve) resolve(value)
+  }
+  function promptText(title, def, hint) {
+    return new Promise((resolve) => {
+      if (promptResolver) closePrompt(null)
+      if (confirmResolver) closeConfirm(false)
+      promptResolver = resolve
+      $('promptTitle').textContent = title || '输入'
+      const hintEl = $('promptHint')
+      if (hint) {
+        hintEl.hidden = false
+        hintEl.textContent = hint
+      } else {
+        hintEl.hidden = true
+        hintEl.textContent = ''
+      }
+      $('promptLabel').textContent = '名称'
+      const input = $('promptInput')
+      input.value = def || ''
+      $('promptMask').classList.add('show')
+      setTimeout(() => { input.focus(); input.select() }, 40)
+    })
+  }
+
+  let confirmResolver = null
+  function closeConfirm(ok) {
+    $('confirmMask').classList.remove('show')
+    const resolve = confirmResolver
+    confirmResolver = null
+    if (resolve) resolve(!!ok)
+  }
+  function confirmText(title, msg, opts) {
+    opts = opts || {}
+    return new Promise((resolve) => {
+      if (confirmResolver) closeConfirm(false)
+      if (promptResolver) closePrompt(null)
+      confirmResolver = resolve
+      const modal = $('confirmModal')
+      modal.classList.toggle('danger', !!opts.danger)
+      modal.classList.toggle('modal-err', !!opts.error)
+      $('confirmTitle').textContent = title || '确认'
+      const msgEl = $('confirmMsg')
+      msgEl.textContent = msg || ''
+      msgEl.className = opts.error ? 'err-detail' : 'hint'
+      const okBtn = $('confirmOk')
+      okBtn.textContent = opts.ok || '确定'
+      okBtn.className = 'btn ' + (opts.danger ? 'btn-danger-solid' : 'btn-primary')
+      $('confirmCancel').textContent = opts.cancel || '取消'
+      $('confirmMask').classList.add('show')
+      setTimeout(() => okBtn.focus(), 40)
+    })
+  }
+  function setTop(on) {
+    ;['btnRefresh', 'btnFetch', 'btnPull', 'btnPullMore', 'btnPush', 'btnPushMore'].forEach(id => { if ($(id)) $(id).disabled = !on })
+  }
+  function loadingHtml(msg) {
+    return '<div class="loading"><i class="spin" aria-hidden="true"></i><span>' + esc(msg || '加载中…') + '</span></div>'
+  }
+  function conflictProgressLabel() {
+    const k = statusData?.inProgress || ''
+    if (k === 'merge' || statusData?.merging) return '正在合并'
+    if (k === 'rebase' || statusData?.rebasing) return '正在变基'
+    if (k === 'cherry-pick' || statusData?.cherryPicking) return '正在 Cherry-pick'
+    return '冲突文件'
+  }
+  function conflictAbortKind() {
+    const k = statusData?.inProgress || ''
+    if (k === 'merge' || statusData?.merging) return 'merge'
+    if (k === 'rebase' || statusData?.rebasing) return 'rebase'
+    if (k === 'cherry-pick' || statusData?.cherryPicking) return 'cherry-pick'
+    return ''
+  }
+  function closeAdd() { $('addMask').classList.remove('show') }
+  function setAddMode(mode) {
+    addMode = mode === 'clone' || mode === 'init' ? mode : 'path'
+    document.querySelectorAll('#addTabs [data-add-mode]').forEach(b => {
+      b.classList.toggle('on', b.dataset.addMode === addMode)
+    })
+    document.querySelectorAll('[data-add-pane]').forEach(p => {
+      p.hidden = p.dataset.addPane !== addMode
+    })
+    const hints = {
+      path: '粘贴本机已有 Git 路径。顶栏可随时切换多个仓库。',
+      clone: '克隆到「放到文件夹」下的子目录，完成后自动打开。',
+      init: '在空目录执行 git init，并加入工作区。'
+    }
+    const labels = { path: '添加并打开', clone: '克隆并打开', init: '初始化并打开' }
+    if ($('addHint')) $('addHint').textContent = hints[addMode]
+    if ($('addConfirm')) $('addConfirm').textContent = labels[addMode]
+    const focusId = addMode === 'clone' ? 'cloneUrl' : addMode === 'init' ? 'initPath' : 'addPath'
+    setTimeout(() => $(focusId)?.focus(), 30)
+  }
+  function openAdd(mode) {
+    closePicker()
+    ;['addPath', 'addName', 'cloneUrl', 'clonePath', 'cloneName', 'initPath', 'initName'].forEach(id => {
+      if ($(id)) $(id).value = ''
+    })
+    if ($('initBranch')) $('initBranch').value = 'main'
+    setAddMode(typeof mode === 'string' ? mode : (addMode || 'path'))
+    $('addMask').classList.add('show')
+  }
+  function closePicker() {
+    $('repoPicker')?.classList.remove('open')
+    if ($('repoTrigger')) $('repoTrigger').setAttribute('aria-expanded', 'false')
+  }
+  function openPicker() {
+    renderRepoPanel()
+    $('repoPicker')?.classList.add('open')
+    if ($('repoTrigger')) $('repoTrigger').setAttribute('aria-expanded', 'true')
+    setTimeout(() => $('repoQ')?.focus(), 20)
+  }
+  function togglePicker() {
+    if ($('repoPicker')?.classList.contains('open')) closePicker()
+    else openPicker()
+  }
+
+  function shortPath(p) {
+    const s = String(p || '').replace(/\\/g, '/')
+    if (s.length <= 36) return s
+    const parts = s.split('/').filter(Boolean)
+    if (parts.length <= 2) return s.slice(-36)
+    return '…/' + parts.slice(-2).join('/')
+  }
+
+  function renderTop() {
+    const r = activeRepo()
+    const branch = statusData?.branch || r?.branch || ''
+    const dirty = statusData ? !statusData.clean : (r ? r.clean === false : false)
+    if ($('repoLab')) $('repoLab').textContent = r ? r.name : (repos.length ? '选择仓库' : '添加仓库')
+    if ($('repoSub')) {
+      if (r && branch) {
+        $('repoSub').hidden = false
+        $('repoSub').textContent = branch
+      } else {
+        $('repoSub').hidden = true
+        $('repoSub').textContent = ''
+      }
+    }
+    if ($('repoIco')) $('repoIco').classList.toggle('is-dirty', !!r && dirty)
+    if ($('repoTrigger')) {
+      $('repoTrigger').title = r ? (r.name + (branch ? ' · ' + branch : '') + '\n' + (r.path || '')) : '选择仓库'
+    }
+    const meta = $('topMeta')
+    if (!meta) return
+    if (!statusData || !r) { meta.innerHTML = ''; return }
+    const conflicts = statusData.conflicted?.length || 0
+    const n = (statusData.staged?.length || 0) + (statusData.unstaged?.length || 0) + (statusData.untracked?.length || 0) + conflicts
+    const a = statusData.ahead || 0, b = statusData.behind || 0
+    const chips = []
+    if (statusData.head) {
+      chips.push('<span class="chip hash" title="HEAD">' + esc(String(statusData.head).slice(0, 7)) + '</span>')
+    }
+    if (statusData.upstream) {
+      chips.push('<span class="chip sync" title="' + esc(statusData.upstream) + '"><span class="a">↑' + a + '</span> <span class="b">↓' + b + '</span></span>')
+    }
+    if (statusData.merging || statusData.rebasing || statusData.cherryPicking) {
+      chips.push('<span class="chip bad">' + esc(conflictProgressLabel()) + '</span>')
+    } else if (conflicts) {
+      chips.push('<span class="chip bad">冲突 ' + conflicts + '</span>')
+    }
+    chips.push('<span class="chip ' + (statusData.clean && !conflicts ? 'ok' : 'warn') + '">'
+      + (statusData.clean && !conflicts ? '干净' : n + ' 处变更') + '</span>')
+    meta.innerHTML = chips.join('')
+  }
+
+  function renderRepoPanel() {
+    const q = repoQuery.trim().toLowerCase()
+    const list = repos.filter(r => !q || (r.name + ' ' + r.path).toLowerCase().includes(q))
+    if (!$('repoList')) return
+    if (!list.length) {
+      $('repoList').innerHTML = '<div class="empty">' + (repos.length ? '无匹配' : '还没有仓库') + '</div>'
+      return
+    }
+    $('repoList').innerHTML = list.map(r => {
+      const on = r.id === activeRepoId
+      const dirty = r.clean === false
+      return '<button type="button" class="pick-row' + (on ? ' on' : '') + '" data-id="' + esc(r.id) + '" data-path="' + esc(r.path) + '" data-name="' + esc(r.name) + '" role="option" aria-selected="' + (on ? 'true' : 'false') + '">'
+        + '<span class="pr-ico' + (dirty ? ' is-dirty' : '') + '" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16V8H4z"/><path d="M8 8V4h8v4"/></svg></span>'
+        + '<span class="pr-body"><span class="pr-name">' + esc(r.name) + (on ? '<span class="cur">当前</span>' : '') + '</span>'
+        + '<span class="pr-meta">' + esc(r.branch || '—') + (dirty ? ' · 有变更' : '') + ' · ' + esc(r.path) + '</span></span></button>'
+    }).join('')
+    $('repoList').querySelectorAll('.pick-row').forEach(el => {
+      el.onclick = () => { selectRepo(el.dataset.id); closePicker() }
+      el.oncontextmenu = (e) => showCtx(e, [
+        { label: '打开', run: () => { selectRepo(el.dataset.id); closePicker() } },
+        { label: '复制路径', run: () => copy(el.dataset.path) },
+        '|',
+        { label: '从工作区移除', danger: true, run: async () => {
+          if (!(await confirmText('移除仓库', '从工作区移除「' + el.dataset.name + '」？不会删除磁盘上的文件。'))) return
+          const res = await invoke('git/repo-remove', { repoId: el.dataset.id })
+          toast(res.success ? '已移除' : (res.message || '失败'))
+          await loadRepos()
+          if (!repos.length) { activeRepoId = ''; showEmpty(); return }
+          if (res.activeRepoId) activeRepoId = res.activeRepoId
+          await refreshAll()
+        } }
+      ])
+    })
+  }
+
+  function stashRef(line) {
+    const m = String(line || '').match(/^(stash@\{\d+\})/)
+    return m ? m[1] : ''
+  }
+
+  function trackHtml(b) {
+    const ahead = b.ahead || 0
+    const behind = b.behind || 0
+    if (b.gone) return '<span class="track"><span class="gone">gone</span></span>'
+    if (!ahead && !behind) return ''
+    let s = '<span class="track">'
+    if (ahead) s += '<span class="a">↑' + ahead + '</span>'
+    if (behind) s += '<span class="b">↓' + behind + '</span>'
+    return s + '</span>'
+  }
+
+  function buildPathTree(items, pathOf) {
+    const root = { folders: {}, leaves: [] }
+    for (const item of items) {
+      const full = pathOf(item)
+      const parts = String(full || '').split('/').filter(Boolean)
+      if (!parts.length) continue
+      let node = root
+      let prefix = ''
+      for (let i = 0; i < parts.length - 1; i++) {
+        const seg = parts[i]
+        prefix = prefix ? prefix + '/' + seg : seg
+        if (!node.folders[seg]) node.folders[seg] = { name: seg, path: prefix, folders: {}, leaves: [] }
+        node = node.folders[seg]
+      }
+      node.leaves.push({ ...item, label: parts[parts.length - 1] })
+    }
+    return root
+  }
+
+  function branchItemHtml(b, opts) {
+    opts = opts || {}
+    const kind = opts.kind || 'local'
+    const full = b.name
+    const label = b.label || full
+    const cur = !!b.current
+    const sel = selectedRef === full
+    const tip = cur
+      ? '当前分支 · 单击看历史 · 右键更多' + (b.upstream ? ' · 跟踪 ' + b.upstream : '')
+      : '单击看历史 · 双击检出 · 右键更多' + (b.upstream ? ' · ↑ ' + b.upstream : '')
+    const cls = 't-item'
+      + (kind === 'remote' ? ' remote' : '')
+      + (cur ? ' cur' : '')
+      + (sel ? ' sel' : '')
+    const attr = kind === 'remote'
+      ? ' data-rbranch="' + esc(full) + '"'
+      : ' data-branch="' + esc(full) + '" data-cur="' + (cur ? '1' : '0') + '"'
+    return '<button type="button" class="' + cls + '"' + attr + ' title="' + esc(tip) + '">'
+      + '<i class="ico" aria-hidden="true"></i><span class="br">' + esc(label) + '</span>'
+      + (kind === 'local' ? trackHtml(b) : '')
+      + (cur ? '<i class="mark" aria-hidden="true"></i>' : '')
+      + '</button>'
+  }
+
+  function renderPathTreeHtml(node, keyPrefix, forceOpen, leafKind) {
+    let html = ''
+    const folderNames = Object.keys(node.folders).sort((a, b) => a.localeCompare(b))
+    for (const name of folderNames) {
+      const child = node.folders[name]
+      const key = keyPrefix + '/' + child.path
+      const open = forceOpen || folderOpen[key] !== false
+      html += '<div class="t-folder"><details' + (open ? ' open' : '') + ' data-folder="' + esc(key) + '">'
+        + '<summary class="t-folder-lab"><i class="caret"></i><i class="folder-ico" aria-hidden="true"></i>'
+        + '<span class="sum-lab">' + esc(name) + '</span></summary>'
+        + '<div class="t-nest">' + renderPathTreeHtml(child, keyPrefix, forceOpen, leafKind) + '</div></details></div>'
+    }
+    const leaves = node.leaves.slice().sort((a, b) => String(a.label || a.name).localeCompare(String(b.label || b.name)))
+    for (const leaf of leaves) html += branchItemHtml(leaf, { kind: leafKind })
+    return html
+  }
+
+  function groupRemoteBranches(remotes) {
+    const groups = {}
+    const order = []
+    for (const b of remotes) {
+      const name = String(b.name || '').trim()
+      if (!name) continue
+      const i = name.indexOf('/')
+      // git for-each-ref short name for remotes/*/HEAD is often just "origin" / "gitee"
+      // (no slash) — SourceTree shows these as HEAD under that remote, never "(other)"
+      let remote
+      let short
+      if (i > 0) {
+        remote = name.slice(0, i)
+        short = name.slice(i + 1)
+        if (!short || short === 'HEAD') short = 'HEAD'
+      } else {
+        remote = name
+        short = 'HEAD'
+      }
+      if (!groups[remote]) { groups[remote] = []; order.push(remote) }
+      const exists = groups[remote].some(x => (x.short || x.name) === short)
+      if (!exists) groups[remote].push({ ...b, short })
+    }
+    return { groups, order }
+  }
+
+  function renderTreeHtml() {
+    const head = '<div class="tree-head"><span class="tree-title">仓库</span>'
+      + '<button type="button" class="tree-add" id="btnNewBranch" title="新建分支" aria-label="新建分支">' + ICO_PLUS + '</button></div>'
+      + '<div class="tree-filter"><input id="treeQ" type="search" placeholder="筛选分支、远程…" value="' + esc(treeFilter) + '" /></div>'
+
+    if (!activeRepoId) {
+      return head + '<div class="tree-scroll"><div class="tree-hint">添加仓库后：文件状态提交变更<br/>单击分支看历史 · 双击切换分支</div></div>'
+    }
+
+    const q = (treeFilter || '').trim().toLowerCase()
+    const match = (s) => !q || String(s || '').toLowerCase().includes(q)
+    const localsAll = branchData?.local || []
+    const remotesAll = branchData?.remote || []
+    const rem = remotesData?.remotes || []
+    const locals = localsAll.filter(b => match(b.name) || match(b.upstream))
+    const remotes = remotesAll.filter(b => match(b.name))
+    const remFiltered = rem.filter(r => match(r.name) || match(r.url) || remotes.some(b => (b.name || '').startsWith(r.name + '/')))
+    const { groups, order } = groupRemoteBranches(remotes)
+    // Prefer `git remote` order; fold in any remotes that only appear as refs. Never show "(other)".
+    const remoteNames = []
+    remFiltered.forEach(r => { if (r.name && !remoteNames.includes(r.name)) remoteNames.push(r.name) })
+    order.forEach(rn => {
+      if (!rn || rn === '(other)') return
+      if (!remoteNames.includes(rn)) remoteNames.push(rn)
+    })
+    const localTree = buildPathTree(locals, b => b.name)
+    const changeN = (statusData?.staged?.length || 0) + (statusData?.unstaged?.length || 0) + (statusData?.untracked?.length || 0) + (statusData?.conflicted?.length || 0)
+    const workOn = view === 'working'
+    const histOn = view === 'history' && selectedRef === '__history__'
+
+    let html = head + '<div class="tree-scroll">'
+
+    html += '<details class="sec ws-sec"' + (treeOpen.workspace !== false || q ? ' open' : '') + ' data-sec="workspace">'
+      + '<summary><i class="caret"></i><span class="sum-lab">工作区</span></summary><div class="t-list">'
+      + '<button type="button" class="t-item work' + (workOn ? ' sel cur' : '') + (changeN ? ' dirty' : '') + '" data-working="1" title="未提交变更 · 暂存与提交">'
+      + '<i class="ico" aria-hidden="true"></i><span class="br">文件状态</span>'
+      + (changeN ? '<span class="chg">' + changeN + '</span>' : '')
+      + '</button>'
+      + '<button type="button" class="t-item whist' + (histOn ? ' sel cur' : '') + '" data-workspace-hist="1" title="当前检出分支的提交历史">'
+      + '<i class="ico" aria-hidden="true"></i><span class="br">历史</span></button></div></details>'
+
+    html += '<details class="sec"' + (treeOpen.branches || q ? ' open' : '') + ' data-sec="branches">'
+      + '<summary><i class="caret"></i><span class="sum-lab">分支</span></summary>'
+      + '<div class="t-list">'
+    if (!locals.length) html += '<div class="t-empty">' + (q ? '无匹配分支' : '暂无本地分支') + '</div>'
+    else html += renderPathTreeHtml(localTree, 'local', !!q, 'local')
+    html += '</div></details>'
+
+    html += '<details class="sec"' + (treeOpen.remotes || q ? ' open' : '') + ' data-sec="remotes">'
+      + '<summary><i class="caret"></i><span class="sum-lab">远程</span></summary>'
+      + '<div class="t-list">'
+    if (!rem.length && !remotesAll.length) {
+      html += '<div class="t-empty">尚未配置 remote</div>'
+    } else if (!remoteNames.length && !remotes.length) {
+      html += '<div class="t-empty">' + (q ? '无匹配远程' : '暂无远程分支') + '</div>'
+    } else {
+      remoteNames.forEach(rn => {
+        if (!rn || rn === '(other)') return
+        const meta = rem.find(r => r.name === rn)
+        const list = groups[rn] || []
+        if (!meta && !list.length) return
+        const rKey = 'remote/' + rn
+        const open = folderOpen[rKey] !== false || !!q
+        const pathTree = buildPathTree(list, b => b.short || b.name)
+        html += '<div class="t-folder"><details' + (open ? ' open' : '') + ' data-folder="' + esc(rKey) + '"'
+          + (meta ? ' data-remote="' + esc(meta.name) + '" data-url="' + esc(meta.url) + '"' : '') + '>'
+          + '<summary class="t-folder-lab" title="' + esc(meta?.url || rn) + '"><i class="caret"></i><i class="folder-ico" aria-hidden="true"></i>'
+          + '<span class="sum-lab">' + esc(rn) + '</span></summary><div class="t-nest">'
+        if (!list.length) html += '<div class="t-empty">无远程分支 · 右键可 Fetch</div>'
+        else html += renderPathTreeHtml(pathTree, rKey, !!q, 'remote')
+        html += '</div></details></div>'
+      })
+    }
+    html += '</div></details>'
+
+    const stashShown = q
+      ? stashItems.filter(line => match(line))
+      : stashItems
+    html += '<details class="sec"' + (treeOpen.stash || (q && stashShown.length) ? ' open' : '') + ' data-sec="stash">'
+      + '<summary><i class="caret"></i><span class="sum-lab">贮藏</span></summary>'
+      + '<div class="t-list">'
+    if (!stashShown.length) html += '<div class="t-empty">' + (q ? '无匹配贮藏' : '暂无贮藏') + '</div>'
+    else {
+      stashShown.slice(0, 16).forEach(line => {
+        const ref = stashRef(line)
+        const stashSel = selectedRef === 'stash:' + ref
+        html += '<button type="button" class="t-item stash' + (stashSel ? ' sel' : '') + '" data-stash-ref="' + esc(ref) + '" data-stash-line="' + esc(line) + '" title="' + esc(line) + ' · 单击预览 · 双击应用">'
+          + '<i class="ico" aria-hidden="true"></i><span class="br">' + esc(line) + '</span></button>'
+      })
+    }
+    html += '</div></details></div>'
+    return html
+  }
+
+  function bindTree(root) {
+    const tq = root.querySelector('#treeQ')
+    if (tq) {
+      tq.oninput = () => {
+        treeFilter = tq.value
+        const pos = tq.selectionStart
+        root.innerHTML = renderTreeHtml()
+        bindTree(root)
+        const next = root.querySelector('#treeQ')
+        if (next) { next.focus(); try { next.setSelectionRange(pos, pos) } catch (_) {} }
+      }
+      tq.onclick = (e) => e.stopPropagation()
+    }
+    root.querySelectorAll('details[data-sec]').forEach(d => {
+      d.addEventListener('toggle', () => { treeOpen[d.dataset.sec] = d.open })
+    })
+    root.querySelectorAll('details[data-folder]').forEach(d => {
+      d.addEventListener('toggle', () => { folderOpen[d.dataset.folder] = d.open })
+    })
+    async function checkoutRef(ref) {
+      if (!ref) return
+      const res = await invoke('git/checkout', { ref })
+      toast(res.success ? '已切换 → ' + ref : (res.message || '失败'))
+      if (res.success) {
+        selectedRef = ref
+        historyRef = ref
+        view = 'history'
+        selectedRev = ''
+      }
+      await refreshAll()
+    }
+    const workBtn = root.querySelector('[data-working]')
+    if (workBtn) {
+      workBtn.onclick = (e) => {
+        e.preventDefault()
+        openWorking()
+      }
+    }
+    const histBtn = root.querySelector('[data-workspace-hist]')
+    if (histBtn) {
+      histBtn.onclick = (e) => {
+        e.preventDefault()
+        const cur = statusData?.branch || branchData?.current || 'HEAD'
+        openHistory(cur, { workspace: true })
+      }
+    }
+    const nb = root.querySelector('#btnNewBranch')
+    if (nb) {
+      nb.disabled = !activeRepoId
+      nb.onclick = async (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (!activeRepoId) return
+        const name = await promptText('新建分支', '', '基于当前 HEAD 创建并切换过去')
+        if (!name) return
+        const res = await invoke('git/branch-create', { name, checkout: true })
+        toast(res.success ? '已创建并切换' : (res.message || '失败'))
+        if (res.success) {
+          selectedRef = name
+          historyRef = name
+          view = 'history'
+          selectedRev = ''
+        }
+        await refreshAll()
+      }
+    }
+
+    root.querySelectorAll('[data-branch]').forEach(b => {
+      const name = b.dataset.branch
+      const cur = b.dataset.cur === '1'
+      b.onclick = (e) => {
+        e.preventDefault()
+        openHistory(name)
+      }
+      b.ondblclick = async (e) => {
+        e.preventDefault()
+        if (cur) { openHistory(name); return }
+        await checkoutRef(name)
+      }
+      b.oncontextmenu = (e) => showCtx(e, [
+        { cap: name },
+        { label: '查看历史', run: () => openHistory(name) },
+        { label: '切换到此分支', disabled: cur, run: async () => {
+          await checkoutRef(name)
+        } },
+        { label: '合并到当前分支', disabled: cur, run: async () => {
+          if (!(await confirmText('合并分支', '将 ' + name + ' 合并进当前分支？'))) return
+          const res = await invoke('git/merge', { ref: name })
+          toast(res.success ? '合并完成' : (res.message || '失败')); await refreshAll()
+        } },
+        { label: '从此新建分支…', run: async () => {
+          const n = await promptText('新建分支', name + '-fix', '起点：' + name)
+          if (!n) return
+          const res = await invoke('git/branch-create', { name: n, checkout: true, startPoint: name })
+          toast(res.success ? '已创建' : (res.message || '失败')); await refreshAll()
+        } },
+        { label: '重命名…', run: async () => {
+          const n = await promptText('重命名分支', name)
+          if (!n || n === name) return
+          const res = await invoke('git/branch-rename', { oldName: name, newName: n })
+          toast(res.success ? '已重命名' : (res.message || '失败')); await refreshAll()
+        } },
+        { label: '推送到 origin', run: async () => {
+          await withBusy('btnPush', async () => {
+            const res = await invoke('git/push', { remote: 'origin', branch: name, allowDangerous })
+            if (!reportFail('推送失败', res)) return
+            toast('推送完成'); await refreshAll()
+          }, '正在推送 → origin/' + name)
+        } },
+        { label: '复制分支名', run: () => copy(name) },
+        '|',
+        { label: '删除分支', danger: true, disabled: cur, run: async () => {
+          const force = allowDangerous
+          if (force && !(await confirmDanger('强制删除 ' + name + '？'))) return
+          if (!force && !(await confirmText('删除分支', '删除本地分支 ' + name + '？'))) return
+          const res = await invoke('git/branch-delete', { name, force, allowDangerous })
+          toast(res.success ? '已删除' : (res.message || '失败')); await refreshAll()
+        } }
+      ])
+    })
+
+    root.querySelectorAll('details[data-remote]').forEach(d => {
+      const remote = d.dataset.remote
+      const url = d.dataset.url || ''
+      d.querySelector('summary')?.addEventListener('contextmenu', (e) => showCtx(e, [
+        { cap: remote },
+        { label: '抓取此远程', run: async () => {
+          await withBusy('btnFetch', async () => {
+            const res = await invoke('git/fetch', { remote })
+            if (!reportFail('抓取失败', res)) return
+            toast('抓取完成'); await refreshAll()
+          }, '正在抓取 ' + remote + '…')
+        } },
+        { label: '推送当前分支到此远程', run: async () => {
+          if (!(await confirmText('推送', '推送当前分支到 ' + remote + '？'))) return
+          await withBusy('btnPush', async () => {
+            const res = await invoke('git/push', { remote, allowDangerous })
+            if (!reportFail('推送失败', res)) return
+            toast('推送完成'); await refreshAll()
+          }, '正在推送 → ' + remote)
+        } },
+        { label: '复制 URL', disabled: !url, run: () => copy(url) }
+      ]))
+    })
+
+    root.querySelectorAll('[data-rbranch]').forEach(b => {
+      const name = b.dataset.rbranch
+      b.onclick = (e) => {
+        e.preventDefault()
+        openHistory(name)
+      }
+      b.ondblclick = async (e) => {
+        e.preventDefault()
+        await checkoutRef(name)
+      }
+      b.oncontextmenu = (e) => showCtx(e, [
+        { cap: name },
+        { label: '查看历史', run: () => openHistory(name) },
+        { label: '检出', run: async () => {
+          await checkoutRef(name)
+        } },
+        { label: '合并到当前', run: async () => {
+          if (!(await confirmText('合并分支', '将 ' + name + ' 合并进当前分支？'))) return
+          const res = await invoke('git/merge', { ref: name })
+          toast(res.success ? '合并完成' : (res.message || '失败')); await refreshAll()
+        } },
+        { label: '从此新建本地分支…', run: async () => {
+          const short = name.includes('/') ? name.split('/').slice(1).join('/') : name
+          const n = await promptText('新建本地分支', short, '起点：' + name)
+          if (!n) return
+          const res = await invoke('git/branch-create', { name: n, checkout: true, startPoint: name })
+          toast(res.success ? '已创建' : (res.message || '失败')); await refreshAll()
+        } },
+        { label: '复制名称', run: () => copy(name) }
+      ])
+    })
+
+    root.querySelectorAll('[data-stash-ref]').forEach(b => {
+      const ref = b.dataset.stashRef
+      const line = b.dataset.stashLine || ref
+      b.onclick = () => {
+        selectedRef = 'stash:' + ref
+        view = 'history'
+        historyRef = ref
+        selectedRev = ref
+        selectedCommitPath = ''
+        logQuery = ''
+        paint()
+      }
+      b.ondblclick = async () => {
+        const res = await invoke('git/stash', { action: 'apply', ref })
+        if (!reportFail('应用贮藏失败', res)) return
+        toast('已应用贮藏')
+        openWorking()
+      }
+      b.oncontextmenu = (e) => showCtx(e, [
+        { cap: ref || '贮藏' },
+        { label: '应用 (Apply)', run: async () => {
+          const res = await invoke('git/stash', { action: 'apply', ref })
+          if (!reportFail('应用贮藏失败', res)) return
+          toast('已应用'); openWorking()
+        } },
+        { label: '弹出 (Pop)', run: async () => {
+          const res = await invoke('git/stash', { action: 'pop', ref })
+          if (!reportFail('弹出贮藏失败', res)) return
+          toast('已弹出'); openWorking()
+        } },
+        { label: '复制说明', run: () => copy(line) },
+        '|',
+        { label: '丢弃 (Drop)', danger: true, run: async () => {
+          if (!(await confirmDanger('丢弃贮藏 ' + (ref || '') + '？'))) return
+          const res = await invoke('git/stash', { action: 'drop', ref, allowDangerous })
+          if (!reportFail('丢弃贮藏失败', res)) return
+          toast('已丢弃'); await refreshAll()
+        } }
+      ])
+    })
+  }
+
+  function splitPath(p) {
+    const norm = String(p || '').replace(/\\/g, '/')
+    const i = norm.lastIndexOf('/')
+    if (i < 0) return { base: norm, dir: '' }
+    return { base: norm.slice(i + 1), dir: norm.slice(0, i) }
+  }
+
+  function matchFilter(path) {
+    const q = fileFilter.trim().toLowerCase()
+    if (!q) return true
+    return String(path || '').toLowerCase().includes(q)
+  }
+
+  function fileEntries() {
+    const out = []
+    for (const r of (statusData?.conflicted || [])) if (matchFilter(r.path)) out.push({ ...r, kind: 'conflicted' })
+    for (const r of (statusData?.staged || [])) if (matchFilter(r.path)) out.push({ ...r, kind: 'staged' })
+    for (const r of (statusData?.unstaged || [])) if (matchFilter(r.path)) out.push({ ...r, kind: 'unstaged' })
+    for (const r of (statusData?.untracked || [])) if (matchFilter(r.path)) out.push({ ...r, kind: 'untracked' })
+    return out
+  }
+
+  function fileRowHtml(r, kind) {
+    const staged = kind === 'staged'
+    const conflict = kind === 'conflicted'
+    const code = conflict ? 'U' : (r.code || (r.xy || '?').trim().slice(-1) || '?')
+    const sel = (selectedPath === r.path && selectedKind === kind) ? ' sel mark' : ''
+    const act = staged ? 'unstage' : 'stage'
+    const tipAct = conflict ? '标记已解决 (git add)' : (staged ? '取消暂存' : '暂存')
+    const path = String(r.path || '').replace(/\\/g, '/')
+    return '<div class="file' + sel + (conflict ? ' conflict' : '') + '" data-path="' + esc(r.path) + '" data-kind="' + kind + '" title="' + esc(path) + '\n' + tipAct + ' · 单击预览 · Ctrl+单击多选">'
+      + '<span class="code ' + esc(code) + '">' + esc(code) + '</span>'
+      + '<span class="fpath">' + esc(path) + '</span>'
+      + '<span class="f-act"><button type="button" class="btn" data-act="' + act + '" title="'
+      + tipAct + '">' + (conflict ? '✓' : (staged ? '−' : '+')) + '</button></span></div>'
+  }
+
+  /** groups: [{ rows, kind }], emptyMsg when all empty */
+  function fileRowsGroups(groups, emptyMsg) {
+    let html = ''
+    let n = 0
+    for (const g of groups) {
+      for (const r of (g.rows || [])) {
+        if (!matchFilter(r.path)) continue
+        html += fileRowHtml(r, g.kind)
+        n++
+      }
+    }
+    if (!n) return '<div class="empty-soft">' + esc(emptyMsg) + '</div>'
+    return html
+  }
+
+  function diffStats(text) {
+    let add = 0, del = 0
+    for (const line of String(text || '').split('\n')) {
+      if (line.startsWith('+') && !line.startsWith('+++')) add++
+      else if (line.startsWith('-') && !line.startsWith('---')) del++
+    }
+    return { add, del }
+  }
+
+  /** Parse unified diff into hunks with self-contained patches (SourceTree-style). */
+  function parseDiffHunks(text) {
+    const lines = String(text || '').split('\n')
+    const hunks = []
+    let fileHeader = []
+    let i = 0
+    while (i < lines.length) {
+      const line = lines[i]
+      if (line.startsWith('diff --git ')) {
+        fileHeader = [line]
+        i++
+        while (i < lines.length && !lines[i].startsWith('@@') && !lines[i].startsWith('diff --git ')) {
+          fileHeader.push(lines[i])
+          i++
+        }
+        continue
+      }
+      if (line.startsWith('@@')) {
+        const hunkLines = [line]
+        i++
+        while (i < lines.length && !lines[i].startsWith('@@') && !lines[i].startsWith('diff --git ')) {
+          hunkLines.push(lines[i])
+          i++
+        }
+        // Prefer a clean header: diff + ---/+++
+        let header = fileHeader.slice()
+        if (!header.some(l => l.startsWith('--- ')) || !header.some(l => l.startsWith('+++ '))) {
+          // keep as-is; git apply may still work with diff --git alone in some versions
+        }
+        const patch = header.concat(hunkLines).join('\n') + '\n'
+        hunks.push({
+          id: 'h' + hunks.length,
+          header: line,
+          body: hunkLines.slice(1),
+          patch
+        })
+        continue
+      }
+      i++
+    }
+    return hunks
+  }
+
+  function colorDiff(text, opts) {
+    opts = opts || {}
+    if (!text) {
+      return '<div class="diff-empty">选择左侧文件查看差异<br/><span style="font-size: var(--dw-font-size);opacity:.85">快捷键 <kbd>j</kbd>/<kbd>k</kbd> · <kbd>Space</kbd> 暂存 · 块级暂存在下方</span></div>'
+    }
+    const hunks = opts.withHunks ? parseDiffHunks(text) : []
+    lastHunks = hunks
+    if (!opts.withHunks || !hunks.length) {
+      return '<pre class="diff">' + String(text).split('\n').map(line => {
+        const e = esc(line) || ' '
+        let cls = 'ln'
+        if (line.startsWith('@@')) cls += ' hunk'
+        else if (line.startsWith('+') && !line.startsWith('+++')) cls += ' add'
+        else if (line.startsWith('-') && !line.startsWith('---')) cls += ' del'
+        else if (line.startsWith('diff ') || line.startsWith('index ') || line.startsWith('+++') || line.startsWith('---')) cls += ' meta'
+        return '<span class="' + cls + '">' + e + '</span>'
+      }).join('') + '</pre>'
+    }
+
+    const staged = !!opts.staged
+    let html = '<div class="diff">'
+    // file meta lines before first hunk
+    const firstPatchLines = hunks[0].patch.split('\n')
+    for (const line of firstPatchLines) {
+      if (line.startsWith('@@')) break
+      if (!line) continue
+      html += '<span class="ln meta">' + esc(line) + '</span>'
+    }
+    hunks.forEach((h, idx) => {
+      const stageLabel = staged ? '取消暂存此块' : '暂存此块'
+      const stageAct = staged ? 'unstage' : 'stage'
+      html += '<div class="hunk-bar" data-hunk="' + idx + '">'
+        + '<span class="hunk-meta">' + esc(h.header) + '</span>'
+        + '<div class="acts">'
+        + '<button type="button" class="btn btn-quiet btn-xs" data-hunk-act="' + stageAct + '">' + stageLabel + '</button>'
+        + (staged ? '' : '<button type="button" class="btn btn-danger btn-xs" data-hunk-act="discard">丢弃此块</button>')
+        + '</div></div>'
+      html += '<span class="ln hunk">' + esc(h.header) + '</span>'
+      for (const line of h.body) {
+        let cls = 'ln'
+        if (line.startsWith('+') && !line.startsWith('+++')) cls = 'ln add'
+        else if (line.startsWith('-') && !line.startsWith('---')) cls = 'ln del'
+        html += '<span class="' + cls + '">' + (esc(line) || ' ') + '</span>'
+      }
+    })
+    html += '</div>'
+    return html
+  }
+
+  async function applyHunk(action, hunkIndex) {
+    const h = lastHunks[hunkIndex]
+    if (!h) return
+    if (action === 'discard' && !(await confirmDanger('丢弃此差异块？不可恢复。'))) return
+    const res = await invoke('git/apply-patch', { patch: h.patch, action, allowDangerous })
+    toast(res.success
+      ? (action === 'stage' ? '已暂存此块' : action === 'unstage' ? '已取消此块' : '已丢弃此块')
+      : (res.message || '块操作失败'))
+    if (res.success) await refreshStatus(true)
+  }
+
+  function paintDiffHeader() {
+    const staged = selectedKind === 'staged'
+    const conflict = selectedKind === 'conflicted'
+    const lab = $('diffLab')
+    if (lab) {
+      lab.textContent = conflict ? '冲突' : (staged ? '已暂存' : '工作区')
+      lab.className = 'lab' + (staged ? ' staged' : '') + (conflict ? ' conflict' : '')
+    }
+    if ($('diffPath')) {
+      if (!selectedPath) $('diffPath').textContent = '全部差异'
+      else {
+        const { base, dir } = splitPath(selectedPath)
+        $('diffPath').textContent = dir ? base + '  ·  ' + dir : base
+        $('diffPath').title = selectedPath
+      }
+    }
+    const st = $('diffStats')
+    if (st) {
+      st.innerHTML = lastDiff
+        ? '<span class="a">+' + lastDiffStats.add + '</span><span class="d">−' + lastDiffStats.del + '</span>'
+        : ''
+    }
+    const stageBtn = $('diffStage')
+    if (stageBtn) {
+      const has = !!selectedPath
+      stageBtn.disabled = !has
+      stageBtn.textContent = staged ? '取消暂存' : '暂存'
+      stageBtn.dataset.act = staged ? 'unstage' : 'stage'
+    }
+    const discardBtn = $('diffDiscard')
+    if (discardBtn) discardBtn.disabled = !selectedPath || selectedKind === 'staged'
+  }
+
+  async function loadDiff() {
+    const box = $('diffBody')
+    if (!box) return
+    const staged = selectedKind === 'staged'
+    const pathSnap = selectedPath
+    const kindSnap = selectedKind
+    box.innerHTML = loadingHtml(selectedPath ? '加载差异…' : '加载中…')
+    const res = await invoke('git/diff', { path: selectedPath || '', staged })
+    if (pathSnap !== selectedPath || kindSnap !== selectedKind) return
+    lastDiff = res.diff || ''
+    lastDiffStats = diffStats(lastDiff)
+    paintDiffHeader()
+    box.classList.remove('is-fading')
+    const canHunk = !!selectedPath && selectedKind !== 'untracked' && selectedKind !== 'conflicted'
+    if (selectedKind === 'conflicted' && !lastDiff) {
+      box.innerHTML = '<div class="diff-empty">冲突文件 · 请在外部编辑器解决后点「✓」标记已解决<br/><span style="font-size: var(--dw-font-size);opacity:.85">或使用「全部标记已解决 / 中止」</span></div>'
+    } else {
+      box.innerHTML = colorDiff(lastDiff || res.message, { withHunks: canHunk, staged })
+    }
+    box.querySelectorAll('[data-hunk-act]').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation()
+        const bar = btn.closest('[data-hunk]')
+        const idx = Number(bar?.dataset.hunk)
+        applyHunk(btn.dataset.hunkAct, idx)
+      }
+    })
+    void box.offsetWidth
+    box.classList.add('is-fading')
+  }
+
+  function fileCountLabel(n) {
+    return n === 1 ? '1 文件' : (n + ' 文件')
+  }
+
+  function changesHtml() {
+    const staged = statusData?.staged || []
+    const unstaged = statusData?.unstaged || []
+    const untracked = statusData?.untracked || []
+    const conflicted = statusData?.conflicted || []
+    const changeN = unstaged.length + untracked.length
+    const unEmpty = fileFilter.trim() ? '无匹配文件' : '工作区干净'
+    const stEmpty = fileFilter.trim() ? '无匹配文件' : '暂存区为空'
+    let html = '<div class="changes-split">'
+    if (conflicted.length || statusData?.merging || statusData?.rebasing || statusData?.cherryPicking) {
+      const abortKind = conflictAbortKind()
+      html += '<section class="pane conflict">'
+        + '<div class="sec-h"><span class="label">' + esc(conflictProgressLabel()) + '</span>'
+        + '<span class="cnt">(' + conflicted.length + ')</span>'
+        + '<div class="acts">'
+        + (conflicted.length
+          ? '<button type="button" class="btn" id="resolveAll" title="git add 全部冲突文件">全部标记已解决</button>'
+          : '')
+        + (abortKind
+          ? '<button type="button" class="btn btn-danger" id="abortOp" title="放弃进行中的操作">中止</button>'
+          : '')
+        + '</div></div>'
+        + '<div class="file-scroll">'
+        + (conflicted.length
+          ? fileRowsGroups([{ rows: conflicted, kind: 'conflicted' }], '无冲突')
+          : '<div class="empty-soft">无未解决冲突 · 可提交完成或中止</div>')
+        + '</div></section>'
+    }
+    /* SourceTree order: staged on top, unstaged below; heights fixed via --files-split */
+    html += '<section class="pane staged">'
+      + '<div class="sec-h"><span class="label">已暂存文件</span>'
+      + '<span class="cnt">(' + esc(fileCountLabel(staged.length)) + ')</span>'
+      + '<div class="acts">'
+      + '<button type="button" class="btn" id="unstageAll"' + (staged.length ? '' : ' disabled') + '>取消所有暂存</button>'
+      + '<button type="button" class="btn" id="unstageSel"' + (staged.length ? '' : ' disabled') + '>取消选定暂存</button>'
+      + '</div></div>'
+      + '<div class="file-scroll">'
+      + fileRowsGroups([{ rows: staged, kind: 'staged' }], stEmpty)
+      + '</div></section>'
+      + '<div class="split-files" id="splitFiles" title="拖动调整上下分栏"></div>'
+      + '<section class="pane unstaged">'
+      + '<div class="sec-h"><span class="label">未暂存文件</span>'
+      + '<span class="cnt">(' + esc(fileCountLabel(changeN)) + ')</span>'
+      + '<div class="acts">'
+      + '<button type="button" class="btn" id="stageAll" title="A"' + (changeN ? '' : ' disabled') + '>暂存所有</button>'
+      + '<button type="button" class="btn" id="stageSel"' + (changeN ? '' : ' disabled') + '>暂存所选</button>'
+      + '</div></div>'
+      + '<div class="file-scroll">'
+      + fileRowsGroups([{ rows: unstaged, kind: 'unstaged' }, { rows: untracked, kind: 'untracked' }], unEmpty)
+      + '</div></section></div>'
+    return html
+  }
+
+  function refreshChangesList() {
+    const box = $('changes')
+    if (!box) return
+    const scrolls = {}
+    box.querySelectorAll('.file-scroll').forEach((el, i) => { scrolls[i] = el.scrollTop })
+    box.innerHTML = changesHtml()
+    box.querySelectorAll('.file-scroll').forEach((el, i) => { if (scrolls[i] != null) el.scrollTop = scrolls[i] })
+    applyFilesSplit()
+    bindFilesSplit()
+    bindFiles(body)
+    wireStageButtons()
+  }
+
+  function markedOrSelectedPaths(kinds) {
+    const allow = new Set(kinds)
+    const marked = [...document.querySelectorAll('.file.mark')]
+      .filter(el => allow.has(el.dataset.kind))
+      .map(el => el.dataset.path)
+      .filter(Boolean)
+    if (marked.length) return [...new Set(marked)]
+    if (allow.has(selectedKind) && selectedPath) return [selectedPath]
+    return []
+  }
+
+  function wireStageButtons() {
+    const staged = statusData?.staged || []
+    const unstaged = statusData?.unstaged || []
+    const untracked = statusData?.untracked || []
+    const doStageAll = async () => {
+      const paths = [...unstaged, ...untracked].map(x => x.path)
+      if (!paths.length) return toast('没有可暂存文件')
+      const res = await invoke('git/stage', { paths })
+      toast(res.success ? '已全部暂存' : (res.message || '失败'))
+      await refreshStatus(true)
+    }
+    const doUnstageAll = async () => {
+      const paths = staged.map(x => x.path)
+      if (!paths.length) return toast('暂存区为空')
+      const res = await invoke('git/unstage', { paths })
+      toast(res.success ? '已全部取消' : (res.message || '失败'))
+      await refreshStatus(true)
+    }
+    const doStageSel = async () => {
+      const paths = markedOrSelectedPaths(['unstaged', 'untracked', 'conflicted'])
+      if (!paths.length) return toast('请先选择未暂存文件（Ctrl+单击可多选）')
+      const res = await invoke('git/stage', { paths })
+      toast(res.success ? ('已暂存 ' + paths.length + ' 个文件') : (res.message || '失败'))
+      await refreshStatus(true)
+    }
+    const doUnstageSel = async () => {
+      const paths = markedOrSelectedPaths(['staged'])
+      if (!paths.length) return toast('请先选择已暂存文件（Ctrl+单击可多选）')
+      const res = await invoke('git/unstage', { paths })
+      toast(res.success ? ('已取消暂存 ' + paths.length + ' 个文件') : (res.message || '失败'))
+      await refreshStatus(true)
+    }
+    if ($('stageAll')) $('stageAll').onclick = doStageAll
+    if ($('unstageAll')) $('unstageAll').onclick = doUnstageAll
+    if ($('stageSel')) $('stageSel').onclick = doStageSel
+    if ($('unstageSel')) $('unstageSel').onclick = doUnstageSel
+    if ($('resolveAll')) $('resolveAll').onclick = async () => {
+      const paths = (statusData?.conflicted || []).map(x => x.path)
+      if (!paths.length) return
+      const res = await invoke('git/stage', { paths })
+      toast(res.success ? '已标记解决' : (res.message || '失败'))
+      await refreshStatus(true)
+    }
+    if ($('abortOp')) $('abortOp').onclick = async () => {
+      const kind = conflictAbortKind()
+      if (!kind) return
+      const labels = { merge: '合并', rebase: '变基', 'cherry-pick': 'Cherry-pick' }
+      if (!(await confirmDanger('中止' + (labels[kind] || kind) + '？未提交的解决进度会丢失。'))) return
+      const res = await invoke('git/abort', { kind })
+      if (!reportFail('中止失败', res)) return
+      toast('已中止')
+      await refreshAll()
+    }
+  }
+
+  function showHelp(text) {
+    let el = $('helpHint')
+    if (!el) {
+      el = document.createElement('div')
+      el.id = 'helpHint'
+      el.className = 'help-hint'
+      document.body.appendChild(el)
+    }
+    el.textContent = text
+    el.classList.add('show')
+    clearTimeout(helpTimer)
+    helpTimer = setTimeout(() => el.classList.remove('show'), 2200)
+  }
+
+  async function toggleStagePath(path, kind) {
+    if (!path) return
+    const staged = kind === 'staged'
+    const conflict = kind === 'conflicted'
+    const res = await invoke(staged ? 'git/unstage' : 'git/stage', { paths: [path] })
+    toast(res.success
+      ? (conflict ? '已标记解决' : (staged ? '已取消暂存' : '已暂存'))
+      : (res.message || '失败'))
+    if (res.success && !staged) selectedKind = 'staged'
+    else if (res.success && staged) selectedKind = 'unstaged'
+    await refreshStatus(true)
+  }
+
+  function moveFileSelection(delta) {
+    const list = fileEntries()
+    if (!list.length) return
+    let idx = list.findIndex(x => x.path === selectedPath && x.kind === selectedKind)
+    if (idx < 0) idx = delta > 0 ? -1 : 0
+    idx = Math.max(0, Math.min(list.length - 1, idx + delta))
+    selectedPath = list[idx].path
+    selectedKind = list[idx].kind
+    body.querySelectorAll('.file').forEach(el => {
+      const on = el.dataset.path === selectedPath && el.dataset.kind === selectedKind
+      el.classList.toggle('sel', on)
+      if (on) el.scrollIntoView({ block: 'nearest' })
+    })
+    loadDiff()
+  }
+
+  function applyPaneWidths() {
+    document.documentElement.style.setProperty('--tree', treeWidth + 'px')
+    document.documentElement.style.setProperty('--files', filesWidth + 'px')
+  }
+
+  function applyFilesSplit() {
+    document.documentElement.style.setProperty('--files-split', filesSplitPct + '%')
+  }
+
+  function bindFilesSplit() {
+    const handle = $('splitFiles')
+    if (!handle) return
+    handle.onmousedown = (e) => {
+      e.preventDefault()
+      const split = handle.closest('.changes-split')
+      if (!split) return
+      handle.classList.add('dragging')
+      const rect = split.getBoundingClientRect()
+      const conflict = split.querySelector('.pane.conflict')
+      const topOffset = conflict ? conflict.getBoundingClientRect().height : 0
+      const usable = Math.max(120, rect.height - topOffset - 5)
+      const onMove = (ev) => {
+        const y = ev.clientY - rect.top - topOffset
+        filesSplitPct = Math.max(18, Math.min(78, (y / usable) * 100))
+        applyFilesSplit()
+      }
+      const onUp = () => {
+        handle.classList.remove('dragging')
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        remember('git.filesSplitPct', String(Math.round(filesSplitPct)))
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+    }
+  }
+
+  function bindResize(handle, kind) {
+    if (!handle) return
+    handle.onmousedown = (e) => {
+      e.preventDefault()
+      handle.classList.add('dragging')
+      const startX = e.clientX
+      const startW = kind === 'tree' ? treeWidth : filesWidth
+      const onMove = (ev) => {
+        const next = startW + (ev.clientX - startX)
+        if (kind === 'tree') {
+          treeWidth = Math.max(160, Math.min(420, next))
+          document.documentElement.style.setProperty('--tree', treeWidth + 'px')
+        } else {
+          filesWidth = Math.max(220, Math.min(520, next))
+          document.documentElement.style.setProperty('--files', filesWidth + 'px')
+        }
+      }
+      const onUp = () => {
+        handle.classList.remove('dragging')
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        remember(kind === 'tree' ? 'git.treeWidth' : 'git.filesWidth', String(kind === 'tree' ? treeWidth : filesWidth))
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+    }
+  }
+
+  function bindSplits() {
+    bindResize($('splitTree'), 'tree')
+    bindResize($('split'), 'files')
+    bindFilesSplit()
+  }
+
+  function bindFiles(root) {
+    root.querySelectorAll('.file').forEach(el => {
+      const path = el.dataset.path
+      const kind = el.dataset.kind
+      el.onclick = async (e) => {
+        const act = e.target.closest?.('[data-act]')?.dataset?.act || e.target.dataset?.act
+        if (act) {
+          e.stopPropagation()
+          await toggleStagePath(path, kind)
+          return
+        }
+        if (e.ctrlKey || e.metaKey) {
+          el.classList.toggle('mark')
+          selectedPath = path
+          selectedKind = kind
+          root.querySelectorAll('.file').forEach(x => x.classList.toggle('sel', x === el))
+          loadDiff()
+          return
+        }
+        selectedPath = path
+        selectedKind = kind
+        root.querySelectorAll('.file').forEach(x => {
+          x.classList.toggle('sel', x === el)
+          x.classList.remove('mark')
+        })
+        el.classList.add('mark')
+        loadDiff()
+      }
+      el.ondblclick = async (e) => {
+        e.preventDefault()
+        await toggleStagePath(path, kind)
+      }
+      el.oncontextmenu = (e) => {
+        const staged = kind === 'staged'
+        const untracked = kind === 'untracked'
+        const conflict = kind === 'conflicted'
+        const items = [
+          { cap: path.split(/[/\\]/).pop() },
+          conflict
+            ? { label: '标记已解决 (git add)', run: async () => { await toggleStagePath(path, kind) } }
+            : staged
+            ? { label: '取消暂存', run: async () => {
+              const res = await invoke('git/unstage', { paths: [path] })
+              toast(res.success ? '已取消暂存' : (res.message || '失败')); await refreshStatus(true)
+            } }
+            : { label: '暂存', run: async () => {
+              const res = await invoke('git/stage', { paths: [path] })
+              toast(res.success ? '已暂存' : (res.message || '失败')); await refreshStatus(true)
+            } },
+          { label: '在 Diff 中打开', run: () => {
+            selectedPath = path; selectedKind = kind
+            root.querySelectorAll('.file').forEach(x => x.classList.toggle('sel', x === el))
+            loadDiff()
+          } },
+          '|',
+          { label: '复制路径', run: () => copy(path) },
+          { label: '复制文件名', run: () => copy(path.split(/[/\\]/).pop()) },
+          { label: '加入 .gitignore', run: async () => {
+            const res = await invoke('git/ignore', { paths: [path] })
+            toast(res.success ? '已写入 .gitignore' : (res.message || '失败'))
+            await refreshStatus(true)
+          } },
+          '|',
+          { label: untracked ? '删除未跟踪文件' : '丢弃本地修改', danger: true, run: async () => {
+            const msg = untracked
+              ? '永久删除未跟踪文件 ' + path + '？'
+              : '丢弃 ' + path + ' 的本地修改？（不可恢复）'
+            if (!(await confirmDanger(msg))) return
+            const res = await invoke('git/discard', { paths: [path], untracked, allowDangerous })
+            toast(res.success ? '已丢弃' : (res.message || '失败'))
+            selectedPath = ''
+            await refreshStatus(true)
+          } }
+        ]
+        showCtx(e, items)
+      }
+    })
+    const commitBtn = root.querySelector('#btnCommit')
+    if (commitBtn) {
+      commitBtn.oncontextmenu = (e) => showCtx(e, [
+        { cap: '提交' },
+        { label: '提交', run: () => commitBtn.click() },
+        { label: '勾选「提交后立即推送」', run: () => { const c = $('pushNow'); if (c) c.checked = true } },
+        { label: '修正上一提交', danger: true, run: async () => {
+          if (!(await confirmDanger('修正上一提交会改写历史。确认？'))) return
+          const message = ($('msg')?.value || '').trim()
+          const res = await invoke('git/commit', { amend: true, message, allowDangerous })
+          if (!reportFail('修正失败', res)) return
+          toast('已修正上一提交')
+          commitMsg = ''; await refreshAll()
+        } }
+      ])
+    }
+  }
+
+  async function paintFiles() {
+    const staged = statusData?.staged || []
+    const unstaged = statusData?.unstaged || []
+    const untracked = statusData?.untracked || []
+    const conflicted = statusData?.conflicted || []
+
+    const stillThere =
+      (selectedKind === 'staged' && staged.some(x => x.path === selectedPath)) ||
+      (selectedKind === 'unstaged' && unstaged.some(x => x.path === selectedPath)) ||
+      (selectedKind === 'untracked' && untracked.some(x => x.path === selectedPath)) ||
+      (selectedKind === 'conflicted' && conflicted.some(x => x.path === selectedPath))
+    if (!selectedPath || !stillThere) {
+      if (conflicted[0]) { selectedPath = conflicted[0].path; selectedKind = 'conflicted' }
+      else if (unstaged[0]) { selectedPath = unstaged[0].path; selectedKind = 'unstaged' }
+      else if (untracked[0]) { selectedPath = untracked[0].path; selectedKind = 'untracked' }
+      else if (staged[0]) { selectedPath = staged[0].path; selectedKind = 'staged' }
+      else { selectedPath = ''; selectedKind = 'unstaged' }
+    }
+
+    applyPaneWidths()
+    applyFilesSplit()
+    body.className = 'body files-mode'
+    body.innerHTML =
+      '<aside class="tree" id="tree">' + renderTreeHtml() + '</aside>'
+      + '<div class="split-tree" id="splitTree" title="拖动调整分支栏宽度"></div>'
+      + '<section class="files">'
+      + '<div class="files-bar"><div class="files-search">'
+      + '<input id="fileQ" type="search" placeholder="筛选文件…" value="' + esc(fileFilter) + '" />'
+      + '</div></div>'
+      + '<div class="changes" id="changes">' + changesHtml() + '</div></section>'
+      + '<div class="split" id="split" title="拖动调整文件栏宽度"></div>'
+      + '<section class="diff-pane">'
+      + '<div class="diff-h"><span class="lab" id="diffLab">工作区</span><span class="path" id="diffPath">—</span>'
+      + '<span class="stats" id="diffStats"></span><span class="spacer"></span>'
+      + '<div class="acts">'
+      + '<button type="button" class="btn btn-quiet btn-xs" id="diffStage">暂存</button>'
+      + '<button type="button" class="btn btn-danger btn-xs" id="diffDiscard">丢弃</button>'
+      + '<button type="button" class="btn btn-ghost btn-xs" id="copyDiff">复制</button>'
+      + '</div></div>'
+      + '<div class="diff-body" id="diffBody"></div></section>'
+      + '<div class="composer" id="composer">'
+      + '<div class="composer-top">'
+      + '<div class="conv" id="conv">'
+      + ['feat', 'fix', 'docs', 'refactor', 'chore', 'perf'].map(t =>
+        '<button type="button" data-prefix="' + t + ': " data-type="' + t + '">' + t + '</button>'
+      ).join('')
+      + '</div>'
+      + '<span class="chip ' + (staged.length ? 'ready' : 'idle') + '" id="stagedChip">已暂存 ' + staged.length + '</span>'
+      + '</div>'
+      + '<div class="composer-body">'
+      + '<textarea id="msg" rows="3" spellcheck="true" placeholder="写一句清晰的提交说明…">' + esc(commitMsg) + '</textarea>'
+      + '<button type="button" class="btn-commit" id="btnCommit"' + (staged.length ? '' : ' disabled') + '>提交</button>'
+      + '</div>'
+      + '<div class="composer-foot">'
+      + '<div class="composer-opts">'
+      + '<label class="push-now"><input type="checkbox" id="chkAmend" /> 修正上一提交</label>'
+      + '<label class="push-now"><input type="checkbox" id="pushNow" /> 提交后立即推送</label>'
+      + '</div>'
+      + '<div class="composer-tools">'
+      + '<button type="button" class="btn-link" id="btnStash">贮藏</button>'
+      + '<button type="button" class="btn-link danger" id="btnHard" title="reset --hard HEAD">硬重置</button>'
+      + '<span class="hint">Ctrl+↵</span>'
+      + '</div></div></div>'
+
+    bindTree($('tree'))
+    bindFiles(body)
+    bindSplits()
+    wireStageButtons()
+    const msg = $('msg')
+    const syncConv = () => {
+      commitMsg = msg.value
+      const m = /^(feat|fix|docs|refactor|chore|perf|test|style|build|ci)(\(|:)/.exec(msg.value || '')
+      const type = m ? m[1] : ''
+      $('conv')?.querySelectorAll('button[data-type]').forEach(b => {
+        b.classList.toggle('on', b.dataset.type === type)
+      })
+    }
+    msg.oninput = syncConv
+    msg.onkeydown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); $('btnCommit').click() }
+    }
+    $('conv').onclick = (e) => {
+      const b = e.target.closest('button[data-prefix]')
+      if (!b) return
+      const prefix = b.dataset.prefix
+      const cur = msg.value || ''
+      if (/^(feat|fix|docs|refactor|chore|perf|test|style|build|ci)(\(.+\))?:\s/.test(cur)) {
+        msg.value = cur.replace(/^(feat|fix|docs|refactor|chore|perf|test|style|build|ci)(\(.+\))?:\s*/, prefix)
+      } else {
+        msg.value = prefix + cur
+      }
+      syncConv()
+      msg.focus()
+      msg.setSelectionRange(msg.value.length, msg.value.length)
+    }
+    syncConv()
+    $('fileQ').oninput = (e) => {
+      fileFilter = e.target.value
+      refreshChangesList()
+    }
+    $('copyDiff').onclick = () => copy(lastDiff)
+    $('diffStage').onclick = async () => {
+      if (!selectedPath) return
+      await toggleStagePath(selectedPath, selectedKind)
+    }
+    $('diffDiscard').onclick = async () => {
+      if (!selectedPath || selectedKind === 'staged') return
+      const untracked = selectedKind === 'untracked'
+      const tip = untracked
+        ? '永久删除未跟踪文件 ' + selectedPath + '？'
+        : '丢弃 ' + selectedPath + ' 的本地修改？（不可恢复）'
+      if (!(await confirmDanger(tip))) return
+      const res = await invoke('git/discard', { paths: [selectedPath], untracked, allowDangerous })
+      toast(res.success ? '已丢弃' : (res.message || '失败'))
+      selectedPath = ''
+      await refreshStatus(true)
+    }
+    async function doCommit() {
+      const message = (msg.value || '').trim()
+      const amend = !!$('chkAmend')?.checked
+      if (!amend && !message) { toast('请填写提交说明'); msg.focus(); return false }
+      if (!amend && !staged.length) { toast('暂存区为空'); return false }
+      if (amend && !(await confirmDanger('修正上一提交会改写历史，确认？'))) return
+      const res = await invoke('git/commit', { message, amend, allowDangerous })
+      if (!reportFail(amend ? '修正失败' : '提交失败', res)) return false
+      toast(amend ? '已修正上一提交' : '提交成功')
+      commitMsg = ''; selectedPath = ''; if ($('chkAmend')) $('chkAmend').checked = false
+      await refreshAll()
+      return true
+    }
+    $('btnCommit').onclick = async () => {
+      if (!(await doCommit())) return
+      if ($('pushNow')?.checked) {
+        const { remote, branch } = pushTarget()
+        const label = remote + (branch ? '/' + branch : '')
+        await withBusy('btnPush', async () => {
+          const res = await invoke('git/push', { remote, branch, allowDangerous })
+          if (!reportFail('推送失败', res)) return
+          toast('已提交并推送 → ' + label)
+          await refreshAll()
+        }, '正在推送 → ' + label)
+      }
+    }
+    $('btnStash').onclick = async () => {
+      const message = (msg.value || '').trim() || 'git-ops stash'
+      const res = await invoke('git/stash', { action: 'push', message })
+      if (!reportFail('贮藏失败', res)) return
+      toast('已贮藏')
+      await refreshAll()
+    }
+    $('btnHard').onclick = async () => {
+      if (!(await confirmDanger('确认 reset --hard HEAD？'))) return
+      const res = await invoke('git/reset', { mode: 'hard', rev: 'HEAD', allowDangerous })
+      if (!reportFail('硬重置失败', res)) return
+      toast('已硬重置')
+      await refreshAll()
+    }
+    await loadDiff()
+  }
+
+  function openWorking() {
+    view = 'working'
+    selectedRef = '__working__'
+    paint()
+  }
+
+  function openHistory(ref, opts) {
+    opts = opts || {}
+    const r = (ref || '').trim()
+    if (!r) return
+    view = 'history'
+    historyRef = r
+    selectedRef = opts.workspace ? '__history__' : r
+    selectedRev = ''
+    selectedCommitPath = ''
+    if (!opts.keepQuery) logQuery = ''
+    paint()
+  }
+
+  function fmtHistDate(d) {
+    const s = String(d || '').replace('T', ' ')
+    return s.length >= 16 ? s.slice(0, 16) : s
+  }
+
+  function statusLetter(st) {
+    const s = String(st || '?').trim()
+    if (!s) return '?'
+    return s.charAt(0).toUpperCase()
+  }
+
+  async function loadCommitDetail(rev) {
+    const metaEl = $('histCommit')
+    const filesEl = $('histFiles')
+    const diffEl = $('histDiffBody')
+    if (!metaEl || !filesEl || !diffEl) return
+    metaEl.innerHTML = loadingHtml('加载提交…')
+    filesEl.innerHTML = ''
+    diffEl.innerHTML = loadingHtml('…')
+    const res = await invoke('git/show', { rev })
+    if (selectedRev !== rev) return
+    if (!res.success) {
+      metaEl.innerHTML = '<div class="empty">' + esc(res.message || '无法加载提交') + '</div>'
+      filesEl.innerHTML = ''
+      diffEl.innerHTML = ''
+      return
+    }
+    const files = res.files || []
+    metaEl.innerHTML =
+      '<div class="hc-sub">' + esc(res.subject || '(无说明)') + '</div>'
+      + '<div class="hc-meta">'
+      + '<span>' + esc(res.short || rev.slice(0, 7)) + '</span>'
+      + '<span>' + esc(res.author || '') + (res.email ? ' &lt;' + esc(res.email) + '&gt;' : '') + '</span>'
+      + '<span>' + esc(fmtHistDate(res.date)) + '</span>'
+      + (res.parents ? '<span>parents ' + esc(String(res.parents).split(/\s+/).map(p => p.slice(0, 7)).join(' ')) + '</span>' : '')
+      + '</div>'
+      + (res.body ? '<div class="hc-body">' + esc(res.body) + '</div>' : '')
+
+    if (!selectedCommitPath || !files.some(f => f.path === selectedCommitPath)) {
+      selectedCommitPath = files[0]?.path || ''
+    }
+    filesEl.innerHTML =
+      '<div class="hf-h">变更文件 · ' + files.length + '</div>'
+      + (files.length ? files.map(f => {
+        const st = statusLetter(f.status)
+        return '<button type="button" class="hist-file' + (f.path === selectedCommitPath ? ' on' : '') + '" data-cpath="' + esc(f.path) + '">'
+          + '<span class="st ' + esc(st) + '">' + esc(st) + '</span><span class="nm" title="' + esc(f.path) + '">' + esc(f.path) + '</span></button>'
+      }).join('') : '<div class="empty">无文件变更</div>')
+
+    filesEl.querySelectorAll('[data-cpath]').forEach(btn => {
+      btn.onclick = async () => {
+        selectedCommitPath = btn.dataset.cpath
+        filesEl.querySelectorAll('.hist-file').forEach(x => x.classList.toggle('on', x === btn))
+        await loadCommitFileDiff(rev, selectedCommitPath)
+      }
+    })
+    if (selectedCommitPath) await loadCommitFileDiff(rev, selectedCommitPath)
+    else diffEl.innerHTML = '<div class="empty">选择文件查看差异</div>'
+  }
+
+  async function loadCommitFileDiff(rev, path) {
+    const diffEl = $('histDiffBody')
+    if (!diffEl) return
+    diffEl.innerHTML = loadingHtml('加载差异…')
+    const res = await invoke('git/show', { rev, path })
+    if (selectedRev !== rev || selectedCommitPath !== path) return
+    lastDiff = res.diff || ''
+    diffEl.innerHTML = colorDiff(lastDiff || res.message || '无差异')
+  }
+
+  function bindHistSplit() {
+    const handle = $('splitHist')
+    if (!handle) return
+    handle.onmousedown = (e) => {
+      e.preventDefault()
+      handle.classList.add('dragging')
+      const hist = handle.parentElement
+      const startY = e.clientY
+      const startPct = histListPct
+      const h = hist.getBoundingClientRect().height || 1
+      const onMove = (ev) => {
+        const delta = ((ev.clientY - startY) / h) * 100
+        histListPct = Math.max(22, Math.min(72, startPct + delta))
+        document.documentElement.style.setProperty('--hist-list', histListPct + '%')
+      }
+      const onUp = () => {
+        handle.classList.remove('dragging')
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        remember('git.histListPct', String(Math.round(histListPct)))
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+    }
+  }
+
+  function histGraphMeta(commits) {
+    const head = String(statusData?.head || '')
+    return commits.map((c, i) => {
+      const parents = String(c.parents || '').trim().split(/\s+/).filter(Boolean)
+      const merge = parents.length > 1 || (c.parentCount || 0) > 1
+      const isHead = !!(head && (c.short === head || c.hash.startsWith(head) || head.startsWith(c.short)))
+      return { merge, isHead, first: i === 0, last: i === commits.length - 1 }
+    })
+  }
+
+  async function paintHistory() {
+    const ref = historyRef || statusData?.branch || 'HEAD'
+    if (!historyRef && ref && ref !== 'HEAD') historyRef = ref
+    const isStash = /^stash@\{\d+\}$/.test(ref)
+    const refLab = isStash ? ('贮藏 · ' + ref) : ref
+
+    applyPaneWidths()
+    document.documentElement.style.setProperty('--hist-list', histListPct + '%')
+    body.className = 'body hist-mode'
+    body.innerHTML =
+      '<aside class="tree" id="tree">' + renderTreeHtml() + '</aside>'
+      + '<div class="split-tree" id="splitTree" title="拖动调整分支栏宽度"></div>'
+      + '<div class="hist">'
+      + '<div class="hist-list" id="histList"><div class="hist-toolbar">'
+      + '<span class="hist-ref" title="' + esc(ref) + '">' + esc(refLab) + '</span>'
+      + (isStash ? '' : '<input id="lq" type="search" placeholder="搜索提交…" value="' + esc(logQuery) + '" />'
+        + '<button type="button" class="btn btn-quiet btn-xs" id="btnLog">查</button>')
+      + '</div>' + loadingHtml('加载历史…') + '</div>'
+      + '<div class="split-hist" id="splitHist" title="拖动调整历史高度"></div>'
+      + '<div class="hist-detail">'
+      + '<div class="hist-commit" id="histCommit">' + loadingHtml('…') + '</div>'
+      + '<div class="hist-files" id="histFiles"></div>'
+      + '<div class="split" id="splitHistFiles" title="拖动调整文件列表宽度" style="grid-column:2;grid-row:2"></div>'
+      + '<div class="hist-diff"><div class="diff-body" id="histDiffBody"></div></div>'
+      + '</div></div>'
+
+    bindTree($('tree'))
+    bindSplits()
+    bindHistSplit()
+
+    logData = await invoke('git/log', { limit: isStash ? 1 : 120, query: isStash ? '' : logQuery, ref })
+    const commits = logData?.commits || []
+    if (!selectedRev && commits[0]) selectedRev = commits[0].hash
+    if (isStash) selectedRev = ref
+    selectedCommitPath = ''
+    const graph = histGraphMeta(commits)
+    const list = $('histList')
+    if (list) {
+      list.innerHTML =
+        '<div class="hist-toolbar">'
+        + '<span class="hist-ref" title="' + esc(ref) + '">' + esc(refLab) + '</span>'
+        + (isStash ? '' : '<input id="lq" type="search" placeholder="搜索提交…" value="' + esc(logQuery) + '" />'
+          + '<button type="button" class="btn btn-quiet btn-xs" id="btnLog">查</button>')
+        + '</div>'
+        + '<div class="hist-cols"><span></span><span>说明</span><span>日期</span><span>作者</span><span>提交</span></div>'
+        + (commits.length ? commits.map((c, i) => {
+          const g = graph[i] || {}
+          const on = c.hash === selectedRev || (isStash && i === 0)
+          const gCls = 'hist-graph'
+            + (g.merge ? ' is-merge' : '')
+            + (g.isHead ? ' is-head' : '')
+            + (g.first ? ' is-first' : '')
+            + (g.last ? ' is-last' : '')
+          return '<button type="button" class="hist-row' + (on ? ' on' : '') + (g.isHead ? ' is-head' : '') + '" data-rev="' + esc(isStash ? ref : c.hash) + '">'
+            + '<div class="' + gCls + '" title="' + (g.isHead ? 'HEAD · ' : '') + (g.merge ? '合并提交' : '提交') + '">'
+            + '<i class="rail"></i><i class="rail-fork"></i><i class="node"></i></div>'
+            + '<div class="hist-sub" title="' + esc(c.subject) + '">' + esc(c.subject) + '</div>'
+            + '<div class="hist-date">' + esc(fmtHistDate(c.date)) + '</div>'
+            + '<div class="hist-author" title="' + esc(c.author) + '">' + esc(c.author) + '</div>'
+            + '<div class="hist-hash">' + esc(c.short) + '</div></button>'
+        }).join('') : '<div class="empty">' + (isStash ? '无法加载贮藏' : (logData?.message ? esc(logData.message) : '没有提交')) + '</div>')
+    }
+
+    if ($('btnLog') && $('lq')) {
+      $('btnLog').onclick = () => { logQuery = $('lq').value.trim(); paintHistory() }
+      $('lq').onkeydown = (e) => { if (e.key === 'Enter') $('btnLog').click() }
+    }
+    body.querySelectorAll('.hist-row').forEach(row => {
+      const rev = row.dataset.rev
+      const short = row.querySelector('.hist-hash')?.textContent || rev.slice(0, 7)
+      row.onclick = async () => {
+        selectedRev = rev
+        selectedCommitPath = ''
+        body.querySelectorAll('.hist-row').forEach(r => r.classList.toggle('on', r === row))
+        await loadCommitDetail(rev)
+      }
+      row.oncontextmenu = (e) => showCtx(e, [
+        { cap: short },
+        { label: '查看详情', run: async () => {
+          selectedRev = rev
+          selectedCommitPath = ''
+          body.querySelectorAll('.hist-row').forEach(r => r.classList.toggle('on', r === row))
+          await loadCommitDetail(rev)
+        } },
+        { label: '复制完整 Hash', run: () => copy(rev) },
+        { label: '复制短 Hash', run: () => copy(short) },
+        '|',
+        { label: '从此新建分支…', run: async () => {
+          const n = await promptText('新建分支', 'from-' + short, '起点：' + short)
+          if (!n) return
+          const res = await invoke('git/branch-create', { name: n, checkout: true, startPoint: rev })
+          toast(res.success ? '已创建并切换' : (res.message || '失败'))
+          if (res.success) { selectedRef = n; historyRef = n; view = 'history'; selectedRev = '' }
+          await refreshAll()
+        } },
+        { label: '检出此提交 (detached)', run: async () => {
+          if (!(await confirmText('检出提交', '检出 ' + short + '？将进入 detached HEAD。'))) return
+          const res = await invoke('git/checkout', { ref: rev })
+          toast(res.success ? '已检出' : (res.message || '失败'))
+          if (res.success) { historyRef = rev; selectedRef = rev; view = 'history' }
+          await refreshAll()
+        } },
+        { label: 'Cherry-pick 到当前分支', run: async () => {
+          if (!(await confirmText('Cherry-pick', 'Cherry-pick ' + short + ' 到当前分支？'))) return
+          const res = await invoke('git/cherry-pick', { rev })
+          toast(res.success ? 'Cherry-pick 完成' : (res.message || '失败'))
+          if (res.success) openWorking()
+          else await refreshAll()
+        } },
+        { label: 'Revert 此提交', run: async () => {
+          if (!(await confirmText('Revert', 'Revert ' + short + '？将生成新的反向提交。'))) return
+          const res = await invoke('git/revert', { rev })
+          toast(res.success ? 'Revert 完成' : (res.message || '失败'))
+          if (res.success) openWorking()
+          else await refreshAll()
+        } },
+        '|',
+        { label: '软重置到此 (soft)', run: async () => {
+          if (!(await confirmText('软重置', '回退到 ' + short + '，改动保留在暂存区。'))) return
+          const res = await invoke('git/reset', { mode: 'soft', rev, allowDangerous })
+          if (!reportFail('软重置失败', res)) return
+          toast('已软重置'); openWorking()
+        } },
+        { label: '混合重置到此 (mixed)', run: async () => {
+          if (!(await confirmText('混合重置', '回退到 ' + short + '，改动保留在工作区。'))) return
+          const res = await invoke('git/reset', { mode: 'mixed', rev, allowDangerous })
+          if (!reportFail('混合重置失败', res)) return
+          toast('已混合重置'); openWorking()
+        } },
+        { label: '硬重置到此 (hard)', danger: true, run: async () => {
+          if (!(await confirmDanger('硬重置到 ' + short + '？未提交改动会丢失。'))) return
+          const res = await invoke('git/reset', { mode: 'hard', rev, allowDangerous })
+          if (!reportFail('硬重置失败', res)) return
+          toast('已硬重置'); openWorking()
+        } }
+      ])
+    })
+    if (selectedRev) await loadCommitDetail(selectedRev)
+  }
+
+  function showEmpty() {
+    setTop(false)
+    renderTop()
+    body.className = 'body'
+    body.innerHTML =
+      '<div class="hero">'
+      + '<div class="hero-ico"><svg width="22" height="22" viewBox="0 0 16 16" fill="none"><path d="M8 1.5 1.5 8 8 14.5 14.5 8 8 1.5Z" stroke="currentColor" stroke-width="1.4"/></svg></div>'
+      + '<h2>比 SourceTree 更快上手</h2>'
+      + '<p>块级暂存、勾选即 stage、提交并推送、键盘驱动；配色跟随宿主。</p>'
+      + '<div class="row"><button type="button" class="btn btn-primary" id="heroAdd">添加仓库</button>'
+      + '<button type="button" class="btn btn-quiet" id="heroClone">克隆</button>'
+      + '<button type="button" class="btn btn-quiet" id="heroDemo">示例</button></div>'
+      + '<div class="keys">'
+      + '<span><kbd>j</kbd>/<kbd>k</kbd> 切换文件</span>'
+      + '<span><kbd>Space</kbd> / 勾选暂存</span>'
+      + '<span>Diff 块级暂存</span>'
+      + '<span>提交并推送</span>'
+      + '<span><kbd>Ctrl</kbd>+<kbd>↵</kbd> 提交</span>'
+      + '</div></div>'
+    $('heroAdd').onclick = () => openAdd('path')
+    $('heroClone').onclick = () => openAdd('clone')
+    $('heroDemo').onclick = () => $('btnDemo').click()
+  }
+
+  function applyHostTheme(info) {
+    if (!info) return
+    const root = document.documentElement
+    const theme = info.theme
+    const appearance = info.appearance
+    let scheme = theme?.appearance
+    if (!scheme && typeof appearance === 'string') scheme = appearance === 'light' ? 'light' : 'dark'
+    if (!scheme && appearance?.colorScheme) scheme = appearance.colorScheme
+    if (scheme !== 'light' && scheme !== 'dark') {
+      scheme = root.getAttribute('data-theme') === 'light' ? 'light' : 'dark'
+    }
+    root.setAttribute('data-theme', scheme)
+    root.setAttribute('data-dw-theme', scheme)
+    root.style.colorScheme = scheme
+    const tokens = theme?.tokens
+    if (tokens && typeof tokens === 'object') {
+      Object.keys(tokens).forEach((key) => {
+        if (typeof tokens[key] === 'string' && tokens[key]) root.style.setProperty(key, tokens[key])
+      })
+    }
+    const colors = appearance?.colors || {}
+    if (colors.background) root.style.setProperty('--color-background', colors.background)
+    if (colors.foreground) root.style.setProperty('--color-foreground', colors.foreground)
+    if (colors.primary) root.style.setProperty('--color-primary', colors.primary)
+    if (colors.border) root.style.setProperty('--color-border', colors.border)
+    // Dark: never inherit host’s ultra-faint --color-border into our chrome tokens.
+    // CSS [data-theme=dark] already lifts --line/--muted from --fg; clear any leftover
+    // inline --line if a previous theme pass wrote one.
+    if (scheme === 'dark') {
+      root.style.removeProperty('--line')
+      root.style.removeProperty('--muted')
+      root.style.removeProperty('--faint')
+      root.style.removeProperty('--hover')
+      root.style.removeProperty('--fill')
+    }
+  }
+
+  async function paint() {
+    if (!activeRepoId) { showEmpty(); return }
+    setTop(true)
+    renderTop()
+    if (view === 'working') await paintFiles()
+    else await paintHistory()
+  }
+
+  async function loadRepos() {
+    const res = await invoke('git/repos', {})
+    repos = res.repos || []
+    if (res.activeRepoId && repos.some(r => r.id === res.activeRepoId)) activeRepoId = res.activeRepoId
+    else if (activeRepoId && !repos.some(r => r.id === activeRepoId)) activeRepoId = repos[0]?.id || ''
+    else if (!activeRepoId && repos.length) activeRepoId = repos[0].id
+    renderRepoPanel()
+    renderTop()
+  }
+
+  async function loadSidebar() {
+    if (!activeRepoId) return
+    branchData = await invoke('git/branches')
+    remotesData = await invoke('git/remotes')
+    const st = await invoke('git/stash', { action: 'list' })
+    stashItems = st.items || []
+  }
+
+  async function refreshStatus(repaintFiles) {
+    if (!activeRepoId) return
+    statusData = await invoke('git/status')
+    const snap = activeRepoId
+    const res = await invoke('git/repos', {})
+    repos = res.repos || []
+    activeRepoId = snap
+    renderRepoPanel()
+    renderTop()
+    if (repaintFiles && view === 'working') await paintFiles()
+    else if (view === 'working') {
+      // light update tree counts only if body has tree
+      const tree = $('tree')
+      if (tree) { tree.innerHTML = renderTreeHtml(); bindTree(tree) }
+    }
+  }
+
+  async function moveHistSelection(delta) {
+    const rows = [...body.querySelectorAll('.hist-row')]
+    if (!rows.length) return
+    let idx = rows.findIndex(r => r.dataset.rev === selectedRev)
+    if (idx < 0) idx = delta > 0 ? -1 : 0
+    idx = Math.max(0, Math.min(rows.length - 1, idx + delta))
+    const row = rows[idx]
+    selectedRev = row.dataset.rev
+    selectedCommitPath = ''
+    rows.forEach(r => r.classList.toggle('on', r === row))
+    row.scrollIntoView({ block: 'nearest' })
+    await loadCommitDetail(selectedRev)
+  }
+
+  async function refreshAll() {
+    await refreshStatus(false)
+    await loadSidebar()
+    if (view === 'history') {
+      if (!historyRef || historyRef === 'HEAD') {
+        historyRef = statusData?.branch || branchData?.current || 'HEAD'
+      }
+      if (selectedRef === '__working__' || !selectedRef) {
+        const cur = statusData?.branch || branchData?.current || ''
+        selectedRef = (!historyRef || historyRef === cur) ? '__history__' : historyRef
+      }
+    } else {
+      selectedRef = '__working__'
+    }
+    await paint()
+  }
+
+  async function selectRepo(id) {
+    if (!id) return
+    if (id !== activeRepoId) {
+      const res = await invoke('git/repo-select', { repoId: id })
+      if (res.success === false) return toast(res.message || '切换失败')
+      activeRepoId = id
+      selectedPath = ''
+      selectedRev = ''
+      historyRef = ''
+      view = 'working'
+      selectedRef = '__working__'
+    }
+    await refreshAll()
+  }
+
+  function pushTarget() {
+    const up = String(statusData?.upstream || '').trim()
+    if (up.includes('/')) {
+      const i = up.indexOf('/')
+      return { remote: up.slice(0, i), branch: up.slice(i + 1) }
+    }
+    const remotes = (remotesData?.remotes || []).map(r => r.name).filter(Boolean)
+    return { remote: remotes[0] || 'origin', branch: statusData?.branch || '' }
+  }
+
+  function remoteNames() {
+    const list = (remotesData?.remotes || []).map(r => r.name).filter(Boolean)
+    return list.length ? list : ['origin']
+  }
+
+  function stripGitProgressNoise(text) {
+    const raw = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    const progress = /^(remote:\s*)?(Counting|Compressing|Writing|Receiving|Resolving)\s+[\w ]+:\s*\d+%/i
+    const lines = []
+    const seen = new Set()
+    for (const line of raw.split('\n')) {
+      const t = line.trim()
+      if (!t) continue
+      if (progress.test(t)) continue
+      if (/^\d+%\s*\(/.test(t)) continue
+      if (seen.has(t)) continue
+      seen.add(t)
+      lines.push(t)
+    }
+    return lines.join('\n')
+  }
+
+  function reportFail(title, res) {
+    if (res?.success) return true
+    const msg = stripGitProgressNoise(res?.message || '')
+    const err = stripGitProgressNoise(res?.stderr || '')
+    let detail = ''
+    if (msg && err && err.includes(msg)) detail = err
+    else detail = [msg, err].filter(Boolean).join('\n\n').trim()
+    if (!detail) detail = '操作失败（无详细输出）'
+    const shown = detail.length > 1200 ? detail.slice(0, 1190) + '…' : detail
+    confirmText(title || '操作失败', shown, { ok: '复制错误', cancel: '关闭', error: true }).then(ok => {
+      if (ok) copy(detail)
+    })
+    return false
+  }
+
+  async function withBusy(btnId, fn, progressTitle) {
+    if (busy) return
+    busy = true
+    const ids = ['btnRefresh', 'btnFetch', 'btnPull', 'btnPullMore', 'btnPush', 'btnPushMore']
+    ids.forEach(id => { if ($(id)) $(id).disabled = true })
+    if (btnId && $(btnId)) $(btnId).classList.add('is-busy')
+    if (progressTitle) showProgress(progressTitle)
+    try { await fn() }
+    finally {
+      busy = false
+      if (btnId && $(btnId)) $(btnId).classList.remove('is-busy')
+      hideProgress()
+      setTop(!!activeRepoId)
+    }
+  }
+
+  async function doFetch() {
+    await withBusy('btnFetch', async () => {
+      const res = await invoke('git/fetch', {})
+      if (!reportFail('抓取失败', res)) return
+      toast('抓取完成')
+      await refreshAll()
+    }, '正在抓取远程…')
+  }
+  async function doPull(rebase) {
+    await withBusy('btnPull', async () => {
+      const res = await invoke('git/pull', { rebase: !!rebase })
+      if (!reportFail(rebase ? '拉取 --rebase 失败' : '拉取失败', res)) return
+      toast(rebase ? '拉取 --rebase 完成' : '拉取完成')
+      await refreshAll()
+    }, rebase ? '正在拉取（rebase）…' : '正在拉取…')
+  }
+  async function doPush(remoteOverride, force) {
+    const def = pushTarget()
+    const remote = remoteOverride || def.remote
+    const branch = def.branch
+    const label = remote + (branch ? '/' + branch : '')
+    if (force) {
+      if (!(await confirmDanger('强制推送到 ' + label + '？（--force-with-lease）'))) return
+    } else if (!(await confirmText('推送', '推送到 ' + label + '？'))) {
+      return
+    }
+    await withBusy('btnPush', async () => {
+      const res = await invoke('git/push', { remote, branch, force: !!force, allowDangerous })
+      if (!reportFail(force ? '强制推送失败' : '推送失败', res)) return
+      toast((force ? '强制推送完成 → ' : '推送完成 → ') + label)
+      await refreshAll()
+    }, (force ? '强制推送 → ' : '正在推送 → ') + label)
+  }
+
+  function pushMenu(e) {
+    const def = pushTarget()
+    const names = remoteNames()
+    const items = [{ cap: '推送到' }]
+    names.forEach(name => {
+      const up = name === def.remote
+      items.push({
+        label: name + (def.branch ? '/' + def.branch : '') + (up ? ' · 上游' : ''),
+        run: () => doPush(name, false)
+      })
+    })
+    if (allowDangerous) {
+      items.push('|')
+      items.push({
+        label: '强制推送 → ' + def.remote + (def.branch ? '/' + def.branch : ''),
+        danger: true,
+        run: () => doPush(def.remote, true)
+      })
+    }
+    showCtx(e, items)
+  }
+
+  async function addRepo() {
+    if (busy) return
+    let method = 'git/repo-add'
+    let params = {}
+    if (addMode === 'clone') {
+      const url = $('cloneUrl').value.trim()
+      const path = $('clonePath').value.trim()
+      const name = $('cloneName').value.trim()
+      if (!url) return toast('请填写仓库 URL')
+      if (!path) return toast('请填写目标文件夹')
+      method = 'git/repo-clone'
+      params = { url, path, name }
+    } else if (addMode === 'init') {
+      const path = $('initPath').value.trim()
+      const name = $('initName').value.trim()
+      const branch = ($('initBranch').value.trim() || 'main')
+      if (!path) return toast('请填写新仓库路径')
+      method = 'git/repo-init'
+      params = { path, name, branch }
+    } else {
+      const path = $('addPath').value.trim()
+      const name = $('addName').value.trim()
+      if (!path) return toast('请填写路径')
+      params = { path, name }
+    }
+    busy = true
+    $('addConfirm').disabled = true
+    const prevLabel = $('addConfirm').textContent
+    $('addConfirm').textContent = addMode === 'clone' ? '克隆中…' : (addMode === 'init' ? '初始化…' : '添加中…')
+    if (addMode === 'clone') showProgress('正在克隆…')
+    try {
+      const res = await invoke(method, params)
+      if (!reportFail(addMode === 'clone' ? '克隆失败' : addMode === 'init' ? '初始化失败' : '添加失败', res)) return
+      toast(res.message || '已就绪')
+      closeAdd()
+      activeRepoId = res.repoId || activeRepoId
+      selectedPath = ''
+      await loadRepos()
+      await refreshAll()
+    } catch (e) { toast(String(e?.message || e)) }
+    finally {
+      busy = false
+      hideProgress()
+      if ($('addConfirm')) {
+        $('addConfirm').disabled = false
+        $('addConfirm').textContent = prevLabel
+      }
+    }
+  }
+
+  async function boot() {
+    if (!ready()) { body.innerHTML = '<div class="empty">等待 Host…</div>'; setTimeout(boot, 200); return }
+    try {
+      if (window.datawisePlugin.ready) await window.datawisePlugin.ready
+      const api = window.datawisePlugin
+      wireProgressEvents()
+      try {
+        const info = await api.getHostInfo?.()
+        applyHostTheme(info)
+        api.onHostInfo?.(applyHostTheme)
+        api.onAppearanceChange?.((next) => applyHostTheme({ appearance: next, theme: typeof next === 'object' ? next : undefined }))
+        document.addEventListener('datawise-plugin-env', (ev) => applyHostTheme(ev.detail || {}))
+      } catch (_) {}
+      const ctx = await api.context
+      connectionId = ctx?.connectionId || ctx?.connection?.id || ''
+      connectionSnapshot = ctx?.connection || null
+      if (!connectionId) {
+        body.innerHTML = '<div class="empty">请从连接打开工作台</div>'
+        return
+      }
+
+      allowDangerous = (await recall('git.allowDangerous')) === '1'
+      const tw = parseInt(await recall('git.treeWidth'), 10)
+      const fw = parseInt(await recall('git.filesWidth'), 10)
+      const hp = parseInt(await recall('git.histListPct'), 10)
+      const fsp = parseInt(await recall('git.filesSplitPct'), 10)
+      if (tw >= 160 && tw <= 420) treeWidth = tw
+      if (fw >= 220 && fw <= 520) filesWidth = fw
+      if (hp >= 22 && hp <= 72) histListPct = hp
+      if (fsp >= 18 && fsp <= 78) filesSplitPct = fsp
+      applyPaneWidths()
+      applyFilesSplit()
+      document.documentElement.style.setProperty('--hist-list', histListPct + '%')
+      $('safeBtn').className = 'safe' + (allowDangerous ? ' on' : '')
+      $('safeBtn').textContent = allowDangerous ? '危险模式 ON' : '安全模式'
+      $('safeBtn').onclick = () => setDanger(!allowDangerous)
+
+      $('repoTrigger').onclick = (e) => { e.stopPropagation(); togglePicker() }
+      $('repoQ').oninput = (e) => { repoQuery = e.target.value; renderRepoPanel() }
+      document.addEventListener('click', (e) => {
+        if (!$('repoPicker').contains(e.target)) closePicker()
+      })
+      $('btnOpenAdd').onclick = () => openAdd('path')
+      document.querySelectorAll('#addTabs [data-add-mode]').forEach(b => {
+        b.onclick = () => setAddMode(b.dataset.addMode)
+      })
+      $('btnDemo').onclick = async () => {
+        closePicker()
+        const res = await invoke('git/repo-demo', {})
+        toast(res.success ? (res.message || '就绪') : (res.message || '失败'))
+        if (res.success) {
+          activeRepoId = res.repoId || activeRepoId
+          selectedPath = ''
+          await loadRepos(); await refreshAll()
+        }
+      }
+      $('addCancel').onclick = closeAdd
+      $('addConfirm').onclick = addRepo
+      ;['addPath', 'addName', 'cloneUrl', 'clonePath', 'cloneName', 'initPath', 'initName', 'initBranch'].forEach(id => {
+        if ($(id)) $(id).onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addRepo() } }
+      })
+      $('addMask').onclick = (e) => { if (e.target === $('addMask')) closeAdd() }
+      $('promptCancel').onclick = () => closePrompt(null)
+      $('promptOk').onclick = () => closePrompt(($('promptInput').value || '').trim() || null)
+      $('promptInput').onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); $('promptOk').click() }
+        if (e.key === 'Escape') { e.preventDefault(); closePrompt(null) }
+      }
+      $('promptMask').onclick = (e) => { if (e.target === $('promptMask')) closePrompt(null) }
+      $('confirmCancel').onclick = () => closeConfirm(false)
+      $('confirmOk').onclick = () => closeConfirm(true)
+      $('confirmMask').onclick = (e) => { if (e.target === $('confirmMask')) closeConfirm(false) }
+      document.addEventListener('keydown', (e) => {
+        if (!$('confirmMask')?.classList.contains('show')) return
+        if (e.key === 'Enter') { e.preventDefault(); closeConfirm(true) }
+      })
+      $('btnRefresh').onclick = () => withBusy('btnRefresh', () => refreshAll())
+      $('btnFetch').onclick = () => doFetch()
+      $('btnPull').onclick = () => doPull(false)
+      const pullMenu = (e) => showCtx(e, [
+        { cap: '拉取' },
+        { label: '普通拉取', run: () => doPull(false) },
+        { label: '拉取并变基 (--rebase)', run: () => doPull(true) }
+      ])
+      $('btnPull').oncontextmenu = pullMenu
+      $('btnPullMore').onclick = (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        pullMenu(e)
+      }
+      $('btnPush').onclick = () => doPush()
+      $('btnPush').oncontextmenu = pushMenu
+      $('btnPushMore').onclick = (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        pushMenu(e)
+      }
+      document.addEventListener('keydown', (e) => {
+        const tag = (e.target?.tagName || '').toLowerCase()
+        const typing = tag === 'input' || tag === 'textarea' || e.target?.isContentEditable
+        if (e.key === '?' && !typing) {
+          e.preventDefault()
+          showHelp('文件状态 · 分支历史 · 双击检出 · j/k 选择 · Space 暂存 · Ctrl+Enter 提交 · R 刷新')
+          return
+        }
+        if (typing) {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && $('btnCommit')) {
+            e.preventDefault(); $('btnCommit').click()
+          }
+          return
+        }
+        if (!activeRepoId) return
+        if (e.key === 'r' || e.key === 'R') { e.preventDefault(); refreshAll(); return }
+        if (view === 'history') {
+          if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); moveHistSelection(1); return }
+          if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); moveHistSelection(-1); return }
+          if (e.key === 'Enter' && selectedRev) { e.preventDefault(); loadCommitDetail(selectedRev); return }
+          return
+        }
+        if (view !== 'working') return
+        if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); moveFileSelection(1); return }
+        if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); moveFileSelection(-1); return }
+        if (e.key === ' ' || e.key === 's' || e.key === 'S') {
+          e.preventDefault()
+          if (selectedPath) toggleStagePath(selectedPath, selectedKind)
+          return
+        }
+        if (e.key === 'c' || e.key === 'C') {
+          e.preventDefault()
+          $('msg')?.focus()
+          return
+        }
+        if (e.key === 'a' || e.key === 'A') {
+          e.preventDefault()
+          $('stageAll')?.click()
+          return
+        }
+      })
+
+      try {
+        const tools = await invoke('git/tools', {})
+        if (tools && tools.available === false) {
+          toast('本机未检测到可用 git：' + (tools.gitBinary || 'git'))
+        }
+      } catch (_) {}
+
+      await loadRepos()
+      if (activeRepoId) await refreshAll()
+      else showEmpty()
+    } catch (e) {
+      body.innerHTML = '<div class="empty">' + esc(e?.message || e) + '</div>'
+    }
+  }
+
+  boot()
+})()
+</script>
+</body>
+</html>

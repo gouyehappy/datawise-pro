@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Jenkins Ops">
+  <rect width="64" height="64" rx="14" fill="#d33833" fill-opacity="0.18"/>
+  <g fill="none" stroke="#d33833" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="32" cy="26" r="10"/>
+    <path d="M22 44c2.5-6 7-9 10-9s7.5 3 10 9"/>
+    <path d="M26 22h12"/>
+    <path d="M32 16v4"/>
+  </g>
+</svg>

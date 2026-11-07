@@ -1,0 +1,10 @@
+/**
+ * Settings panel styles — barrel over domain partials.
+ * Imported from global.css as ./settings-panel.css
+ */
+@import './settings/00-chrome.css';
+@import './settings/01-deep-link.css';
+@import './settings/02-layout-editor.css';
+@import './settings/03-ai.css';
+@import './settings/04-knowledge.css';
+@import './settings/05-shell-layout.css';

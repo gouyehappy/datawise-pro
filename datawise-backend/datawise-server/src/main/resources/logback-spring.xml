@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="60 seconds">
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- 与 datawise.config.dir 对齐；桌面启动也会 -Ddatawise.logging.dir 提前锁定 -->
+    <springProperty scope="context" name="LOG_DIR" source="datawise.logging.dir" defaultValue="config/logs"/>
+
+    <!-- 文件保留完整 requestId，便于按一次请求把 SQL / AI 串起来。 -->
+    <property name="FILE_LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{requestId:-}] %-40logger{39} | %msg%n%wEx"/>
+    <!-- 控制台只留 8 位请求号。访问日志正文不再重复打印 requestId / session 全文。 -->
+    <property name="CONSOLE_LOG_PATTERN"
+              value="%d{HH:mm:ss.SSS} %-5level %.-8X{requestId} %-12.12logger{0} %msg%n%wEx"/>
+
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/datawise.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/archive/datawise.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>4096</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="FILE"/>
+    </appender>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!--
+      日志通道（都进 datawise.log，控制台同一套级别）：
+      datawise.api        访问日志。INFO 只留写操作、慢请求、4xx/5xx；普通 GET 在 DEBUG。
+      datawise.perf       连接 / 资源树 / SQL 耗时。
+      datawise.exception  业务异常，默认 WARN。
+    -->
+    <logger name="datawise.exception" level="WARN"/>
+    <logger name="datawise.api" level="INFO"/>
+    <logger name="datawise.perf" level="INFO"/>
+    <logger name="org.apache.datawise.backend.ai" level="INFO"/>
+    <logger name="org.apache.datawise.backend.controller.ai" level="INFO"/>
+    <logger name="datawise.ai.audit" level="INFO"/>
+    <logger name="org.apache.datawise.backend.connector" level="INFO"/>
+    <logger name="org.apache.datawise.backend.jdbc" level="INFO"/>
+    <logger name="org.apache.datawise.backend.database" level="INFO"/>
+
+    <!-- 降噪：Hive/Thrift SASL 连接层 DEBUG 刷屏 -->
+    <logger name="org.apache.thrift" level="WARN"/>
+    <logger name="org.apache.thrift.transport" level="WARN"/>
+    <logger name="org.apache.thrift.transport.TSaslTransport" level="WARN"/>
+    <logger name="org.apache.hive" level="WARN"/>
+    <logger name="org.apache.hive.service.auth" level="WARN"/>
+    <logger name="org.apache.hive.jdbc" level="WARN"/>
+
+    <springProfile name="dev,local">
+        <logger name="org.apache.datawise.backend.ai" level="DEBUG"/>
+        <logger name="org.apache.datawise.backend.controller.ai" level="DEBUG"/>
+        <logger name="datawise.ai.audit" level="DEBUG"/>
+    </springProfile>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </root>
+</configuration>

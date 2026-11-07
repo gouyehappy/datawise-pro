@@ -1,0 +1,3 @@
+# Keep Maven config portable on Windows checkouts (Maven 3.9 one-arg-per-line).
+datawise-backend/.mvn/maven.config text eol=lf
+datawise-backend/.mvn/*.xml text eol=lf

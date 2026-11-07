@@ -1,0 +1,25 @@
+{
+  "name": "@datawise/tokens",
+  "version": "5.0.0",
+  "private": false,
+  "type": "module",
+  "description": "DataWise design tokens (CSS variables, skins, density, text-scale, chrome plugins)",
+  "license": "MIT",
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./src/index.css",
+    "./index.css": "./src/index.css",
+    "./skins/index.css": "./src/skins/index.css",
+    "./skins/*": "./src/skins/*",
+    "./ui-density.css": "./src/ui-density.css",
+    "./ui-text-scale.css": "./src/ui-text-scale.css",
+    "./plugins/*": "./src/plugins/*",
+    "./*": "./src/*"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ]
+}

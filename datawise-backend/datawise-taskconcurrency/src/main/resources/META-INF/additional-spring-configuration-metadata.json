@@ -1,0 +1,46 @@
+{
+  "groups": [
+    {
+      "name": "datawise.task-concurrency",
+      "type": "org.apache.datawise.taskconcurrency.spring.TaskConcurrencySpringProperties",
+      "description": "Task concurrency controller settings."
+    },
+    {
+      "name": "datawise.task-concurrency.metrics",
+      "type": "org.apache.datawise.taskconcurrency.spring.TaskConcurrencySpringProperties$Metrics",
+      "description": "Micrometer metrics for task concurrency."
+    }
+  ],
+  "properties": [
+    {
+      "name": "datawise.task-concurrency.enabled",
+      "type": "java.lang.Boolean",
+      "defaultValue": true,
+      "description": "Whether task concurrency auto-configuration is enabled."
+    },
+    {
+      "name": "datawise.task-concurrency.store-type",
+      "type": "org.apache.datawise.taskconcurrency.spring.TaskConcurrencySpringProperties$StoreType",
+      "defaultValue": "auto",
+      "description": "Store backend: auto, jdbc, or in-memory."
+    },
+    {
+      "name": "datawise.task-concurrency.runtime-enabled",
+      "type": "java.lang.Boolean",
+      "defaultValue": true,
+      "description": "Whether TaskConcurrencyRuntime starts when a TaskHandler bean exists."
+    },
+    {
+      "name": "datawise.task-concurrency.metrics.enabled",
+      "type": "java.lang.Boolean",
+      "defaultValue": true,
+      "description": "Whether default Micrometer metrics listener is registered."
+    },
+    {
+      "name": "datawise.task-concurrency.metrics.prefix",
+      "type": "java.lang.String",
+      "defaultValue": "datawise.task.concurrency",
+      "description": "Metric name prefix for task concurrency."
+    }
+  ]
+}

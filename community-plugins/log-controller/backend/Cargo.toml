@@ -1,0 +1,28 @@
+[package]
+name = "datawise-plugin-log-controller"
+version = "0.1.47"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["datawise-community"]
+
+[[bin]]
+name = "datawise-plugin-log-controller"
+path = "src/main.rs"
+
+[workspace]
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+datawise-plugin-sdk = "0.1.0"
+futures = "0.3"
+glob = "0.3"
+regex = "1"
+russh = { version = "0.62", features = ["des"] }
+russh-sftp = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "io-util", "net"] }
+uuid = { version = "1", features = ["v4"] }
+
+[patch.crates-io]
+datawise-plugin-sdk = { path = "../shared/sdk/rust/datawise-plugin-sdk" }

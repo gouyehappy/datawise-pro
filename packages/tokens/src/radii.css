@@ -1,0 +1,26 @@
+/**
+ * 圆角统一入口 — 语义指挥官见 variables.css。
+ *
+ * 业务只许写指挥官，不要写刻度原料：
+ *   面板 / 卡片 / 图节点 / 内嵌壳 → --dw-panel-radius（或 .dw-soft-card）
+ *   按钮 / 芯片 / 导航 / 图标块   → --dw-control-radius / --dw-control-radius-sm
+ *   菜单浮层 → --dw-menu-radius；模态 → --dw-modal-radius
+ *   胶囊 / 圆点 → --dw-radius-pill / --dw-radius-full
+ *
+ * 刻度对照（仅皮肤/令牌内部用）：
+ *   2px → --dw-radius-xs
+ *   3–4px → --dw-control-radius-sm
+ *   6–7px → --dw-control-radius
+ *   8–10px → --dw-radius-lg（组成 --dw-panel-radius，勿直接当面板）
+ *   12–14px → --dw-menu-radius
+ *
+ * 1px 发丝线、拖拽握把的非对称角除外。
+ */
+
+.dw-radius-xs { border-radius: var(--dw-radius-xs); }
+.dw-radius-sm { border-radius: var(--dw-radius-sm); }
+.dw-radius-md { border-radius: var(--dw-radius-md); }
+.dw-radius-lg { border-radius: var(--dw-radius-lg); }
+.dw-radius-xl { border-radius: var(--dw-radius-xl); }
+.dw-radius-pill { border-radius: var(--dw-radius-pill); }
+.dw-radius-full { border-radius: var(--dw-radius-full); }

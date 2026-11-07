@@ -1,0 +1,8 @@
+datawise_dbt_sample:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "datawise_dbt_sample.duckdb"
+      schema: main
+      threads: 4

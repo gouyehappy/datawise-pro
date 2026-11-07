@@ -1,0 +1,9 @@
+# Optional local profile for `dbt compile` / `dbt run` with DuckDB.
+# Copy to ~/.dbt/profiles.yml or set Profiles dir to this demo-project folder.
+datawise_dbt_demo:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ":memory:"
+      schema: main

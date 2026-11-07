@@ -1,0 +1,6 @@
+# PostgreSQL / Kingbase 函数扩展
+
+[functions]
+COALESCE | (value [, ...]) | any
+NOW | () | timestamp
+DATE_TRUNC | (field, source) | timestamp

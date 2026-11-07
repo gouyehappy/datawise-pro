@@ -1,0 +1,20 @@
+# Local / Vite 联调（profile=dev，默认启用）
+# 端口与 datawise-frontend/runtime-ports.json → dev.backend 一致
+server:
+  port: 18421
+
+datawise:
+  security:
+    connection-probe:
+      # 本地联调需探测本机/内网数据库
+      allow-private-networks: true
+  connectors:
+    # 本地插件开发可不强制 manifest SHA
+    require-manifest-integrity: false
+  community-plugin:
+    # 本机联调可装未签名 .dwp；生产 profile 保持 false
+    allow-unsigned: true
+  ai:
+    analysis:
+      # 本地联调放宽列级语义检查，避免样例 schema 误杀
+      semantic-check: lenient

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hello Workbench</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: var(--color-background, #131416);
+      --fg: var(--color-foreground, #d7d7db);
+      --muted: var(--color-muted-foreground, #97989d);
+      --card: var(--color-popover, #1e1e20);
+      --accent: var(--color-primary, #14b8a6);
+      --accent-fg: var(--color-primary-foreground, #fff);
+      --border: var(--color-border, rgb(110 110 114 / 0.28));
+      --pre: var(--color-muted, #2a2a2d);
+      font-family: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+    }
+    :root[data-theme="light"],
+    :root[data-dw-theme="light"] {
+      color-scheme: light;
+      --bg: var(--color-background, #ffffff);
+      --fg: var(--color-foreground, #18181b);
+      --muted: var(--color-muted-foreground, #52525b);
+      --card: var(--color-popover, #ffffff);
+      --border: var(--color-border, #e4e4e7);
+      --pre: var(--color-muted, #f4f4f5);
+    }
+    body { margin: 0; background: var(--bg); color: var(--fg); }
+    main { max-width: 720px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 1.35rem; margin: 0 0 8px; }
+    p { color: var(--muted); margin: 0 0 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    button {
+      background: var(--accent);
+      color: var(--accent-fg);
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--pre);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 3rem;
+      font-size: var(--dw-font-size);
+      color: var(--fg);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Hello Workbench</h1>
+    <p id="status">Waiting for host bridge…</p>
+    <div class="card">
+      <button id="greet" disabled>Invoke hello/greet</button>
+      <button id="listFs" disabled style="margin-left:8px;background:#334155;color:#e2e8f0">List hello:/</button>
+    </div>
+    <div class="card">
+      <div style="font-size: var(--dw-font-size);color:var(--muted);margin-bottom:8px">Response</div>
+      <pre id="out">(none)</pre>
+    </div>
+  </main>
+  <script>
+    const statusEl = document.getElementById('status')
+    const outEl = document.getElementById('out')
+    const greetBtn = document.getElementById('greet')
+    const listBtn = document.getElementById('listFs')
+
+    function ready() {
+      return window.datawisePlugin && typeof window.datawisePlugin.invoke === 'function'
+    }
+
+    function setReady() {
+      if (!ready()) return
+      statusEl.textContent = 'Host bridge ready · locale=' + (window.datawisePlugin.locale || 'en')
+      greetBtn.disabled = false
+      listBtn.disabled = false
+    }
+
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'datawise-plugin-env') {
+        setReady()
+      }
+    })
+
+    greetBtn.addEventListener('click', async () => {
+      outEl.textContent = '…'
+      try {
+        const result = await window.datawisePlugin.invoke('hello/greet', {})
+        outEl.textContent = JSON.stringify(result, null, 2)
+      } catch (e) {
+        outEl.textContent = String(e && e.message ? e.message : e)
+      }
+    })
+
+    listBtn.addEventListener('click', async () => {
+      outEl.textContent = '…'
+      try {
+        const result = await window.datawisePlugin.invoke('filesystem/list', {
+          providerId: 'io.datawise.example.hello.fs',
+          uri: 'hello:/'
+        })
+        outEl.textContent = JSON.stringify(result, null, 2)
+      } catch (e) {
+        outEl.textContent = String(e && e.message ? e.message : e)
+      }
+    })
+
+    // Host may inject the bridge before this script runs.
+    setReady()
+    setInterval(setReady, 500)
+  </script>
+</body>
+</html>

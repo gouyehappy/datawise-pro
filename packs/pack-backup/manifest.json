@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "packId": "pack.backup",
+  "version": "1.0.0-dev",
+  "minCoreVersion": "4.1.0",
+  "maxCoreVersion": "4.99.99",
+  "capabilities": [
+    "backup.policy",
+    "backup.restore",
+    "backup.schedule"
+  ],
+  "plugins": [],
+  "extensionPoints": [
+    "settings.backup",
+    "api.backup"
+  ],
+  "requiresRestart": false,
+  "channel": "stable"
+}

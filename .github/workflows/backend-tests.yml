@@ -1,0 +1,57 @@
+name: Backend tests
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'datawise-backend/**'
+      - '.github/workflows/backend-tests.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'datawise-backend/**'
+      - '.github/workflows/backend-tests.yml'
+
+concurrency:
+  group: backend-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: datawise-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Run unit tests
+        run: mvn -B test -DskipITs
+      - name: Jacoco coverage floor (selected modules)
+        run: >
+          mvn -B -pl
+          datawise-common,datawise-connectors/datawise-connector-spi,datawise-connectors/datawise-connector-api,datawise-lineage,datawise-config
+          jacoco:check -Djacoco.check.skip=false
+      - name: Spotless check (common + spi + api + config)
+        run: >
+          mvn -B -pl
+          datawise-common,datawise-connectors/datawise-connector-spi,datawise-connectors/datawise-connector-api,datawise-config
+          spotless:check -Dspotless.skip=false
+      - name: Upload Jacoco HTML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-reports
+          path: datawise-backend/**/target/site/jacoco/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Pack security retest (static)
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/pack/security-retest.sh
+      - name: without-ai fat jar must omit AI classes
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/pack/without-ai-jar-scan.sh

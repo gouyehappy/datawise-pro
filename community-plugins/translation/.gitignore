@@ -1,0 +1,14 @@
+.dwp-staging/
+dist/
+.signing/
+_gocache/
+_gotmp/
+_xbuild/
+backend/datawise-plugin-translation
+backend/datawise-plugin-translation.exe
+backend/*.exe
+*.dwp
+.DS_Store
+Thumbs.db
+.idea
+.vscode

@@ -1,0 +1,91 @@
+/* ---- 统一图标（Lucide / DwIcon） ---- */
+.dw-icon-root {
+    --dw-icon-size: var(--dw-icon-size-md);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--dw-icon-size);
+    height: var(--dw-icon-size);
+    color: inherit;
+    line-height: 1;
+}
+
+.dw-icon-root.dw-icon--fit {
+    width: 100%;
+    height: 100%;
+}
+
+.dw-icon-root.dw-icon--size-xs { --dw-icon-size: var(--dw-icon-size-xs); }
+.dw-icon-root.dw-icon--size-sm { --dw-icon-size: var(--dw-icon-size-sm); }
+.dw-icon-root.dw-icon--size-md { --dw-icon-size: var(--dw-icon-size-md); }
+.dw-icon-root.dw-icon--size-lg { --dw-icon-size: var(--dw-icon-size-lg); }
+.dw-icon-root.dw-icon--size-xl { --dw-icon-size: var(--dw-icon-size-xl); }
+.dw-icon-root.dw-icon--size-rail { --dw-icon-size: var(--dw-icon-size-rail); }
+.dw-icon-root.dw-icon--size-console { --dw-icon-size: var(--dw-icon-size-console); }
+.dw-icon-root.dw-icon--size-tab { --dw-icon-size: var(--dw-icon-size-tab); }
+.dw-icon-root.dw-icon--size-menu { --dw-icon-size: var(--dw-icon-size-menu); }
+
+.dw-icon-root .dw-icon__glyph {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.dw-icon-root.dw-icon--muted {
+    opacity: 0.5;
+}
+
+.dw-icon-root.dw-icon--danger {
+    color: var(--dw-danger);
+}
+
+.dw-icon-root.dw-icon--filled .dw-icon__glyph path {
+    fill: currentColor;
+    stroke: none;
+}
+
+.dw-icon-root.dw-icon--stop .dw-icon__glyph rect {
+    fill: currentColor;
+    stroke: none;
+}
+
+.tool-btn__graphic .dw-icon-root {
+    --dw-icon-size: var(--dw-icon-size-rail);
+}
+
+/* glyph 自己带 class 时锁定 console 尺寸，勿 100% 撑满 IconButton */
+.dw-console-glyph.dw-icon-root {
+    --dw-icon-size: var(--dw-icon-size-console);
+    width: var(--dw-console-icon-size);
+    height: var(--dw-console-icon-size);
+}
+
+.dw-console-glyph .dw-icon-root {
+    --dw-icon-size: var(--dw-icon-size-console);
+    width: 100%;
+    height: 100%;
+}
+
+/* DataGrid 工具栏：同上，避免 fit:100% 盖掉固定 glyph 尺寸 */
+.grid-glyph.dw-icon-root {
+    width: var(--dw-grid-toolbar-icon-size, var(--dw-icon-size-lg));
+    height: var(--dw-grid-toolbar-icon-size, var(--dw-icon-size-lg));
+}
+
+.dw-ctx-menu__icon.dw-icon-root,
+.dw-ctx-menu__icon .dw-icon-root {
+    --dw-icon-size: var(--dw-icon-size-sm);
+}
+
+.dw-tab__icon .dw-icon-root {
+    --dw-icon-size: var(--dw-icon-size-tab);
+}
+
+.titlebar-menu-icon.dw-icon-root {
+    --dw-icon-size: var(--dw-icon-size-sm);
+}
+
+.titlebar-menu-icon.dw-icon-root.dw-icon--size-md {
+    --dw-icon-size: var(--dw-icon-size-md);
+}

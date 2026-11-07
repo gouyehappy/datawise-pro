@@ -1,0 +1,31 @@
+/* Git gutter decorations — consumers may import or rely on host equivalents. */
+.dw-git-gutter-added,
+.dw-git-gutter-modified,
+.dw-git-gutter-deleted {
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+.dw-git-gutter-added {
+  background: var(--dw-success) !important;
+}
+
+.dw-git-gutter-modified {
+  background: var(--dw-warning) !important;
+}
+
+.dw-git-gutter-deleted {
+  background: var(--dw-danger) !important;
+}
+
+.dw-git-line-added {
+  background: color-mix(in srgb, var(--dw-success) 8%, transparent);
+}
+
+.dw-git-line-modified {
+  background: color-mix(in srgb, var(--dw-warning) 8%, transparent);
+}
+
+.dw-git-line-deleted {
+  background: color-mix(in srgb, var(--dw-danger) 8%, transparent);
+}

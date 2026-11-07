@@ -1,0 +1,23 @@
+# Redis Ops fleet inventory — many instances in one workbench.
+# Optional per instance: username, password, ssl (true/false).
+# Passwords can be empty for local/dev. Prefer secrets management in production.
+instances:
+  - id: local
+    name: Local Redis
+    host: 127.0.0.1
+    port: 6379
+    database: 0
+    ssl: false
+    tags: [dev, local]
+  - id: cache-demo
+    name: Cache (demo placeholder)
+    host: 127.0.0.1
+    port: 6380
+    database: 0
+    tags: [cache]
+  - id: session-demo
+    name: Session (demo placeholder)
+    host: 127.0.0.1
+    port: 6381
+    database: 0
+    tags: [session]

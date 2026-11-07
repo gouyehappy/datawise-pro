@@ -1,0 +1,32 @@
+/**
+ * Inset-split plugin — page under tab bar: left sheet + right cards.
+ *
+ * Classic: left keeps bottom-left only; each right card keeps bottom-right only.
+ * IDE: --dw-panel-radius is 0 → every corner stays square.
+ *
+ * Opt in: `.dw-inset-pane` / `.dw-inset-card`
+ * Built-in roots already mapped: `.conn-layout`, `.dw-workbench-split`
+ *
+ * Token: --dw-inset-radius (falls back to --dw-panel-radius)
+ */
+
+:root {
+    --dw-inset-radius: var(--dw-panel-radius);
+}
+
+.dw-inset-pane,
+.conn-layout > .conn-editor,
+.dw-workbench-split > .dw-workbench-col--left > .dw-workbench-card {
+    border-radius: 0 0 0 var(--dw-inset-radius);
+}
+
+html[data-ui-skin='classic'] .conn-layout > .conn-editor,
+html:not([data-ui-skin]) .conn-layout > .conn-editor {
+    box-shadow: var(--dw-panel-shadow);
+}
+
+.dw-inset-card,
+.conn-preview .preview-card,
+.dw-workbench-split > .dw-workbench-col--right > .dw-workbench-card {
+    border-radius: 0 0 var(--dw-inset-radius) 0;
+}

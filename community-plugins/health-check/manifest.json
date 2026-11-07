@@ -1,0 +1,54 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.health-check",
+  "name": "Health Checklist",
+  "version": "0.1.0",
+  "publisher": "datawise-community",
+  "icon": "assets/plugin.svg",
+  "description": "On-call probe board: TCP, HTTP, and read-only SQL checks with a copyable report.",
+  "license": "Apache-2.0",
+  "tags": ["ops", "health", "sre"],
+  "permissions": ["host.workbench", "host.events", "host.clipboard", "host.sql"],
+  "engines": { "datawise": ">=4.1.0", "hostApi": "^1.5" },
+  "entrypoints": {
+    "backend": { "executable": "bin/health-check-plugin.jar", "transport": "stdio-jsonl" },
+    "ui": { "root": "ui", "entry": "ui/index.html" }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.health-check.connection",
+      "label": "Health suite",
+      "capabilities": ["test", "connect"],
+      "fields": [
+        {
+          "key": "suitePath",
+          "label": "Suite path",
+          "type": "text",
+          "binding": "config",
+          "required": true,
+          "description": "Folder of *.suite.yml"
+        }
+      ],
+      "workbench": "io.datawise.community.health-check.workbench",
+      "actions": [
+        { "id": "use-demo", "label": "Use bundled demo suite", "variant": "outline", "requires_valid_form": false }
+      ]
+    },
+    { "type": "workbench", "id": "io.datawise.community.health-check.workbench", "label": "Health Checklist" }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "值班巡检",
+      "description": "多目标巡检板：TCP、HTTP 与只读 SQL，结果可复制成值班汇报。",
+      "contributions": {
+        "io.datawise.community.health-check.connection": {
+          "label": "巡检配置",
+          "fields": { "suitePath": { "label": "检查包目录" } },
+          "actions": { "use-demo": { "label": "使用自带示例" } }
+        },
+        "io.datawise.community.health-check.workbench": { "label": "值班巡检" }
+      }
+    }
+  }
+}

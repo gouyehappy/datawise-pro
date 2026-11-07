@@ -1,0 +1,201 @@
+/**
+ * Layout, shortcuts, editor preview
+ * Split from settings-panel.css — do not import directly; use ../settings-panel.css
+ */
+
+/* ---- 布局 / 快捷键共用卡片 ---- */
+
+.module-shell__main .setting-card,
+.module-shell__main .shortcut-card {
+    padding: var(--dw-space-7);
+    border: 1px solid var(--dw-panel-border);
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg-editor);
+    box-shadow: var(--dw-panel-shadow);
+}
+
+.module-shell__main .setting-card--panel {
+    margin-top: var(--mp-gap-lg);
+    padding: var(--dw-space-6) var(--dw-space-8);
+}
+
+.module-shell__main .setting-card__head,
+.module-shell__main .shortcut-card__head {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: var(--dw-space-6);
+    align-items: start;
+    margin-bottom: clamp(12px, 1.4vmin, 14px);
+}
+
+.module-shell__main .setting-card__head--compact {
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    margin-bottom: 0;
+}
+
+.module-shell__main .setting-card__head h3,
+.module-shell__main .shortcut-card__copy h3,
+.module-shell__main .config-card h3 {
+    margin: 0;
+    font-size: var(--dw-text-lg);
+    font-weight: 600;
+}
+
+.module-shell__main .setting-card__icon,
+.module-shell__main .shortcut-card__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-density-md);
+    height: var(--dw-density-md);
+    border-radius: var(--dw-control-radius);
+    color: var(--dw-primary);
+}
+
+.module-shell__main .setting-card__icon--left,
+.module-shell__main .shortcut-card__icon--primary {
+    background: color-mix(in srgb, var(--dw-primary) 12%, var(--dw-bg-panel));
+}
+
+.module-shell__main .setting-card__icon--right,
+.module-shell__main .shortcut-card__icon--sky {
+    background: color-mix(in srgb, var(--mp-tone-sky) 12%, var(--dw-bg-panel));
+    color: var(--dw-info-fg);
+}
+
+.module-shell__main .setting-card__icon--panel {
+    background: color-mix(in srgb, var(--mp-tone-emerald) 12%, var(--dw-bg-panel));
+    color: var(--dw-success-fg);
+}
+
+.module-shell__main .shortcut-card__icon--violet {
+    background: color-mix(in srgb, var(--dw-primary) 12%, var(--dw-bg-panel));
+    color: var(--dw-primary);
+}
+
+.module-shell__main .count-badge {
+    padding: var(--dw-space-2) var(--dw-space-4);
+    border-radius: var(--dw-radius-pill);
+    background: var(--dw-bg-muted);
+    border: 1px solid var(--dw-border-light);
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.module-shell__main .config-card {
+    display: flex;
+    gap: var(--dw-space-7);
+    margin-top: var(--mp-gap-lg);
+    padding: clamp(16px, 1.8vmin, 18px);
+    border: 1px dashed color-mix(in srgb, var(--dw-primary) 35%, var(--dw-panel-border));
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg-panel);
+    box-shadow: var(--dw-panel-shadow);
+}
+
+.module-shell__main .config-card__icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-density-lg);
+    height: var(--dw-density-lg);
+    border-radius: var(--dw-control-radius);
+    background: color-mix(in srgb, var(--dw-primary) 12%, var(--dw-bg-panel));
+    color: var(--dw-primary);
+}
+
+.module-shell__main .config-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dw-gap-sm);
+    height: var(--mp-btn-h);
+    padding: 0 var(--dw-space-7);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-control-radius);
+    background: var(--dw-bg-panel);
+    color: var(--dw-text);
+    font-size: var(--dw-text-md);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--dw-transition-colors);
+}
+
+.module-shell__main .config-btn:hover {
+    background: var(--dw-bg-hover);
+    border-color: color-mix(in srgb, var(--dw-primary) 30%, var(--dw-border));
+}
+
+.module-shell__main .config-btn--primary {
+    border-color: color-mix(in srgb, var(--dw-primary) 40%, var(--dw-border));
+    background: var(--dw-primary-softer);
+    color: var(--dw-primary);
+}
+
+.module-shell__main .config-btn--primary:hover {
+    background: var(--dw-primary-soft);
+}
+
+.module-shell__main .config-btn--primary.config-btn--saved,
+.module-shell__main .config-btn--primary.config-btn--saved:hover {
+    border-color: color-mix(in srgb, var(--dw-success, #16a34a) 45%, var(--dw-border));
+    background: color-mix(in srgb, var(--dw-success, #16a34a) 18%, var(--dw-bg));
+    color: var(--dw-success, #16a34a);
+    cursor: default;
+}
+
+.module-shell__main .config-note {
+    margin: var(--dw-space-6) 0 0;
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-xs);
+    line-height: var(--dw-leading-loose);
+}
+
+.module-shell__main .settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--mp-gap-lg);
+}
+
+@media (max-width: 860px) {
+    .module-shell__main .settings-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ---- 编辑器预览 ---- */
+
+.module-shell__main .preview-pane {
+    min-width: 0;
+    border: 1px solid var(--dw-panel-border);
+    border-radius: var(--dw-panel-radius);
+    overflow: hidden;
+    background: var(--dw-bg-editor);
+    box-shadow: var(--dw-panel-shadow);
+}
+
+.module-shell__main .preview-head {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-gap-sm);
+    padding: var(--dw-space-5) clamp(12px, 1.4vmin, 14px);
+    border-bottom: 1px solid var(--dw-border-light);
+    background: var(--dw-bg-muted);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    color: var(--dw-text-secondary);
+}
+
+.module-shell__main .preview-dot {
+    width: var(--dw-icon-size-xs);
+    height: var(--dw-icon-size-xs);
+    border-radius: 50%;
+    background: var(--dw-border);
+}
+
+.module-shell__main .preview-dot:nth-child(1) { background: #ff5f57; }
+.module-shell__main .preview-dot:nth-child(2) { background: #febc2e; }
+.module-shell__main .preview-dot:nth-child(3) { background: #28c840; }

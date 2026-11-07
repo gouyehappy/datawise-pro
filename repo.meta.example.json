@@ -1,0 +1,5 @@
+{
+  "$comment": "Optional override. Copy to repo.meta.json (gitignored) or set DATAWISE_GITHUB_REPO=owner/name. Default channel is gouyehappy/datawise-cli.",
+  "githubOwner": "gouyehappy",
+  "githubRepo": "datawise-cli"
+}

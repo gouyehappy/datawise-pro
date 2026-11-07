@@ -1,0 +1,135 @@
+/**
+ * Portable editor tab bar base — skins override via html[data-ui-skin].
+ * Host may keep a richer tab-bar.css; playground / external apps use this.
+ */
+.dw-tab-bar {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: var(--dw-tab-height);
+  padding: 0 var(--dw-space-2);
+  border-bottom: 1px solid var(--dw-tab-bar-border);
+  background: var(--dw-tab-bar-bg);
+}
+
+.dw-tab-scroll {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: var(--dw-tab-gap);
+  overflow: auto hidden;
+  padding: 0 var(--dw-space-1);
+}
+
+.dw-tab-pinned {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: var(--dw-tab-gap);
+  max-width: 40%;
+  padding-right: var(--dw-space-1);
+  border-right: 1px solid color-mix(in srgb, var(--dw-tab-bar-border) 88%, transparent);
+}
+
+.dw-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dw-gap-xs);
+  max-width: 220px;
+  height: var(--dw-tab-pill-height);
+  padding: 0 var(--dw-space-3) 0 var(--dw-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--dw-tab-pill-radius);
+  background: transparent;
+  color: var(--dw-tab-inactive-text, var(--dw-text-muted));
+  white-space: nowrap;
+  font-size: var(--dw-tab-title-size, var(--dw-text-sm));
+  font-weight: 400;
+  flex-shrink: 0;
+  cursor: default;
+  transition: color var(--dw-duration-fast, 120ms) var(--dw-ease, ease),
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.dw-tab:hover:not(.active) {
+  background: var(--dw-tab-hover-bg, color-mix(in srgb, var(--dw-text) 6%, transparent));
+  color: var(--dw-text);
+}
+
+.dw-tab.active,
+.dw-tab.active:hover {
+  background: var(--dw-tab-active-bg, var(--dw-bg-panel));
+  border-color: var(--dw-tab-active-border, transparent);
+  color: var(--dw-tab-active-text, var(--dw-text));
+}
+
+.dw-tab__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  line-height: var(--dw-tab-title-line, 1.2);
+  padding-block: 1px;
+}
+
+.dw-tab__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dw-icon-size-md, 16px);
+  height: var(--dw-icon-size-md, 16px);
+  margin-left: var(--dw-space-1);
+  border: none;
+  border-radius: var(--dw-radius-xs);
+  background: transparent;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.dw-tab__close:hover {
+  opacity: 1;
+  background: var(--dw-tab-close-hover, color-mix(in srgb, var(--dw-text) 10%, transparent));
+}
+
+.dw-tab-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dw-density-sm, 28px);
+  height: var(--dw-tab-pill-height);
+  margin-left: var(--dw-space-1);
+  border: none;
+  border-radius: var(--dw-tab-pill-radius);
+  background: transparent;
+  color: var(--dw-text-muted);
+  cursor: pointer;
+}
+
+.dw-tab-add:hover {
+  background: var(--dw-tab-hover-bg, color-mix(in srgb, var(--dw-text) 6%, transparent));
+  color: var(--dw-text);
+}
+
+.dw-tab-overflow {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: var(--dw-space-1);
+}
+
+.dw-tab-overflow__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dw-density-sm, 28px);
+  height: var(--dw-tab-pill-height);
+  border: none;
+  border-radius: var(--dw-tab-pill-radius);
+  background: transparent;
+  color: var(--dw-text-muted);
+  cursor: pointer;
+}

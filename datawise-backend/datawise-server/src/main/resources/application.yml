@@ -1,0 +1,339 @@
+spring:
+  application:
+    name: datawise-backend
+  profiles:
+    # mvn spring-boot:run / IDE 默认走 dev；桌面打包显式 --spring.profiles.active=desktop
+    # SaaS / 多租户云：--spring.profiles.active=cloud（见 application-cloud.yml）
+    default: open
+  main:
+    allow-bean-definition-overriding: true
+    allow-circular-references: true
+  servlet:
+    multipart:
+      # Community .dwp packages (design cap 512 MiB). Default 1MB aborts the upload.
+      max-file-size: 512MB
+      max-request-size: 512MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  config: classpath:logback-spring.xml
+  level:
+    org.apache.datawise.backend: INFO
+    datawise.exception: WARN
+    # Hive JDBC 连接池 keepalive 会触发 Thrift SASL 读写；默认压到 WARN 避免控制台刷屏
+    org.apache.thrift: WARN
+    org.apache.hive: WARN
+
+datawise:
+  entitlement:
+    # open = 全量开通（默认，不影响现有功能）；enforced = 商业授权门禁
+    mode: open
+    free-ai-calls-daily-limit: 3
+    free-migration-rows-limit: 1000
+    trial-days: 7
+    # §1.3 站点 Pro 套餐试用天数（本地默认 7；云部署可改为 14）
+    site-pro-trial-days: 7
+    # 云多租户：新建租户自动领取 Pro 试用（默认关闭；profile=cloud 为 true）
+    auto-claim-tenant-pro-trial: false
+    # §1.3 云端新租户 Pro 试用天数（application-cloud.yml 同步 14）
+    tenant-pro-trial-days: 14
+    # 生产环境务必覆盖；空白密钥不再静默回退到此默认值
+    signing-secret: datawise-dev-pack-signing-secret-change-me
+    watermark-enabled: true
+    watermark-text: ""
+    # 留空关闭公证心跳；生产可指向 license 网关
+    heartbeat-url: ""
+    heartbeat-interval-hours: 24
+    heartbeat-check-ms: 3600000
+    # 生产必须 false；仅内部 profile 可开
+    allow-unsigned: false
+    core-version: 4.1.2
+    # Ed25519 公钥 PEM（文件路径或 classpath:…）；空则仅校验 HMAC pack.sig
+    public-key-path: ""
+    require-ed25519: false
+  connector:
+    download:
+      # 生产保持 true；仅 loopback 可用 http（本地 HttpServer 测试）
+      require-https: true
+      # 非空时远程 JAR 主机名必须命中；空 = 任意 https 主机
+      allowed-hosts: []
+  config:
+    # 相对 backend 模块 cwd（mvn spring-boot:run）指向仓库根 config/
+    dir: config
+    secrets:
+      # 启动时将 connections.xml / app.xml 中明文密钥批量加密
+      migrate-on-startup: true
+  storage:
+    # file = JSON/XML under config/（默认）；jdbc = 身份元数据进库（用户/会话/租户/Token）
+    backend: file
+    datasource:
+      jdbc-url: jdbc:h2:mem:datawise_metadata;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+      username: sa
+      password: ""
+      driver-class-name: org.h2.Driver
+  tenancy:
+    # single = 本地/私有化隐式 default 租户；multi = SaaS 多租户
+    mode: single
+    default-tenant-id: default
+    allow-tenant-create: false
+    # multi 时填写平台超管 userId；留空则回退为首个注册用户
+    platform-admin-user-ids: []
+    # 每租户连接数硬顶；0 = 不限制
+    max-connections-per-tenant: 0
+    # 是否开放公开注册（本地账号）
+    allow-registration: false
+    # 每租户每日 AI 调用上限；0 = 不限制
+    max-ai-calls-per-tenant-per-day: 0
+  projects:
+    # PW-3-04：false=统一 tenants/{tid}/connections.xml；true=按项目拆分（仅 file 存储）
+    split-connections: false
+  auth:
+    session:
+      # 登录 token 默认有效 1 小时；可在设置页覆盖 config/auth-session.json
+      ttl-minutes: 60
+      sliding-renewal: true
+  security:
+    auth:
+      # 受保护路由默认拒绝匿名；公开路径见 public-path-prefixes
+      require-authentication: true
+      public-path-prefixes:
+        - /login
+        - /signOut
+        - /api/auth/register
+        - /api/auth/login-options
+        - /api/auth/oidc/login
+        - /api/auth/oidc/callback
+        - /api/health
+        - /actuator/health
+        - /v3/api-docs
+        - /swagger-ui
+        # WebSocket：浏览器无法带 X-DW-Session-Id，由 HandshakeInterceptor 校验 Sec-WebSocket-Protocol / ?dwSession=
+        - /ws/ssh-shell
+        - /ws/k8s-exec
+        - /ws/terminal
+        - /ws/community-plugin-stream
+    connection-probe:
+      # 默认拒绝探测私网/元数据地址（防 SSRF）。桌面/本地 profile 会覆盖为 true
+      allow-private-networks: false
+  community-plugin:
+    # 生产必须 false；仅可信本机开发可开，客户端 allowUnsigned 不能单独放行
+    allow-unsigned: false
+  logging:
+    # 统一运行日志：始终落在工作区 logs/（与桌面「打开运行日志」一致，勿用相对 cwd）
+    dir: ${datawise.config.dir:config}/logs
+  jdbc:
+    # 启动时预加载 config/drivers/ 下已存在的 JDBC 驱动 JAR
+    preload-drivers-on-startup: true
+    # JDBC 驱动 Maven 仓库（按顺序尝试；Central 不通时可换阿里云等镜像）
+    # 企业内网 Nexus / Artifactory：把镜像 URL 放在列表最前即可（Phase 4 config-only，无专用 UI）
+    # 设计稿中的 datawise.jdbc.maven-repo-url 对应本列表
+    maven:
+      repositories:
+        - https://repo1.maven.org/maven2
+        - https://maven.aliyun.com/repository/central
+    pool:
+      # 每个已保存连接的 HikariCP 池参数（可按部署规模调大 maximum-pool-size）
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout-ms: 60000
+      max-lifetime-ms: 600000
+      connection-timeout-ms: 10000
+      validation-timeout-ms: 3000
+      keepalive-time-ms: 30000
+      # SELECT 默认 fetch size；0 表示使用驱动默认值
+      default-fetch-size: 500
+  connectors:
+    # 可选数据源 connector 插件目录（相对 datawise.config.dir）
+    plugins-dir: plugins
+    # AppCDS 训练可设 false，避免把插件 ClassLoader 类打进 jsa 导致运行时刷屏
+    load-plugins: true
+    # 拒绝 SHA-256 与 config/plugins/manifest.json 不一致的插件 JAR
+    require-manifest-integrity: true
+  query:
+    # 服务端默认最大返回行数；0 表示不设默认上限（仍受 absolute-max-result-rows 约束）
+    max-result-rows: 10000
+    # 交互 SQL 物化绝对上限（即使 max-result-rows=0 也会生效）；0 仅建议本地调试
+    absolute-max-result-rows: 100000
+    # 游标 / 表分页 OFFSET 上限，避免深 OFFSET 全表扫描；0 = 不限制
+    max-cursor-offset: 100000
+    # JDBC Statement.setQueryTimeout（秒）；0 表示不限制。默认 10 分钟防挂死查询（cloud 仍为 300）。
+    timeout-seconds: 600
+    # 交互 SQL 进程内并发上限；0 = 不限制。控制台执行与游标续页共用。
+    max-concurrent-global: 64
+    max-concurrent-per-user: 8
+  sql:
+    rewrite:
+      # 控制台执行前自动为表名/字段名加引号（基于 sqlparser + 连接 dbType）
+      quote-identifiers: true
+  workspace:
+    # SQL 脚本根目录默认值（可在设置页修改，持久化到 config/workspace.xml）
+    scripts-dir: scripts
+  terminal:
+    websocket:
+      # 默认关闭：启用前须完成安全评审
+      enabled: false
+      # 非空时仅允许所列 IP / IPv4 CIDR 握手；示例：127.0.0.1、10.0.0.0/8
+      allowed-ips: []
+      # 非空时仅当直连 remote 命中列表才读取 X-Forwarded-For / X-Real-IP（防伪造）
+      trusted-proxy-ips: []
+  connection:
+    # 长时间无 SQL/Explorer 操作后自动回收 JDBC 连接池（毫秒）；健康探测 ping 不计入活跃
+    idle-evict-enabled: true
+    idle-evict-ms: 900000
+    idle-evict-poll-ms: 60000
+    # 进程内缓存的 Hikari 池上限；0=不限制。超出按最近活跃 LRU 回收
+    max-active-pools: 64
+  ssh:
+    # VPN/跳板 handshake；终端前端等待约 120s（含 1 次重试）
+    connect-timeout-ms: 45000
+    # 交互 Shell 空闲 keepalive（毫秒）；0 关闭。避免 NAT/防火墙过早掐断 SSH。
+    server-alive-interval-ms: 15000
+    server-alive-count-max: 3
+    idle-ttl-minutes: 30
+    terminal:
+      websocket:
+        # 浏览器经 ?dwSession= 握手鉴权（路径已在 security.auth.public-path-prefixes）
+        enabled: true
+        path: /ws/ssh-shell
+        # 非空时仅允许所列 IP / IPv4 CIDR；本地留空
+        allowed-ips: []
+        trusted-proxy-ips: []
+  k8s-exec-ws:
+    enabled: true
+    path: /ws/k8s-exec
+    allowed-ips: []
+    trusted-proxy-ips: []
+  explorer:
+    schema-session:
+      # Explorer 懒加载树复用的 JDBC schema 会话空闲回收时间（毫秒）
+      idle-timeout-ms: 120000
+      max-entries: 16
+      schema-cache-ttl-ms: 3600000
+      table-list-page-size: 500
+  migration:
+    default-batch-size: 500
+    max-batch-tables: 50
+    continue-on-table-failure: true
+    table-retry-attempts: 2
+    pipeline-read-ahead: true
+    task-concurrency-enabled: true
+    task-concurrency-tenant-slots: 2
+    task-concurrency-default-priority: 5
+    task-concurrency-admission-log-enabled: true
+    task-concurrency-priority:
+      small-table-threshold: 1
+      medium-table-threshold: 3
+      large-table-threshold: 5
+      huge-table-threshold: 10
+      small-table-bonus: 1
+      medium-table-bonus: 1
+      large-table-penalty: 1
+      huge-table-penalty: 2
+      resume-bonus: 1
+      small-batch-threshold: 200
+      large-batch-threshold: 2000
+      small-batch-bonus: 0
+      large-batch-penalty: 1
+      throttle-penalty: 1
+  task-concurrency:
+    enabled: true
+    # 单机桌面默认内存；多实例请改 jdbc（需 storage.backend=jdbc）
+    store-type: in-memory
+    global-max-concurrent: 6
+    lease-ttl: 30m
+    dispatch-interval: 500ms
+    maintenance-interval: 30s
+    dispatch-batch-size: 10
+    runtime-enabled: true
+    metrics:
+      enabled: true
+      prefix: datawise.task.concurrency
+  # Migration / 团队共享 Query SSE：默认进程内总线；多实例可改 jdbc（需 storage.backend=jdbc）
+  # 控制台事务会话 / 结果 cursor / AI 分析 SSE 仍为进程内（需 sticky 或单副本，见 docs/DEPLOYMENT.md#affinity）
+  sse:
+    bus-type: in-memory
+    # instance-id:  # 可选；默认 spring.application.name@host:pid
+    jdbc:
+      poll-interval: 500ms
+      retention: 5m
+  ai:
+    # offline = 使用模型配置里的 base URL（默认，兼容现网）
+    # hybrid = 当 hybrid-base-url 非空时，OpenAI 兼容调用改走网关（云脑 / 私有网关）
+    delivery: offline
+    hybrid-base-url: ${DW_AI_GATEWAY:}
+    # hybrid 网关已配置时：线上仅发 promptRef 信封，不发 Prompt 模板全文（Wave 27）
+    opaque-prompts: true
+    # 开发 / CI：本地 OpenAI 兼容 stub，展开 dw-ai/1 promptRef（默认关闭，Wave 28/30）
+    gateway-stub:
+      enabled: false
+      # 非空时：展开 opaque 后转发到上游 OpenAI 兼容脑（如 https://api.openai.com/v1）
+      upstream-base-url: ${DW_AI_GATEWAY_UPSTREAM:}
+      upstream-api-key: ${DW_AI_GATEWAY_UPSTREAM_KEY:}
+      upstream-timeout-seconds: 60
+    rag:
+      enabled: true
+      # 向量库：none | memory | pgvector — 生产推荐 pgvector + openai embedding（见 docs/DEPLOYMENT.md#ai-production）
+      vector-store: none
+      pgvector:
+        jdbc-url:
+        username:
+        password:
+        table: ai_evidence_embeddings
+      max-snippets: 12
+      max-glossary-hits: 6
+      embedding:
+        # hash — 离线确定性向量（开发）；生产用 openai 兼容 embedding API
+        provider: hash
+        base-url:
+        api-key:
+        model: text-embedding-3-small
+        # dimensions: 1536
+    analysis:
+      checkpoint:
+        # memory | file — file 持久化 SQL 确认 interrupt 会话（config/ai-checkpoints/）
+        storage: file
+      # off | lenient | strict — 生产推荐 strict
+      semantic-check: strict
+      retry:
+        max-sql-validation-retries: 2
+        max-sql-execute-attempts: 2
+      steps:
+        planner: true
+        evidence: true
+        sql-validate: true
+        python: true
+        chart: true
+        summary: true
+        report: true
+    python:
+      enabled: true
+      # simulated 仅开发；生产推荐 docker（见 docs/DEPLOYMENT.md#ai-production）
+      executor: simulated
+      sandbox-enabled: true
+      python-command: python
+      pip-command: pip
+      dependency-install-enabled: true
+      allowed-packages: pandas,numpy,scipy,scikit-learn,matplotlib,statsmodels,seaborn
+      dependency-install-timeout-seconds: 60
+      docker-binary: docker
+      docker-image: python:3.12-slim
+      docker-memory: 512m
+      k8s-binary: kubectl
+      k8s-namespace: default
+      k8s-image: python:3.12-slim
+      k8s-memory: 512Mi
+      timeout-seconds: 30
+      max-retries: 2

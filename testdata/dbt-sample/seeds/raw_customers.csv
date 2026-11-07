@@ -1,0 +1,6 @@
+customer_id,customer_name,email,status,created_at
+1,Ada Lovelace,ada@example.com,active,2024-01-10
+2,Grace Hopper,grace@example.com,active,2024-02-14
+3,Alan Turing,alan@example.com,inactive,2024-03-01
+4,Katherine Johnson,katherine@example.com,active,2024-03-20
+5,Margaret Hamilton,margaret@example.com,active,2024-04-05

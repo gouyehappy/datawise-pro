@@ -1,0 +1,52 @@
+{
+  "name": "@datawise/framework",
+  "version": "5.0.0",
+  "private": false,
+  "type": "module",
+  "description": "DataWise UI Framework aggregator �� tokens + theme + icons + ui + overlays + chrome",
+  "license": "MIT",
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./style.css": "./src/style.css",
+    "./data-grid": "./src/data-grid.ts",
+    "./graph-canvas": "./src/graph-canvas.ts",
+    "./code": "./src/code.ts",
+    "./shortcuts": "./src/shortcuts.ts",
+    "./package.json": "./package.json"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "dependencies": {
+    "@datawise/tokens": "file:../tokens",
+    "@datawise/theme": "file:../theme",
+    "@datawise/icons": "file:../icons",
+    "@datawise/ui": "file:../ui",
+    "@datawise/overlays": "file:../overlays",
+    "@datawise/chrome": "file:../chrome",
+    "@datawise/data-grid": "file:../data-grid",
+    "@datawise/graph-canvas": "file:../graph-canvas",
+    "@datawise/code": "file:../code",
+    "@datawise/shortcuts": "file:../shortcuts"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0",
+    "lucide-vue-next": "^0.400.0",
+    "@phosphor-icons/vue": "^2.0.0",
+    "reka-ui": "^2.0.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.2",
+    "vue": "^3.5.13"
+  },
+  "scripts": {
+    "typecheck": "node -e \"process.exit(0)\""
+  }
+}

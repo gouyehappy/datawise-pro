@@ -1,0 +1,12 @@
+/**
+ * Framework aggregate styles for external apps / playground.
+ * Host DataWise loads tokens/skins via global.css instead — do not double-import there.
+ */
+@import '@datawise/tokens/index.css';
+@import '@datawise/tokens/skins/index.css';
+@import '@datawise/tokens/ui-density.css';
+@import '@datawise/tokens/ui-text-scale.css';
+@import '@datawise/tokens/plugins/soft-card.css';
+@import '@datawise/ui/style.css';
+@import '@datawise/overlays/style.css';
+@import '@datawise/chrome/style.css';

@@ -1,0 +1,52 @@
+/**
+ * 工作台布局 — Database / AI / Module 单页共用
+ * 三栏：侧栏树 | 中心区 | ShortcutRail
+ */
+
+.module-workbench,
+.dw-workbench {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    gap: var(--dw-panel-gap);
+    background: transparent;
+}
+
+.module-workbench__center,
+.dw-workbench__center {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    gap: var(--dw-panel-gap);
+}
+
+.module-panel,
+.dw-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+.module-panel > :deep(*),
+.dw-panel > :deep(*) {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+.module-panel > :deep(.panel-loading-shell),
+.module-panel > :deep(.panel-load-error),
+.dw-panel > :deep(.panel-loading-shell),
+.dw-panel > :deep(.panel-load-error) {
+    position: absolute;
+    inset: 0;
+    flex: none;
+    background: var(--dw-bg-editor);
+}
+

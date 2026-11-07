@@ -1,0 +1,369 @@
+/* Shared browse-panel chrome for Nacos / Polaris (and similar connectors). */
+.connector-browse-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-wb-stack-gap);
+  min-height: 0;
+  height: 100%;
+}
+
+.connector-browse-panel__body {
+  display: grid;
+  gap: var(--dw-wb-stack-gap);
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+/* DBX-style: list left / detail right — prefer DwSplitPane; keep class for legacy. */
+.connector-browse-panel__body--split {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+}
+
+.connector-browse-panel__body--split.dw-split-pane,
+.connector-browse-panel__body.dw-split-pane {
+  display: flex;
+  height: 100%;
+}
+
+.connector-browse-panel__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dw-gap-sm) var(--dw-gap);
+}
+
+.connector-browse-panel__search {
+  flex: 1 1 7.5rem;
+  min-width: 6.5rem;
+  max-width: 14rem;
+}
+
+/* Legacy raw input — prefer SearchInput via ConnectorBrowseToolbar */
+.connector-browse-panel__toolbar-field {
+  flex: 1 1 7.5rem;
+  min-width: 6.5rem;
+  max-width: 14rem;
+  height: var(--dw-density-sm);
+  padding: 0 var(--dw-space-3);
+  border: 1px solid var(--dw-border-light);
+  border-radius: var(--dw-wb-control-radius);
+  background: var(--dw-bg-panel);
+  color: var(--dw-text);
+  font-size: var(--dw-text-sm);
+  box-sizing: border-box;
+}
+
+.connector-browse-panel__toolbar-field::placeholder {
+  color: var(--dw-text-muted);
+}
+
+.connector-browse-panel__toolbar-field:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--dw-primary) 55%, var(--dw-border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dw-primary) 16%, transparent);
+}
+
+.connector-browse-panel__toolbar-meta {
+  margin-left: auto;
+  font-size: var(--dw-text-sm);
+  color: var(--dw-text-muted);
+  white-space: nowrap;
+}
+
+.connector-browse-panel__toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+@media (max-width: 900px) {
+  .connector-browse-panel__toolbar-meta {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+.connector-browse-panel__pane {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--dw-wb-card-border);
+  /* AURA-X: [Modify] - 跟工作台卡半径 / inset token，ide 下为直角 */
+  /* Protection: 功能完整性已验证，无简化行为 */
+  /* 人格: [@前端艺术家] */
+  border-radius: var(--dw-wb-card-radius);
+  background: var(--dw-bg-panel);
+  padding: var(--dw-wb-pane-pad);
+}
+
+/* Host for DwCodeViewer / DwLogViewer: avoid double padding around the editor */
+.connector-browse-panel__pane--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.connector-browse-panel__pane--flush > .dw-code-viewer,
+.connector-browse-panel__pane--flush > .dw-code-viewer--card {
+  height: 100%;
+  border: none;
+  border-radius: inherit;
+}
+
+.connector-browse-panel__pane--flush:has(> .dw-empty) {
+  padding: var(--dw-wb-pane-pad);
+}
+
+.connector-browse-panel__pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dw-wb-stack-gap);
+  margin-bottom: var(--dw-wb-stack-gap);
+  font-size: var(--dw-text-sm);
+  color: var(--dw-text-muted);
+}
+
+.connector-browse-panel__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--dw-text-sm);
+}
+
+.connector-browse-panel__table th,
+.connector-browse-panel__table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--dw-border-light);
+  text-align: left;
+  vertical-align: top;
+}
+
+.connector-browse-panel__table tbody tr.is-clickable {
+  cursor: pointer;
+}
+
+.connector-browse-panel__table tbody tr.is-clickable:hover,
+.connector-browse-panel__table tbody tr.is-selected {
+  background: color-mix(in srgb, var(--dw-primary) 8%, transparent);
+}
+
+.connector-browse-panel__badge {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: var(--dw-radius-pill);
+  background: var(--dw-success-soft);
+  color: var(--dw-success-fg);
+  font-size: var(--dw-text-sm);
+}
+
+.connector-browse-panel__badge.is-unhealthy {
+  background: var(--dw-danger-soft);
+  color: var(--dw-danger-fg);
+}
+
+/* Workbench panes (Nacos / Polaris): flush split, filters live on the list pane. */
+.connector-browse-panel.nacos-workbench-pane,
+.connector-browse-panel.connector-workbench-pane {
+  gap: 0;
+}
+
+.nacos-workbench-pane .connector-browse-panel__body--split,
+.connector-workbench-pane .connector-browse-panel__body--split {
+  gap: 0;
+  grid-template-columns: minmax(300px, 0.92fr) minmax(340px, 1.28fr);
+}
+
+.nacos-workbench-pane .connector-browse-panel__pane,
+.connector-workbench-pane .connector-browse-panel__pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+/* Flush panes never keep free-standing card chrome (classic card radius). */
+.connector-workbench-pane .dw-workbench-table-shell,
+.connector-workbench-pane .dw-workbench-card,
+.nacos-workbench-pane .dw-workbench-table-shell,
+.nacos-workbench-pane .dw-workbench-card {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.nacos-workbench-pane .connector-browse-panel__pane + .connector-browse-panel__pane,
+.connector-workbench-pane .connector-browse-panel__pane + .connector-browse-panel__pane,
+.nacos-workbench-pane .dw-split-pane__end.connector-browse-panel__pane,
+.connector-workbench-pane .dw-split-pane__end.connector-browse-panel__pane {
+  border-left: 1px solid var(--dw-border);
+}
+
+/* Flush against the list: no card radius on either skin. */
+.connector-workbench-pane .dw-log-viewer--card {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.nacos-list,
+.connector-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.nacos-list__filters,
+.connector-list__filters {
+  display: grid;
+  grid-template-columns: minmax(8.5rem, 0.8fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.35rem;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--dw-border);
+}
+
+.nacos-list__filters .dw-select-host,
+.connector-list__filters .dw-select-host {
+  min-width: 0;
+  width: 100%;
+}
+
+.nacos-list__filters--services,
+.connector-list__filters--services {
+  grid-template-columns: minmax(8.5rem, 0.9fr) minmax(0, 1.4fr) auto;
+}
+
+.nacos-list__filters--configs,
+.connector-list__filters--configs {
+  grid-template-columns: minmax(8.5rem, 0.8fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.nacos-list__filter,
+.connector-list__filter,
+.nacos-list__filters .dw-search,
+.connector-list__filters .dw-search {
+  width: 100%;
+  min-width: 0;
+  height: var(--dw-density-sm);
+  box-sizing: border-box;
+}
+
+.nacos-list__filter,
+.connector-list__filter {
+  padding: 0 var(--dw-space-3);
+  border: 1px solid var(--dw-border-light);
+  border-radius: var(--dw-wb-control-radius);
+  background: var(--dw-bg-panel);
+  color: var(--dw-text);
+  font-size: var(--dw-text-sm);
+}
+
+.nacos-list__filter:focus,
+.connector-list__filter:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--dw-primary) 55%, var(--dw-border));
+}
+
+.nacos-list__refresh,
+.connector-list__refresh {
+  height: var(--dw-density-sm);
+  padding: 0 var(--dw-space-3);
+  border: 1px solid var(--dw-border-light);
+  border-radius: var(--dw-wb-control-radius);
+  background: var(--dw-bg-panel);
+  color: var(--dw-text-secondary);
+  font-size: var(--dw-text-sm);
+  white-space: nowrap;
+}
+
+.nacos-list__refresh:hover:not(:disabled),
+.connector-list__refresh:hover:not(:disabled) {
+  color: var(--dw-text);
+  box-shadow: none;
+}
+
+.nacos-list__scroll,
+.connector-list__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.nacos-list__scroll .connector-browse-panel__table thead th,
+.connector-list__scroll .connector-browse-panel__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--dw-bg-muted);
+  font-size: var(--dw-font-size-menu-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dw-text-muted);
+}
+
+.nacos-list__empty,
+.connector-list__empty {
+  padding: 0.5rem 0.75rem;
+  text-align: center;
+  color: var(--dw-text-muted);
+  font-size: var(--dw-text-sm);
+  vertical-align: middle;
+}
+
+.nacos-list__empty .dw-empty,
+.connector-list__empty .dw-empty {
+  padding: 1.25rem 0.75rem;
+}
+
+.nacos-list__foot,
+.connector-list__foot {
+  flex-shrink: 0;
+  padding: 0.35rem 0.65rem;
+  border-top: 1px solid var(--dw-border);
+  color: var(--dw-text-muted);
+  font-size: var(--dw-text-xs);
+}
+
+.nacos-list__foot--head,
+.connector-list__foot--head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 0;
+  border-bottom: 1px solid var(--dw-border);
+  color: var(--dw-text-secondary);
+}
+
+.nacos-editor-empty,
+.connector-editor-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-height: 0;
+  padding: 1.5rem;
+  color: var(--dw-text-muted);
+  text-align: center;
+}
+
+.nacos-editor-empty strong,
+.connector-editor-empty strong {
+  color: var(--dw-text-secondary);
+  font-size: var(--dw-text-sm);
+  font-weight: 600;
+}
+
+.nacos-editor-empty p,
+.connector-editor-empty p {
+  margin: 0;
+  max-width: 22rem;
+  font-size: var(--dw-text-xs);
+}

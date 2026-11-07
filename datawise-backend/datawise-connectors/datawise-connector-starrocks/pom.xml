@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.apache.datawise</groupId>
+        <artifactId>datawise-connectors</artifactId>
+        <version>5.0.0</version>
+    </parent>
+
+    <artifactId>datawise-connector-starrocks</artifactId>
+    <name>datawise-connector-starrocks</name>
+    <description>Optional StarRocks connector plugin (MySQL protocol)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.datawise</groupId>
+            <artifactId>datawise-connector-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.datawise</groupId>
+            <artifactId>datawise-connector-mysql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <version>8.4.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <includes>
+                                    <include>org.apache.datawise:datawise-connector-mysql</include>
+                                </includes>
+                            </artifactSet>
+                            <filters>
+                                <filter>
+                                    <artifact>org.apache.datawise:datawise-connector-mysql</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/services/**</exclude>
+                                        <exclude>META-INF/spring/**</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

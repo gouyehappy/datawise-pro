@@ -1,0 +1,211 @@
+/**
+ * Legacy host soft-card aliases (prefer .dw-soft-card on new code).
+ * Core `.dw-soft-card` lives in `@datawise/tokens/plugins/soft-card.css`.
+ * Skin-gated so IDE does not inherit Classic shadow. Radius still follows --dw-panel-radius.
+ */
+
+html[data-ui-skin='classic'] :is(
+    .tool-window,
+    .explorer-panel,
+    .explorer.dw-surface,
+    .workspace.dw-surface,
+    .shortcut-panel,
+    .notification-drawer,
+    .dw-side-browser,
+    .mp-hero,
+    .mp-panel,
+    .mp-stat,
+    .mp-stat--icon,
+    .mp-status,
+    .mp-journey,
+    .mp-tile,
+    .mp-card,
+    .dash-card,
+    .dash-edit-bar,
+    .setting-block,
+    .editor-card,
+    .shortcut-card,
+    .setting-card,
+    .table-detail__stat,
+    .table-detail__properties-body,
+    .table-detail__ddl-card,
+    .ai-workbench .ai-side-explorer,
+    .ai-workbench .ai-workspace,
+    .lineage-panel__warnings,
+    .lineage-panel__impact,
+    .dw-er-table-node,
+    .dw-graph-node-shell,
+    .schema-er-flow-node,
+    .lineage-entity-node,
+    .schema-compare__body > .table-list,
+    .schema-compare__body > .table-detail,
+    .schema-compare__body > .ddl-panel,
+    .schema-er-graph__inspector,
+    .schema-er-graph__dock,
+    .dw-embedded-panel,
+    .table-detail__hero,
+    .dw-workbench-page .dw-code-viewer--card
+),
+html:not([data-ui-skin]) :is(
+    .tool-window,
+    .explorer-panel,
+    .explorer.dw-surface,
+    .workspace.dw-surface,
+    .shortcut-panel,
+    .notification-drawer,
+    .dw-side-browser,
+    .mp-hero,
+    .mp-panel,
+    .mp-stat,
+    .mp-stat--icon,
+    .mp-status,
+    .mp-journey,
+    .mp-tile,
+    .mp-card,
+    .dash-card,
+    .dash-edit-bar,
+    .setting-block,
+    .editor-card,
+    .shortcut-card,
+    .setting-card,
+    .table-detail__stat,
+    .table-detail__properties-body,
+    .table-detail__ddl-card,
+    .ai-workbench .ai-side-explorer,
+    .ai-workbench .ai-workspace,
+    .lineage-panel__warnings,
+    .lineage-panel__impact,
+    .dw-er-table-node,
+    .dw-graph-node-shell,
+    .schema-er-flow-node,
+    .lineage-entity-node,
+    .schema-compare__body > .table-list,
+    .schema-compare__body > .table-detail,
+    .schema-compare__body > .ddl-panel,
+    .schema-er-graph__inspector,
+    .schema-er-graph__dock,
+    .dw-embedded-panel,
+    .table-detail__hero,
+    .dw-workbench-page .dw-code-viewer--card
+) {
+    border-radius: var(--dw-panel-radius);
+    box-shadow: var(--dw-panel-shadow);
+}
+
+/* Radius only — already bordered; do not add a second shadow */
+html[data-ui-skin='classic'] :is(
+    .table-relations__summary-card,
+    .table-relations__section,
+    .table-relations__card,
+    .mp-hero__inner,
+    .mp-hero__settings
+),
+html:not([data-ui-skin]) :is(
+    .table-relations__summary-card,
+    .table-relations__section,
+    .table-relations__card,
+    .mp-hero__inner,
+    .mp-hero__settings
+) {
+    border-radius: var(--dw-panel-radius);
+}
+
+html[data-ui-skin='classic'] :is(
+    .relation-graph__toolbar,
+    .dw-er-table-node__head,
+    .table-detail__ddl-head,
+    .table-migration__toolbar
+),
+html:not([data-ui-skin]) :is(
+    .relation-graph__toolbar,
+    .dw-er-table-node__head,
+    .table-detail__ddl-head,
+    .table-migration__toolbar
+) {
+    border-radius: var(--dw-panel-radius) var(--dw-panel-radius) 0 0;
+}
+
+html[data-ui-skin='classic'] .relation-graph__canvas-wrap,
+html:not([data-ui-skin]) .relation-graph__canvas-wrap {
+    border-radius: 0 0 var(--dw-panel-radius) var(--dw-panel-radius);
+}
+
+html[data-ui-skin='classic'] .table-detail__sidebar,
+html:not([data-ui-skin]) .table-detail__sidebar {
+    border-radius: var(--dw-panel-radius) 0 0 var(--dw-panel-radius);
+}
+
+/* SQL result split: same soft card, plus the inner seam border */
+html[data-ui-skin='classic'] .result-pane--split:not(.result-pane--messages-only) > :is(.messages-panel, .messages-rail),
+html:not([data-ui-skin]) .result-pane--split:not(.result-pane--messages-only) > :is(.messages-panel, .messages-rail) {
+    border-radius: var(--dw-panel-radius);
+    box-shadow: var(--dw-panel-shadow);
+    border-right: 1px solid var(--dw-border-light);
+}
+
+html[data-ui-skin='classic'] .result-pane--split:not(.result-pane--messages-only) > .result-pane__main,
+html:not([data-ui-skin]) .result-pane--split:not(.result-pane--messages-only) > .result-pane__main {
+    border-radius: var(--dw-panel-radius);
+    box-shadow: var(--dw-panel-shadow);
+    border-left: 1px solid var(--dw-border-light);
+}
+
+/* Raised market / plugin cards: soft card + extra border, wash, padding */
+html[data-ui-skin='classic'] :is(
+    .pack-store-page .pack-suite,
+    .pack-store-page .pack-suite__card,
+    .pack-store-page .pack-card,
+    .pack-store-page .pack-store__site-trial,
+    .pack-store-page .pack-store__filters,
+    .plugin-page .plugin-panel,
+    .plugin-page .plugin-card,
+    .plugin-page .plugin-alert,
+    .plugin-page .plugin-filter-dock,
+    .plugin-page .plugin-preset-card,
+    .connector-market-page .connector-card,
+    .connector-market-page .connector-market-pending-alert,
+    .connector-market-page .connector-market-library,
+    .plugin-dev-page .plugin-dev__panel,
+    .plugin-dev-page .plugin-dev-preset-sync,
+    .community-plugin-page .community-plugin-panel,
+    .community-plugin-page .community-plugin-card
+),
+html:not([data-ui-skin]) :is(
+    .pack-store-page .pack-suite,
+    .pack-store-page .pack-suite__card,
+    .pack-store-page .pack-card,
+    .pack-store-page .pack-store__site-trial,
+    .pack-store-page .pack-store__filters,
+    .plugin-page .plugin-panel,
+    .plugin-page .plugin-card,
+    .plugin-page .plugin-alert,
+    .plugin-page .plugin-filter-dock,
+    .plugin-page .plugin-preset-card,
+    .connector-market-page .connector-card,
+    .connector-market-page .connector-market-pending-alert,
+    .connector-market-page .connector-market-library,
+    .plugin-dev-page .plugin-dev__panel,
+    .plugin-dev-page .plugin-dev-preset-sync,
+    .community-plugin-page .community-plugin-panel,
+    .community-plugin-page .community-plugin-card
+) {
+    border-radius: calc(var(--dw-panel-radius) + 2px);
+    box-shadow: var(--dw-panel-shadow), 0 1px 0 color-mix(in srgb, var(--dw-border) 55%, transparent);
+    border: 1px solid color-mix(in srgb, var(--dw-border) 70%, transparent);
+    background: color-mix(in srgb, var(--dw-surface) 96%, var(--dw-bg));
+}
+
+html[data-ui-skin='classic'] :is(
+    .pack-store-page .pack-card,
+    .plugin-page .plugin-card,
+    .plugin-page .plugin-preset-card,
+    .connector-market-page .connector-card
+),
+html:not([data-ui-skin]) :is(
+    .pack-store-page .pack-card,
+    .plugin-page .plugin-card,
+    .plugin-page .plugin-preset-card,
+    .connector-market-page .connector-card
+) {
+    padding: calc(var(--dw-space-3) + 2px);
+}

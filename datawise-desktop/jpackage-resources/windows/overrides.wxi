@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DataWise jpackage WiX overrides.
+  Language 2052 = zh-CN → installer UI uses Chinese WiX localization.
+-->
+<Include>
+  <?define JpProductLanguage=2052 ?>
+</Include>

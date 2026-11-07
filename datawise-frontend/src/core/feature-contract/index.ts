@@ -1,0 +1,30 @@
+export {defineFeature} from '@/core/feature-contract/define-feature'
+export {
+    listFeatureMenuContributions,
+    listFeatureMenuContributionsForSlot,
+    listFeatureNavModuleContributions,
+    listFeaturePaletteContributions,
+    listFeatureSettingsContributions,
+    listFeatureTabContributions,
+    listRegisteredFeatures,
+    registerFeatures,
+    resetFeatureRegistry,
+    resolveFeatureTabContribution,
+    resolveNavModuleContribution,
+    resolveShellSlotForModule,
+} from '@/core/feature-contract/feature-runtime'
+export type {
+    FeatureContributions,
+    FeatureDefinition,
+    FeatureMenuAction,
+    FeatureMenuContribution,
+    FeatureNavModuleContribution,
+    FeatureNavModuleKind,
+    FeaturePaletteAction,
+    FeaturePaletteContribution,
+    FeaturePaletteWhen,
+    FeatureSettingsContribution,
+    FeatureShellSlot,
+    FeatureTabContribution,
+    FeatureWorkspaceOpenId,
+} from '@/core/feature-contract/types'

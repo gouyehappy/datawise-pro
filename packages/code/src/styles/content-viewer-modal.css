@@ -1,0 +1,78 @@
+/**
+ * Shared dense chrome for DwLogViewer / DwCodeViewer expand modals.
+ */
+.app-modal:has(.dw-content-viewer-modal) {
+  padding-bottom: 0;
+}
+
+.app-modal:has(.dw-content-viewer-modal) .app-modal-header {
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--dw-border) 80%, transparent);
+}
+
+.app-modal:has(.dw-content-viewer-modal) .app-modal-heading {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.app-modal:has(.dw-content-viewer-modal) .app-modal-heading h2 {
+  margin: 0;
+  font-size: var(--dw-text-md);
+  font-weight: 650;
+  line-height: 1.3;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.app-modal:has(.dw-content-viewer-modal) .app-modal-heading p {
+  margin: 0;
+  max-width: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+  font-size: var(--dw-text-sm);
+  color: var(--dw-text-muted);
+}
+
+.app-modal:has(.dw-content-viewer-modal) .app-modal-heading p::before {
+  content: '·';
+  margin-right: 8px;
+  color: color-mix(in srgb, var(--dw-text-muted) 70%, transparent);
+}
+
+.app-modal:has(.dw-content-viewer-modal) .app-modal-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.app-modal:has(.dw-content-viewer-modal) .app-modal-close {
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.app-modal:has(.dw-content-viewer-modal) .app-modal-body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  flex: 1;
+}
+
+.app-modal:has(.dw-content-viewer-modal) .dw-content-viewer-modal__surface {
+  min-height: calc(94vh - 72px);
+}

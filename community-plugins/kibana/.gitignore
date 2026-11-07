@@ -1,0 +1,8 @@
+# Build / IDE
+.dwp-staging/
+dist/
+.signing/
+backend/datawise-plugin-kibana
+backend/datawise-plugin-kibana.exe
+frontend/node_modules/
+frontend/dist/

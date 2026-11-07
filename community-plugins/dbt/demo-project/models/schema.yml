@@ -1,0 +1,15 @@
+version: 2
+models:
+  - name: stg_customers
+    description: Demo staging customers
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+          - unique
+  - name: customers
+    description: Demo active customers mart
+    columns:
+      - name: customer_id
+        tests:
+          - not_null

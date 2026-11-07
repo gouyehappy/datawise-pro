@@ -1,0 +1,23 @@
+{
+  "enabled": false,
+  "issuer": "https://idp.example.com/realms/datawise",
+  "clientId": "datawise",
+  "clientSecret": "",
+  "redirectUri": "http://localhost:18421/api/auth/oidc/callback",
+  "frontendRedirectBase": "http://localhost:28413",
+  "scopes": "openid profile email",
+  "localLoginEnabled": true,
+  "tenantClaim": "org_id",
+  "tenantClaimMap": {
+    "acme-corp": "acme"
+  },
+  "defaultOidcRoleKey": "developer",
+  "autoProvisionMembership": true,
+  "roleClaim": "groups",
+  "roleClaimMap": {
+    "datawise-admins": "tenant_admin",
+    "datawise-analysts": "analyst"
+  },
+  "syncRolesFromClaim": false,
+  "deprovisionMissingRoleClaim": false
+}

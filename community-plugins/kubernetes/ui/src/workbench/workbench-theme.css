@@ -1,0 +1,199 @@
+/* Host-synced light/dark for classic K8s workbench surfaces.
+ * Base workbench/session/detail CSS still ships dark fallbacks; these
+ * overrides kick in when host-appearance sets html.light / data-theme=light. */
+:root,
+:root.dark,
+:root[data-theme="dark"],
+:root[data-dw-theme="dark"] {
+  --wb-bg: #0c1015;
+  --wb-panel: #171e27;
+  --wb-sidebar: #090c10;
+  --wb-text: #f0f0f3;
+  --wb-text-strong: #f4f4f7;
+  --wb-muted: #c4c7cc;
+  --wb-faint: #a8adb6;
+  --wb-border: #2e3440;
+  --wb-border-2: #374151;
+  --wb-card: #162234;
+  --wb-input: #0b1320;
+  --wb-btn: #1e2d40;
+  --wb-btn-border: #3a4e69;
+  --wb-notice: #1c2b42;
+  --wb-error-bg: #44242d;
+  --wb-error-fg: #ffb4b4;
+}
+
+:root.light,
+:root[data-theme="light"],
+:root[data-dw-theme="light"] {
+  --wb-bg: #f8fafc;
+  --wb-panel: #ffffff;
+  --wb-sidebar: #f1f5f9;
+  --wb-text: #0f172a;
+  --wb-text-strong: #020617;
+  --wb-muted: #64748b;
+  --wb-faint: #94a3b8;
+  --wb-border: #e2e8f0;
+  --wb-border-2: #cbd5e1;
+  --wb-card: #ffffff;
+  --wb-input: #ffffff;
+  --wb-btn: #e2e8f0;
+  --wb-btn-border: #cbd5e1;
+  --wb-notice: #eff6ff;
+  --wb-error-bg: #fef2f2;
+  --wb-error-fg: #b91c1c;
+}
+
+:root.light .wb,
+:root[data-theme="light"] .wb,
+:root[data-dw-theme="light"] .wb {
+  background: var(--wb-bg) !important;
+  color: var(--wb-text) !important;
+}
+
+:root.light .wb-sidebar,
+:root[data-theme="light"] .wb-sidebar,
+:root[data-dw-theme="light"] .wb-sidebar {
+  background: var(--wb-sidebar) !important;
+  border-right-color: var(--wb-border) !important;
+}
+
+:root.light .wb-brand,
+:root[data-theme="light"] .wb-brand,
+:root[data-dw-theme="light"] .wb-brand {
+  color: var(--wb-text-strong) !important;
+}
+
+:root.light .wb-sidebar button,
+:root.light .wb-sidebar summary,
+:root[data-theme="light"] .wb-sidebar button,
+:root[data-theme="light"] .wb-sidebar summary,
+:root[data-dw-theme="light"] .wb-sidebar button,
+:root[data-dw-theme="light"] .wb-sidebar summary {
+  color: var(--wb-text) !important;
+}
+
+:root.light .wb-sidebar button:hover,
+:root.light .wb-sidebar button.active,
+:root[data-theme="light"] .wb-sidebar button:hover,
+:root[data-theme="light"] .wb-sidebar button.active,
+:root[data-dw-theme="light"] .wb-sidebar button:hover,
+:root[data-dw-theme="light"] .wb-sidebar button.active {
+  background: #2563eb !important;
+  color: #fff !important;
+}
+
+:root.light .wb-sidebar button small,
+:root.light .wb-sidebar summary,
+:root.light .wb-sidebar footer small,
+:root[data-theme="light"] .wb-sidebar button small,
+:root[data-theme="light"] .wb-sidebar summary,
+:root[data-theme="light"] .wb-sidebar footer small,
+:root[data-dw-theme="light"] .wb-sidebar button small,
+:root[data-dw-theme="light"] .wb-sidebar summary,
+:root[data-dw-theme="light"] .wb-sidebar footer small {
+  color: var(--wb-muted) !important;
+}
+
+:root.light .wb-sidebar footer,
+:root[data-theme="light"] .wb-sidebar footer,
+:root[data-dw-theme="light"] .wb-sidebar footer {
+  color: var(--wb-text) !important;
+  border-top-color: var(--wb-border) !important;
+}
+
+:root.light .k8s-session,
+:root[data-theme="light"] .k8s-session,
+:root[data-dw-theme="light"] .k8s-session {
+  background: var(--wb-panel) !important;
+  color: var(--wb-text) !important;
+  border-color: var(--wb-border-2) !important;
+}
+
+:root.light .k8s-session button,
+:root.light .k8s-session select,
+:root.light .k8s-session input,
+:root[data-theme="light"] .k8s-session button,
+:root[data-theme="light"] .k8s-session select,
+:root[data-theme="light"] .k8s-session input,
+:root[data-dw-theme="light"] .k8s-session button,
+:root[data-dw-theme="light"] .k8s-session select,
+:root[data-dw-theme="light"] .k8s-session input {
+  background: var(--wb-input) !important;
+  color: var(--wb-text) !important;
+  border-color: var(--wb-border-2) !important;
+}
+
+:root.light .k8s-terminal,
+:root[data-theme="light"] .k8s-terminal,
+:root[data-dw-theme="light"] .k8s-terminal {
+  background: #0f172a !important; /* terminal stays dark by design */
+}
+
+:root.light .kd-detail,
+:root.light .kd-editor,
+:root.light .kd-confirm,
+:root[data-theme="light"] .kd-detail,
+:root[data-theme="light"] .kd-editor,
+:root[data-theme="light"] .kd-confirm,
+:root[data-dw-theme="light"] .kd-detail,
+:root[data-dw-theme="light"] .kd-editor,
+:root[data-dw-theme="light"] .kd-confirm {
+  background: var(--wb-panel) !important;
+  color: var(--wb-text) !important;
+  border-color: var(--wb-border-2) !important;
+}
+
+:root.light .kd-detail button,
+:root.light .kd-editor button,
+:root.light .kd-confirm button,
+:root[data-theme="light"] .kd-detail button,
+:root[data-theme="light"] .kd-editor button,
+:root[data-theme="light"] .kd-confirm button,
+:root[data-dw-theme="light"] .kd-detail button,
+:root[data-dw-theme="light"] .kd-editor button,
+:root[data-dw-theme="light"] .kd-confirm button {
+  background: var(--wb-btn) !important;
+  color: var(--wb-text) !important;
+  border-color: var(--wb-btn-border) !important;
+}
+
+:root.light .kd-sections article,
+:root.light .kd-sections details,
+:root.light .kd-timeline li,
+:root[data-theme="light"] .kd-sections article,
+:root[data-theme="light"] .kd-sections details,
+:root[data-theme="light"] .kd-timeline li,
+:root[data-dw-theme="light"] .kd-sections article,
+:root[data-dw-theme="light"] .kd-sections details,
+:root[data-dw-theme="light"] .kd-timeline li {
+  background: var(--wb-card) !important;
+  border-color: var(--wb-border) !important;
+}
+
+:root.light .kd-notice,
+:root[data-theme="light"] .kd-notice,
+:root[data-dw-theme="light"] .kd-notice {
+  background: var(--wb-notice) !important;
+}
+
+:root.light .kd-error,
+:root.light .k8s-session-error,
+:root[data-theme="light"] .kd-error,
+:root[data-theme="light"] .k8s-session-error,
+:root[data-dw-theme="light"] .kd-error,
+:root[data-dw-theme="light"] .k8s-session-error {
+  background: var(--wb-error-bg) !important;
+  color: var(--wb-error-fg) !important;
+}
+
+:root.light .kd-yaml,
+:root.light .kd-confirm input,
+:root[data-theme="light"] .kd-yaml,
+:root[data-theme="light"] .kd-confirm input,
+:root[data-dw-theme="light"] .kd-yaml,
+:root[data-dw-theme="light"] .kd-confirm input {
+  background: var(--wb-input) !important;
+  color: var(--wb-text) !important;
+  border-color: var(--wb-border-2) !important;
+}

@@ -1,0 +1,256 @@
+name: Desktop release
+
+# Tag a release (example):
+#   git tag v4.1.4
+#   git push origin v4.1.4
+#
+# Desktop host is single-JVM JCEF only (zip + native installer via dist:desktop).
+# Default connector profile is **core** (mysql/postgresql/sqlite); use dist:desktop:full for all connectors.
+#   Windows → zip + Setup.exe (Inno) · macOS → zip + DMG · Linux → zip + deb (fakeroot)
+# Runtime image: JetBrains jbr_jcef (cached under datawise-desktop/target/jbr-cache).
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish artifacts to GitHub Releases'
+        type: boolean
+        default: true
+      profile:
+        description: 'Connector packaging profile (default core)'
+        type: choice
+        options:
+          - core
+          - slim
+          - full
+        default: core
+
+concurrency:
+  group: desktop-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  # Prepare GitHub Release for this tag. Keep existing assets by default so a
+  # single-OS retry (e.g. macOS) does not wipe successful Win/Linux uploads.
+  # Set repository variable FORCE_RELEASE_RESET=true to wipe and rebuild clean.
+  reset-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure GitHub Release exists (optional wipe)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_RELEASE_RESET: ${{ vars.FORCE_RELEASE_RESET }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish }}" != "true" ]; then
+            echo "publish=false — skip release reset"
+            exit 0
+          fi
+          if ! gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "No release for $TAG yet — platform jobs will create it"
+            exit 0
+          fi
+          COUNT="$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets | length')"
+          if [ "${FORCE_RELEASE_RESET:-}" = "true" ] || [ "${FORCE_RELEASE_RESET:-}" = "1" ]; then
+            echo "FORCE_RELEASE_RESET set — deleting release $TAG ($COUNT assets)…"
+            gh release delete "$TAG" --repo "${{ github.repository }}" --yes
+            echo "Deleted release $TAG (git tag kept)"
+            exit 0
+          fi
+          echo "Keeping existing release $TAG ($COUNT assets) — new uploads will merge/replace"
+
+  release-windows:
+    needs: reset-release
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: datawise-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            datawise-frontend/package-lock.json
+            sql-editor/package-lock.json
+
+      - name: Align package version with tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: node scripts/desktop/align-release-version.mjs --from-env
+
+      - name: Install frontend deps
+        run: |
+          npm ci --prefix ../sql-editor --ignore-scripts
+          npm ci --workspaces=false
+
+      - name: Cache jbr_jcef runtime
+        uses: actions/cache@v4
+        with:
+          path: datawise-desktop/target/jbr-cache
+          key: jbr-jcef-17.0.12-b1207.37-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Prefetch jbr_jcef
+        working-directory: datawise-desktop
+        run: node scripts/ensure-jbr-jcef.mjs
+
+      - name: Install WiX Toolset (for Setup.exe)
+        shell: bash
+        run: choco install wixtoolset -y --no-progress
+
+      - name: Build and publish Windows desktop (JCEF)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATAWISE_DESKTOP_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'core' }}
+          NODE_OPTIONS: --max-old-space-size=6144
+        shell: bash
+        run: |
+          # WiX candle/light on PATH for jpackage --type exe
+          export PATH="/c/Program Files (x86)/WiX Toolset v3.14/bin:/c/Program Files (x86)/WiX Toolset v3.11/bin:$PATH"
+          PROFILE="${DATAWISE_DESKTOP_PROFILE:-core}"
+          echo "Desktop connector profile=$PROFILE"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish }}" != "true" ]; then
+            npm run dist:desktop -- --profile "$PROFILE" --dir
+          else
+            npm run dist:desktop -- --profile "$PROFILE" --publish
+          fi
+
+  release-linux:
+    needs: reset-release
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: datawise-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            datawise-frontend/package-lock.json
+            sql-editor/package-lock.json
+
+      - name: Align package version with tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: node scripts/desktop/align-release-version.mjs --from-env
+
+      - name: Install frontend deps
+        run: |
+          npm ci --prefix ../sql-editor --ignore-scripts
+          npm ci --workspaces=false
+
+      - name: Cache jbr_jcef runtime
+        uses: actions/cache@v4
+        with:
+          path: datawise-desktop/target/jbr-cache
+          key: jbr-jcef-17.0.12-b1207.37-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Prefetch jbr_jcef
+        working-directory: datawise-desktop
+        run: node scripts/ensure-jbr-jcef.mjs
+
+      - name: Install fakeroot (for .deb installer)
+        run: sudo apt-get update && sudo apt-get install -y fakeroot binutils
+
+      - name: Build and publish Linux desktop (JCEF)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATAWISE_DESKTOP_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'core' }}
+          NODE_OPTIONS: --max-old-space-size=6144
+        shell: bash
+        run: |
+          PROFILE="${DATAWISE_DESKTOP_PROFILE:-core}"
+          echo "Desktop connector profile=$PROFILE"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish }}" != "true" ]; then
+            npm run dist:desktop -- --profile "$PROFILE" --dir
+          else
+            npm run dist:desktop -- --profile "$PROFILE" --publish
+          fi
+
+  release-macos:
+    needs: reset-release
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: datawise-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            datawise-frontend/package-lock.json
+            sql-editor/package-lock.json
+
+      - name: Align package version with tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: node scripts/desktop/align-release-version.mjs --from-env
+
+      - name: Install frontend deps
+        run: |
+          npm ci --prefix ../sql-editor --ignore-scripts
+          npm ci --workspaces=false
+
+      - name: Cache jbr_jcef runtime
+        uses: actions/cache@v4
+        with:
+          path: datawise-desktop/target/jbr-cache
+          key: jbr-jcef-17.0.12-b1207.37-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Prefetch jbr_jcef
+        working-directory: datawise-desktop
+        run: node scripts/ensure-jbr-jcef.mjs
+
+      - name: Build and publish macOS desktop (JCEF)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATAWISE_DESKTOP_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'core' }}
+          # Avoid Node heap pressure while copying CEF Frameworks / zipping .app
+          NODE_OPTIONS: --max-old-space-size=6144
+          # Optional: Developer ID Application identity for CEF Frameworks + app codesign
+          MAC_SIGNING_IDENTITY: ${{ secrets.MAC_SIGNING_IDENTITY }}
+          # Optional: repository variable MAC_NOTARIZE=true to notarize after sign
+          MAC_NOTARIZE: ${{ vars.MAC_NOTARIZE }}
+          NOTARYTOOL_KEYCHAIN_PROFILE: ${{ secrets.NOTARYTOOL_KEYCHAIN_PROFILE }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        shell: bash
+        run: |
+          PROFILE="${DATAWISE_DESKTOP_PROFILE:-core}"
+          echo "Desktop connector profile=$PROFILE"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish }}" != "true" ]; then
+            npm run dist:desktop -- --profile "$PROFILE" --dir
+          else
+            npm run dist:desktop -- --profile "$PROFILE" --publish
+          fi

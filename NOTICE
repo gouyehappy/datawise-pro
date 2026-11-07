@@ -1,0 +1,7 @@
+DataWise
+Copyright 2026 DataWise Contributors
+
+This product includes software developed as part of the DataWise project.
+
+The `sql-editor/` package (`@datawise/sql-editor`) is licensed under the MIT License.
+See `sql-editor/package.json` and `sql-editor/LICENSE` if present.

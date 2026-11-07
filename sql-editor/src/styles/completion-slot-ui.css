@@ -1,0 +1,53 @@
+/**
+ * 补全槽位 badge 共用色板。
+ * 与 `.hint-slot`（hint bar）或 `.slot-chip`（settings）组合使用 `tone-*` class。
+ */
+.hint-slot.tone-default,
+.slot-chip.tone-default {
+    background: #6b7280;
+}
+
+.hint-slot.tone-select,
+.slot-chip.tone-select {
+    background: #2563eb;
+}
+
+.hint-slot.tone-from,
+.slot-chip.tone-from {
+    background: #7c3aed;
+}
+
+.hint-slot.tone-join,
+.slot-chip.tone-join {
+    background: #9333ea;
+}
+
+.hint-slot.tone-on,
+.slot-chip.tone-on {
+    background: #0891b2;
+}
+
+.hint-slot.tone-where,
+.slot-chip.tone-where {
+    background: #ea580c;
+}
+
+.hint-slot.tone-group,
+.slot-chip.tone-group {
+    background: #ca8a04;
+}
+
+.hint-slot.tone-having,
+.slot-chip.tone-having {
+    background: #d97706;
+}
+
+.hint-slot.tone-order,
+.slot-chip.tone-order {
+    background: #059669;
+}
+
+.hint-slot.tone-tail,
+.slot-chip.tone-tail {
+    background: #64748b;
+}

@@ -1,0 +1,120 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.example.hello",
+  "name": "Hello Workbench",
+  "version": "1.0.0",
+  "publisher": "datawise-examples",
+  "icon": "assets/plugin.svg",
+  "description": "Demo community plugin: connection + workbench + hello:/ filesystem",
+  "license": "Apache-2.0",
+  "tags": [
+    "example",
+    "demo"
+  ],
+  "permissions": [
+    "host.workbench",
+    "host.filesystem",
+    "host.events"
+  ],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.1"
+  },
+  "entrypoints": {
+    "backend": {
+      "executable": "bin/hello-plugin.jar",
+      "transport": "stdio-jsonl"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.example.hello.connection",
+      "label": "Hello connection",
+      "icon": "assets/plugin.svg",
+      "capabilities": [
+        "test",
+        "connect"
+      ],
+      "fields": [
+        {
+          "key": "host",
+          "label": "Host",
+          "type": "text",
+          "binding": "host",
+          "required": true,
+          "default": "127.0.0.1"
+        },
+        {
+          "key": "port",
+          "label": "Port",
+          "type": "number",
+          "binding": "port",
+          "default": 22
+        },
+        {
+          "key": "greeting",
+          "label": "Greeting",
+          "type": "text",
+          "binding": "config",
+          "default": "Hello"
+        }
+      ],
+      "workbench": "io.datawise.example.hello.workbench",
+      "filesystemProvider": "io.datawise.example.hello.fs"
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.example.hello.workbench",
+      "label": "Hello workbench"
+    },
+    {
+      "type": "filesystem-provider",
+      "id": "io.datawise.example.hello.fs",
+      "label": "Hello files",
+      "schemes": [
+        "hello"
+      ],
+      "rootUri": "hello:/",
+      "capabilities": [
+        "read",
+        "write",
+        "delete",
+        "rename",
+        "mkdir"
+      ]
+    },
+    {
+      "type": "context-menu",
+      "id": "io.datawise.example.hello.connection-menu",
+      "label": "Hello say hi",
+      "menu": "connection"
+    },
+    {
+      "type": "result-view",
+      "id": "io.datawise.example.hello.result",
+      "label": "Hello result view"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "你好工作台",
+      "description": "社区插件最小示例：连接 + 工作台 + 文件系统。",
+      "contributions": {
+        "io.datawise.example.hello.connection": {
+          "label": "你好连接"
+        },
+        "io.datawise.example.hello.workbench": {
+          "label": "你好工作台"
+        },
+        "io.datawise.example.hello.fs": {
+          "label": "你好文件"
+        }
+      }
+    }
+  }
+}

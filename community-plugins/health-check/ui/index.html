@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Health Checklist</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: var(--color-background, #131416);
+      --ink-2: var(--color-muted, #2a2a2d);
+      --ink-3: var(--color-popover, #1e1e20);
+      --line: var(--color-border, rgb(110 110 114 / 0.28));
+      --fg: var(--color-foreground, #d7d7db);
+      --dim: var(--color-muted-foreground, #97989d);
+      --faint: color-mix(in srgb, var(--color-muted-foreground, #97989d) 78%, transparent);
+      --coral: #ff6b4a; --coral-ink: #2a0d06;
+      --mint: var(--color-success, #4ade80);
+      --amber: var(--color-warning, #fbbf24);
+      --err: var(--color-destructive, #f3625f);
+      --glow: rgba(62,207,142,.08);
+      font-family: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+    }
+    :root[data-theme="light"], :root[data-dw-theme="light"] {
+      color-scheme: light;
+      --ink: var(--color-background, #ffffff);
+      --ink-2: var(--color-muted, #f4f4f5);
+      --ink-3: var(--color-popover, #ffffff);
+      --line: var(--color-border, #e4e4e7);
+      --fg: var(--color-foreground, #18181b);
+      --dim: var(--color-muted-foreground, #52525b);
+      --coral-ink: #fff7f4; --glow: rgba(22,163,74,.08);
+      --faint: color-mix(in srgb, var(--color-muted-foreground, #71717a) 88%, transparent);
+    }
+    *{box-sizing:border-box} html,body{height:100%;margin:0} body{background:radial-gradient(800px 360px at 100% -10%,var(--glow),transparent 50%),var(--ink);color:var(--fg);overflow:hidden}
+    .shell{height:100%}
+    .rail{border-right:1px solid var(--line);display:flex;flex-direction:column;background:color-mix(in srgb,var(--ink-2) 90%,transparent);min-width:0}
+    .pad{padding:16px 14px 8px} strong{font-size:17px}
+    input,select,button{font: 500 var(--dw-font-size) var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);color:var(--fg)}
+    input,select{width:100%;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--ink);padding:0 10px}
+    .list{flex:1;overflow:auto;padding:8px}
+    .item{width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:8px;padding:8px 10px;cursor:pointer}
+    .item.active{background:rgba(62,207,142,.12);border-color:rgba(62,207,142,.4)}
+    .stage{display:flex;flex-direction:column;min-height:0;position:relative}
+    .head{padding:16px 22px 0} h2{margin:0;font-size:24px} .sub{color:var(--dim);font-size: var(--dw-font-size);margin-top:6px}
+    .canvas{flex:1;margin:12px 22px 72px;overflow:auto}
+    table{width:100%;border-collapse:collapse;font-size:13px} th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+    th{color:var(--faint);font-size:11px}
+    .st{font-weight:650;font-size:12px}
+    .st.pass{color:var(--mint)} .st.fail{color:var(--err)} .st.deferred{color:var(--amber)}
+    .dock{position:absolute;left:22px;right:22px;bottom:12px;height:52px;display:flex;gap:8px;align-items:center;padding:0 10px;border-radius:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--ink-3) 94%,#000)}
+    .btn{height:34px;padding:0 14px;border:0;border-radius:9px;cursor:pointer}
+    .btn-primary{background:var(--coral);color:var(--coral-ink);font-weight:650}
+    .btn-quiet{background:transparent;color:var(--dim);border:1px solid var(--line)}
+    .empty{color:var(--faint);padding:16px 4px}
+    label.inline{display:flex;align-items:center;gap:6px;font-size: var(--dw-font-size);color:var(--dim)}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="pad"><strong>Suites</strong></div>
+    <div class="pad"><input id="q" type="search" placeholder="搜索检查包" /></div>
+    <div class="list" id="list"></div>
+  </aside>
+  <section class="stage">
+    <header class="head">
+      <h2 id="title">选择检查包</h2>
+      <div class="sub" id="summary">点全部巡检开始。SQL 检查会用你选的 DataWise 连接。</div>
+    </header>
+    <div class="canvas" id="canvas"><div class="empty">还没有结果。</div></div>
+    <div class="dock">
+      <select id="conn" style="max-width:280px"></select>
+      <button class="btn btn-primary" id="runAll">全部巡检</button>
+      <button class="btn btn-quiet" id="runFail">重跑失败</button>
+      <button class="btn btn-quiet" id="copy">复制报告</button>
+      <label class="inline"><input id="fails" type="checkbox" style="width:auto;height:auto"/> 只看失败</label>
+    </div>
+  </section>
+</div>
+<script>
+  let connectionId = ''
+  let suites = []
+  let current = null
+  let results = []
+  let summary = { pass: 0, fail: 0, elapsedMs: 0 }
+  let sqlConnections = []
+
+  function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+  function ready(){return window.datawisePlugin && window.datawisePlugin.invoke}
+  async function invoke(m,p={}){return window.datawisePlugin.invoke(m, Object.assign({connectionId}, p))}
+
+  function renderList() {
+    const q = document.getElementById('q').value.trim().toLowerCase()
+    const list = document.getElementById('list')
+    list.innerHTML = ''
+    for (const s of suites.filter(x => !q || (x.title+x.id).toLowerCase().includes(q))) {
+      const b = document.createElement('button')
+      b.className = 'item' + (current && current.id === s.id ? ' active' : '')
+      b.innerHTML = esc(s.title)+'<div class="empty" style="padding:2px 0">'+s.checks+' checks</div>'
+      b.onclick = () => select(s.id)
+      list.appendChild(b)
+    }
+  }
+
+  function visible() {
+    return document.getElementById('fails').checked ? results.filter(r => r.status === 'fail') : results
+  }
+
+  function renderTable() {
+    document.getElementById('title').textContent = current ? current.title : '选择检查包'
+    document.getElementById('summary').textContent = results.length
+      ? (summary.fail + ' 失败 · ' + summary.pass + ' 通过 · ' + summary.elapsedMs + ' ms')
+      : '点全部巡检开始。'
+    const rows = visible()
+    document.getElementById('canvas').innerHTML = rows.length
+      ? '<table><tr><th>status</th><th>check</th><th>target</th><th>ms</th><th>summary</th></tr>'
+        + rows.map(r => '<tr><td class="st '+esc(r.status)+'">'+esc(r.status)+'</td><td>'+esc(r.id)+'</td><td>'+esc(r.target)+'</td><td>'+esc(r.ms)+'</td><td>'+esc(r.summary)+'</td></tr>').join('')
+        + '</table>'
+      : '<div class="empty">没有要显示的结果。</div>'
+  }
+
+  async function select(id) {
+    const res = await invoke('health/get', { id })
+    current = res.suite
+    results = []
+    renderList()
+    renderTable()
+  }
+
+  async function finishSql(rows) {
+    const conn = document.getElementById('conn').value
+    for (const row of rows) {
+      if (row.status !== 'deferred') continue
+      if (!conn || !window.datawisePlugin.sql) {
+        row.status = 'fail'
+        row.summary = '未选择 SQL 连接'
+        continue
+      }
+      const t0 = performance.now()
+      try {
+        await window.datawisePlugin.sql.executeReadonly({ connectionId: conn, sql: row.sql || 'SELECT 1' })
+        row.status = 'pass'
+        row.summary = 'SQL ok'
+      } catch (e) {
+        row.status = 'fail'
+        row.summary = e && e.message ? e.message : String(e)
+      }
+      row.ms = Math.round(performance.now() - t0)
+    }
+    summary.pass = rows.filter(r => r.status === 'pass').length
+    summary.fail = rows.filter(r => r.status === 'fail').length
+  }
+
+  async function run(only) {
+    if (!current) return
+    const res = await invoke('health/run', { id: current.id, only: only || '' })
+    results = res.results || []
+    summary = { pass: res.pass || 0, fail: res.fail || 0, elapsedMs: res.elapsedMs || 0 }
+    await finishSql(results)
+    renderTable()
+    try {
+      const prev = JSON.parse((await window.datawisePlugin.storage.get('health.history')) || '[]')
+      prev.unshift({ at: new Date().toISOString(), title: current.title, pass: summary.pass, fail: summary.fail, elapsedMs: summary.elapsedMs })
+      await window.datawisePlugin.storage.set('health.history', JSON.stringify(prev.slice(0, 20)))
+    } catch (e) {}
+  }
+
+  async function copyReport() {
+    const lines = ['# ' + (current ? current.title : 'health'), '', summary.fail + ' fail / ' + summary.pass + ' pass / ' + summary.elapsedMs + ' ms', '']
+    for (const r of results) lines.push('- ' + r.status + ' ' + r.id + ' (' + r.target + ') ' + r.ms + 'ms — ' + (r.summary || ''))
+    await window.datawisePlugin.clipboard.writeText(lines.join('\n'))
+  }
+
+  async function boot() {
+    if (!ready()) return
+    const ctx = await window.datawisePlugin.context
+    connectionId = (ctx && ctx.connectionId) || ''
+    if (window.datawisePlugin.sql) {
+      try { sqlConnections = await window.datawisePlugin.sql.listConnections() || [] } catch (e) { sqlConnections = [] }
+    }
+    document.getElementById('conn').innerHTML = sqlConnections.map(c =>
+      '<option value="'+esc(c.id)+'">'+esc((c.name||c.id))+'</option>'
+    ).join('') || '<option value="">无 SQL 连接</option>'
+    const res = await invoke('health/list')
+    suites = res.suites || []
+    renderList()
+    if (suites[0]) await select(suites[0].id)
+  }
+  document.getElementById('q').oninput = renderList
+  document.getElementById('fails').onchange = renderTable
+  document.getElementById('runAll').onclick = () => run('').catch(e => alert(e.message || e))
+  document.getElementById('runFail').onclick = () => {
+    const ids = results.filter(r => r.status === 'fail').map(r => r.id).join(',')
+    if (!ids) return
+    run(ids).catch(e => alert(e.message || e))
+  }
+  document.getElementById('copy').onclick = () => copyReport()
+  window.addEventListener('message', e => { if (e.data && e.data.type === 'datawise-plugin-env') boot() })
+  boot()
+</script>
+<script src="dw-split-pane.js"></script>
+<script>
+  DwSplitPane.mount({
+    root: '.shell',
+    start: '.rail',
+    end: '.stage',
+    storageKey: 'dw.split.health-check',
+    defaultRatio: 'sidebar',
+    defaultWidth: 240,
+    minWidth: 180,
+    maxWidth: 400,
+  })
+</script>
+</body>
+</html>

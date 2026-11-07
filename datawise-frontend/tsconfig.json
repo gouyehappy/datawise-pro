@@ -1,0 +1,62 @@
+{
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "compilerOptions": {
+    "composite": false,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ],
+      "@datawise/sql-editor": [
+        "../sql-editor/src/index.ts"
+      ],
+      "@datawise/sql-editor/*": [
+        "../sql-editor/src/*"
+      ],
+      "@sql-editor/*": [
+        "../sql-editor/src/*"
+      ],
+      "monaco-editor": [
+        "./node_modules/monaco-editor"
+      ],
+      "monaco-editor/*": [
+        "./node_modules/monaco-editor/*"
+      ],
+      "vue": [
+        "./node_modules/vue"
+      ],
+      "vue/*": [
+        "./node_modules/vue/*"
+      ],
+      "dt-sql-parser": [
+        "./node_modules/dt-sql-parser"
+      ],
+      "dt-sql-parser/*": [
+        "./node_modules/dt-sql-parser/*"
+      ],
+      "sql-formatter": [
+        "./node_modules/sql-formatter"
+      ],
+      "sql-formatter/*": [
+        "./node_modules/sql-formatter/*"
+      ]
+    },
+    "types": [
+      "vite/client"
+    ]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
+    "../sql-editor/src/**/*.ts",
+    "../sql-editor/src/**/*.vue"
+  ],
+  "exclude": [
+    "../sql-editor/src/__tests__/**",
+    "../sql-editor/demo/**",
+    "src/__tests__/**",
+    "src/**/*.spec.ts"
+  ]
+}

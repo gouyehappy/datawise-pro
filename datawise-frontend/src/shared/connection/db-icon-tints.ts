@@ -1,0 +1,88 @@
+import type {DbType} from '@/core/types'
+
+/** 数据库类型图标底色（浅色主题） */
+export const DB_ICON_TINTS: Partial<Record<DbType, string>> = {
+    mysql: 'rgba(0, 117, 143, 0.12)',
+    mariadb: 'rgba(0, 153, 184, 0.12)',
+    postgresql: 'rgba(51, 103, 145, 0.12)',
+    oracle: 'rgba(234, 27, 34, 0.1)',
+    sqlserver: 'rgba(204, 41, 39, 0.1)',
+    redis: 'rgba(216, 44, 32, 0.1)',
+    mongodb: 'rgba(67, 153, 52, 0.12)',
+    clickhouse: 'rgba(255, 204, 1, 0.18)',
+    sqlite: 'rgba(0, 124, 145, 0.1)',
+    hive: 'rgba(253, 187, 48, 0.15)',
+    kudu: 'rgba(249, 108, 0, 0.14)',
+    dm: 'rgba(37, 99, 235, 0.1)',
+    presto: 'rgba(59, 130, 246, 0.1)',
+    trino: 'rgba(221, 107, 32, 0.12)',
+    db2: 'rgba(15, 98, 254, 0.1)',
+    oceanbase: 'rgba(1, 129, 253, 0.1)',
+    kingbase: 'rgba(220, 38, 38, 0.1)',
+    greenplum: 'rgba(61, 139, 92, 0.12)',
+    opengauss: 'rgba(37, 99, 235, 0.12)',
+    gbase8a: 'rgba(5, 150, 105, 0.12)',
+    elasticsearch: 'rgba(0, 85, 113, 0.12)',
+    kylin: 'rgba(240, 157, 19, 0.15)',
+    starrocks: 'rgba(1, 128, 143, 0.12)',
+    doris: 'rgba(124, 58, 237, 0.12)',
+    flink: 'rgba(230, 81, 0, 0.12)',
+    kafka: 'rgba(35, 31, 32, 0.1)',
+    tidb: 'rgba(220, 21, 11, 0.1)',
+    h2: 'rgba(9, 71, 107, 0.12)',
+    gaussdb: 'rgba(199, 0, 11, 0.1)',
+    highgo: 'rgba(0, 91, 172, 0.1)',
+    oscar: 'rgba(225, 29, 72, 0.1)',
+    tdengine: 'rgba(0, 65, 206, 0.1)',
+    sybase: 'rgba(0, 112, 242, 0.1)',
+    phoenix: 'rgba(249, 115, 22, 0.12)',
+    cachedb: 'rgba(51, 54, 149, 0.12)',
+    hsql: 'rgba(180, 83, 9, 0.12)',
+}
+
+/** 深色主题下略提高对比度的底色 */
+const DARK_DB_ICON_TINTS: Partial<Record<DbType, string>> = {
+    mysql: 'rgba(110, 196, 232, 0.16)',
+    mariadb: 'rgba(110, 196, 232, 0.16)',
+    postgresql: 'rgba(123, 167, 255, 0.16)',
+    oracle: 'rgba(255, 107, 107, 0.16)',
+    sqlserver: 'rgba(248, 113, 113, 0.16)',
+    redis: 'rgba(255, 107, 94, 0.16)',
+    mongodb: 'rgba(110, 231, 122, 0.16)',
+    clickhouse: 'rgba(250, 204, 21, 0.18)',
+    sqlite: 'rgba(56, 189, 248, 0.16)',
+    hive: 'rgba(252, 211, 77, 0.18)',
+    kudu: 'rgba(251, 146, 60, 0.18)',
+    dm: 'rgba(96, 165, 250, 0.16)',
+    presto: 'rgba(147, 197, 253, 0.16)',
+    trino: 'rgba(244, 114, 182, 0.16)',
+    db2: 'rgba(96, 165, 250, 0.16)',
+    oceanbase: 'rgba(56, 189, 248, 0.16)',
+    kingbase: 'rgba(248, 113, 113, 0.16)',
+    greenplum: 'rgba(74, 222, 128, 0.16)',
+    opengauss: 'rgba(96, 165, 250, 0.16)',
+    gbase8a: 'rgba(52, 211, 153, 0.16)',
+    elasticsearch: 'rgba(34, 211, 238, 0.16)',
+    kylin: 'rgba(251, 191, 36, 0.18)',
+    starrocks: 'rgba(56, 189, 176, 0.16)',
+    doris: 'rgba(165, 180, 252, 0.16)',
+    flink: 'rgba(251, 146, 60, 0.16)',
+    kafka: 'rgba(229, 231, 235, 0.14)',
+    tidb: 'rgba(248, 113, 113, 0.16)',
+    h2: 'rgba(56, 189, 248, 0.16)',
+    gaussdb: 'rgba(255, 107, 107, 0.16)',
+    highgo: 'rgba(96, 165, 250, 0.16)',
+    oscar: 'rgba(251, 113, 133, 0.16)',
+    tdengine: 'rgba(96, 165, 250, 0.16)',
+    sybase: 'rgba(56, 189, 248, 0.16)',
+    phoenix: 'rgba(251, 146, 60, 0.16)',
+    cachedb: 'rgba(129, 140, 248, 0.16)',
+    hsql: 'rgba(251, 191, 36, 0.18)',
+}
+
+export function dbIconTint(dbType: DbType, dark = false): string {
+    const palette = dark ? DARK_DB_ICON_TINTS : DB_ICON_TINTS
+    return palette[dbType] ?? (dark
+        ? 'color-mix(in srgb, var(--dw-text) 10%, var(--dw-bg-muted))'
+        : 'var(--dw-bg-muted)')
+}

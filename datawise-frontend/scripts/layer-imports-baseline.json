@@ -1,0 +1,6 @@
+{
+  "generatedAt": "2026-09-30T04:47:39.522Z",
+  "maxTotal": 0,
+  "note": "Refuse new core/shared → features reverse imports; lower maxTotal when cleaning debt.",
+  "byFile": {}
+}

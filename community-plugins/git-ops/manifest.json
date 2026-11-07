@@ -1,0 +1,74 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.git-ops",
+  "name": "Git Ops",
+  "version": "0.12.24",
+  "publisher": "datawise-community",
+  "icon": "assets/plugin.svg",
+  "description": "Beyond SourceTree: hunk stage/discard, checkbox staging, commit & push, keyboard-first, host theme.",
+  "license": "Apache-2.0",
+  "tags": ["ops", "git", "vcs"],
+  "permissions": ["host.workbench", "host.events", "host.clipboard"],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.5"
+  },
+  "entrypoints": {
+    "backend": {
+      "executable": "bin/git-ops-plugin.jar",
+      "transport": "stdio-jsonl"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.git-ops.connection",
+      "label": "Git workspace",
+      "icon": "assets/plugin.svg",
+      "capabilities": ["test", "connect"],
+      "fields": [
+        {
+          "key": "gitBinary",
+          "label": "git binary",
+          "type": "text",
+          "binding": "config",
+          "default": "git",
+          "placeholder": "git or full path, e.g. C:\\Program Files\\Git\\cmd\\git.exe",
+          "description": "Git executable for this workspace. Add repositories inside the workbench."
+        }
+      ],
+      "workbench": "io.datawise.community.git-ops.workbench"
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.git-ops.workbench",
+      "label": "Git Ops"
+    },
+    {
+      "type": "context-menu",
+      "id": "io.datawise.community.git-ops.open",
+      "label": "Open Git Ops",
+      "menu": "connection"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Git 运维",
+      "description": "超越 SourceTree：块级暂存/丢弃、勾选暂存、提交并推送、键盘优先；配色跟随宿主。",
+      "contributions": {
+        "io.datawise.community.git-ops.connection": {
+          "label": "Git 工作区",
+          "fields": {
+            "gitBinary": { "label": "git 可执行文件" }
+          }
+        },
+        "io.datawise.community.git-ops.workbench": { "label": "Git 运维台" },
+        "io.datawise.community.git-ops.open": { "label": "打开 Git 运维台" }
+      }
+    }
+  }
+}

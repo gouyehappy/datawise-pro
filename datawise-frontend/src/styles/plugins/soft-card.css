@@ -1,0 +1,3 @@
+/* deprecated shim — source of truth @datawise/tokens (+ host aliases) */
+@import '@datawise/tokens/plugins/soft-card.css';
+@import './soft-card-host-aliases.css';

@@ -1,0 +1,29 @@
+/**
+ * Soft-card plugin — panel chrome commander (`--dw-panel-radius` / `--dw-panel-shadow`).
+ *
+ * Prefer `.dw-soft-card` on panel roots.
+ * Controls use `--dw-control-radius`, not this plugin.
+ * Host product aliases live in the Host App (e.g. soft-card-host-aliases.css).
+ */
+
+.dw-soft-card {
+    border-radius: var(--dw-panel-radius);
+    box-shadow: var(--dw-panel-shadow);
+}
+
+/* Top edge only — tab strips, press grips, sticky heads on a soft card */
+.dw-soft-card--top {
+    border-radius: var(--dw-panel-radius) var(--dw-panel-radius) 0 0;
+}
+
+.dw-soft-card--bottom {
+    border-radius: 0 0 var(--dw-panel-radius) var(--dw-panel-radius);
+}
+
+.dw-soft-card--start {
+    border-radius: var(--dw-panel-radius) 0 0 var(--dw-panel-radius);
+}
+
+.dw-soft-card--flat {
+    box-shadow: none;
+}

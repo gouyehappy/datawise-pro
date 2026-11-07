@@ -1,0 +1,802 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.ssh",
+  "name": "SSH Terminal",
+  "version": "0.7.11-beta.17",
+  "publisher": "datawise-community",
+  "description": "SSH terminal, SFTP, and remote operations.",
+  "license": "MIT",
+  "homepage": "https://github.com/phenixan/datawise-cli",
+  "icon": "assets/plugin.svg",
+  "tags": [
+    "ssh",
+    "sftp",
+    "terminal"
+  ],
+  "permissions": [
+    "host.events",
+    "host.binary",
+    "host.filesystem",
+    "host.workbench",
+    "host.clipboard",
+    "host.ai"
+  ],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.6"
+  },
+  "entrypoints": {
+    "backend": {
+      "transport": "stdio-framed",
+      "executable": "bin/windows-x86_64/datawise-plugin-ssh.exe"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.ssh.connection",
+      "label": "SSH server",
+      "icon": "assets/plugin.svg",
+      "description": "SSH connection",
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Connection name",
+          "type": "text",
+          "binding": "name",
+          "required": true,
+          "default": "SSH server"
+        },
+        {
+          "key": "bastion_mode",
+          "label": "Connect via",
+          "type": "select",
+          "binding": "config",
+          "default": "direct",
+          "options": [
+            {
+              "label": "Direct SSH (or ProxyJump)",
+              "value": "direct"
+            },
+            {
+              "label": "JumpServer / KoKo bastion",
+              "value": "jumpserver"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "key": "host",
+          "label": "Host",
+          "type": "text",
+          "binding": "host",
+          "required": true,
+          "default": "127.0.0.1",
+          "description": "",
+          "visible_when": {
+            "field": "bastion_mode",
+            "one_of": [
+              "direct"
+            ]
+          }
+        },
+        {
+          "key": "port",
+          "label": "Port",
+          "type": "number",
+          "binding": "port",
+          "required": true,
+          "default": 22,
+          "description": "",
+          "visible_when": {
+            "field": "bastion_mode",
+            "one_of": [
+              "direct"
+            ]
+          }
+        },
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "binding": "user",
+          "required": true,
+          "default": "root",
+          "description": "",
+          "visible_when": {
+            "field": "bastion_mode",
+            "one_of": [
+              "direct"
+            ]
+          }
+        },
+        {
+          "key": "bastion_host",
+          "label": "JumpServer host",
+          "type": "text",
+          "binding": "config",
+          "required": true,
+          "default": "",
+          "description": "",
+          "visible_when": {
+            "field": "bastion_mode",
+            "one_of": [
+              "jumpserver"
+            ]
+          }
+        },
+        {
+          "key": "bastion_port",
+          "label": "JumpServer SSH port",
+          "type": "number",
+          "binding": "config",
+          "required": true,
+          "default": 2222,
+          "description": "",
+          "visible_when": {
+            "field": "bastion_mode",
+            "one_of": [
+              "jumpserver"
+            ]
+          }
+        },
+        {
+          "key": "bastion_web_port",
+          "label": "JumpServer web port",
+          "type": "number",
+          "binding": "config",
+          "required": true,
+          "default": 801,
+          "description": "",
+          "visible_when": {
+            "field": "bastion_mode",
+            "one_of": [
+              "jumpserver"
+            ]
+          }
+        },
+        {
+          "key": "bastion_user",
+          "label": "JumpServer user",
+          "type": "text",
+          "binding": "config",
+          "required": true,
+          "default": "",
+          "description": "",
+          "visible_when": {
+            "field": "bastion_mode",
+            "one_of": [
+              "jumpserver"
+            ]
+          }
+        },
+        {
+          "key": "authentication",
+          "label": "Authentication",
+          "type": "select",
+          "binding": "config",
+          "default": "password",
+          "options": [
+            {
+              "label": "Password",
+              "value": "password"
+            },
+            {
+              "label": "Private key",
+              "value": "private-key"
+            },
+            {
+              "label": "Private key, then password",
+              "value": "private-key-password"
+            },
+            {
+              "label": "SSH Agent",
+              "value": "agent"
+            },
+            {
+              "label": "No authentication",
+              "value": "none"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "key": "password_source",
+          "label": "Password source",
+          "type": "select",
+          "binding": "config",
+          "default": "direct",
+          "options": [
+            {
+              "label": "Enter in this form",
+              "value": "direct"
+            },
+            {
+              "label": "Local command",
+              "value": "command"
+            }
+          ],
+          "description": "",
+          "visible_when": {
+            "field": "authentication",
+            "one_of": [
+              "password",
+              "private-key-password"
+            ]
+          }
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "password",
+          "binding": "password",
+          "description": "",
+          "visible_when": {
+            "all_of": [
+              {
+                "field": "authentication",
+                "one_of": [
+                  "password",
+                  "private-key-password"
+                ]
+              },
+              {
+                "field": "password_source",
+                "one_of": [
+                  "direct"
+                ]
+              }
+            ]
+          },
+          "required_when": {
+            "all_of": [
+              {
+                "field": "authentication",
+                "one_of": [
+                  "password",
+                  "private-key-password"
+                ]
+              },
+              {
+                "field": "password_source",
+                "one_of": [
+                  "direct"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "key": "password_command",
+          "label": "Password command",
+          "type": "text",
+          "binding": "config",
+          "default": "",
+          "description": "",
+          "visible_when": {
+            "all_of": [
+              {
+                "field": "authentication",
+                "one_of": [
+                  "password",
+                  "private-key-password"
+                ]
+              },
+              {
+                "field": "password_source",
+                "one_of": [
+                  "command"
+                ]
+              }
+            ]
+          },
+          "required_when": {
+            "all_of": [
+              {
+                "field": "authentication",
+                "one_of": [
+                  "password",
+                  "private-key-password"
+                ]
+              },
+              {
+                "field": "password_source",
+                "one_of": [
+                  "command"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "key": "private_key_path",
+          "label": "Private key path",
+          "type": "text",
+          "binding": "config",
+          "picker": {
+            "kind": "file",
+            "content_field": "private_key"
+          },
+          "description": "",
+          "visible_when": {
+            "field": "authentication",
+            "one_of": [
+              "private-key",
+              "private-key-password"
+            ]
+          }
+        },
+        {
+          "key": "private_key_passphrase",
+          "label": "Private key passphrase",
+          "type": "password",
+          "binding": "secret",
+          "description": "",
+          "visible_when": {
+            "field": "authentication",
+            "one_of": [
+              "private-key",
+              "private-key-password"
+            ]
+          }
+        },
+        {
+          "key": "private_key",
+          "label": "Private key content",
+          "type": "textarea",
+          "binding": "secret",
+          "required": false,
+          "description": "",
+          "visible_when": {
+            "field": "authentication",
+            "one_of": [
+              "private-key",
+              "private-key-password"
+            ]
+          }
+        },
+        {
+          "key": "agent_socket",
+          "label": "Agent socket",
+          "type": "text",
+          "binding": "config",
+          "description": "",
+          "visible_when": {
+            "field": "authentication",
+            "one_of": [
+              "agent"
+            ]
+          }
+        },
+        {
+          "key": "sudo_source",
+          "label": "Sudo credentials",
+          "type": "select",
+          "binding": "config",
+          "default": "custom",
+          "options": [
+            {
+              "value": "custom",
+              "label": "Custom (this connection)"
+            },
+            {
+              "value": "global",
+              "label": "Global Quick Sudo profile"
+            },
+            {
+              "value": "off",
+              "label": "Off"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "key": "sudo_profile",
+          "label": "Quick Sudo profile",
+          "type": "text",
+          "binding": "config",
+          "options_action": "sudo/profiles/options",
+          "visible_when": {
+            "field": "sudo_source",
+            "one_of": [
+              "global"
+            ]
+          },
+          "description": ""
+        },
+        {
+          "key": "sudo_password",
+          "label": "Sudo password",
+          "type": "password",
+          "binding": "secret",
+          "visible_when": {
+            "field": "sudo_source",
+            "one_of": [
+              "custom"
+            ]
+          },
+          "description": ""
+        },
+        {
+          "key": "sudo_use_pty",
+          "label": "Request PTY for sudo",
+          "type": "boolean",
+          "binding": "config",
+          "default": false,
+          "visible_when": {
+            "field": "sudo_source",
+            "one_of": [
+              "custom"
+            ]
+          },
+          "description": ""
+        },
+        {
+          "key": "sudo_whitelist",
+          "label": "Sudo allowlist",
+          "type": "textarea",
+          "binding": "config",
+          "default": "",
+          "visible_when": {
+            "field": "sudo_source",
+            "one_of": [
+              "custom",
+              "global"
+            ]
+          },
+          "description": ""
+        },
+        {
+          "key": "auth_flow_mode",
+          "label": "2FA",
+          "type": "select",
+          "binding": "config",
+          "default": "off",
+          "visible_when": {
+            "field": "sudo_source",
+            "one_of": [
+              "custom",
+              "off"
+            ]
+          },
+          "options": [
+            {
+              "value": "off",
+              "label": "Off (never auto-answer OTP)"
+            },
+            {
+              "value": "password_then_otp",
+              "label": "Password first, then OTP"
+            },
+            {
+              "value": "password_plus_otp",
+              "label": "Password + OTP combined"
+            },
+            {
+              "value": "password_only",
+              "label": "Password only"
+            }
+          ],
+          "description": ""
+        },
+        {
+          "key": "totp_secret",
+          "label": "TOTP secrets",
+          "type": "textarea",
+          "binding": "secret",
+          "visible_when": {
+            "field": "auth_flow_mode",
+            "one_of": [
+              "password_then_otp",
+              "password_plus_otp"
+            ]
+          },
+          "description": ""
+        },
+        {
+          "key": "totp_prompt_hint",
+          "label": "OTP prompt",
+          "type": "text",
+          "binding": "config",
+          "visible_when": {
+            "field": "auth_flow_mode",
+            "one_of": [
+              "password_then_otp",
+              "password_plus_otp"
+            ]
+          },
+          "description": ""
+        },
+        {
+          "key": "password_prompt_hint",
+          "label": "Password prompt",
+          "type": "text",
+          "binding": "config",
+          "visible_when": {
+            "all_of": [
+              {
+                "field": "sudo_source",
+                "one_of": [
+                  "custom",
+                  "off"
+                ]
+              },
+              {
+                "field": "auth_flow_mode",
+                "one_of": [
+                  "password_then_otp",
+                  "password_plus_otp"
+                ]
+              }
+            ]
+          },
+          "description": ""
+        },
+        {
+          "key": "advanced_options",
+          "label": "Show advanced options",
+          "type": "boolean",
+          "binding": "config",
+          "default": false,
+          "description": ""
+        },
+        {
+          "key": "jump_hosts",
+          "label": "ProxyJump hosts (JSON)",
+          "type": "textarea",
+          "binding": "config",
+          "default": "",
+          "placeholder": "[\n  { \"host\": \"bastion.example.com\", \"port\": 22, \"username\": \"ops\", \"password\": \"…\" }\n]",
+          "description": "",
+          "visible_when": {
+            "all_of": [
+              {
+                "field": "advanced_options",
+                "one_of": [
+                  "true"
+                ]
+              },
+              {
+                "field": "bastion_mode",
+                "one_of": [
+                  "direct"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "key": "read_only",
+          "label": "Read-only",
+          "type": "boolean",
+          "binding": "config",
+          "default": false,
+          "description": "",
+          "visible_when": {
+            "field": "advanced_options",
+            "one_of": [
+              "true"
+            ]
+          }
+        },
+        {
+          "key": "connect_timeout_secs",
+          "label": "SSH timeout (seconds)",
+          "type": "number",
+          "binding": "config",
+          "default": 30,
+          "description": "",
+          "visible_when": {
+            "field": "advanced_options",
+            "one_of": [
+              "true"
+            ]
+          }
+        },
+        {
+          "key": "keepalive_interval_secs",
+          "label": "SSH keepalive (seconds)",
+          "type": "number",
+          "binding": "config",
+          "default": 30,
+          "description": "",
+          "visible_when": {
+            "field": "advanced_options",
+            "one_of": [
+              "true"
+            ]
+          }
+        },
+        {
+          "key": "terminal_keepalive_secs",
+          "label": "Terminal keepalive (seconds)",
+          "type": "number",
+          "binding": "config",
+          "default": 0,
+          "description": "",
+          "visible_when": {
+            "field": "advanced_options",
+            "one_of": [
+              "true"
+            ]
+          }
+        },
+        {
+          "key": "set_env",
+          "label": "Environment (SetEnv)",
+          "type": "textarea",
+          "binding": "config",
+          "default": "",
+          "placeholder": "LANG=zh_CN.UTF-8",
+          "description": "",
+          "visible_when": {
+            "field": "advanced_options",
+            "one_of": [
+              "true"
+            ]
+          }
+        },
+        {
+          "key": "triggers_enabled",
+          "label": "Enable automatic replies",
+          "type": "boolean",
+          "binding": "config",
+          "default": false,
+          "description": "",
+          "visible_when": {
+            "field": "advanced_options",
+            "one_of": [
+              "true"
+            ]
+          }
+        },
+        {
+          "key": "triggers",
+          "label": "Automatic reply rules",
+          "type": "textarea",
+          "binding": "config",
+          "default": "",
+          "placeholder": "#!! ExpectCount 1\n#!! ExpectPattern1 (?i)verification code\n#!! ExpectSendText1 654321\\r",
+          "description": "",
+          "visible_when": {
+            "field": "triggers_enabled",
+            "one_of": [
+              "true"
+            ]
+          }
+        },
+        {
+          "key": "trigger_answer_1",
+          "label": "Secret slot 1",
+          "type": "password",
+          "binding": "secret",
+          "description": "",
+          "visible_when": {
+            "field": "triggers_enabled",
+            "one_of": [
+              "true"
+            ]
+          }
+        },
+        {
+          "key": "trigger_answer_2",
+          "label": "Secret slot 2",
+          "type": "password",
+          "binding": "secret",
+          "description": "",
+          "visible_when": {
+            "field": "triggers_enabled",
+            "one_of": [
+              "true"
+            ]
+          }
+        },
+        {
+          "key": "passphrase_command",
+          "label": "Passphrase command",
+          "type": "text",
+          "binding": "config",
+          "default": "",
+          "description": "",
+          "visible_when": {
+            "all_of": [
+              {
+                "field": "advanced_options",
+                "one_of": [
+                  "true"
+                ]
+              },
+              {
+                "field": "authentication",
+                "one_of": [
+                  "private-key",
+                  "private-key-password"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "key": "remote_command",
+          "label": "Remote command",
+          "type": "text",
+          "binding": "config",
+          "default": "",
+          "description": "",
+          "visible_when": {
+            "field": "advanced_options",
+            "one_of": [
+              "true"
+            ]
+          }
+        }
+      ],
+      "workbench": "io.datawise.community.ssh.workbench",
+      "actions": [
+        {
+          "id": "quick-sudo-profiles",
+          "label": "Global Quick Sudo profiles",
+          "description": "",
+          "variant": "outline",
+          "when": "always",
+          "requires_valid_form": false,
+          "timeout_ms": 10000
+        },
+        {
+          "id": "import-private-key",
+          "label": "Import private key from file",
+          "description": "",
+          "variant": "outline",
+          "when": "always",
+          "requires_valid_form": false,
+          "timeout_ms": 120000
+        },
+        {
+          "id": "import-sessions",
+          "label": "Import sessions",
+          "description": "Fill this form from a MobaXterm / Xshell / WindTerm / SecureCRT / FinalShell / Electerm / Termius / OpenSSH config export. Only the first session is applied; secrets are never filled.",
+          "variant": "outline",
+          "when": "always",
+          "requires_valid_form": false,
+          "timeout_ms": 120000
+        }
+      ],
+      "capabilities": [
+        "test",
+        "connect",
+        "disconnect"
+      ],
+      "filesystemProvider": "io.datawise.community.ssh.files"
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.ssh.workbench",
+      "label": "SSH Terminal",
+      "description": "SSH workbench",
+      "icon": "assets/plugin.svg"
+    },
+    {
+      "type": "filesystem-provider",
+      "id": "io.datawise.community.ssh.files",
+      "label": "SFTP files",
+      "description": "",
+      "schemes": [
+        "sftp"
+      ],
+      "capabilities": [
+        "read",
+        "write",
+        "delete",
+        "rename",
+        "mkdir"
+      ],
+      "rootUri": "sftp:/",
+      "sessionBound": true,
+      "openTarget": "workbench"
+    }
+  ]
+}

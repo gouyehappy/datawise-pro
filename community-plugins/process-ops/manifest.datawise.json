@@ -1,0 +1,95 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.process-ops",
+  "name": "Process Ops",
+  "version": "0.1.0",
+  "publisher": "datawise-community",
+  "description": "Multi-host process and resource workbench: localhost by default, add remote SSH Linux hosts, inspect CPU/memory/disk, manage processes and systemd units, run diagnostics.",
+  "license": "Apache-2.0",
+  "source": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/process-ops",
+  "homepage": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/process-ops",
+  "icon": "assets/plugin.svg",
+  "tags": ["process", "ops", "sre", "ssh", "linux", "diagnostics"],
+  "permissions": [
+    "host.workbench",
+    "host.events",
+    "host.clipboard"
+  ],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.6"
+  },
+  "entrypoints": {
+    "backend": {
+      "transport": "stdio-jsonl",
+      "executable": "bin/windows-x86_64/datawise-plugin-process-ops.exe"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.process-ops.connection",
+      "label": "Process Ops workspace",
+      "description": "Create a workspace with any name. Localhost is available immediately; add remote SSH Linux hosts in the left rail.",
+      "icon": "assets/plugin.svg",
+      "workbench": "io.datawise.community.process-ops.workbench",
+      "capabilities": ["test", "connect", "disconnect"],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Workspace name",
+          "type": "text",
+          "binding": "name",
+          "required": true,
+          "default": "Process Ops",
+          "description": "Shown in the connection list. Hosts are managed inside the workbench."
+        },
+        {
+          "key": "notes",
+          "label": "Notes",
+          "type": "text",
+          "binding": "config",
+          "required": false,
+          "description": "Optional free-form notes for this workspace."
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.process-ops.workbench",
+      "label": "Process Ops",
+      "description": "Host rail, process table, systemd, and diagnostics",
+      "icon": "assets/plugin.svg"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "进程运维 Process Ops",
+      "description": "多主机进程与资源工作台：默认本机，左栏可添加远程 SSH Linux；查看 CPU/内存/磁盘，管理进程与 systemd，一键诊断。",
+      "contributions": {
+        "io.datawise.community.process-ops.connection": {
+          "label": "进程运维工作区",
+          "description": "填写任意名称即可创建。打开后默认可用本机；在左栏添加远程 SSH Linux 主机。",
+          "fields": {
+            "display_name": {
+              "label": "工作区名称",
+              "description": "显示在连接列表中。主机在工作台内管理。"
+            },
+            "notes": {
+              "label": "备注",
+              "description": "可选备注。"
+            }
+          }
+        },
+        "io.datawise.community.process-ops.workbench": {
+          "label": "进程运维",
+          "description": "主机栏、进程表、systemd 与诊断"
+        }
+      }
+    }
+  }
+}

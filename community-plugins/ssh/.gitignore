@@ -1,0 +1,20 @@
+/backend/target/
+/frontend/node_modules/
+/frontend/dist/
+/scripts/__pycache__/
+/dist/
+/ui/
+!/ui/
+!/ui/.gitkeep
+.dwp-staging/
+# Local upstream reference trees / one-off port helpers (never commit).
+.dbx-clone/
+.dbx-ref/
+/_*.py
+.tmp-upstream/
+.datawise-store.json
+.datawise-dev/
+.datawise-repository-signing-key.env
+.worktrees/
+.zcode/
+.omc/

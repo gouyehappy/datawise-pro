@@ -1,0 +1,77 @@
+{
+  "name": "datawise-vscode",
+  "displayName": "DataWise",
+  "description": "Open SQL from VS Code in the DataWise CLI desktop app",
+  "version": "4.1.7",
+  "publisher": "datawise-cli",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:datawise.openInDataWise"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "datawise.openInDataWise",
+        "title": "Open in DataWise",
+        "category": "DataWise",
+        "icon": "$(link-external)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "datawise.openInDataWise",
+          "group": "navigation@100",
+          "when": "editorTextFocus && !editorReadonly"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "datawise.openInDataWise",
+          "group": "navigation@100",
+          "when": "resourceLangId == sql || resourceExtname == .sql"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "datawise.openInDataWise",
+          "when": "editorIsOpen"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DataWise",
+      "properties": {
+        "datawise.connectionId": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Default connection ID from DataWise `connections.xml`. Required to target a specific data source."
+        },
+        "datawise.database": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Optional default database or schema passed to the SQL console."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "test": "tsx --test src/deep-link.test.ts",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.85.0",
+    "tsx": "^4.19.2",
+    "typescript": "~5.7.2"
+  }
+}

@@ -1,0 +1,19 @@
+id: redis-high-memory
+title: Redis 内存偏高
+tags: [redis, memory]
+steps:
+  - id: window
+    type: note
+    body: 确认实例、业务窗口，以及是否允许只读探测。
+  - id: copy-info
+    type: copy_command
+    command: redis-cli INFO memory
+  - id: copy-slow
+    type: copy_command
+    command: redis-cli SLOWLOG GET 20
+  - id: checklist
+    type: checklist
+    items:
+      - 已记录 used_memory 与 maxmemory
+      - 已看过 Slowlog
+      - 已通知业务

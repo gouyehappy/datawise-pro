@@ -1,0 +1,94 @@
+{
+  "projectName": "DataWise",
+  "architectureDocDir": "docs",
+  "regressionTestDirPattern": "datawise-frontend/src/__tests__/regression/",
+  "sensitive": {
+    "exact": [
+      "config/connections.xml",
+      "config/.datawise-master-key",
+      "config/app.xml",
+      "config/sessions.json",
+      "config/users.json",
+      "config/teams.json",
+      "config/workspace.xml",
+      "config/updater.xml",
+      "config/auth-session.json",
+      "config/sql-history.json",
+      "config/export-tasks.json",
+      "config/notifications.json",
+      "config/sql-snippets.shared.xml",
+      "config/sql-snippets.personal.xml"
+    ],
+    "patterns": [
+      "^config/users/",
+      "^config/(logs|cache|scripts|migration|ai-checkpoints|drivers)(/|$)",
+      "^config/plugins/.+\\.jar$",
+      "^config/api-tokens\\.json$",
+      "\\.env$",
+      "(^|/)\\.env\\.(?!development\\.example$|production\\.example$|example$)"
+    ]
+  },
+  "apiAlignment": {
+    "clientPathPattern": "datawise-frontend/src/shared/api/http/paths\\.ts$",
+    "serverPathPattern": "datawise-backend/datawise-server/src/main/java/.*Controller\\.java$"
+  },
+  "connector": {
+    "sourcePattern": "^datawise-backend/datawise-connectors/",
+    "pluginsDir": "config/plugins",
+    "packageHint": "mvn package → JAR 进 config/plugins/ → 重启后端"
+  },
+  "codePatterns": {
+    "frontendBusiness": "^datawise-frontend/src/(features|shared)/",
+    "backendBusiness": "^datawise-backend/",
+    "bigChangeFileCount": 8
+  },
+  "testLayers": [
+    {
+      "id": "frontend",
+      "changePattern": "^datawise-frontend/",
+      "workDir": "datawise-frontend",
+      "marker": "package.json",
+      "typecheck": "npm run typecheck",
+      "test": "npm run test",
+      "testBugs": "npm run test:bugs",
+      "bugsOnlyPattern": "datawise-frontend/src/__tests__/regression/",
+      "excludeBugsPattern": "^datawise-frontend/src/(?!__tests__/regression)"
+    },
+    {
+      "id": "sql-editor",
+      "changePattern": "^sql-editor/",
+      "workDir": ".",
+      "test": "npm run test --prefix sql-editor",
+      "alsoTypecheckDir": "datawise-frontend"
+    },
+    {
+      "id": "backend",
+      "changePattern": "^datawise-backend/",
+      "workDir": "datawise-backend",
+      "marker": "pom.xml",
+      "test": "mvn test",
+      "testModuleTemplate": "mvn test -pl {modules} -am",
+      "modulePatterns": [
+        "^datawise-backend/(datawise-connectors/datawise-connector-[a-z0-9-]+)",
+        "^datawise-backend/(datawise-(?!connectors)[a-z0-9-]+)"
+      ],
+      "moduleAliases": {
+        "datawise-connector-mysql": ["datawise-connector-api"],
+        "datawise-connector-postgresql": ["datawise-connector-api"],
+        "datawise-connector-redis": ["datawise-connector-api"],
+        "datawise-connector-doris": ["datawise-connector-api"],
+        "datawise-connector-starrocks": ["datawise-connector-api"],
+        "datawise-connector-kafka": ["datawise-connector-api"],
+        "datawise-connector-mongodb": ["datawise-connector-api"]
+      },
+      "defaultModuleExtras": ["datawise-connector-api"]
+    }
+  ],
+  "pluginCatalogAudit": {
+    "catalogPathPattern": "^datawise-backend/datawise-workspace/src/main/resources/seed/plugins\\.json$",
+    "registryPathPattern": "^datawise-frontend/src/features/plugin/services/plugin-registry\\.service\\.ts$",
+    "workDir": "datawise-frontend",
+    "command": "npm run audit:plugin-catalog",
+    "strictCommand": "npm run audit:plugin-catalog:strict"
+  }
+}

@@ -1,0 +1,976 @@
+/**
+ * IDE 工作台壳层覆盖（classic 不写任何覆盖，走 :root / theme.service 原值）
+ * 由 ui-skin 插件注册表挂载：html[data-ui-skin='ide']
+ * 字号与 classic 共用 variables.css；此处只调密度、圆角、间距与布局外观。
+ */
+
+html[data-ui-skin='ide'] {
+    /* Density ladder — override only here; aliases in variables.css follow */
+    --dw-density-md: 28px;
+    --dw-density-sm: 24px;
+    --dw-density-xs: 20px;
+    --dw-density-lg: 32px;
+    --dw-density-xl: 44px;
+
+    --mp-radius: 4px;
+    --dw-pad-control: 4px 8px;
+    --dw-pad-control-lg: 4px 10px;
+    --dw-panel-gap: 0;
+    --dw-shell-padding: 0;
+    --dw-panel-radius: 0;
+    --dw-splitter-size: 4px;
+    --dw-tool-stripe-width: 48px;
+    --dw-tool-btn-pad: 5px;
+    --dw-tool-icon-caption-gap: 3px;
+    --dw-tool-pill-radius: 8px;
+    --dw-icon-size-rail: 20px;
+    --dw-tool-caption-size: 10px;
+    --dw-tool-caption-leading: 1.1;
+    --dw-titlebar-height: 36px;
+    /* Tab / toolbar / menu heights follow density ladder (ui-density.css adjusts --dw-density-*) */
+    --dw-tab-height: var(--dw-density-md);
+    --dw-tab-pill-height: var(--dw-density-md);
+    --dw-tab-pill-radius: 0;
+    --dw-tab-gap: 0;
+    --dw-toolbar-height: var(--dw-tab-height);
+    --dw-radius-xs: 1px;
+    --dw-radius-sm: 2px;
+    --dw-radius-md: 4px;
+    --dw-radius-lg: 6px;
+    --dw-radius-xl: 6px;
+    --dw-control-radius: 4px;
+    --dw-control-radius-sm: 3px;
+    --dw-input-radius: 4px;
+    --dw-btn-radius: 4px;
+    /* IDEA New UI menus (M1：仅 ide；classic 用 :root 卡片菜单) */
+    --dw-menu-radius: 10px;
+    --dw-menu-item-radius: 6px;
+    --dw-menu-gutter: 36px;
+    --dw-menu-item-h: var(--dw-density-md);
+    --dw-menu-pad-y: 6px;
+    --dw-menu-pad-x: 6px;
+    --dw-menu-item-pad-end: 6px;
+    --dw-menu-hover: color-mix(in srgb, var(--dw-text) 8%, transparent);
+    --dw-menu-active: color-mix(in srgb, var(--dw-primary) 34%, transparent);
+    --dw-menu-border: color-mix(in srgb, var(--dw-border) 82%, transparent);
+    --dw-titlebar-chip-radius: 6px;
+    --dw-modal-radius: var(--dw-radius-md);
+    --dw-space-3: 4px;
+    --dw-space-4: 6px;
+    --dw-space-5: 8px;
+    --dw-space-6: 10px;
+}
+
+html[data-ui-skin='ide'] .app--desktop {
+    --dw-titlebar-height: 36px;
+}
+
+html[data-ui-skin='ide'] .shell-main {
+    border-left: 1px solid var(--dw-panel-border);
+    background: var(--dw-bg);
+}
+
+html[data-ui-skin='ide'] .tool-stripe--right {
+    border-left: 1px solid var(--dw-panel-border);
+}
+
+html[data-ui-skin='ide'] .tool-stripe--left {
+    border-right: 1px solid var(--dw-panel-border);
+}
+
+html[data-ui-skin='ide'] .tool-btn--stack.active::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 0 var(--dw-radius-xs) var(--dw-radius-xs) 0;
+    background: var(--dw-primary);
+}
+
+html[data-ui-skin='ide'] .tool-stripe--right .tool-btn--stack.active::before {
+    left: auto;
+    right: -3px;
+    border-radius: var(--dw-radius-xs) 0 0 var(--dw-radius-xs);
+}
+
+html[data-ui-skin='ide'] .tool-btn--brand.active::before {
+    display: none;
+}
+
+html[data-ui-skin='ide'] .desktop-titlebar {
+    border-bottom: none;
+}
+
+html[data-ui-skin='ide'] .desktop-titlebar__controls {
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+}
+
+html[data-ui-skin='ide'] .desktop-titlebar__btn {
+    width: 46px;
+    height: 100%;
+    border-radius: 0;
+}
+
+html[data-ui-skin='ide'] .status-bar {
+    background: var(--dw-bg-chrome);
+    border-top: none;
+    padding-left: var(--dw-space-3);
+    padding-right: var(--dw-space-2);
+}
+
+html[data-ui-skin='ide'] .status-bar__chip {
+    border-radius: 0;
+}
+
+html[data-ui-skin='ide'] .status-bar__tools {
+    border-left-color: var(--dw-panel-border);
+}
+
+html[data-ui-skin='ide'] .terminal-pane {
+    border-top: 1px solid var(--dw-panel-border);
+}
+
+/* ---- IDE 编辑器 Tab：直角平铺、贴满栏高、顶缘高亮（VS Code / IDEA 系） ---- */
+html[data-ui-skin='ide'] .dw-tab-bar {
+    height: var(--dw-tab-height);
+    padding: 0;
+    border-bottom-color: var(--dw-tab-bar-border);
+}
+
+html[data-ui-skin='ide'] .dw-tab-scroll {
+    gap: 0;
+    padding: 0;
+    align-items: stretch;
+    height: 100%;
+}
+
+html[data-ui-skin='ide'] .dw-tab-pinned {
+    gap: 0;
+    height: 100%;
+    align-items: stretch;
+    padding-right: 0;
+}
+
+html[data-ui-skin='ide'] .dw-tab {
+    height: 100%;
+    max-width: 200px;
+    min-width: 72px;
+    padding: 0 var(--dw-space-5) 0 var(--dw-space-4);
+    border: 0;
+    border-radius: 0;
+    border-right: 1px solid color-mix(in srgb, var(--dw-tab-bar-border) 85%, transparent);
+    background: transparent;
+    box-shadow: inset 0 -1px 0 var(--dw-tab-bar-border);
+}
+
+html[data-ui-skin='ide'] .dw-tab:hover:not(.active) {
+    background: var(--dw-tab-hover-bg);
+    color: var(--dw-text);
+}
+
+html[data-ui-skin='ide'] .dw-tab.active,
+html[data-ui-skin='ide'] .dw-tab.active:hover {
+    background: var(--dw-tab-active-bg);
+    border-right-color: var(--dw-tab-bar-border);
+    color: var(--dw-tab-active-text);
+    box-shadow:
+        inset 0 2px 0 var(--dw-primary),
+        inset 0 -1px 0 var(--dw-tab-active-bg);
+    z-index: 1;
+}
+
+html[data-ui-skin='ide'] .dw-tab__close {
+    width: var(--dw-icon-size-md);
+    height: var(--dw-icon-size-md);
+    margin-left: var(--dw-space-2);
+    border-radius: var(--dw-radius-xs);
+    opacity: 0;
+}
+
+html[data-ui-skin='ide'] .dw-tab:hover .dw-tab__close,
+html[data-ui-skin='ide'] .dw-tab.active .dw-tab__close {
+    opacity: 0.65;
+}
+
+html[data-ui-skin='ide'] .dw-tab__close:hover {
+    opacity: 1;
+    background: var(--dw-tab-close-hover);
+}
+
+html[data-ui-skin='ide'] .dw-tab-add {
+    width: var(--dw-tab-height);
+    height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    border-right: 1px solid color-mix(in srgb, var(--dw-tab-bar-border) 85%, transparent);
+}
+
+html[data-ui-skin='ide'] .dw-tab-overflow {
+    height: 100%;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 1px solid var(--dw-tab-bar-border);
+}
+
+html[data-ui-skin='ide'] .dw-tab-overflow__btn {
+    width: var(--dw-tab-height);
+    height: 100%;
+    border-radius: 0;
+}
+
+html[data-ui-skin='ide'] .dw-ide-tab-strip {
+    gap: 0;
+    padding: 0;
+    min-height: var(--dw-tab-height);
+}
+
+html[data-ui-skin='ide'] .dw-ide-tab,
+html[data-ui-skin='ide'] .team-tab,
+html[data-ui-skin='ide'] .migration-panel__tab,
+html[data-ui-skin='ide'] .sql-monitor__tab,
+html[data-ui-skin='ide'] .plugin-dev-tab {
+    border-radius: 0;
+    border-color: transparent;
+}
+
+html[data-ui-skin='ide'] .dw-ide-tab.active,
+html[data-ui-skin='ide'] .dw-ide-tab.is-active,
+html[data-ui-skin='ide'] .team-tab.is-active,
+html[data-ui-skin='ide'] .migration-panel__tab.is-active,
+html[data-ui-skin='ide'] .sql-monitor__tab--active,
+html[data-ui-skin='ide'] .plugin-dev-tab.is-active {
+    border-color: transparent;
+    box-shadow: inset 0 2px 0 var(--dw-primary);
+}
+
+/* 设置里的分段控件仍保持紧凑圆角，不跟编辑器 Tab 抢风格 */
+html[data-ui-skin='ide'] .dw-segment__btn {
+    border-radius: var(--dw-control-radius-sm);
+}
+
+html[data-ui-skin='ide'] .dw-segment__btn.is-active {
+    box-shadow: none;
+    border-color: var(--dw-primary-border);
+}
+
+/* ---- IDE 工作台页：贴边分栏、直角内卡、无阴影 ---- */
+html[data-ui-skin='ide'] .dw-workbench-page {
+    --dw-wb-head-bg: var(--dw-bg-muted);
+    --dw-wb-head-border: var(--dw-panel-border);
+    --dw-wb-head-shadow: none;
+    --dw-wb-head-pad-y: 0;
+    --dw-wb-head-min-height: var(--dw-tab-height);
+    --dw-wb-split-gap: 0;
+    --dw-wb-split-divider: var(--dw-panel-border);
+    --dw-wb-col-pad-top: 0;
+    --dw-wb-col-pad-right: 0;
+    --dw-wb-col-pad-bottom: 0;
+    --dw-wb-col-pad-left: 0;
+    --dw-wb-content-pad-x: var(--dw-space-4);
+    --dw-wb-content-pad-y: var(--dw-space-3);
+    --dw-wb-stack-gap: var(--dw-space-2);
+    --dw-wb-pane-pad: var(--dw-space-2);
+    --dw-wb-card-border: var(--dw-panel-border);
+    --dw-wb-card-radius: 0;
+    --dw-wb-control-radius: 0;
+    --dw-wb-card-shadow: none;
+    --dw-wb-card-bg: var(--dw-bg-panel);
+    --dw-wb-placeholder-border: var(--dw-panel-border);
+    --dw-wb-placeholder-style: solid;
+    --dw-wb-placeholder-shadow: none;
+    --dw-wb-terminal-border: var(--dw-panel-border);
+    --dw-wb-terminal-radius: 0;
+    --dw-wb-terminal-shadow: none;
+}
+
+/* Connector workbench：IDE 贴边直角头（仍保持紧凑单行，不吃大页头高） */
+html[data-ui-skin='ide'] .dw-workbench-page.connector-workbench {
+    --dw-wb-head-pad-y: 0;
+    --dw-wb-head-min-height: var(--dw-tab-height);
+    --dw-wb-content-pad-x: 0.75rem;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-page > .connector-workbench__head {
+    --dw-wb-head-pad-y: 0;
+    --dw-wb-head-min-height: var(--dw-tab-height);
+    --dw-wb-content-pad-x: 0.75rem;
+}
+
+/* 相连内卡 / 代码卡 / 筛选控件：直角（不覆盖整页 button/input，避免头上文字按钮变形） */
+html[data-ui-skin='ide'] .dw-workbench-page .connector-browse-panel__pane,
+html[data-ui-skin='ide'] .dw-workbench-page .connector-ns-bar,
+html[data-ui-skin='ide'] .dw-workbench-page .dw-code-viewer--card,
+html[data-ui-skin='ide'] .dw-workbench-page .connector-workbench__badge,
+html[data-ui-skin='ide'] .dw-workbench-page .connector-workbench__tabs button,
+html[data-ui-skin='ide'] .dw-workbench-page .connector-list__filter,
+html[data-ui-skin='ide'] .dw-workbench-page .connector-list__refresh,
+html[data-ui-skin='ide'] .dw-workbench-page .jenkins-jobs-panel__view,
+html[data-ui-skin='ide'] .dw-workbench-page .jenkins-jobs-panel__badge,
+html[data-ui-skin='ide'] .dw-workbench-page .jenkins-jobs-panel__folder-tag,
+html[data-ui-skin='ide'] .dw-workbench-page .jenkins-jobs-panel__crumb,
+html[data-ui-skin='ide'] .dw-workbench-page .jenkins-nodes-panel__chip,
+html[data-ui-skin='ide'] .dw-workbench-page .jenkins-nodes-panel__badge,
+html[data-ui-skin='ide'] .dw-workbench-page .dw-log-viewer--card,
+html[data-ui-skin='ide'] .dw-workbench-page .dw-log-viewer__live-pill,
+html[data-ui-skin='ide'] .dw-workbench-page .dw-log-viewer__filter,
+html[data-ui-skin='ide'] .dw-workbench-page .yarn-apps-panel__badge,
+html[data-ui-skin='ide'] .dw-workbench-page .connector-browse-panel__badge {
+    border-radius: 0;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-page.connector-workbench .connector-workbench__head,
+html[data-ui-skin='ide'] .dw-workbench-page .connector-workbench__head {
+    min-height: var(--dw-wb-head-min-height);
+    padding-top: 0;
+    padding-bottom: 0;
+    box-shadow: none;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-page .connector-workbench__tabs {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-page__head {
+    min-height: var(--dw-wb-head-min-height);
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-page__icon {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-split {
+    column-gap: 0;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--left,
+html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--right {
+    gap: 0;
+}
+
+html[data-ui-skin='ide'] .lineage-panel__toolbar {
+    min-height: var(--dw-tab-height);
+    padding-top: 0;
+    padding-bottom: 0;
+    border-bottom-color: var(--dw-panel-border);
+    background: var(--dw-bg-muted);
+}
+
+html[data-ui-skin='ide'] .lineage-panel__warnings,
+html[data-ui-skin='ide'] .lineage-panel__impact {
+    border-bottom: 1px solid var(--dw-panel-border);
+}
+
+html[data-ui-skin='ide'] .schema-er-graph__inspector,
+html[data-ui-skin='ide'] .schema-er-graph__dock {
+    border-radius: 0;
+    box-shadow: none;
+    border-color: var(--dw-panel-border);
+}
+
+html[data-ui-skin='ide'] .table-migration__toolbar {
+    min-height: var(--dw-tab-height);
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+html[data-ui-skin='ide'] .conn-editor {
+    border-right-color: var(--dw-panel-border);
+}
+
+html[data-ui-skin='ide'] .dw-workbench-page--terminal .dw-workbench-page__body {
+    gap: 0;
+    padding: 0;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-page--terminal .ssh-quick-ops {
+    margin-bottom: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    max-height: min(200px, 26vh);
+}
+
+html[data-ui-skin='ide'] .dw-workbench-page--terminal .ssh-quick-ops.is-collapsed {
+    max-height: none;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-page--terminal .ssh-terminal-tab__search {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    box-shadow: none;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-page--terminal .ssh-script-record-tab__editor {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+}
+
+/* ---- 仪表盘 / 扩展 / 插件 / 连接 / 开发：对齐 IDE 工作台 ---- */
+html[data-ui-skin='ide'] .module-page {
+    padding: 0;
+    background: var(--dw-bg);
+    --mp-pad: 0;
+    --mp-gap: var(--dw-space-4);
+    --mp-gap-lg: var(--dw-space-5);
+    --mp-hero-radius: 0;
+    --mp-shell-radius: 0;
+    --mp-shell-gap: var(--dw-space-5);
+    --mp-card-gap: var(--dw-space-4);
+    --mp-shell-border: var(--dw-panel-border);
+    --mp-shell-surface: var(--dw-bg-panel);
+    --mp-shell-tile: var(--dw-bg-panel);
+    --mp-shell-control-radius: var(--dw-control-radius-sm);
+    --mp-shell-rail: 2px;
+    --mp-shell-control-bg: color-mix(in srgb, var(--dw-text) 4%, var(--dw-bg-panel));
+    --mp-shell-control-bg-hover: color-mix(in srgb, var(--dw-primary) 8%, var(--dw-bg-panel));
+    --mp-shell-control-bg-active: color-mix(in srgb, var(--dw-primary) 12%, var(--dw-bg-panel));
+    --mp-shell-focus-ring: 0 0 0 2px color-mix(in srgb, var(--dw-primary) 18%, transparent);
+}
+
+html[data-ui-skin='ide'] .mp-page-wrap {
+    max-width: none;
+    padding: 0;
+    gap: 0;
+}
+
+html[data-ui-skin='ide'] :is(
+    .pack-store-page__wrap,
+    .plugin-page__wrap,
+    .community-plugin-page__wrap,
+    .dashboard-page__wrap
+) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dw-space-5);
+    max-width: none;
+    padding: 0 var(--dw-space-6) var(--dw-space-6);
+}
+
+/* 连接 / 开发：Hero 嵌套更深，内层承担水平留白以便顶栏可贴边 */
+html[data-ui-skin='ide'] :is(.connector-market-page__wrap, .plugin-dev-page__wrap) {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-width: none;
+    padding: 0;
+}
+
+html[data-ui-skin='ide'] .connector-market-page .connector-market--page,
+html[data-ui-skin='ide'] .plugin-dev-page .plugin-dev--standalone {
+    gap: var(--dw-space-5);
+    padding: 0 var(--dw-space-6) var(--dw-space-6);
+}
+
+/* Hero → 工作台顶栏 */
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .community-plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-hero {
+    margin: 0 calc(-1 * var(--dw-space-6)) 0;
+    border: 0;
+    border-bottom: 1px solid var(--dw-panel-border);
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--dw-bg-muted);
+}
+
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .community-plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-hero__inner {
+    align-items: center;
+    min-height: var(--dw-density-xl);
+    padding: var(--dw-space-4) var(--dw-space-6);
+    gap: var(--dw-space-5);
+}
+
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .community-plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-hero--with-settings .mp-hero__inner {
+    padding-right: 52px;
+}
+
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .community-plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-hero__settings {
+    top: 50%;
+    right: var(--dw-space-5);
+    transform: translateY(-50%);
+}
+
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .community-plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-hero__eyebrow,
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .community-plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-hero__hint {
+    display: none;
+}
+
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .community-plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-hero__title {
+    font-size: var(--dw-text-xl);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: var(--dw-leading-snug);
+}
+
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .community-plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-hero__sub {
+    margin-top: 2px;
+    font-size: var(--dw-text-sm);
+    line-height: var(--dw-leading-snug);
+    max-width: 72ch;
+}
+
+/* 面板 / 卡片直角扁平 */
+html[data-ui-skin='ide'] :is(
+    .mp-hero,
+    .mp-panel,
+    .mp-stat,
+    .mp-stat--icon,
+    .mp-status,
+    .mp-journey,
+    .mp-tile,
+    .mp-card,
+    .dash-card,
+    .dash-edit-bar
+) {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+html[data-ui-skin='ide'] :is(
+    .pack-store-page .pack-suite,
+    .pack-store-page .pack-suite__card,
+    .pack-store-page .pack-card,
+    .pack-store-page .pack-store__site-trial,
+    .pack-store-page .pack-store__filters,
+    .plugin-page .plugin-panel,
+    .plugin-page .plugin-card,
+    .plugin-page .plugin-alert,
+    .plugin-page .plugin-filter-dock,
+    .plugin-page .plugin-preset-card,
+    .connector-market-page .connector-card,
+    .connector-market-page .connector-market-pending-alert,
+    .connector-market-page .connector-market-library,
+    .plugin-dev-page .plugin-dev__panel,
+    .plugin-dev-page .plugin-dev-preset-sync
+) {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+html[data-ui-skin='ide'] :is(
+    .pack-store-page .pack-card:hover,
+    .pack-store-page .pack-suite__card:hover,
+    .plugin-page .plugin-card:hover,
+    .plugin-page .plugin-preset-card:hover,
+    .plugin-page .plugin-preset-card.is-active,
+    .connector-market-page .connector-card:hover,
+    .connector-market-page .connector-card--ready:hover
+) {
+    box-shadow: none;
+    transform: none;
+}
+
+/* 五页共用指标条：IDE 直角扁平 */
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .community-plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-status {
+    border-radius: 0;
+    border-color: var(--dw-panel-border);
+    background: var(--dw-bg-panel);
+    box-shadow: none;
+}
+
+html[data-ui-skin='ide'] .plugin-page .plugin-center-tabs,
+html[data-ui-skin='ide'] .plugin-dev-page .plugin-dev__tabs {
+    border-radius: var(--dw-control-radius-sm);
+}
+
+html[data-ui-skin='ide'] .plugin-page .plugin-center-tabs__btn,
+html[data-ui-skin='ide'] .plugin-dev-page .dw-ide-tab,
+html[data-ui-skin='ide'] .plugin-dev-page .plugin-dev-tab {
+    border-radius: var(--dw-control-radius-sm);
+}
+
+html[data-ui-skin='ide'] :is(
+    .plugin-page .plugin-card-grid,
+    .community-plugin-page .community-plugin-installed,
+    .pack-store-page .pack-store__grid,
+    .connector-market-page .connector-market-board,
+    .connector-market-page .connector-market-skeleton,
+    .mp-card-grid
+) {
+    gap: var(--mp-card-gap);
+}
+
+html[data-ui-skin='ide'] .plugin-dev-page .plugin-dev-pane {
+    padding: var(--dw-space-5) var(--dw-space-6);
+}
+
+html[data-ui-skin='ide'] .plugin-dev-page .plugin-dev-pane__head,
+html[data-ui-skin='ide'] .plugin-dev-page .plugin-dev-preset-sync {
+    margin-bottom: var(--dw-space-5);
+}
+
+html[data-ui-skin='ide'] .plugin-dev-page .plugin-dev-preset-sync {
+    padding: var(--dw-space-4) var(--dw-space-5);
+}
+
+html[data-ui-skin='ide'] .connector-market-page .mp-journey {
+    margin: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+}
+
+html[data-ui-skin='ide'] .pack-store-page .pack-store {
+    gap: var(--dw-space-5);
+}
+
+html[data-ui-skin='ide'] .pack-store-page .pack-suite {
+    padding: var(--dw-space-4) var(--dw-space-5);
+}
+
+html[data-ui-skin='ide'] .module-shell__nav-item {
+    border-radius: var(--dw-control-radius-sm);
+}
+
+html[data-ui-skin='ide'] .module-shell__nav-item.is-active {
+    box-shadow: inset 2px 0 0 var(--dw-primary);
+}
+
+html[data-ui-skin='ide'] .module-shell__main .setting-block,
+html[data-ui-skin='ide'] .module-shell__main .editor-card,
+html[data-ui-skin='ide'] .module-shell__main .shortcut-card,
+html[data-ui-skin='ide'] .module-shell__main .setting-card {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* ---- 表详情（属性 / DDL / 关系 / 关系图）：IDE 紧凑贴合（减留白，不缩小正文字号 / Tab） ---- */
+html[data-ui-skin='ide'] .table-detail__header {
+    background: var(--dw-bg-muted);
+}
+
+html[data-ui-skin='ide'] .table-detail__view-btn.active {
+    background: var(--dw-bg);
+    box-shadow: inset 0 2px 0 var(--dw-primary);
+}
+
+html[data-ui-skin='ide'] .table-detail__view-btn.active::after {
+    display: none;
+}
+
+html[data-ui-skin='ide'] .table-detail__properties {
+    gap: var(--dw-space-4);
+    padding: var(--dw-space-4) var(--dw-space-5);
+}
+
+html[data-ui-skin='ide'] .table-detail__hero {
+    align-items: center;
+    gap: var(--dw-space-4);
+    padding: var(--dw-space-4) var(--dw-space-5);
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--dw-bg-panel);
+}
+
+html[data-ui-skin='ide'] .table-detail__hero-icon {
+    width: var(--dw-density-md);
+    height: var(--dw-density-md);
+    border-radius: var(--dw-radius-sm);
+}
+
+html[data-ui-skin='ide'] .table-detail__hero-kind {
+    margin-bottom: 0;
+}
+
+html[data-ui-skin='ide'] .table-detail__hero-title {
+    font-weight: 600;
+}
+
+html[data-ui-skin='ide'] .table-detail__hero-desc {
+    margin-top: var(--dw-space-1);
+    line-height: var(--dw-leading-snug);
+}
+
+html[data-ui-skin='ide'] .table-detail__stats {
+    gap: var(--dw-gap-xs);
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+
+html[data-ui-skin='ide'] .table-detail__stat {
+    gap: 2px;
+    padding: var(--dw-space-3) var(--dw-space-4);
+    border-radius: 0;
+}
+
+html[data-ui-skin='ide'] .table-detail__properties-body {
+    min-height: 200px;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+html[data-ui-skin='ide'] .table-detail__sidebar {
+    width: 132px;
+    padding: var(--dw-space-3);
+    gap: 2px;
+}
+
+html[data-ui-skin='ide'] .table-detail__section-btn {
+    padding: var(--dw-space-3) var(--dw-space-4);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+html[data-ui-skin='ide'] .table-detail__section-btn.active {
+    box-shadow: inset 2px 0 0 var(--dw-primary);
+    border-color: transparent;
+}
+
+html[data-ui-skin='ide'] .table-detail__section-label {
+    gap: var(--dw-space-2);
+}
+
+html[data-ui-skin='ide'] .table-detail__section-badge {
+    min-width: 18px;
+    padding: 0 var(--dw-space-2);
+    border-radius: var(--dw-radius-sm);
+}
+
+html[data-ui-skin='ide'] .table-detail__panel-head {
+    padding: var(--dw-space-3) var(--dw-space-5);
+    min-height: var(--dw-density-md);
+}
+
+html[data-ui-skin='ide'] .table-detail__panel-count {
+    padding: 1px var(--dw-space-3);
+    border-radius: var(--dw-radius-sm);
+}
+
+html[data-ui-skin='ide'] .table-detail__grid th,
+html[data-ui-skin='ide'] .table-detail__grid td {
+    padding: var(--dw-space-2) var(--dw-space-4);
+}
+
+html[data-ui-skin='ide'] .table-detail__grid-wrap :deep(.dw-empty--compact) {
+    min-height: 56px;
+    padding: var(--dw-space-5) var(--dw-space-4);
+}
+
+html[data-ui-skin='ide'] .table-detail__ddl {
+    padding: 0;
+}
+
+html[data-ui-skin='ide'] .table-detail__ddl-card {
+    min-height: 100%;
+    border-radius: 0;
+    box-shadow: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+}
+
+html[data-ui-skin='ide'] .table-detail__ddl-head {
+    align-items: center;
+    gap: var(--dw-space-4);
+    padding: var(--dw-space-3) var(--dw-space-5);
+    min-height: var(--dw-tab-height);
+    background: var(--dw-bg-muted);
+}
+
+html[data-ui-skin='ide'] .table-detail__ddl-kicker {
+    margin-bottom: 0;
+}
+
+html[data-ui-skin='ide'] .table-detail__ddl-head-text p {
+    margin-top: 1px;
+}
+
+html[data-ui-skin='ide'] .table-detail__ddl-code {
+    padding: var(--dw-space-4) var(--dw-space-5);
+    line-height: var(--dw-leading-relaxed);
+}
+
+html[data-ui-skin='ide'] .table-relations.dw-embedded-panel {
+    gap: var(--dw-wb-stack-gap);
+    padding: var(--dw-wb-content-pad-y) var(--dw-wb-content-pad-x);
+}
+
+html[data-ui-skin='ide'] .table-relations__summary {
+    gap: var(--dw-gap-xs);
+}
+
+html[data-ui-skin='ide'] .table-relations__summary-card {
+    gap: 2px;
+    padding: var(--dw-space-3) var(--dw-space-4);
+    border-radius: 0;
+}
+
+html[data-ui-skin='ide'] .table-relations__columns {
+    gap: var(--dw-space-4);
+}
+
+html[data-ui-skin='ide'] .table-relations__section {
+    border-radius: 0;
+}
+
+html[data-ui-skin='ide'] .table-relations__head {
+    padding: var(--dw-space-3) var(--dw-space-5);
+}
+
+html[data-ui-skin='ide'] .table-relations__head p {
+    margin-top: 1px;
+}
+
+html[data-ui-skin='ide'] .table-relations__count {
+    padding: 1px var(--dw-space-3);
+    border-radius: var(--dw-radius-sm);
+}
+
+html[data-ui-skin='ide'] .table-relations__cards {
+    gap: var(--dw-gap-xs);
+    padding: var(--dw-space-3);
+}
+
+html[data-ui-skin='ide'] .table-relations__card {
+    gap: var(--dw-gap-sm);
+    padding: var(--dw-space-3) var(--dw-space-4);
+    border-radius: 0;
+}
+
+html[data-ui-skin='ide'] .table-relations__card:hover {
+    transform: none;
+}
+
+html[data-ui-skin='ide'] .table-relations__flow {
+    gap: var(--dw-gap-xs);
+}
+
+html[data-ui-skin='ide'] .table-relations__flow-block {
+    gap: var(--dw-gap-xs);
+}
+
+html[data-ui-skin='ide'] .table-relations__chip {
+    padding: 0 var(--dw-space-2);
+    border-radius: var(--dw-radius-sm);
+}
+
+html[data-ui-skin='ide'] .relation-graph {
+    gap: 0;
+}
+
+html[data-ui-skin='ide'] .relation-graph__toolbar {
+    min-height: var(--dw-tab-height);
+    padding: 0 var(--dw-space-5);
+    border-bottom: 1px solid var(--dw-panel-border);
+    background: var(--dw-bg-muted);
+}
+
+html[data-ui-skin='ide'] .relation-graph__canvas-wrap {
+    min-height: 0;
+}
+
+html[data-ui-skin='ide'] .dw-er-table-node {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+html[data-ui-skin='ide'] .dw-er-table-node__head {
+    padding: var(--dw-space-2) var(--dw-space-3);
+    min-height: var(--dw-density-sm);
+}
+
+html[data-ui-skin='ide'] .dw-er-table-node__col {
+    padding: 2px var(--dw-space-3);
+    min-height: 22px;
+}
+
+/* —— 工具窗 / Explorer / Modal：IDE 直角扁平（对照 classic 卡片） —— */
+html[data-ui-skin='ide'] :is(
+    .tool-window,
+    .explorer-panel,
+    .shortcut-panel,
+    .notification-drawer,
+    .dw-side-browser
+) {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+html[data-ui-skin='ide'] .tool-window__head {
+    border-bottom-color: var(--dw-panel-border);
+}
+
+html[data-ui-skin='ide'] :is(
+    .app-modal__panel,
+    .app-drawer__panel,
+    .dw-modal__panel
+) {
+    border-radius: var(--dw-modal-radius);
+    box-shadow: var(--dw-menu-shadow);
+}
+
+

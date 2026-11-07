@@ -1,0 +1,105 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.translation",
+  "name": "Translation",
+  "version": "0.1.1",
+  "publisher": "datawise-community",
+  "description": "Instant translation workbench (MVP): built-in free engine, OpenAI-compatible LLMs, and optional DataWise host AI. Translate-as-you-type, streaming, engine management, history. Engines/secrets live in the plugin data directory (SQLite).",
+  "license": "Apache-2.0",
+  "source": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/translation",
+  "homepage": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/translation",
+  "icon": "assets/plugin.svg",
+  "tags": ["translation", "i18n", "llm", "workbench"],
+  "permissions": [
+    "host.workbench",
+    "host.events",
+    "host.clipboard",
+    "host.ai"
+  ],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.6"
+  },
+  "entrypoints": {
+    "backend": {
+      "transport": "stdio-jsonl",
+      "executable": "bin/windows-x86_64/datawise-plugin-translation.exe"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.translation.connection",
+      "label": "Translation workspace",
+      "description": "Create a workspace with any name, then open the workbench. A free engine works out of the box — no API key on this form. Add OpenAI-compatible engines or use DataWise host AI inside the workbench.",
+      "icon": "assets/plugin.svg",
+      "workbench": "io.datawise.community.translation.workbench",
+      "capabilities": ["test", "connect", "disconnect"],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Workspace name",
+          "type": "text",
+          "binding": "name",
+          "required": true,
+          "default": "Translation",
+          "description": "Shown in the connection list. Engines and API keys are configured inside the workbench."
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.translation.workbench",
+      "label": "Translation",
+      "description": "Translate-as-you-type, streaming, engines and history",
+      "icon": "assets/plugin.svg"
+    },
+    {
+      "type": "result-view",
+      "id": "io.datawise.community.translation.result",
+      "label": "Send SQL to Translation",
+      "description": "Load the current result SQL into the Translation workbench",
+      "icon": "assets/plugin.svg"
+    },
+    {
+      "type": "context-menu",
+      "id": "io.datawise.community.translation.context",
+      "label": "Translate name…",
+      "menu": "table",
+      "icon": "assets/plugin.svg"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Translation 即时翻译",
+      "description": "即时翻译工作台（MVP）：内置免费引擎、OpenAI 兼容大模型，可选 DataWise 宿主 AI。输入即译、流式输出、引擎管理与历史。引擎与密钥保存在插件数据目录（SQLite）。",
+      "contributions": {
+        "io.datawise.community.translation.connection": {
+          "label": "翻译工作区",
+          "description": "填写任意名称即可创建。打开工作台后内置免费引擎可直接翻译，无需在此填 API Key。OpenAI 兼容引擎与宿主 AI 在工作台内配置。",
+          "fields": {
+            "display_name": {
+              "label": "工作区名称",
+              "description": "显示在连接列表中。引擎与密钥在工作台内管理。"
+            }
+          }
+        },
+        "io.datawise.community.translation.workbench": {
+          "label": "即时翻译",
+          "description": "输入即译、流式输出、引擎管理与历史"
+        },
+        "io.datawise.community.translation.result": {
+          "label": "发送 SQL 到翻译",
+          "description": "将当前结果的 SQL 载入翻译工作台"
+        },
+        "io.datawise.community.translation.context": {
+          "label": "翻译名称…"
+        }
+      }
+    }
+  }
+}

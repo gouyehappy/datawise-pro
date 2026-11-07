@@ -1,0 +1,3 @@
+﻿# Keep LF so frontend multiline comments compile identically into ui/index.html.
+* text=auto eol=lf
+*.cmd text eol=crlf

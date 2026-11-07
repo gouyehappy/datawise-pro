@@ -1,0 +1,373 @@
+/**
+ * Ledger — blueprint / technical shell: sharp seams, strip tabs, flush chrome.
+ * Mirrors ide coverage for tabs / rail / titlebar / workbench / cards, with
+ * stronger borders and near-zero radii. Colors still follow data-theme + tones.
+ */
+
+html[data-ui-skin='ledger'] {
+    --dw-density-md: 26px;
+    --dw-density-sm: 22px;
+    --dw-density-xs: 18px;
+    --dw-density-lg: 30px;
+    --dw-density-xl: 40px;
+
+    --mp-radius: 2px;
+    --dw-pad-control: 3px 7px;
+    --dw-pad-control-lg: 3px 9px;
+    --dw-panel-gap: 0;
+    --dw-shell-padding: 0;
+    --dw-panel-radius: 0;
+    --dw-splitter-size: 3px;
+
+    --dw-tool-stripe-width: 44px;
+    --dw-tool-btn-pad: 4px;
+    --dw-tool-icon-caption-gap: 2px;
+    --dw-tool-pill-radius: 0;
+    --dw-icon-size-rail: 18px;
+    --dw-tool-caption-size: 9px;
+    --dw-tool-caption-leading: 1.05;
+
+    --dw-titlebar-height: 32px;
+    --dw-titlebar-chip-radius: 0;
+
+    --dw-tab-height: var(--dw-density-md);
+    --dw-tab-pill-height: var(--dw-density-md);
+    --dw-tab-pill-radius: 0;
+    --dw-tab-gap: 0;
+    --dw-toolbar-height: var(--dw-tab-height);
+
+    --dw-radius-xs: 0;
+    --dw-radius-sm: 0;
+    --dw-radius-md: 2px;
+    --dw-radius-lg: 2px;
+    --dw-radius-xl: 2px;
+    --dw-control-radius: 2px;
+    --dw-control-radius-sm: 0;
+    --dw-input-radius: 2px;
+    --dw-btn-radius: 2px;
+
+    --dw-menu-radius: 2px;
+    --dw-menu-item-radius: 0;
+    --dw-menu-gutter: 32px;
+    --dw-menu-item-h: var(--dw-density-md);
+    --dw-menu-pad-y: 4px;
+    --dw-menu-pad-x: 4px;
+    --dw-menu-item-pad-end: 4px;
+    --dw-menu-hover: color-mix(in srgb, var(--dw-text) 10%, transparent);
+    --dw-menu-active: color-mix(in srgb, var(--dw-primary) 28%, transparent);
+    --dw-menu-border: var(--dw-border);
+
+    --dw-modal-radius: 2px;
+    --dw-space-3: 3px;
+    --dw-space-4: 5px;
+    --dw-space-5: 7px;
+    --dw-space-6: 9px;
+}
+
+html[data-ui-skin='ledger'] .app--desktop {
+    --dw-titlebar-height: 32px;
+}
+
+/* —— Workbench tokens —— */
+html[data-ui-skin='ledger'] .dw-workbench-page {
+    --dw-wb-head-bg: var(--dw-bg-muted);
+    --dw-wb-head-border: var(--dw-border);
+    --dw-wb-head-shadow: none;
+    --dw-wb-head-pad-y: 0;
+    --dw-wb-head-min-height: var(--dw-tab-height);
+    --dw-wb-split-gap: 0;
+    --dw-wb-split-divider: var(--dw-border);
+    --dw-wb-col-pad-top: 0;
+    --dw-wb-col-pad-right: 0;
+    --dw-wb-col-pad-bottom: 0;
+    --dw-wb-col-pad-left: 0;
+    --dw-wb-content-pad-x: var(--dw-space-4);
+    --dw-wb-content-pad-y: var(--dw-space-3);
+    --dw-wb-stack-gap: var(--dw-space-2, 2px);
+    --dw-wb-pane-pad: var(--dw-space-3);
+    --dw-wb-card-border: var(--dw-border);
+    --dw-wb-card-radius: 0;
+    --dw-wb-control-radius: 0;
+    --dw-wb-card-shadow: none;
+    --dw-wb-card-bg: var(--dw-bg-panel);
+    --dw-wb-placeholder-border: var(--dw-border);
+    --dw-wb-placeholder-style: solid;
+    --dw-wb-placeholder-shadow: none;
+    --dw-wb-terminal-border: var(--dw-border);
+    --dw-wb-terminal-radius: 0;
+    --dw-wb-terminal-shadow: none;
+}
+
+/* —— Shell chrome —— */
+html[data-ui-skin='ledger'] .shell-main {
+    border-left: 1px solid var(--dw-panel-border);
+    background: var(--dw-bg);
+}
+
+html[data-ui-skin='ledger'] .tool-stripe--right {
+    border-left: 1px solid var(--dw-panel-border);
+}
+
+html[data-ui-skin='ledger'] .tool-stripe--left {
+    border-right: 1px solid var(--dw-panel-border);
+}
+
+html[data-ui-skin='ledger'] .tool-btn--stack.active::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: 4px;
+    bottom: 4px;
+    width: 2px;
+    border-radius: 0;
+    background: var(--dw-primary);
+}
+
+html[data-ui-skin='ledger'] .tool-stripe--right .tool-btn--stack.active::before {
+    left: auto;
+    right: -3px;
+}
+
+html[data-ui-skin='ledger'] .tool-btn--brand.active::before {
+    display: none;
+}
+
+html[data-ui-skin='ledger'] .desktop-titlebar {
+    border-bottom: 1px solid var(--dw-panel-border);
+    box-shadow: none;
+}
+
+html[data-ui-skin='ledger'] .desktop-titlebar__controls {
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+}
+
+html[data-ui-skin='ledger'] .desktop-titlebar__btn {
+    width: 42px;
+    height: 100%;
+    border-radius: 0;
+}
+
+html[data-ui-skin='ledger'] .status-bar {
+    background: var(--dw-bg-chrome);
+    border-top: 1px solid var(--dw-panel-border);
+    padding-left: var(--dw-space-3);
+    padding-right: var(--dw-space-2);
+}
+
+html[data-ui-skin='ledger'] .status-bar__chip {
+    border-radius: 0;
+    border: 1px solid color-mix(in srgb, var(--dw-border) 80%, transparent);
+}
+
+html[data-ui-skin='ledger'] .status-bar__tools {
+    border-left-color: var(--dw-panel-border);
+}
+
+html[data-ui-skin='ledger'] .terminal-pane {
+    border-top: 1px solid var(--dw-panel-border);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* —— Tabs: strip / blueprint —— */
+html[data-ui-skin='ledger'] .dw-tab-bar {
+    height: var(--dw-tab-height);
+    padding: 0;
+    border-bottom: 1px solid var(--dw-tab-bar-border, var(--dw-border));
+    background: var(--dw-bg-muted);
+}
+
+html[data-ui-skin='ledger'] .dw-tab-scroll {
+    gap: 0;
+    padding: 0;
+    align-items: stretch;
+    height: 100%;
+}
+
+html[data-ui-skin='ledger'] .dw-tab-pinned {
+    gap: 0;
+    height: 100%;
+    align-items: stretch;
+    padding-right: 0;
+}
+
+html[data-ui-skin='ledger'] .dw-tab {
+    height: 100%;
+    max-width: 200px;
+    min-width: 64px;
+    padding: 0 var(--dw-space-4) 0 var(--dw-space-3);
+    border: 0;
+    border-radius: 0;
+    border-right: 1px solid color-mix(in srgb, var(--dw-border) 90%, transparent);
+    background: transparent;
+    box-shadow: inset 0 -1px 0 var(--dw-border);
+}
+
+html[data-ui-skin='ledger'] .dw-tab:hover:not(.active) {
+    background: color-mix(in srgb, var(--dw-text) 6%, transparent);
+    color: var(--dw-text);
+}
+
+html[data-ui-skin='ledger'] .dw-tab.active,
+html[data-ui-skin='ledger'] .dw-tab.active:hover {
+    background: var(--dw-bg-panel);
+    color: var(--dw-text);
+    box-shadow:
+        inset 0 2px 0 var(--dw-primary),
+        inset 0 -1px 0 var(--dw-bg-panel);
+    z-index: 1;
+}
+
+html[data-ui-skin='ledger'] .dw-tab__close {
+    width: var(--dw-icon-size-md, 14px);
+    height: var(--dw-icon-size-md, 14px);
+    margin-left: var(--dw-space-2);
+    border-radius: 0;
+    opacity: 0;
+}
+
+html[data-ui-skin='ledger'] .dw-tab:hover .dw-tab__close,
+html[data-ui-skin='ledger'] .dw-tab.active .dw-tab__close {
+    opacity: 0.7;
+}
+
+html[data-ui-skin='ledger'] .dw-tab__close:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--dw-text) 10%, transparent);
+}
+
+html[data-ui-skin='ledger'] .dw-tab-add {
+    width: var(--dw-tab-height);
+    height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    border-right: 1px solid color-mix(in srgb, var(--dw-border) 90%, transparent);
+}
+
+html[data-ui-skin='ledger'] .dw-tab-overflow {
+    height: 100%;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 1px solid var(--dw-border);
+}
+
+html[data-ui-skin='ledger'] .dw-tab-overflow__btn {
+    width: var(--dw-tab-height);
+    height: 100%;
+    border-radius: 0;
+}
+
+html[data-ui-skin='ledger'] .dw-ide-tab-strip {
+    gap: 0;
+    padding: 0;
+    min-height: var(--dw-tab-height);
+}
+
+html[data-ui-skin='ledger'] .dw-ide-tab,
+html[data-ui-skin='ledger'] .team-tab,
+html[data-ui-skin='ledger'] .migration-panel__tab,
+html[data-ui-skin='ledger'] .sql-monitor__tab,
+html[data-ui-skin='ledger'] .plugin-dev-tab {
+    border-radius: 0;
+    border-color: transparent;
+}
+
+html[data-ui-skin='ledger'] .dw-ide-tab.active,
+html[data-ui-skin='ledger'] .dw-ide-tab.is-active,
+html[data-ui-skin='ledger'] .team-tab.is-active,
+html[data-ui-skin='ledger'] .migration-panel__tab.is-active,
+html[data-ui-skin='ledger'] .sql-monitor__tab--active,
+html[data-ui-skin='ledger'] .plugin-dev-tab.is-active {
+    border-color: transparent;
+    box-shadow: inset 0 2px 0 var(--dw-primary);
+}
+
+html[data-ui-skin='ledger'] .dw-segment {
+    border-radius: 0;
+    border-color: var(--dw-border);
+    background: var(--dw-bg);
+}
+
+html[data-ui-skin='ledger'] .dw-segment__btn {
+    border-radius: 0;
+}
+
+html[data-ui-skin='ledger'] .dw-segment__btn.is-active {
+    box-shadow: none;
+    border: 1px solid var(--dw-primary-border, var(--dw-primary));
+    background: color-mix(in srgb, var(--dw-primary) 8%, var(--dw-bg));
+}
+
+/* —— Tool window / module / modal —— */
+html[data-ui-skin='ledger'] .tool-window__head {
+    border-bottom: 1px solid var(--dw-border);
+}
+
+html[data-ui-skin='ledger'] :is(.app-modal__panel, .app-drawer__panel, .dw-modal__panel) {
+    border-radius: 0;
+    border: 1px solid var(--dw-border);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--dw-text) 16%, transparent);
+}
+
+html[data-ui-skin='ledger'] .module-shell__nav {
+    border-right: 1px solid var(--dw-border);
+    background: var(--dw-bg-muted);
+}
+
+html[data-ui-skin='ledger'] .module-shell__nav-item.is-active {
+    border-radius: 0;
+    background: color-mix(in srgb, var(--dw-primary) 16%, var(--dw-bg));
+    box-shadow: inset 3px 0 0 var(--dw-primary);
+}
+
+/* —— Cards & browse —— */
+html[data-ui-skin='ledger'] :is(.mp-card, .dash-card, .settings-card, .dw-card, .dw-soft-card) {
+    border-radius: 0;
+    border: 1px solid var(--dw-border);
+    box-shadow: none;
+}
+
+html[data-ui-skin='ledger'] .dw-browse-toolbar,
+html[data-ui-skin='ledger'] .pg__panel {
+    border-radius: 0;
+    border-color: var(--dw-border);
+    box-shadow: none;
+}
+
+html[data-ui-skin='ledger'] .lineage-panel__toolbar {
+    box-shadow: none;
+    border-bottom: 1px solid var(--dw-border);
+}
+
+html[data-ui-skin='ledger'] .dw-workbench-page.connector-workbench {
+    --dw-wb-head-pad-y: 0;
+    --dw-wb-head-min-height: var(--dw-tab-height);
+    --dw-wb-content-pad-x: 0.75rem;
+}
+
+html[data-ui-skin='ledger'] .dw-workbench-page.connector-workbench .connector-workbench__head,
+html[data-ui-skin='ledger'] .dw-workbench-page .connector-workbench__head {
+    border-radius: 0;
+    border-bottom: 1px solid var(--dw-border);
+}
+
+html[data-ui-skin='ledger'] .dw-workbench-page .connector-browse-panel__pane,
+html[data-ui-skin='ledger'] .dw-workbench-page .connector-ns-bar,
+html[data-ui-skin='ledger'] .dw-workbench-page .dw-code-viewer--card,
+html[data-ui-skin='ledger'] .dw-workbench-page .dw-log-viewer--card,
+html[data-ui-skin='ledger'] .dw-workbench-page .connector-workbench__badge,
+html[data-ui-skin='ledger'] .dw-workbench-page .connector-workbench__tabs button {
+    border-radius: 0;
+}
+
+html[data-ui-skin='ledger'] .dw-workbench-split {
+    gap: 0;
+}
+
+html[data-ui-skin='ledger'] .dw-workbench-split > .dw-workbench-col--left,
+html[data-ui-skin='ledger'] .dw-workbench-split > .dw-workbench-col--right {
+    border-color: var(--dw-border);
+}

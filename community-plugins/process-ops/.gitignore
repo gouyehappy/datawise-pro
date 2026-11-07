@@ -1,0 +1,8 @@
+node_modules/
+ui/
+dist/
+.dwp-staging*/
+backend/datawise-plugin-process-ops
+backend/datawise-plugin-process-ops.exe
+*.exe
+.DS_Store

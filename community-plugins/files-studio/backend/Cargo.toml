@@ -1,0 +1,49 @@
+[package]
+name = "datawise-plugin-files-studio"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["datawise-community"]
+
+[[bin]]
+name = "datawise-plugin-files-studio"
+path = "src/main.rs"
+
+[workspace]
+
+[dependencies]
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+hex = "0.4"
+hmac = "0.12"
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+sha2 = "0.10"
+datawise-plugin-sdk = "0.1.0"
+flate2 = "1"
+# services-sftp pulls openssh (unix-only); enable on Linux/macOS packaging later.
+opendal = { version = "0.59", features = [
+  "services-fs",
+  "services-s3",
+  "services-azblob",
+  "services-gcs",
+  "services-obs",
+  "services-webdav",
+  "services-ftp",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tar = "0.4"
+russh = { version = "0.62", features = ["des"] }
+russh-sftp = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util", "net"] }
+uuid = { version = "1", features = ["v4"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_NetworkManagement_WNet",
+] }
+
+[patch.crates-io]
+datawise-plugin-sdk = { path = "../shared/sdk/rust/datawise-plugin-sdk" }

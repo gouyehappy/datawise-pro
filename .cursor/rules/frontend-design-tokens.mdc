@@ -1,0 +1,60 @@
+---
+description: Frontend styles must use shared design tokens — dual classic/IDE skins, no ambient AI chrome
+globs: datawise-frontend/**/*.{vue,css,scss}
+alwaysApply: false
+---
+
+# DataWise frontend style system
+
+统一用 `datawise-frontend/src/styles/variables.css`；业务 `<style>` 只引用令牌/共用 class。
+完整契约见 `datawise-frontend/docs/UI_STYLE_CONTRACT.md`。
+
+经典卡片（classic）与 IDE 工作台（ide）双皮肤均需支持：差异只通过 `html[data-ui-skin]` 与 `--dw-wb-*`，禁止在功能 CSS 里写死某一皮肤的 px。
+
+## Do
+
+- 圆角指挥官：面板 `--dw-panel-radius` / `.dw-soft-card`；控件 `--dw-control-radius`（`-sm`）；菜单 `--dw-menu-radius`；胶囊 `--dw-radius-pill`（禁止业务写 `--dw-radius-lg` 当面板）
+- 字号 `--dw-text-*` / `--dw-font-size-*`（**禁止壳层写死 px/rem**）
+- **界面文字档位** `html[data-ui-text-scale]`：`styles/ui-text-scale.css` + `shared/config/ui-text-scale.ts`；新壳层只用令牌即可自动跟随设置（见 `docs/UI_TEXT_SCALE.md`）
+- **界面疏密** `html[data-ui-density]`：`styles/ui-density.css` + `shared/config/ui-density.ts`；控件高度走 `--dw-density-*`（见 `docs/UI_DENSITY.md`）；勿再开平行图标/Tab 高度设置
+- 间距 `--dw-space-*`（1–12） / `--dw-gap*` / `--dw-pad-control*`
+- **控件高度** `--dw-density-{md,sm,xs,lg,xl}`（皮肤覆写）；别名 `--dw-control-h*` / `--dw-btn-height*`；同行控件同档
+- **图标盒** `--dw-icon-size-{xs,sm,md,lg,xl,menu,console,tab,rail}`（9–22px 禁止写死 px）
+- 色调 `--mp-tone`（默认 primary；`.mp-tone-*` 覆写）
+- 表面 `--dw-surface*` / `.dw-surface`
+- **壳层配方** `styles/plugins/`：`.dw-soft-card` / `.dw-inset-pane|card` / `.dw-seam-*`（见 `frontend-chrome-plugins`）
+- 边框 `--dw-border*` / `--dw-panel-border`
+- 状态色 `--dw-success*|warning*|danger*|info*|link`
+- 按钮：`DwButton` → `btn-primary|secondary|ghost`；工具栏 `.dw-text-btn` / `.dw-icon-btn`（禁止 `.mp-btn`）
+- 分段：仅 `.dw-segment` / `.dw-segment__btn`（可选 `--sm`；设置页 `.settings-segment-tabs` 共用同一套令牌）
+- 搜索：`SearchInput` / `.dw-search`（可选 `--sm`）
+- 壳层：工作台 `.dw-workbench-page`；模块 `.module-page`（**禁止** `--ambient`）；设置 `SettingsPageShell`
+- 焦点 / 阴影 / 动效 / z-index：`--dw-focus-*` / `--dw-shadow*` / `--dw-transition*` / `--dw-z-*`
+- 等宽字体：`--dw-mono`
+
+## Don't
+
+- 壳层 / 菜单 / Tab / 标题栏写死 `font-size: NNpx` 或 `0.875rem`（会绕过「界面文字大小」）；用 `--dw-text-*` / `--dw-font-size-*`
+- 再开第二套「全局字号 / 全局密度」偏好或平行 CSS 变量阶梯；扩展请走 `uiTextScale` / `uiDensity` + 令牌
+- 写死控件 `height` / `min-height` 的 `NNpx` / `clamp(...px)`（≤8px 分割线与 ≥64px 内容区除外）；用 density 令牌
+- 写死 `8px` / `#16a34a` / `#e5e7eb` / 非预览用的 `#7c3aed`
+- `module-page--ambient`、多层 radial 氛围底、hero glow 光球、模块页营销渐变
+- 新并行按钮族（`.mp-btn` 变体系统）或第二套 segment
+- `var(--token, 8px)` 或冗余 `var(--a, var(--b))` fallback
+- 复制整段面板 chrome；抽到 `styles/plugins/*.css`（soft-card / inset / seam / dock）
+- 功能 CSS 按 classic/ide 分支硬编码控件高度/圆角（应走 skin 令牌）
+- 拼写错误 `--dw-control-height`（正确为 `--dw-control-h`）
+
+## OK 局部例外
+
+- Monaco / xterm / 桌面 CEF zoom / 插件 iframe：独立字号或缩放，不跟 `uiTextScale`
+- `50%` 正圆、终端主题色、窗口交通灯、图表系列色（图表可用 `resolveUiTextScaleFactor`）
+- 主题皮肤 / 布局预览里的静态示意色（非运行时 chrome）
+- 图标光学尺寸偶发、大内容区 `min-height`
+- 引导动画专用 cubic-bezier / 长时长 transition
+- Monaco minimap overlay（优先 `color-mix` + `--dw-primary*`）
+
+语义别名（一律指向权威令牌，禁止再写 fallback）：`--dw-accent`→primary，`--dw-text-primary`→text，`--dw-bg-base/subtle/input`→bg 系，`--dw-selection-bg` / `--dw-ink-deep` / `--dw-graph-node-dark`。
+
+全局改观感：`variables.css` 或 `skins/classic.css` / `skins/ide.css`。
+双皮肤审计截图：`npm run capture:ui-audit`。

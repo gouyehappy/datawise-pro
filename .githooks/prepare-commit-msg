@@ -1,0 +1,6 @@
+#!/bin/sh
+# Remove Cursor Agent co-author lines from commit messages (IDE/Agent may inject them).
+MSG_FILE="$1"
+[ -f "$MSG_FILE" ] || exit 0
+grep -v 'cursoragent@cursor.com' "$MSG_FILE" > "$MSG_FILE.tmp" && mv "$MSG_FILE.tmp" "$MSG_FILE"
+exit 0

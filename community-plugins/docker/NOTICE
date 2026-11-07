@@ -1,0 +1,11 @@
+Docker for DataWise
+Copyright 2026 DataWise community contributors
+
+This plugin is a DataWise port of Ezreal-byte/dbx-docker-plugin
+(https://github.com/Ezreal-byte/dbx-docker-plugin), distributed under the Apache License 2.0.
+
+That upstream work adapts the Docker workbench implementation from DBX
+(https://github.com/t8y2/dbx), also under Apache License 2.0.
+The Go plugin SDK in backend/sdk is adapted from the same DBX repository.
+
+Docker is a trademark of Docker, Inc. This plugin is not affiliated with Docker, Inc.

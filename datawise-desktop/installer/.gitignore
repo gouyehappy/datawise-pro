@@ -1,0 +1,4 @@
+﻿# Residual Electron portable build leftovers (Cursor may lock app.asar until reboot)
+ui/release-portable/
+ui/**/app.asar
+ui/**/node_modules/

@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: Cleaned customer rows from seed.
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+      - name: email
+        tests: [not_null]
+      - name: status
+        tests:
+          - accepted_values:
+              values: ["active", "inactive"]
+
+  - name: stg_orders
+    description: Cleaned order rows from seed.
+    columns:
+      - name: order_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id
+
+  - name: customers
+    description: Active customers with completed-order aggregates.
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+      - name: order_count
+        tests: [not_null]
+
+  - name: customer_orders
+    description: Order grain joined to customer attributes.
+    columns:
+      - name: order_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests: [not_null]

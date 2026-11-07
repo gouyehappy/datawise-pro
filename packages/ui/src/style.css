@@ -1,0 +1,11 @@
+/**
+ * @datawise/ui atom styles (host may already load these via global.css —
+ * playground / external apps import this entry).
+ */
+@import './styles/buttons.css';
+@import './styles/forms.css';
+@import './styles/status.css';
+@import './styles/cards.css';
+@import './styles/icons.css';
+@import './styles/menus.css';
+@import './styles/patterns.css';

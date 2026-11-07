@@ -1,0 +1,26 @@
+[
+  {
+    "id": "example-migration",
+    "name": "CI migration (example)",
+    "userId": 1,
+    "tokenHash": "$2a$10$replace.with.bcrypt.hash.of.your.token",
+    "scopes": ["migration"],
+    "createdAt": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "example-sql",
+    "name": "CI sql exec (example)",
+    "userId": 1,
+    "tokenHash": "$2a$10$replace.with.bcrypt.hash.of.your.token",
+    "scopes": ["sql"],
+    "createdAt": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "example-runtime",
+    "name": "CI runtime connectors (example)",
+    "userId": 1,
+    "tokenHash": "$2a$10$replace.with.bcrypt.hash.of.your.token",
+    "scopes": ["runtime"],
+    "createdAt": "2026-01-01T00:00:00Z"
+  }
+]

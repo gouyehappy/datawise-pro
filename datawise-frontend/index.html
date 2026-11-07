@@ -1,0 +1,242 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <!-- Baseline CSP: blocks plugins/object embeds.
+         Monaco Editor + Vite HMR still require 'unsafe-inline'/'unsafe-eval' and blob: workers
+         (Monaco loads workers via blob URLs and uses new Function for tokenization).
+         Removing unsafe-eval needs Monaco worker bundling + hashed inline boot script — tracked as residual.
+         frame-ancestors is omitted here: browsers ignore it on <meta> and only warn; set it via HTTP
+         headers on the desktop/static server if clickjacking protection is required. -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self' app:;
+      script-src 'self' 'unsafe-inline' 'unsafe-eval' app: blob:;
+      style-src 'self' 'unsafe-inline' app: data:;
+      img-src 'self' data: blob: app:;
+      font-src 'self' data: app:;
+      connect-src 'self' app: http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:;
+      worker-src 'self' blob: app:;
+      child-src 'self' blob: app:;
+      object-src 'none';
+      base-uri 'self';
+      form-action 'self';
+    "/>
+    <!-- 阻塞脚本：首帧只定一次 chrome（宿主 seed 优先）；后续 CSS 只用 --dw-boot-chrome，禁止「先默认再纠正」 -->
+    <script>
+      (function () {
+        var LIGHT = '#dce4ee'
+        var DARK = '#0c1014'
+        var mode = 'light'
+        var chrome = null
+        try {
+          if (typeof window.__DW_HOST_CHROME__ === 'string' && window.__DW_HOST_CHROME__) {
+            chrome = window.__DW_HOST_CHROME__
+            mode = window.__DW_HOST_THEME_MODE__ === 'dark' ? 'dark' : 'light'
+          }
+        } catch (e0) {}
+        if (!chrome) {
+          try {
+            var raw = localStorage.getItem('dw-cli-theme-prefs')
+            if (raw) {
+              var p = JSON.parse(raw)
+              var app = p.appearance || (p.mode === 'dark' ? 'dark' : 'light')
+              if (app === 'dark') mode = 'dark'
+              else if (app === 'light') mode = 'light'
+              else mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+            } else {
+              mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+            }
+          } catch (e) {
+            try {
+              mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+            } catch (e2) {}
+          }
+          chrome = mode === 'dark' ? DARK : LIGHT
+        }
+        var root = document.documentElement
+        root.setAttribute('data-theme', mode)
+        root.style.colorScheme = mode
+        root.style.setProperty('--dw-boot-chrome', chrome)
+        root.style.backgroundColor = chrome
+        window.__DW_BOOT_CHROME__ = chrome
+        window.__datawiseClearOpenScreen = function () {
+          var el = document.getElementById('dw-open-screen')
+          if (el && el.parentNode) el.parentNode.removeChild(el)
+        }
+        function paintCover() {
+          var el = document.getElementById('dw-open-screen')
+          if (!el) return
+          el.style.background = chrome
+          if (document.body) document.body.style.backgroundColor = chrome
+        }
+        if (document.body) paintCover()
+        else document.addEventListener('DOMContentLoaded', paintCover, {once: true})
+      })()
+    </script>
+    <script src="/theme-boot.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>DataWise CLI</title>
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png"/>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png"/>
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png"/>
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png"/>
+    <link rel="icon" type="image/png" sizes="128x128" href="/favicon-128.png"/>
+    <link rel="icon" type="image/png" sizes="256x256" href="/favicon-256.png"/>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png"/>
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png"/>
+    <script src="/boot-watchdog.js"></script>
+    <style>
+      /* Surfaces follow --dw-boot-chrome from the blocking script (no hardcoded light/dark race). */
+      html, body, #app {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: var(--dw-boot-chrome, #dce4ee);
+      }
+
+      #dw-open-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        pointer-events: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--dw-boot-chrome, #dce4ee);
+      }
+
+      .dw-open-screen__inner {
+        position: relative;
+        width: 128px;
+        height: 128px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .dw-open-screen__halo {
+        position: absolute;
+        inset: 0;
+        margin: auto;
+        width: 128px;
+        height: 128px;
+        border-radius: 50%;
+        border: 2px solid color-mix(in srgb, var(--dw-primary, #2563eb) 55%, transparent);
+        box-sizing: border-box;
+        pointer-events: none;
+        animation: dw-open-ripple 2.4s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+      }
+
+      .dw-open-screen__halo--2 {
+        animation-delay: 0.8s;
+      }
+
+      .dw-open-screen__halo--3 {
+        animation-delay: 1.6s;
+      }
+
+      .dw-open-screen__icon {
+        position: relative;
+        z-index: 1;
+        width: 128px;
+        height: 128px;
+        object-fit: contain;
+        border-radius: 24px;
+      }
+
+      @keyframes dw-open-ripple {
+        0% {
+          transform: scale(0.92);
+          opacity: 0.7;
+        }
+        100% {
+          transform: scale(2.35);
+          opacity: 0;
+        }
+      }
+
+      .dw-boot-fail {
+        box-sizing: border-box;
+        position: fixed;
+        inset: 0;
+        z-index: 10001;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: color-mix(in srgb, var(--dw-bg-chrome, Canvas) 92%, transparent);
+      }
+
+      .dw-boot-fail[hidden] {
+        display: none !important;
+      }
+
+      .dw-boot-fail__panel {
+        box-sizing: border-box;
+        width: min(420px, 100%);
+        padding: 16px 18px;
+        border: 1px solid var(--dw-border, #2e2e32);
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--dw-bg-panel, Canvas) 94%, transparent);
+        text-align: center;
+        color: var(--dw-text, CanvasText);
+        font-family:
+          "Noto Sans SC Variable", "Noto Sans SC",
+          "Segoe UI Variable", "Segoe UI", "PingFang SC", system-ui, sans-serif;
+      }
+
+      .dw-boot-fail__title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .dw-boot-fail__detail {
+        margin: 8px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--dw-text-secondary, GrayText);
+        word-break: break-word;
+      }
+
+      .dw-boot-fail__retry {
+        margin-top: 14px;
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff;
+        background: var(--dw-primary, #2563eb);
+        cursor: pointer;
+      }
+    </style>
+</head>
+<body>
+<div id="dw-open-screen" aria-hidden="true">
+  <div class="dw-open-screen__inner">
+    <div class="dw-open-screen__halo"></div>
+    <div class="dw-open-screen__halo dw-open-screen__halo--2"></div>
+    <div class="dw-open-screen__halo dw-open-screen__halo--3"></div>
+    <img class="dw-open-screen__icon" src="/favicon-128.png" alt="" width="128" height="128"/>
+  </div>
+</div>
+<div id="app"></div>
+
+<script src="/open-screen.js"></script>
+
+<div id="dw-boot-fail" class="dw-boot-fail" hidden>
+  <div class="dw-boot-fail__panel" role="alert">
+    <p class="dw-boot-fail__title">启动卡住了</p>
+    <p id="dw-boot-fail-detail" class="dw-boot-fail__detail"></p>
+    <button id="dw-boot-retry" type="button" class="dw-boot-fail__retry">重新加载</button>
+  </div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

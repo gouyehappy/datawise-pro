@@ -1,0 +1,172 @@
+/**
+ * IDEA 风格右侧工具窗口 — 与 ShortcutRail 并排，挤开工作区并留间隙
+ */
+.workbench-edge {
+    display: flex;
+    flex-shrink: 0;
+    align-self: stretch;
+    gap: var(--dw-panel-gap);
+    min-height: 0;
+}
+
+.workbench-edge__panel {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    min-width: 0;
+    min-height: 0;
+}
+
+.workbench-edge__panel > * {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+}
+
+.tool-window-host {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+}
+
+.tool-window {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+}
+
+.tool-window__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--dw-gap);
+    flex-shrink: 0;
+    min-height: var(--dw-control-h);
+    padding: var(--dw-space-4) var(--dw-space-4) var(--dw-space-4) var(--dw-space-7);
+    border-bottom: 1px solid var(--dw-border-light);
+    background: color-mix(in srgb, var(--dw-bg) 40%, var(--dw-bg-panel));
+}
+
+.tool-window__head-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.tool-window__title {
+    margin: 0;
+    font-size: var(--dw-text-md);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: var(--dw-leading-tight);
+}
+
+.tool-window__subtitle {
+    margin: 0;
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-xs);
+    line-height: var(--dw-leading-snug);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tool-window__head-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-gap-xs);
+    flex-shrink: 0;
+}
+
+.tool-window__icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: var(--dw-btn-height);
+    border: none;
+    border-radius: var(--dw-control-radius-sm);
+    background: transparent;
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-xl);
+    line-height: 1;
+    cursor: pointer;
+}
+
+.tool-window__icon-btn:hover {
+    background: var(--dw-bg-hover);
+    color: var(--dw-text);
+}
+
+
+.tool-window__dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: var(--dw-z-toolbar);
+    min-width: 168px;
+    padding: var(--dw-space-2);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-control-radius);
+    background: var(--dw-bg);
+    box-shadow: var(--dw-shadow);
+}
+
+.tool-window__dropdown button {
+    display: block;
+    width: 100%;
+    padding: var(--dw-space-3) var(--dw-space-5);
+    border: none;
+    border-radius: var(--dw-control-radius-sm);
+    background: transparent;
+    color: var(--dw-text);
+    font-size: var(--dw-text-sm);
+    text-align: left;
+    cursor: pointer;
+}
+
+.tool-window__dropdown button:hover:not(:disabled) {
+    background: var(--dw-bg-hover);
+}
+
+.tool-window__dropdown button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.tool-window__dropdown button.is-danger {
+    color: var(--dw-danger);
+}
+
+.tool-window__menu {
+    position: relative;
+}
+
+.tool-window--standalone {
+    position: fixed;
+    top: var(--dw-panel-gap);
+    right: var(--dw-shell-padding);
+    bottom: calc(var(--dw-status-height) + var(--dw-panel-gap));
+    z-index: var(--dw-z-overlay);
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border: 1px solid var(--dw-panel-border);
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg-panel);
+    box-shadow: var(--dw-panel-shadow), var(--dw-shadow-float);
+    overflow: hidden;
+}
+
+.tool-window--standalone .tool-window {
+    flex: 1;
+    min-height: 0;
+}

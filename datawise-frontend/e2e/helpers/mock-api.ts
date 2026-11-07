@@ -1,0 +1,765 @@
+/**
+ * Shared Playwright API mocks for e2e specs and `npm run capture:demos`.
+ * Keeps the Vue shell usable without a running backend.
+ */
+import type {Page, Route} from '@playwright/test'
+
+function apiBody(data: unknown) {
+    return JSON.stringify({success: true, code: 0, data, msg: 'ok'})
+}
+
+const MOCK_EXPLORER_TREE = {
+    tree: [
+        {
+            id: 'g1',
+            label: 'Default',
+            type: 'group',
+            expanded: true,
+            children: [
+                {
+                    id: 'conn-1',
+                    label: 'Test MySQL',
+                    type: 'connection',
+                    dbType: 'mysql',
+                    expanded: false,
+                    children: [],
+                },
+            ],
+        },
+    ],
+}
+
+const MOCK_CATALOG = {
+    version: 1,
+    groups: [{id: 'g1', label: 'Default', sortOrder: 0, expanded: true}],
+    connections: [
+        {
+            id: 'conn-1',
+            groupId: 'g1',
+            sortOrder: 0,
+            config: {
+                id: 'conn-1',
+                name: 'Test MySQL',
+                dbType: 'mysql',
+                host: '127.0.0.1',
+                port: 3306,
+                userName: 'root',
+                userPassword: '',
+                databaseName: 'demo',
+                env: 'dev',
+            },
+        },
+    ],
+}
+
+const MOCK_CONNECTION_CHILDREN = {
+    tree: [
+        {
+            id: 'conn-1:demo',
+            label: 'demo',
+            type: 'database',
+            dbType: 'mysql',
+            children: [],
+        },
+    ],
+}
+
+const MOCK_DATABASE_CHILDREN = {
+    tree: [
+        {
+            id: 'folder-tables-conn-1-demo',
+            label: 'tables',
+            type: 'folder',
+            expanded: false,
+            children: [],
+        },
+        {
+            id: 'folder-views-conn-1-demo',
+            label: 'views',
+            type: 'folder',
+            expanded: false,
+            children: [],
+        },
+        {
+            id: 'folder-ai-conn-1-demo',
+            label: 'ai',
+            type: 'folder',
+            expanded: false,
+            children: [],
+        },
+    ],
+}
+
+const MOCK_TABLES_CHILDREN = {
+    tree: [
+        {
+            id: 'table-conn-1-demo-orders',
+            label: 'orders',
+            type: 'table',
+            dbType: 'mysql',
+            children: [],
+        },
+        {
+            id: 'table-conn-1-demo-users',
+            label: 'users',
+            type: 'table',
+            dbType: 'mysql',
+            children: [],
+        },
+    ],
+}
+
+const PLATFORM_FEATURES = [
+    'semantic_metrics',
+    'analysis_canvas',
+    'federated_views',
+    'schema_drift',
+    'data_quality',
+    'scheduled_tasks',
+] as const
+
+const MOCK_AI_CHILDREN = {
+    tree: PLATFORM_FEATURES.map((feature) => ({
+        id: `platform-${feature}-conn-1-demo`,
+        label: feature,
+        type: 'platform_feature',
+        meta: feature,
+        expanded: false,
+        children: [],
+    })),
+}
+
+const MOCK_SQL_EXECUTE_RESULT = {
+    sql: 'SELECT 1 AS id',
+    rowCount: 1,
+    durationMs: 12,
+    columns: [{name: 'id', type: 'INT'}],
+    rows: [{id: 1}],
+}
+
+const MOCK_PLUGINS = [
+    {
+        id: 'p-ai-workbench',
+        name: 'AI Workbench',
+        version: '1.0.0',
+        author: 'DataWise',
+        description: 'AI',
+        enabled: true,
+        category: 'ai',
+    },
+    {
+        id: 'p-grid-export',
+        name: 'Grid Export',
+        version: '1.0.0',
+        author: 'DataWise',
+        description: 'Export',
+        enabled: true,
+        category: 'utility',
+    },
+    {
+        id: 'p-sql-format',
+        name: 'SQL Format',
+        version: '1.0.0',
+        author: 'DataWise',
+        description: 'Format',
+        enabled: true,
+        category: 'utility',
+    },
+    {
+        id: 'p-sql-history',
+        name: 'SQL History',
+        version: '1.0.0',
+        author: 'DataWise',
+        description: 'History',
+        enabled: true,
+        category: 'utility',
+    },
+    {
+        id: 'p-sql-monitor',
+        name: 'SQL Monitor',
+        version: '1.0.0',
+        author: 'DataWise',
+        description: 'Monitor',
+        enabled: true,
+        category: 'utility',
+    },
+]
+
+const MOCK_ANALYSIS_CANVAS = [
+    {
+        id: 'canvas-1',
+        title: '近三月销售趋势',
+        description: '演示画布：按月汇总销售额',
+        parameterCount: 2,
+        updatedAt: '2026-07-18T10:00:00Z',
+    },
+    {
+        id: 'canvas-2',
+        title: '用户活跃度周报',
+        description: '按周统计活跃用户',
+        parameterCount: 1,
+        updatedAt: '2026-07-17T08:30:00Z',
+    },
+]
+
+const MOCK_SEMANTIC_METRICS = [
+    {
+        id: 'metric-1',
+        name: '订单金额',
+        expression: 'SUM(orders.amount)',
+        description: '已支付订单金额合计',
+        unit: 'CNY',
+        owner: 'analytics',
+        tags: ['sales', 'kpi'],
+        autoGenerated: false,
+        relatedTables: ['orders'],
+        upstreamMetrics: [],
+        definitionVersion: 2,
+        latestChangeNote: '排除已退款订单',
+        connectionId: 'conn-1',
+        database: 'demo',
+    },
+]
+
+const MOCK_FEDERATED_VIEWS = [
+    {
+        id: 'fv-1',
+        name: '订单×用户',
+        description: '跨库关联订单与用户',
+        sourceCount: 2,
+        updatedAt: '2026-07-16T12:00:00Z',
+    },
+]
+
+const MOCK_SCHEMA_DRIFT = [
+    {
+        id: 'drift-1',
+        name: 'demo → staging',
+        sourceConnectionId: 'conn-1',
+        sourceDatabase: 'demo',
+        targetConnectionId: 'conn-1',
+        targetDatabase: 'demo_staging',
+        tablePattern: '%',
+        enabled: true,
+        driftCount: 3,
+        lastCheckedAt: '2026-07-19T09:00:00Z',
+    },
+]
+
+const MOCK_SCHEDULED_TASKS = [
+    {
+        id: 'task-1',
+        name: '画布日更',
+        type: 'analysis_canvas',
+        cronExpression: '0 8 * * *',
+        enabled: true,
+        lastRunAt: '2026-07-19T08:00:00Z',
+        lastRunStatus: 'ok',
+        orchestrationState: '',
+        orchestrationRef: '',
+        payloadJson: '{"canvasId":"canvas-1"}',
+    },
+]
+
+const MOCK_DQ_RULES = [
+    {
+        id: 'dq-1',
+        name: '订单金额非负',
+        type: 'data_quality',
+        cronExpression: '',
+        enabled: true,
+        lastRunAt: '2026-07-18T18:00:00Z',
+        lastRunStatus: 'ok',
+        payloadJson: JSON.stringify({
+            connectionId: 'conn-1',
+            database: 'demo',
+            sql: 'SELECT id FROM orders WHERE amount < 0',
+            assertion: 'empty_result',
+            blocking: true,
+        }),
+    },
+]
+
+const MOCK_PROJECT_DEFAULT = {
+    id: 'proj_default',
+    name: '默认项目',
+    colorKey: 'slate',
+    description: '',
+    archived: false,
+    docsDir: 'docs',
+    scriptsDir: 'scripts',
+    isDefault: true,
+}
+
+const MOCK_PROJECT_PAY = {
+    id: 'proj_pay',
+    name: '支付中台',
+    colorKey: 'blue',
+    description: '支付业务',
+    archived: false,
+    docsDir: 'docs',
+    scriptsDir: 'scripts',
+    isDefault: false,
+}
+
+const MOCK_DB_TYPES = [
+    {id: 'mysql', label: 'MySQL', category: 'common'},
+    {id: 'postgresql', label: 'PostgreSQL', category: 'common'},
+    {id: 'redis', label: 'Redis', category: 'more'},
+]
+
+const MOCK_AI_TAG_CATALOG = [
+    {
+        connectionId: 'conn-1',
+        connectionName: 'Test MySQL',
+        database: 'demo',
+        tableName: 'orders',
+    },
+]
+
+const MOCK_AI_CHAT_REPLY = {
+    reply: '分析完成',
+    sql: 'SELECT 1',
+    steps: [],
+}
+
+const MOCK_TEAM = {
+    id: 'team-1',
+    name: 'E2E Team',
+    memberCount: 2,
+    role: 'owner' as const,
+    sharedConnectionIds: ['conn-1'],
+    inviteCode: 'E2ECODE',
+    pendingInviteCount: 0,
+}
+
+const MOCK_PRODUCTION_APPROVAL = {
+    id: 'pa-1',
+    teamId: 'team-1',
+    connectionId: 'conn-1',
+    connectionName: 'Prod MySQL',
+    database: 'demo',
+    status: 'pending' as const,
+    requestedByUserName: 'alice',
+    requestedByUserId: 2,
+    reviewedByUserName: '',
+    requestedAt: '2026-09-23T10:00:00Z',
+    reviewedAt: '',
+    sql: 'UPDATE orders SET amount = 1 WHERE id = 1',
+}
+
+const MOCK_TEAM_MEMBERS = [
+    {userId: 1, userName: 'demo', role: 'owner' as const, joinedAt: '2026-01-01T00:00:00Z'},
+    {userId: 2, userName: 'alice', role: 'member' as const, joinedAt: '2026-02-01T00:00:00Z'},
+]
+
+const MOCK_TEAM_INVITES = [
+    {
+        id: 'invite-1',
+        userId: 3,
+        userName: 'bob',
+        status: 'pending',
+        requestedAt: '2026-09-20T12:00:00Z',
+    },
+]
+
+const AI_CHAT_SEED = {
+    version: 1,
+    activeSessionId: 'sess-e2e',
+    sessions: [
+        {
+            id: 'sess-e2e',
+            title: 'E2E',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            selectedTargetIds: ['conn-1:demo:orders'],
+            messages: [{id: 'welcome', role: 'assistant', content: '', time: '', kind: 'welcome'}],
+        },
+    ],
+}
+
+export function buildAnalysisSseBody() {
+    return [
+        'event: step',
+        'data: {"step":"intent","status":"ok","message":"数据源已确认"}',
+        '',
+        'event: step',
+        'data: {"step":"summary","status":"ok","message":"摘要完成"}',
+        '',
+        'event: result',
+        'data: {"reply":"分析完成","sql":"SELECT 1"}',
+        '',
+    ].join('\n')
+}
+
+function decodeNodeIdFromChildrenPath(pathname: string): string | null {
+    const match = pathname.match(/\/nodes\/([^/]+)\/children$/)
+    if (!match) return null
+    try {
+        return decodeURIComponent(match[1])
+    } catch {
+        return match[1]
+    }
+}
+
+function resolveChildrenPayload(nodeId: string | null) {
+    if (!nodeId || nodeId === 'conn-1') {
+        return MOCK_CONNECTION_CHILDREN
+    }
+    if (nodeId === 'conn-1:demo') {
+        return MOCK_DATABASE_CHILDREN
+    }
+    if (nodeId.includes('folder-tables')) {
+        return MOCK_TABLES_CHILDREN
+    }
+    if (nodeId.includes('folder-ai') || nodeId.toLowerCase().includes('folder-ai')) {
+        return MOCK_AI_CHILDREN
+    }
+    if (nodeId.includes('folder-views')) {
+        return {tree: []}
+    }
+    return MOCK_CONNECTION_CHILDREN
+}
+
+async function fulfillJson(route: Route, data: unknown) {
+    return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: apiBody(data),
+    })
+}
+
+type MockOptions = {
+    sseBody?: string
+}
+
+async function installSharedMocks(page: Page, options: MockOptions = {}) {
+    // 每页独立状态，避免 Playwright 多 worker 并行时互相踩 mock
+    let mockProjects = [
+        {...MOCK_PROJECT_DEFAULT},
+        {...MOCK_PROJECT_PAY},
+    ]
+    let mockActiveProjectId = MOCK_PROJECT_DEFAULT.id
+
+    function mockActiveProjectPayload() {
+        const project =
+            mockProjects.find((p) => p.id === mockActiveProjectId) ?? MOCK_PROJECT_DEFAULT
+        return {projectId: project.id, project}
+    }
+
+    function mockExplorerTreeForActiveProject() {
+        const isPay = mockActiveProjectId === MOCK_PROJECT_PAY.id
+        return {
+            tree: [
+                {
+                    id: 'g1',
+                    label: 'Default',
+                    type: 'group',
+                    expanded: true,
+                    children: [
+                        {
+                            id: isPay ? 'conn-pay' : 'conn-1',
+                            label: isPay ? 'Pay MySQL' : 'Test MySQL',
+                            type: 'connection',
+                            dbType: 'mysql',
+                            expanded: false,
+                            children: [],
+                        },
+                    ],
+                },
+            ],
+        }
+    }
+
+    await page.addInitScript(() => {
+        localStorage.setItem('dw-cli-onboarding-completed', '1')
+        // Avoid release-highlight cards competing with first-path e2e clicks.
+        localStorage.setItem('dw-cli-release-highlights-dismissed:dashboard:v4.1.7', '1')
+        localStorage.setItem('dw-cli-release-highlights-dismissed:platform:v4.1.7', '1')
+
+        // Title-bar flows (project switcher, app menu → team) need a real desktop host.
+        // Keep this distinct from the web plugin stub (`platform: 'web'`).
+        if (!window.__datawiseDesktopBridge) {
+            window.__datawiseDesktopBridge = {
+                platform: 'win32',
+                chrome: {
+                    minimize: async () => true,
+                    toggleMaximize: async () => true,
+                    close: async () => true,
+                    isMaximized: async () => false,
+                    onMaximizeChange: () => () => undefined,
+                },
+            }
+        }
+    })
+
+    await page.route('**/*', async (route: Route) => {
+        const url = new URL(route.request().url())
+        const path = url.pathname
+        const method = route.request().method()
+
+        if (path === '/api/health') {
+            return fulfillJson(route, {status: 'ok', version: 'e2e', serverTime: new Date().toISOString()})
+        }
+        // Demo / e2e：用管理员会话，避免 guest workbench 预设隐藏仪表盘 / AI / 设置等入口
+        if (path === '/login/guest' || path === '/login') {
+            return fulfillJson(route, {
+                sessionId: 'session-e2e-admin',
+                userName: 'demo',
+                userId: 1,
+                guest: false,
+                admin: true,
+                tenancyMode: 'single',
+                platformAdmin: true,
+                tenantId: 'default',
+                tenantName: 'Default',
+            })
+        }
+        if (path === '/api/auth/session') {
+            return fulfillJson(route, {
+                sessionId: 'session-e2e-admin',
+                userName: 'demo',
+                userId: 1,
+                guest: false,
+                admin: true,
+                tenancyMode: 'single',
+                platformAdmin: true,
+                tenantId: 'default',
+                tenantName: 'Default',
+                tenants: [{id: 'default', name: 'Default', role: 'tenant_admin'}],
+            })
+        }
+        if (path === '/api/projects/active') {
+            if (method === 'PUT') {
+                try {
+                    const body = JSON.parse(route.request().postData() || '{}') as {projectId?: string}
+                    if (body.projectId) {
+                        mockActiveProjectId = body.projectId
+                    }
+                } catch {
+                    /* ignore */
+                }
+            }
+            return fulfillJson(route, mockActiveProjectPayload())
+        }
+        if (path === '/api/projects' && method === 'GET') {
+            return fulfillJson(route, mockProjects)
+        }
+        if (path === '/api/projects' && method === 'POST') {
+            try {
+                const body = JSON.parse(route.request().postData() || '{}') as {name?: string}
+                const created = {
+                    id: `proj_${Date.now()}`,
+                    name: body.name?.trim() || '新项目',
+                    colorKey: 'orange',
+                    description: '',
+                    archived: false,
+                    docsDir: 'docs',
+                    scriptsDir: 'scripts',
+                    isDefault: false,
+                }
+                mockProjects = [created, ...mockProjects]
+                mockActiveProjectId = created.id
+                return fulfillJson(route, created)
+            } catch {
+                return fulfillJson(route, MOCK_PROJECT_PAY)
+            }
+        }
+        if (path === '/api/config/app') {
+            return fulfillJson(route, {
+                version: 1,
+                ai: {analysisMode: 'smart', skipSqlConfirmation: true},
+                sideRail: {visibleModules: ['database', 'dashboard', 'ai', 'plugin']},
+                explorer: {expandedNodeIds: ['g1']},
+                connectionHealth: {
+                    alertsEnabled: true,
+                    drawerAlertsEnabled: true,
+                    slowQueryAlertsEnabled: true,
+                    probeIntervalMinutes: 5,
+                    alertOnOkToError: true,
+                    alertOnUnknownToError: true,
+                    watchedConnectionIds: ['conn-1'],
+                },
+            })
+        }
+        if (path === '/api/config/connections') {
+            return fulfillJson(route, MOCK_CATALOG)
+        }
+        if (path === '/api/explorer/tree') {
+            return fulfillJson(route, mockExplorerTreeForActiveProject())
+        }
+        if (path === '/api/plugins') {
+            return fulfillJson(route, MOCK_PLUGINS)
+        }
+        // Open-mode entitlement so AI nav / analysis e2e is not blocked by paywall.
+        if (path === '/api/packs/entitlement' || path === '/api/packs/catalog') {
+            return fulfillJson(route, {
+                mode: 'open',
+                packs: [],
+                suiteId: null,
+                freeAiCallsRemaining: null,
+                freeAiCallsDailyLimit: 3,
+                metaDocUsable: true,
+            })
+        }
+        if (path === '/api/teams') {
+            return fulfillJson(route, [MOCK_TEAM])
+        }
+        if (path === '/api/teams/join-requests') {
+            return fulfillJson(route, [])
+        }
+        const teamMembersMatch = path.match(/^\/api\/teams\/([^/]+)\/members$/)
+        if (teamMembersMatch) {
+            return fulfillJson(route, MOCK_TEAM_MEMBERS)
+        }
+        const teamInvitesMatch = path.match(/^\/api\/teams\/([^/]+)\/invites$/)
+        if (teamInvitesMatch && method === 'GET') {
+            return fulfillJson(route, MOCK_TEAM_INVITES)
+        }
+        const teamApprovalsListMatch = path.match(/^\/api\/teams\/([^/]+)\/production-approvals$/)
+        if (teamApprovalsListMatch && method === 'GET') {
+            return fulfillJson(route, [MOCK_PRODUCTION_APPROVAL])
+        }
+        const teamApprovalDetailMatch = path.match(/^\/api\/teams\/([^/]+)\/production-approvals\/([^/]+)$/)
+        if (teamApprovalDetailMatch && method === 'GET') {
+            return fulfillJson(route, MOCK_PRODUCTION_APPROVAL)
+        }
+        const teamApprovalApproveMatch = path.match(
+            /^\/api\/teams\/([^/]+)\/production-approvals\/([^/]+)\/approve$/,
+        )
+        if (teamApprovalApproveMatch && method === 'POST') {
+            return fulfillJson(route, {
+                ...MOCK_PRODUCTION_APPROVAL,
+                status: 'executed',
+                reviewedByUserName: 'demo',
+                reviewedAt: '2026-09-23T10:05:00Z',
+            })
+        }
+        const teamApprovalRejectMatch = path.match(
+            /^\/api\/teams\/([^/]+)\/production-approvals\/([^/]+)\/reject$/,
+        )
+        if (teamApprovalRejectMatch && method === 'POST') {
+            return fulfillJson(route, {
+                ...MOCK_PRODUCTION_APPROVAL,
+                status: 'rejected',
+                reviewedByUserName: 'demo',
+                reviewedAt: '2026-09-23T10:05:00Z',
+            })
+        }
+        if (path.match(/^\/api\/teams\/[^/]+\/audit-logs/)) {
+            return fulfillJson(route, [])
+        }
+        if (path === '/api/db-types' || path === '/api/explorer/db-types') {
+            return fulfillJson(route, MOCK_DB_TYPES)
+        }
+        // Bootstrap waits on this; a null catch-all would poll for ~90s and stall AppSplash.
+        if (path === '/api/datasources/plugins/status') {
+            return fulfillJson(route, {
+                phase: 'READY',
+                ready: true,
+                loadedJarCount: 1,
+                loadedConnectorCount: 1,
+                failureCount: 0,
+            })
+        }
+        if (path.startsWith('/api/explorer/connections/') && path.endsWith('/ping')) {
+            return fulfillJson(route, {ok: true, latencyMs: 3})
+        }
+        if (path.startsWith('/api/explorer/connections/') && (path.endsWith('/connect') || path.endsWith('/reconnect'))) {
+            return fulfillJson(route, {ok: true, latencyMs: 8, message: 'connected'})
+        }
+        if (path.startsWith('/api/explorer/connections/') && path.endsWith('/disconnect')) {
+            return fulfillJson(route, null)
+        }
+        if (path.startsWith('/api/explorer/connections/') && path.endsWith('/children')) {
+            const nodeId = decodeNodeIdFromChildrenPath(path)
+            return fulfillJson(route, resolveChildrenPayload(nodeId))
+        }
+        if (path === '/api/sql/execute') {
+            return fulfillJson(route, MOCK_SQL_EXECUTE_RESULT)
+        }
+        if (path === '/api/ai/analyze/stream') {
+            return route.fulfill({
+                status: 200,
+                headers: {'Content-Type': 'text/event-stream'},
+                body: options.sseBody ?? buildAnalysisSseBody(),
+            })
+        }
+        if (path === '/api/ai/chat') {
+            return fulfillJson(route, MOCK_AI_CHAT_REPLY)
+        }
+        if (path === '/api/ai/chat/stream') {
+            const reply = typeof MOCK_AI_CHAT_REPLY.reply === 'string' ? MOCK_AI_CHAT_REPLY.reply : ''
+            const resultJson = JSON.stringify(MOCK_AI_CHAT_REPLY)
+            return route.fulfill({
+                status: 200,
+                headers: {'Content-Type': 'text/event-stream'},
+                body:
+                    `event: delta\ndata: ${reply}\n\n` +
+                    `event: result\ndata: ${resultJson}\n\n`,
+            })
+        }
+        if (path === '/api/ai/table-tags/catalog') {
+            return fulfillJson(route, MOCK_AI_TAG_CATALOG)
+        }
+        if (path === '/api/platform/analysis-canvas') {
+            return fulfillJson(route, MOCK_ANALYSIS_CANVAS)
+        }
+        if (path === '/api/platform/semantic-metrics') {
+            return fulfillJson(route, MOCK_SEMANTIC_METRICS)
+        }
+        if (path === '/api/platform/federated-views') {
+            return fulfillJson(route, MOCK_FEDERATED_VIEWS)
+        }
+        if (path === '/api/platform/schema-drift/monitors') {
+            return fulfillJson(route, MOCK_SCHEMA_DRIFT)
+        }
+        if (path === '/api/platform/scheduled-tasks') {
+            return fulfillJson(route, MOCK_SCHEDULED_TASKS)
+        }
+        if (path.startsWith('/api/platform/data-quality/rules')) {
+            return fulfillJson(route, MOCK_DQ_RULES)
+        }
+        if (path.startsWith('/api/platform/data-quality/templates')) {
+            return fulfillJson(route, [])
+        }
+        if (path.startsWith('/api/discovery/')) {
+            return fulfillJson(route, {
+                hits: [],
+                total: 0,
+                offset: 0,
+                limit: 40,
+                hasMore: false,
+                facets: {kinds: [], connections: [], owners: [], tags: []},
+            })
+        }
+        if (path.startsWith('/api/workspace/')) {
+            return fulfillJson(route, [])
+        }
+        if (path.startsWith('/api/notifications')) {
+            return fulfillJson(route, [])
+        }
+        if (path.startsWith('/api/shares')) {
+            return fulfillJson(route, [])
+        }
+        if (method !== 'GET' && path.startsWith('/api/')) {
+            return fulfillJson(route, null)
+        }
+        if (path.startsWith('/api/')) {
+            return fulfillJson(route, null)
+        }
+
+        return route.continue()
+    })
+}
+
+export async function installWorkspaceE2eMocks(page: Page) {
+    await installSharedMocks(page)
+}
+
+export async function installAnalysisE2eMocks(page: Page, sseBody = buildAnalysisSseBody()) {
+    await page.addInitScript((seed) => {
+        localStorage.setItem('dw-cli-ai-chat', JSON.stringify(seed))
+    }, AI_CHAT_SEED)
+    await installSharedMocks(page, {sseBody})
+}

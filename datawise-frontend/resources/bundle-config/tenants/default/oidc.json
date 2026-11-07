@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "issuerUri": "",
+  "clientId": "",
+  "clientSecret": "",
+  "scopes": "openid profile email",
+  "usernameClaim": "preferred_username",
+  "displayNameClaim": "name",
+  "emailClaim": "email",
+  "roleClaim": "roles",
+  "tenantClaim": ""
+}

@@ -1,0 +1,6 @@
+.dwp-staging/
+.signing/
+dist/
+frontend/node_modules/
+backend/datawise-plugin-nacos-ops
+backend/datawise-plugin-nacos-ops.exe

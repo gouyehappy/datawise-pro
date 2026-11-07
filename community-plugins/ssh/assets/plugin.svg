@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="SSH Terminal">
+  <!-- Soft brand tint (matches DbTypeIcon framed micro-background) -->
+  <rect width="64" height="64" rx="14" fill="#0ea5e9" fill-opacity="0.18"/>
+  <!-- Center terminal glyph, brand color -->
+  <g fill="none" stroke="#0ea5e9" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 22l12 10-12 10"/>
+    <path d="M36 42h14"/>
+  </g>
+</svg>

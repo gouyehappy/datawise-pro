@@ -1,0 +1,82 @@
+---
+description: When to use Toast vs StatusBar vs inline form errors in the frontend
+globs: datawise-frontend/src/**/*.{ts,vue}
+alwaysApply: false
+---
+
+# Toast / StatusBar / Inline feedback
+
+Pick **one** channel per user action. Do not fire StatusBar and Toast together for the same outcome.
+
+## Toast (`useAppToast`)
+
+Prefer `useAppToast()` from `@/features/layout/composables/useAppToast` (forwards through the layout facade). Do not call `useToastStore()` from feature code.
+
+```ts
+const toast = useAppToast()
+toast.success('…')
+toast.error('…')
+toast.warning('…')
+toast.show('…') // info
+```
+
+Use for brief, cross-context feedback with **no stable form anchor**:
+
+- Copy / clipboard results **outside** an open modal
+- Export / import completion (page chrome, not modal)
+- Explorer tree lifecycle (open/disconnect/delete connection, rename, etc.)
+- Kafka send, team/plugin short “operation done” when **no dialog is open**
+- Success that has already closed a modal / tab
+
+### Modal / AppModal (硬约束)
+
+**弹窗仍打开时，禁止 toast。** 遮罩层会盖住 toast，用户看不到。
+
+弹窗内操作（复制、执行、保存失败、校验、生成完成等）一律用弹窗内反馈：
+
+- `DwInlineAlert` `density="banner"`（推荐；可用 `useModalFeedback`）
+- `FormField` `:error`（字段错误）
+- `DwConfirmAlert`（确认风险条）
+- 按钮文案切换（如 Copy → Copied），仅适合瞬时成功
+
+弹窗**已关闭**后再 toast 可以（先 `close()`，再 toast）。
+
+Variants:
+
+- Success → `toast.success` / `layout.showSuccessToast`
+- Failure → `toast.error` / `layout.showErrorToast`
+- Neutral info → `toast.show` / `layout.showToast`
+
+## StatusBar (`workspace.setStatus`)
+
+Use when the user is already watching the console / editor chrome:
+
+- Run prerequisites (no connection selected, capability missing)
+- Format / save / execute status messages for SQL console
+- Tab rename / save failures from the workspace tab bar
+
+## Inline & panel feedback
+
+Prefer shared components over ad-hoc `*__error` / banner markup:
+
+| Component | Use for |
+|-----------|---------|
+| `DwInlineAlert` | Field/form errors; dialog banners (`density="banner"`); info/success text hints |
+| `FormField` `:error` | Field-bound errors (wraps `DwInlineAlert`) |
+| `DwActionFeedback` | Connection / AI test footer chips |
+| `DwConfirmAlert` | Confirm-dialog warning/danger strips (icon + message + hint) |
+| `DwPanelState` | Panel loading / error / empty state machines (graphs, detail tabs, grids) |
+| `EmptyState` | Dedicated empty illustrations (also used inside `DwPanelState` empty) |
+
+Guest read-only: rely on `guest-notice` + disabled controls — **do not toast**.
+
+## Anti-patterns
+
+- Toast while `AppModal` / dialog is still open
+- Toast for guest write denial when a page banner already explains read-only
+- Toast that duplicates an already-rendered inline alert / StatusBar line
+- Direct `useToastStore()` in features (use `useAppToast` instead)
+- Using bare `showToast` / `toast.show` for success/error when a typed helper exists
+- Never change `layout.showToast` default to error; bare `show` means **info**
+- Do not extract SQL `error-callout` (AI fix) into these components
+- Do not reintroduce `dw-form-error` / `modal-alert-banner` / `modal-error-text` class copies

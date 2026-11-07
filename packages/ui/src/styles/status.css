@@ -1,0 +1,196 @@
+/* 统一状态徽章、摘要芯片、日志行着色 */
+
+.dw-status {
+    --dw-status-bg: var(--dw-bg-muted);
+    --dw-status-fg: var(--dw-text-secondary);
+    --dw-status-ring: none;
+    --dw-status-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: var(--dw-space-1) var(--dw-space-4);
+    border-radius: var(--dw-radius-pill);
+    font-size: var(--dw-text-xs);
+    font-weight: var(--dw-status-weight);
+    line-height: var(--dw-leading-snug);
+    white-space: nowrap;
+    color: var(--dw-status-fg);
+    background: var(--dw-status-bg);
+    box-shadow: var(--dw-status-ring);
+}
+
+.dw-status--inline {
+    margin-left: var(--dw-space-3);
+    vertical-align: middle;
+}
+
+.dw-status--dot {
+    gap: var(--dw-gap-sm);
+}
+
+.dw-status__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.45;
+    flex-shrink: 0;
+}
+
+.dw-status--success .dw-status__dot,
+.dw-status--primary .dw-status__dot {
+    opacity: 1;
+}
+
+.dw-status--team {
+    --dw-status-bg: color-mix(in srgb, var(--dw-primary) 12%, var(--dw-bg-muted));
+    --dw-status-fg: var(--dw-primary);
+}
+
+.dw-status--success {
+    --dw-status-bg: color-mix(in srgb, var(--dw-success) 14%, var(--dw-bg-muted));
+    --dw-status-fg: var(--dw-success-fg);
+}
+
+.dw-status--error {
+    --dw-status-bg: color-mix(in srgb, var(--dw-danger) 12%, var(--dw-bg-muted));
+    --dw-status-fg: var(--dw-danger-fg);
+}
+
+.dw-status--warn {
+    --dw-status-bg: color-mix(in srgb, var(--mp-tone-amber) 14%, var(--dw-bg-muted));
+    --dw-status-fg: var(--dw-warning-fg);
+}
+
+.dw-status--running {
+    --dw-status-bg: color-mix(in srgb, var(--dw-warning) 14%, var(--dw-bg-muted));
+    --dw-status-fg: var(--dw-warning-fg);
+}
+
+.dw-status--info {
+    --dw-status-bg: var(--dw-bg-muted);
+    --dw-status-fg: var(--dw-text-secondary);
+}
+
+.dw-status--neutral {
+    --dw-status-bg: var(--dw-bg-muted);
+    --dw-status-fg: var(--dw-text-secondary);
+}
+
+.dw-status--primary {
+    --dw-status-bg: var(--dw-primary-soft);
+    --dw-status-fg: var(--dw-primary);
+}
+
+.dw-status--accent {
+    --dw-status-bg: color-mix(in srgb, var(--dw-info) 12%, var(--dw-bg-muted));
+    --dw-status-fg: var(--dw-info-fg);
+}
+
+/* 摘要芯片（略大，用于面板头部统计） */
+.dw-status-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--dw-space-2) var(--dw-space-5);
+    border-radius: var(--dw-control-radius);
+    font-size: var(--dw-text-xs);
+    font-weight: var(--dw-status-weight);
+    line-height: var(--dw-leading-snug);
+    color: var(--dw-status-fg);
+    background: var(--dw-status-bg);
+    box-shadow: var(--dw-status-ring);
+}
+
+.dw-status-chip.dw-status--success {
+    --dw-status-bg: color-mix(in srgb, var(--dw-success) 10%, var(--dw-bg));
+}
+
+.dw-status-chip.dw-status--warn {
+    --dw-status-bg: color-mix(in srgb, var(--mp-tone-amber) 10%, var(--dw-bg));
+}
+
+.dw-status-chip.dw-status--error {
+    --dw-status-bg: color-mix(in srgb, var(--dw-danger) 10%, var(--dw-bg));
+}
+
+.dw-status-chip.dw-status--primary {
+    --dw-status-bg: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg));
+}
+
+/* Look dialects — override --dw-status-* (no !important) */
+.dw-status--look-soft {
+    --dw-status-bg: color-mix(in srgb, var(--dw-status-fg) 10%, var(--dw-bg));
+    --dw-status-weight: 500;
+    --dw-status-ring: none;
+}
+
+.dw-status--look-outline {
+    --dw-status-bg: transparent;
+    --dw-status-weight: 500;
+    --dw-status-ring: inset 0 0 0 1px color-mix(in srgb, var(--dw-status-fg) 45%, var(--dw-border));
+}
+
+/* 日志行着色 */
+.dw-log-line {
+    padding: var(--dw-space-3) var(--dw-space-5);
+    border-bottom: 1px solid var(--dw-border-light);
+    font-family: var(--dw-mono);
+    font-size: var(--dw-text-xs);
+    line-height: var(--dw-leading);
+}
+
+.dw-log-line:last-child {
+    border-bottom: none;
+}
+
+.dw-log-line.dw-status--success {
+    color: var(--dw-success-fg);
+}
+
+.dw-log-line.dw-status--warn {
+    color: var(--dw-warning-fg);
+}
+
+.dw-log-line.dw-status--error {
+    color: var(--dw-danger-fg);
+}
+
+.dw-log-line.dw-status--info {
+    color: var(--dw-text-secondary);
+}
+
+/* 进度条 */
+.dw-progress {
+    display: block;
+    height: 6px;
+    border-radius: var(--dw-radius-pill);
+    background: var(--dw-bg-muted);
+    overflow: hidden;
+}
+
+.dw-progress--sm {
+    height: 3px;
+}
+
+.dw-progress__bar {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--dw-primary);
+    transition: width 0.2s ease;
+}
+
+.dw-progress--indeterminate .dw-progress__bar {
+    width: 42%;
+    background: var(--dw-warning);
+    animation: dw-progress-indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes dw-progress-indeterminate {
+    0% {
+        transform: translateX(-120%);
+    }
+    100% {
+        transform: translateX(320%);
+    }
+}

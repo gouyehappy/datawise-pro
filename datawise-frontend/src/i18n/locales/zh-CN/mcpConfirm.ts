@@ -1,0 +1,17 @@
+export default {
+    title: 'MCP 待确认',
+    pendingCount: '{count} 项待确认',
+    empty: '暂无待确认的 MCP 操作。',
+    confirm: '确认',
+    confirmSubmitApproval: '确认并提交审批',
+    reject: '拒绝',
+    expires: '过期时间 {at}',
+    openedConsole: '已根据 MCP 提议打开 SQL 控制台',
+    submittedApproval: '已提交生产 SQL 审批，并打开控制台供审阅',
+    approvalTeamMissing: '未找到共享该生产连接的团队，无法提交审批',
+    rejected: '已拒绝 MCP 提议',
+    prodApprovalHint: '共享生产连接上的写 SQL：确认后将创建团队审批单，不会直接执行。',
+    riskSession: '会话',
+    riskWrite: '写操作',
+    riskProdApproval: '生产审批',
+}

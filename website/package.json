@@ -1,0 +1,22 @@
+{
+  "name": "datawise-website",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DataWise official marketing site",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && node scripts/build-docs.mjs",
+    "build:pages": "tsc && vite build && node scripts/build-docs.mjs",
+    "build:docs": "node scripts/build-docs.mjs",
+    "preview": "vite preview",
+    "preview:pages": "vite preview"
+  },
+  "dependencies": {
+    "marked": "^15.0.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2"
+  }
+}

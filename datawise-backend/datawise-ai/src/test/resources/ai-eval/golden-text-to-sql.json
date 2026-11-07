@@ -1,0 +1,26 @@
+[
+  {
+    "id": "mysql-count-orders",
+    "dialect": "mysql",
+    "question": "统计 orders 表有多少行",
+    "schemaTables": ["orders"],
+    "mustContain": ["SELECT", "COUNT", "orders"],
+    "mustNotContain": ["DELETE", "UPDATE", "DROP"]
+  },
+  {
+    "id": "mysql-filter-status",
+    "dialect": "mysql",
+    "question": "查询 status 为 active 的用户",
+    "schemaTables": ["users"],
+    "mustContain": ["SELECT", "users", "status"],
+    "mustNotContain": ["DELETE", "TRUNCATE"]
+  },
+  {
+    "id": "pg-group-by-day",
+    "dialect": "postgresql",
+    "question": "按天汇总 sales 金额",
+    "schemaTables": ["sales"],
+    "mustContain": ["SELECT", "sales"],
+    "mustNotContain": ["INSERT", "DROP"]
+  }
+]

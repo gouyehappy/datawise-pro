@@ -1,0 +1,82 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.httpclient",
+  "name": "HTTP Client",
+  "version": "0.1.0",
+  "publisher": "datawise-community",
+  "description": "A Postman-style HTTP workbench: compose requests, send them through a native sidecar, and inspect responses.",
+  "license": "Apache-2.0",
+  "source": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/http-client",
+  "homepage": "https://github.com/phenixan/datawise-cli",
+  "icon": "assets/plugin.svg",
+  "tags": [
+    "http",
+    "api",
+    "rest",
+    "workbench"
+  ],
+  "permissions": [
+    "host.workbench",
+    "host.events",
+    "host.clipboard"
+  ],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.1"
+  },
+  "entrypoints": {
+    "backend": {
+      "transport": "stdio-jsonl",
+      "executable": "bin/windows-x86_64/datawise-plugin-http-client.exe"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.httpclient.connection",
+      "label": "HTTP Client",
+      "description": "Create an HTTP Client connection to choose where collections and environments are stored.",
+      "icon": "assets/plugin.svg",
+      "workbench": "io.datawise.community.httpclient.workbench",
+      "capabilities": [
+        "test",
+        "connect",
+        "disconnect"
+      ],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Connection name",
+          "type": "text",
+          "binding": "name",
+          "required": true,
+          "default": "HTTP Client",
+          "description": "Name shown in the connection list."
+        },
+        {
+          "key": "storage_dir",
+          "label": "Storage directory",
+          "type": "text",
+          "binding": "config",
+          "default": "",
+          "placeholder": "e.g. /data/datawise-http-client or D:\\datawise-http-client",
+          "description": "Optional. Where collections, environments, history and tabs are stored (store.json). Leave empty to use the plugin default data directory. Type an absolute path.",
+          "picker": {
+            "kind": "directory"
+          }
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.httpclient.workbench",
+      "label": "HTTP Client",
+      "description": "Compose and send HTTP requests, inspect responses, keep collections and environments.",
+      "icon": "assets/plugin.svg"
+    }
+  ]
+}

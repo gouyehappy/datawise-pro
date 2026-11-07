@@ -1,0 +1,16 @@
+[
+  {
+    "id": "dqshare-example",
+    "name": "No negatives",
+    "description": "Example shared template — copy to tenants/{tenantId}/data-quality-templates.json",
+    "sql": "SELECT id FROM {table} WHERE amount < 0",
+    "assertion": "empty_result",
+    "expected": "0",
+    "column": "",
+    "blocking": true,
+    "cronExpression": null,
+    "createdAt": null,
+    "updatedAt": null,
+    "createdByUserId": null
+  }
+]

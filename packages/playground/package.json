@@ -1,0 +1,25 @@
+{
+  "name": "@datawise/playground",
+  "version": "5.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DataWise UI Framework playground / teaching demo",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@datawise/framework": "file:../framework",
+    "@phosphor-icons/vue": "^2.2.1",
+    "lucide-vue-next": "^0.577.0",
+    "reka-ui": "^2.10.1",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.5",
+    "typescript": "~5.7.2",
+    "vite": "^7.3.1",
+    "vue-tsc": "^2.2.0"
+  }
+}

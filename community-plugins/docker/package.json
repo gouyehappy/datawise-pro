@@ -1,0 +1,27 @@
+{
+  "name": "datawise-community-docker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vue-tsc --noEmit && vite build",
+    "test": "vitest run",
+    "smoke": "node scripts/smoke-sidecar.mjs",
+    "package": "node package.mjs"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "echarts": "^5.5.1",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vite-plugin-singlefile": "^2.2.0",
+    "vitest": "^2.1.8",
+    "vue-tsc": "^2.2.0"
+  }
+}

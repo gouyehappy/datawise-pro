@@ -1,0 +1,344 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.kibana",
+  "name": "Kibana Logs",
+  "version": "0.3.2",
+  "publisher": "datawise-community",
+  "description": "Kibana / OpenSearch Dashboards Discover-style workbench for Elasticsearch logs (UI adapted from open-source Discover patterns).",
+  "license": "Apache-2.0",
+  "source": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/kibana",
+  "homepage": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/kibana",
+  "icon": "assets/plugin.svg",
+  "tags": [
+    "kibana",
+    "elasticsearch",
+    "logs",
+    "observability",
+    "workbench",
+    "discover"
+  ],
+  "permissions": [
+    "host.workbench",
+    "host.events",
+    "host.clipboard"
+  ],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.1"
+  },
+  "entrypoints": {
+    "backend": {
+      "transport": "stdio-jsonl",
+      "executable": "bin/windows-x86_64/datawise-plugin-kibana.exe"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.kibana.connection",
+      "label": "Kibana",
+      "description": "Connect with anonymous, username/password, API key, or bearer token.",
+      "icon": "assets/plugin.svg",
+      "workbench": "io.datawise.community.kibana.workbench",
+      "capabilities": [
+        "test",
+        "connect",
+        "disconnect"
+      ],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Connection name",
+          "type": "text",
+          "default": "Kibana",
+          "binding": "name",
+          "required": true
+        },
+        {
+          "key": "auth_mode",
+          "label": "Authentication",
+          "type": "select",
+          "default": "basic",
+          "binding": "config",
+          "description": "Choose how to authenticate; credential fields below update for the selected mode.",
+          "options": [
+            {
+              "label": "None / Anonymous",
+              "value": "none"
+            },
+            {
+              "label": "Username + Password",
+              "value": "basic"
+            },
+            {
+              "label": "API Key",
+              "value": "api_key"
+            },
+            {
+              "label": "Bearer token",
+              "value": "bearer"
+            }
+          ]
+        },
+        {
+          "key": "host",
+          "label": "Host / URL",
+          "type": "text",
+          "binding": "host",
+          "required": true,
+          "placeholder": "https://kibana.example.com/kibana",
+          "description": "Required for every auth mode. Paste a full URL to auto-fill HTTPS, port, and base path."
+        },
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "binding": "user",
+          "placeholder": "elastic",
+          "visible_when": {
+            "field": "auth_mode",
+            "one_of": ["basic"]
+          },
+          "required_when": {
+            "field": "auth_mode",
+            "one_of": ["basic"]
+          }
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "password",
+          "binding": "password",
+          "visible_when": {
+            "field": "auth_mode",
+            "one_of": ["basic"]
+          },
+          "required_when": {
+            "field": "auth_mode",
+            "one_of": ["basic"]
+          }
+        },
+        {
+          "key": "api_key",
+          "label": "API Key",
+          "type": "password",
+          "binding": "secret",
+          "placeholder": "id:api_key or encoded key",
+          "description": "Required for API Key mode (id:key or Base64-encoded).",
+          "visible_when": {
+            "field": "auth_mode",
+            "one_of": ["api_key"]
+          },
+          "required_when": {
+            "field": "auth_mode",
+            "one_of": ["api_key"]
+          }
+        },
+        {
+          "key": "token",
+          "label": "Bearer token",
+          "type": "password",
+          "binding": "secret",
+          "description": "Required for Bearer mode (service account or SSO token).",
+          "visible_when": {
+            "field": "auth_mode",
+            "one_of": ["bearer"]
+          },
+          "required_when": {
+            "field": "auth_mode",
+            "one_of": ["bearer"]
+          }
+        },
+        {
+          "key": "default_index",
+          "label": "Default index pattern",
+          "type": "text",
+          "binding": "config",
+          "default": "logs-*",
+          "placeholder": "logs-* or filebeat-*",
+          "description": "Optional. Index pattern selected when the workbench opens."
+        },
+        {
+          "key": "show_advanced",
+          "label": "Show advanced options",
+          "type": "boolean",
+          "default": false,
+          "binding": "config",
+          "description": "Port, HTTPS, Kibana base path, space, TLS, and timeout."
+        },
+        {
+          "key": "use_https",
+          "label": "Use HTTPS",
+          "type": "boolean",
+          "default": true,
+          "binding": "config",
+          "visible_when": {
+            "field": "show_advanced",
+            "one_of": ["true"]
+          },
+          "description": "Usually inferred when you paste a full https:// URL."
+        },
+        {
+          "key": "port",
+          "label": "Port",
+          "type": "number",
+          "binding": "port",
+          "default": 443,
+          "placeholder": "443 or 5601",
+          "visible_when": {
+            "field": "show_advanced",
+            "one_of": ["true"]
+          },
+          "description": "Optional. HTTPS defaults to 443; local Kibana often uses 5601."
+        },
+        {
+          "key": "kibana_base_path",
+          "label": "Kibana base path",
+          "type": "text",
+          "binding": "config",
+          "default": "",
+          "placeholder": "/kibana",
+          "visible_when": {
+            "field": "show_advanced",
+            "one_of": ["true"]
+          },
+          "description": "Optional. Path prefix before /app or /api (e.g. /soc-v7-kibana). Leave empty if Kibana is at site root; also auto-detected from redirects or a pasted URL."
+        },
+        {
+          "key": "space_id",
+          "label": "Kibana space",
+          "type": "text",
+          "binding": "config",
+          "default": "",
+          "placeholder": "default",
+          "visible_when": {
+            "field": "show_advanced",
+            "one_of": ["true"]
+          },
+          "description": "Optional. Space id from URL /s/{space}/…."
+        },
+        {
+          "key": "insecure_skip_tls_verify",
+          "label": "Skip TLS verification",
+          "type": "boolean",
+          "default": false,
+          "binding": "config",
+          "visible_when": {
+            "field": "show_advanced",
+            "one_of": ["true"]
+          },
+          "description": "Only for self-signed certificates you trust."
+        },
+        {
+          "key": "timeout_s",
+          "label": "Timeout (seconds)",
+          "type": "number",
+          "default": 30,
+          "binding": "config",
+          "visible_when": {
+            "field": "show_advanced",
+            "one_of": ["true"]
+          }
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.kibana.workbench",
+      "label": "Kibana Logs",
+      "description": "Search and browse Elasticsearch logs through a Discover-style UI.",
+      "icon": "assets/plugin.svg"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Kibana 日志",
+      "description": "仿 Kibana / OpenSearch Dashboards Discover 的日志检索工作台（开源 Discover 布局与交互）。",
+      "contributions": {
+        "io.datawise.community.kibana.connection": {
+          "label": "Kibana",
+          "description": "支持匿名、用户名密码、API Key、Bearer Token 等方式连接。",
+          "fields": {
+            "display_name": {
+              "label": "连接名称"
+            },
+            "auth_mode": {
+              "label": "认证方式",
+              "description": "选择认证方式后，下方只显示该方式需要的凭证字段。",
+              "options": {
+                "none": "无 / 匿名",
+                "basic": "用户名 + 密码",
+                "api_key": "API Key",
+                "bearer": "Bearer Token"
+              }
+            },
+            "host": {
+              "label": "主机 / URL",
+              "placeholder": "https://kibana.example.com/kibana",
+              "description": "所有认证方式都需要。可粘贴完整地址，自动识别 HTTPS、端口和 Base Path。"
+            },
+            "username": {
+              "label": "用户名",
+              "placeholder": "elastic"
+            },
+            "password": {
+              "label": "密码"
+            },
+            "api_key": {
+              "label": "API Key",
+              "placeholder": "id:api_key 或已编码的 key",
+              "description": "API Key 模式必填（id:key 或 Base64）。"
+            },
+            "token": {
+              "label": "Bearer Token",
+              "description": "Bearer 模式必填（服务账号或 SSO Token）。"
+            },
+            "default_index": {
+              "label": "默认索引模式",
+              "placeholder": "logs-* 或 filebeat-*",
+              "description": "可选。打开工作台时默认选中的索引模式。"
+            },
+            "show_advanced": {
+              "label": "显示高级选项",
+              "description": "端口、HTTPS、Base Path、Space、TLS、超时等。"
+            },
+            "use_https": {
+              "label": "使用 HTTPS",
+              "description": "粘贴 https:// 完整地址时通常会自动识别。"
+            },
+            "port": {
+              "label": "端口",
+              "placeholder": "443 或 5601",
+              "description": "可选。HTTPS 默认 443；本地 Kibana 常见 5601。"
+            },
+            "kibana_base_path": {
+              "label": "Kibana Base Path",
+              "placeholder": "/kibana",
+              "description": "可选。非根路径部署时填写（如 /soc-v7-kibana）；也可从完整 URL 或跳转自动识别。"
+            },
+            "space_id": {
+              "label": "Kibana Space",
+              "placeholder": "default",
+              "description": "可选。来自 URL 中 /s/{space}/ 的空间 ID。"
+            },
+            "insecure_skip_tls_verify": {
+              "label": "跳过 TLS 校验",
+              "description": "仅在确认风险的自签名证书场景启用。"
+            },
+            "timeout_s": {
+              "label": "超时（秒）"
+            }
+          }
+        },
+        "io.datawise.community.kibana.workbench": {
+          "label": "Kibana 日志",
+          "description": "用 Discover 风格界面检索与浏览 Elasticsearch 日志。"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,211 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.jenkins",
+  "name": "Jenkins Ops",
+  "version": "0.3.27",
+  "publisher": "datawise-community",
+  "icon": "assets/plugin.svg",
+  "description": "Jenkins ops console: health overview, pinned jobs, queue triage, build follow, artifacts, and agent status.",
+  "license": "Apache-2.0",
+  "tags": ["jenkins", "ci", "cd", "ops", "builds"],
+  "permissions": ["host.workbench", "host.events", "host.clipboard"],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.2"
+  },
+  "entrypoints": {
+    "backend": {
+      "executable": "bin/jenkins-plugin.jar",
+      "transport": "stdio-jsonl"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.jenkins.connection",
+      "label": "Jenkins controller",
+      "icon": "assets/plugin.svg",
+      "capabilities": ["test", "connect", "disconnect"],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Display name",
+          "type": "text",
+          "binding": "name",
+          "default": "Jenkins"
+        },
+        {
+          "key": "protocol",
+          "label": "Protocol",
+          "type": "select",
+          "binding": "config",
+          "required": true,
+          "default": "http",
+          "options": [
+            { "label": "HTTP (internal)", "value": "http" },
+            { "label": "HTTPS", "value": "https" }
+          ]
+        },
+        {
+          "key": "host",
+          "label": "IP / Domain",
+          "type": "text",
+          "binding": "host",
+          "required": true,
+          "placeholder": "192.0.2.30"
+        },
+        {
+          "key": "port",
+          "label": "Port",
+          "type": "number",
+          "binding": "port",
+          "required": true,
+          "default": 8080
+        },
+        {
+          "key": "context_path",
+          "label": "Context path",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "/jenkins",
+          "description": "Leave empty for Jenkins at the server root."
+        },
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "binding": "user",
+          "required": true,
+          "placeholder": "admin"
+        },
+        {
+          "key": "auth_method",
+          "label": "Authentication",
+          "type": "select",
+          "binding": "config",
+          "required": true,
+          "default": "api_token",
+          "options": [
+            { "label": "API Token", "value": "api_token" },
+            { "label": "Password", "value": "password" }
+          ]
+        },
+        {
+          "key": "api_token",
+          "label": "API Token",
+          "type": "password",
+          "binding": "password",
+          "visible_when": { "field": "auth_method", "one_of": ["api_token"] },
+          "required_when": { "field": "auth_method", "one_of": ["api_token"] },
+          "description": "Prefer an API Token over the login password for REST mutations."
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "password",
+          "binding": "password",
+          "visible_when": { "field": "auth_method", "one_of": ["password"] },
+          "required_when": { "field": "auth_method", "one_of": ["password"] }
+        },
+        {
+          "key": "read_only",
+          "label": "Read-only mode",
+          "type": "boolean",
+          "binding": "config",
+          "default": false,
+          "description": "Blocks trigger, stop, and artifact download."
+        },
+        {
+          "key": "download_dir",
+          "label": "Download directory",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "Leave empty for <user home>/Downloads"
+        },
+        {
+          "key": "insecure_skip_tls",
+          "label": "Skip TLS certificate verification",
+          "type": "boolean",
+          "binding": "config",
+          "default": false,
+          "visible_when": { "field": "protocol", "one_of": ["https"] }
+        },
+        {
+          "key": "connect_timeout_secs",
+          "label": "Connection timeout (seconds)",
+          "type": "number",
+          "binding": "config",
+          "default": 15
+        }
+      ],
+      "workbench": "io.datawise.community.jenkins.workbench"
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.jenkins.workbench",
+      "label": "Jenkins Ops"
+    },
+    {
+      "type": "context-menu",
+      "id": "io.datawise.community.jenkins.open",
+      "label": "Open Jenkins Ops",
+      "menu": "connection"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Jenkins 运维台",
+      "description": "Jenkins 运维台：健康总览、收藏 Job、队列排障、构建跟随、产物下载与节点状态。",
+      "contributions": {
+        "io.datawise.community.jenkins.connection": {
+          "label": "Jenkins 控制器",
+          "fields": {
+            "display_name": { "label": "显示名称" },
+            "protocol": {
+              "label": "协议",
+              "options": {
+                "http": "HTTP (内网)",
+                "https": "HTTPS"
+              }
+            },
+            "host": { "label": "IP / 域名" },
+            "port": { "label": "端口" },
+            "context_path": {
+              "label": "上下文路径",
+              "description": "留空表示 Jenkins 部署在站点根路径。"
+            },
+            "username": { "label": "用户名" },
+            "auth_method": {
+              "label": "认证方式",
+              "options": {
+                "api_token": "API Token",
+                "password": "密码"
+              }
+            },
+            "api_token": {
+              "label": "API Token",
+              "description": "触发构建等写操作建议使用 API Token，而不是登录密码。"
+            },
+            "password": { "label": "密码" },
+            "read_only": {
+              "label": "只读模式",
+              "description": "禁止触发构建、停止构建与下载产物。"
+            },
+            "download_dir": {
+              "label": "下载目录",
+              "placeholder": "留空表示 <用户目录>/Downloads"
+            },
+            "insecure_skip_tls": { "label": "跳过 TLS 证书校验" },
+            "connect_timeout_secs": { "label": "连接超时 (秒)" }
+          }
+        },
+        "io.datawise.community.jenkins.workbench": { "label": "Jenkins 运维台" },
+        "io.datawise.community.jenkins.open": { "label": "打开 Jenkins 运维台" }
+      }
+    }
+  }
+}

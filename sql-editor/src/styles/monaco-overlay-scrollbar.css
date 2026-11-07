@@ -1,0 +1,72 @@
+/**
+ * Monaco 滚动条与 DwOverlayScroll 同宽：轨/滑块均为 --dw-scrollbar-size（4px），滑块铺满轨。
+ * 选择器覆盖 .editor-scrollable 与通用 .monaco-scrollable-element，避免漏匹配。
+ */
+
+.sql-monaco-host,
+.monaco-host {
+    --dw-monaco-sb-size: var(--dw-scrollbar-size, 4px);
+}
+
+.sql-monaco-host .monaco-scrollable-element > .scrollbar,
+.sql-monaco-host .monaco-editor .editor-scrollable > .scrollbar,
+.monaco-host .monaco-scrollable-element > .scrollbar {
+    background: var(--sql-scrollbar-track, var(--dw-scrollbar-track, transparent)) !important;
+}
+
+.sql-monaco-host .monaco-scrollable-element > .scrollbar.vertical,
+.sql-monaco-host .monaco-editor .editor-scrollable > .scrollbar.vertical,
+.monaco-host .monaco-scrollable-element > .scrollbar.vertical {
+    width: var(--dw-monaco-sb-size) !important;
+    min-width: var(--dw-monaco-sb-size) !important;
+}
+
+.sql-monaco-host .monaco-scrollable-element > .scrollbar.horizontal,
+.sql-monaco-host .monaco-editor .editor-scrollable > .scrollbar.horizontal,
+.monaco-host .monaco-scrollable-element > .scrollbar.horizontal {
+    height: var(--dw-monaco-sb-size) !important;
+    min-height: var(--dw-monaco-sb-size) !important;
+}
+
+.sql-monaco-host .monaco-scrollable-element > .scrollbar > .slider,
+.sql-monaco-host .monaco-editor .editor-scrollable > .scrollbar > .slider,
+.monaco-host .monaco-scrollable-element > .scrollbar > .slider {
+    border-radius: 999px !important;
+    background: var(--sql-scrollbar-thumb, var(--dw-scrollbar-thumb)) !important;
+    transition: background 0.18s ease;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+}
+
+.sql-monaco-host .monaco-scrollable-element > .scrollbar:hover > .slider,
+.sql-monaco-host .monaco-scrollable-element > .scrollbar > .slider:hover,
+.sql-monaco-host .monaco-scrollable-element > .scrollbar.active > .slider,
+.sql-monaco-host .monaco-editor .editor-scrollable > .scrollbar:hover > .slider,
+.sql-monaco-host .monaco-editor .editor-scrollable > .scrollbar.active > .slider,
+.monaco-host .monaco-scrollable-element > .scrollbar:hover > .slider,
+.monaco-host .monaco-scrollable-element > .scrollbar.active > .slider,
+.monaco-host .monaco-scrollable-element > .scrollbar > .slider:hover {
+    background: var(--sql-scrollbar-thumb-hover, var(--dw-scrollbar-thumb-hover)) !important;
+}
+
+/* 铺满轨（与 DwOverlayScroll inset:0 一致），勿再 left/right 内缩 */
+.sql-monaco-host .monaco-scrollable-element > .scrollbar.vertical > .slider,
+.sql-monaco-host .monaco-editor .editor-scrollable > .scrollbar.vertical > .slider,
+.monaco-host .monaco-scrollable-element > .scrollbar.vertical > .slider {
+    left: 0 !important;
+    right: 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+.sql-monaco-host .monaco-scrollable-element > .scrollbar.horizontal > .slider,
+.sql-monaco-host .monaco-editor .editor-scrollable > .scrollbar.horizontal > .slider,
+.monaco-host .monaco-scrollable-element > .scrollbar.horizontal > .slider {
+    top: 0 !important;
+    bottom: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+}

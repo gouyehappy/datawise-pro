@@ -1,0 +1,32 @@
+/**
+ * 侧栏分栏拖动手柄 — Explorer（右侧缘）与 Shortcut 工具窗（左侧缘）共用定位
+ */
+
+.explorer-pane,
+.workbench-edge {
+    position: relative;
+}
+
+.panel-resize-handle--trailing,
+.explorer-pane__resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: calc(var(--dw-splitter-size) * -0.5);
+    z-index: var(--dw-z-raised);
+    width: var(--dw-splitter-size);
+    height: auto;
+    transform: translateX(50%);
+}
+
+.panel-resize-handle--leading,
+.workbench-edge__resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--dw-splitter-size) * -0.5);
+    z-index: var(--dw-z-raised);
+    width: var(--dw-splitter-size);
+    height: auto;
+    transform: translateX(-50%);
+}

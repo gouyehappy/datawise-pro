@@ -1,0 +1,2192 @@
+/*
+ * Translation 即时翻译 —— 主应用
+ * ==========================================================================
+ * 设计铁律（来自 dbx-todo 的事故沉淀，详见 AGENTS.md 第 4 章）：
+ *
+ *   1. 绝不用 $("id").属性 = ... 直接赋值。元素缺失时那是「对 null 赋值」
+ *      → TypeError，而它通常位于绑定/boot 开头，会把整个界面连坐搞死
+ *      （真实事故：所有按钮失效 + 数据从不落盘，根因是一个 id 拼错）。
+ *      一律走 click(id,fn) / on(id,ev,fn) 安全绑定 + 页面级 error 兜底。
+ *
+ *   2. 永远不要把 $("字面量") 直接接属性访问 —— 打包脚本会扫描并拒绝。
+ *      读取用 val(id)，写入用 setVal(id,v)，它们内部把 id 当变量传。
+ *
+ *   3. 所有数据落盘只走 window.TranslationStore（storage.js → 侧车 → SQLite）。
+ *      绝不碰 localStorage（opaque origin 会抛 SecurityError），
+ *      也绝不静默退化到内存而不告知用户。
+ *
+ *   4. 译文与用户输入一律 textContent 渲染，绝不 innerHTML（防 XSS）。
+ *
+ * 流式翻译的竞态防护（本文件最关键的正确性保证）：
+ *   前端维护 currentTaskId，收到事件时若 taskId 不匹配则【直接丢弃】。
+ *   没有这道过滤，快速连续输入时会出现「旧响应晚到覆盖新结果」——
+ *   用户输入 "hello world" 的过程中，"hello" 的译文可能在
+ *   "hello world" 的译文之后到达，把正确结果覆盖掉。
+ */
+(function () {
+  "use strict";
+
+  var App = window.App = window.App || {};
+  var S = window.TranslationStore;
+  var E = window.Engines;
+  var H = window.History;
+
+  /* 宿主 AI 合成引擎：不落库，仅当前会话可见；密钥留在宿主。 */
+  var HOST_AI_ID = "__host_ai__";
+  var PANE_ROW_MIN = 720;      // 宽于此时原文/译文左右分栏
+
+  /* ============ 状态 ============ */
+  var state = {
+    view: "translate",
+    prefs: {},
+    engines: [],
+    currentEngineId: "",
+    enginesSeen: false,
+    engineMenuOpen: false, // 翻译页引擎下拉是否展开
+    engineList: [],        // 当前有序引擎列表（默认第一），供下拉与按钮复用  // 首次加载引擎列表后置 true，用于区分「初始化」与「顺序/默认真的变了」
+    sourceLang: "auto",
+    targetLang: "zh",
+    hostAi: { configured: false, profileName: "", model: "" },
+    // 流式任务
+    taskId: "",            // 当前任务 ID，事件竞态过滤的依据
+    streaming: false,
+    streamBuffer: "",
+    streamStart: 0,
+    // 即时翻译
+    instantTimer: null,
+    lastInstantText: "",
+    // 译文区自动滚动：用户手动上滚后暂停，避免"抢滚动条"
+    autoScroll: true,
+    bootDone: false,
+    paneRatio: 0.5         // 分隔条比例（0.2–0.8）
+  };
+
+  /* ============ 宿主环境轮询状态 ============
+   * 声明放在这里（而非 startEnvPolling 附近），保证在任何使用点之前 ——
+   * var 提升虽然能让代码跑通，但「声明在使用之后」会让人误读执行顺序，
+   * 排查「轮询为什么没生效」时白白多花时间。
+   */
+  var envPollTimer = null;
+  var lastEnvSignature = "";
+
+  /* ============ 安全 DOM 助手 ============ */
+  function $(id) { return document.getElementById(id); }
+  function val(id) { var e = $(id); return e ? e.value : ""; }
+  function setVal(id, v) { var e = $(id); if (e) { e.value = (v == null ? "" : v); } }
+  function txt(id, v) { var e = $(id); if (e) { e.textContent = (v == null ? "" : String(v)); } }
+  function show(id, yes) { var e = $(id); if (e) { e.hidden = !yes; } }
+  function setDisabled(id, yes) { var e = $(id); if (e) { e.disabled = !!yes; } }
+  function setChecked(id, yes) { var e = $(id); if (e) { e.checked = !!yes; } }
+  function isChecked(id) { var e = $(id); return e ? !!e.checked : false; }
+
+  function click(id, fn) {
+    var e = $(id);
+    if (!e) { console.warn("[app] 缺少 #" + id); return; }
+    e.addEventListener("click", function (ev) {
+      try { fn(ev); } catch (err) { reportErr("点击 #" + id, err); }
+    });
+  }
+  function on(id, ev, fn) {
+    var e = $(id);
+    if (!e) { console.warn("[app] 缺少 #" + id); return; }
+    e.addEventListener(ev, function (e2) {
+      try { fn(e2); } catch (err) { reportErr("事件 #" + id + " " + ev, err); }
+    });
+  }
+  function h(tag, props, children) {
+    var e = document.createElement(tag);
+    if (props) {
+      Object.keys(props).forEach(function (k) {
+        var v = props[k];
+        if (v === null || v === undefined || v === false) { return; }
+        if (k === "class") { e.className = v; }
+        else if (k === "dataset") { Object.keys(v).forEach(function (d) { e.dataset[d] = v[d]; }); }
+        else if (k === "text") { e.textContent = String(v); }
+        else if (k.indexOf("on") === 0 && typeof v === "function") {
+          e.addEventListener(k.slice(2).toLowerCase(), v);
+        } else if (v === true) { e.setAttribute(k, ""); }
+        else { e.setAttribute(k, String(v)); }
+      });
+    }
+    if (children != null) {
+      var arr = Array.isArray(children) ? children : [children];
+      arr.forEach(function (c) {
+        if (c == null || c === false) { return; }
+        e.appendChild(typeof c === "object" ? c : document.createTextNode(String(c)));
+      });
+    }
+    return e;
+  }
+
+  function t(key, vars) {
+    return (window.TranslationI18N && window.TranslationI18N.t)
+      ? window.TranslationI18N.t(key, vars) : key;
+  }
+
+  /* ============ 全局错误兜底 ============
+   * 页面级异常如果不接住，用户只会看到一片空白的界面，
+   * 完全不知道该反馈什么。接住后至少能在诊断报告里留下证据。
+   */
+  function reportErr(where, err) {
+    console.error("[Translation] " + where + ":", err);
+    toast(t("genericFail", { msg: (err && err.message) || String(err) }), "error");
+  }
+  window.addEventListener("error", function (e) {
+    console.error("[Translation] 页面错误:", e.error || e.message);
+    if (S && S.log) { S.log("页面级异常", false, String(e.message || (e.error && e.error.message) || "")); }
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    console.error("[Translation] 未捕获 Promise:", e.reason);
+    if (S && S.log) { S.log("未捕获 Promise", false, String((e.reason && e.reason.message) || e.reason || "")); }
+  });
+
+  /* ============ 轻提示 ============ */
+  var toastTimer = null;
+  function toast(msg, kind, ms) {
+    var el = $("toast");
+    if (!el) { return; }
+    el.textContent = String(msg == null ? "" : msg);
+    el.className = "toast" + (kind ? " " + kind : "");
+    el.hidden = false;
+    if (toastTimer) { clearTimeout(toastTimer); }
+    toastTimer = setTimeout(function () { el.hidden = true; }, ms || 2600);
+  }
+
+  /* ============ 通用确认弹框 ============
+   * 沙箱 iframe 里原生 confirm() 不可用（会被宿主拦截或直接返回 false），
+   * 必须自己实现。返回 Promise<boolean>。
+   */
+  var confirmResolve = null;
+  function confirmDialog(opts) {
+    return new Promise(function (resolve) {
+      var titleEl = $("confirm-title");
+      var linesEl = $("confirm-lines");
+      var yesBtn = $("btn-confirm-yes");
+      if (!titleEl || !linesEl || !yesBtn) { resolve(false); return; }
+
+      titleEl.textContent = (opts && opts.title) || t("confirm");
+      linesEl.textContent = "";
+      ((opts && opts.lines) || []).forEach(function (ln) {
+        if (typeof ln === "string") { linesEl.appendChild(h("p", { text: ln })); }
+        else if (ln && ln.text) { linesEl.appendChild(h("p", { class: ln.cls || "", text: ln.text })); }
+      });
+      // 选项（用于导入模式、导出是否含密钥这类二选一）
+      if (opts && opts.options && opts.options.length) {
+        var wrap = h("div", { class: "confirm-options" });
+        opts.options.forEach(function (o, i) {
+          wrap.appendChild(h("label", {}, [
+            h("input", { type: "radio", name: "confirm-opt", value: o.value, checked: i === 0 }),
+            h("span", { text: o.label })
+          ]));
+        });
+        linesEl.appendChild(wrap);
+      }
+      yesBtn.className = (opts && opts.danger) ? "danger" : "primary";
+      yesBtn.textContent = (opts && opts.yesText) || t("confirm");
+
+      confirmResolve = resolve;
+      show("confirm-modal", true);
+    });
+  }
+
+  function closeConfirm(result) {
+    show("confirm-modal", false);
+    var r = confirmResolve;
+    confirmResolve = null;
+    if (r) { r(result); }
+  }
+
+  // 读取确认弹框里选中的选项值
+  function confirmChoice() {
+    var checked = document.querySelector('input[name="confirm-opt"]:checked');
+    return checked ? checked.value : "";
+  }
+
+  /* ============ 主题与字体：完整跟随宿主 DataWise ============
+   *
+   * 设计目标：DBX 切换主题、调色板、UI 字体、编辑器字体、圆角风格时，
+   * 本插件界面【实时】跟着变，无需重开工作台。参考 dbx-plugin-toolbox 的
+   * src/lib/host.js applyTheme 实现。
+   *
+   * 官方文档「主题负载携带什么」明确了投递矩阵：
+   *   浅色/深色/跟随系统 → theme.appearance
+   *   调色板 + 自定义配色 → --color-* tokens
+   *   圆角风格           → --radius-* tokens
+   *   UI 字体            → --font-sans token
+   *   编辑器（等宽）字体  → --font-mono token + theme.editor.fontFamily
+   *   编辑器字号         → theme.editor.fontSize
+   *
+   * 两层机制配合：
+   *   1. 自带完整明暗两套 CSS 变量作为【兜底】—— 开发宿主不投递 tokens 时
+   *      界面仍有正确的明暗配色，不会变成一片白或一片黑。
+   *   2. 宿主投递了 tokens 就用 setProperty 覆盖到文档根元素，实现精确跟随。
+   *      tokens 缺失时不覆盖，兜底变量继续生效。
+   */
+
+  // 宿主可能只投递 --font-sans，而组件里用的是 --font-family（或反之）。
+  // 建立别名对，任一存在就补齐另一个，避免「宿主给了字体但组件读不到」。
+  // 这几对直接对齐 dbx-plugin-toolbox 的 ALIAS_PAIRS。
+  var TOKEN_ALIAS_PAIRS = [
+    ["--font-sans", "--font-family"],
+    ["--font-mono", "--dbx-editor-font-family"],
+    ["--dbx-editor-font-size", "--editor-font-size"]
+  ];
+
+  // 宿主 token → 本项目语义变量的映射。
+  //
+  // 为什么需要这一层：本项目 styles.css 用的是自己的语义变量名
+  // （--bg / --panel / --text / --primary …），而宿主投递的是
+  // DBX/shadcn 体系的 --color-background / --color-card / --color-foreground …。
+  // 两套名字对不上，宿主投递的调色板就【完全不会生效】——
+  // 只有明暗切换生效（因为 CSS 里有 body[data-theme="dark"] 两套兜底值），
+  // 用户在 DataWise 里自定义的主色、边框色、圆角都传不进来。
+  //
+  // 映射后：宿主投递了什么就覆盖什么，没投递的保持 CSS 里的兜底值。
+  // 这样「跟随宿主」才是完整的（调色板 + 圆角 + 字体），而不只是明暗。
+  //
+  // 注意映射方向是【宿主 → 本项目】，且只在宿主确实投递了该 token 时才覆盖，
+  // 否则会把兜底值冲成 undefined。
+  var HOST_TOKEN_MAP = [
+    // 背景与面板
+    ["--color-background", "--bg"],
+    ["--color-card", "--panel"],
+    ["--color-muted", "--panel-2"],
+    ["--color-accent", "--panel-3"],
+    // 边框
+    ["--color-border", "--border"],
+    ["--color-input", "--border-strong"],
+    // 文字
+    ["--color-foreground", "--text"],
+    ["--color-muted-foreground", "--text-2"],
+    // 主色
+    ["--color-primary", "--primary"],
+    ["--color-primary-foreground", "--primary-fg"],
+    // 语义色
+    ["--color-destructive", "--danger"],
+    ["--color-destructive-foreground", "--danger-fg"],
+    ["--color-success", "--ok"],
+    ["--color-warning", "--warn"],
+    // 圆角
+    ["--radius-md", "--radius"],
+    ["--radius-sm", "--radius-sm"]
+  ];
+
+  // appliedTokens 记录上一次应用到根元素的 token 名，
+  // 用于在主题切换后移除「这次不再投递」的 token，避免旧值残留。
+  var appliedTokens = {};
+
+  // flattenTokens 把可能嵌套的 tokens 对象拍平成 { "--css-name": "value" }。
+  //
+  // 宿主的 tokens 可能是 { color: { primary: "#fff" } } 这种嵌套结构，
+  // 也可能是扁平的 { "--color-primary": "#fff" }。两种都要能处理。
+  function flattenTokens(tokens, prefix, out) {
+    out = out || {};
+    if (!tokens || typeof tokens !== "object") { return out; }
+    var keys = Object.keys(tokens);
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      var value = tokens[key];
+      var name = prefix ? (prefix + "-" + key) : key;
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        // 嵌套对象：若其值全是标量则递归拍平，否则跳过（不认识的深层结构不强解）
+        flattenTokens(value, name.replace(/^--+/, ""), out);
+        continue;
+      }
+      var cssName = toCssVarName(name);
+      var cssValue = toCssValue(value);
+      if (cssName && cssValue) { out[cssName] = cssValue; }
+    }
+    return out;
+  }
+
+  // toCssVarName 把 token 名规范成合法的 CSS 变量名（--xxx-yyy）。
+  // 非法名（含空格、以数字开头等）返回空串，调用方据此跳过 —— 防止
+  // setProperty 抛异常或注入畸形样式。
+  function toCssVarName(name) {
+    var raw = String(name == null ? "" : name).trim();
+    if (!raw) { return ""; }
+    var dashed = raw.indexOf("--") === 0 ? raw : ("--" + raw);
+    return /^--[a-zA-Z_][a-zA-Z0-9-]*$/.test(dashed) ? dashed : "";
+  }
+
+  // toCssValue 只接受有限的字符串与数字，其余一律拒绝。
+  // 这是防注入的关键：token 值来自宿主，虽然可信，但仍不应把
+  // 任意字符串塞进 style（例如含 "}" 或 ";" 的值会破坏样式表）。
+  function toCssValue(value) {
+    if (typeof value === "number" && isFinite(value)) { return String(value); }
+    if (typeof value === "string") {
+      var v = value.trim();
+      // 拒绝含 CSS 语法字符的值，避免样式注入
+      if (v && !/[;{}<>]/.test(v)) { return v; }
+    }
+    return "";
+  }
+
+  function applyTheme() {
+    var theme = (S && typeof S.themeObject === "function")
+      ? S.themeObject()
+      : { appearance: (S && S.theme ? S.theme() : "light"), tokens: {}, editor: null };
+
+    var appearance = theme.appearance === "dark" ? "dark" : "light";
+    var root = document.documentElement;
+
+    // 1) 外观：同时设置多个约定位置，兼容不同 CSS 选择器写法
+    //    （本项目用 body[data-theme]，但也设 root 的 dataset 与 class 以防万一）
+    document.body.dataset.theme = appearance;
+    root.dataset.dbxTheme = appearance;
+    if (root.classList) {
+      if (appearance === "dark") { root.classList.add("dark"); }
+      else { root.classList.remove("dark"); }
+    }
+    // colorScheme 让原生控件（滚动条、表单）也跟随明暗
+    try { root.style.colorScheme = appearance; } catch (e) { /* 老浏览器忽略 */ }
+
+    // 2) tokens：把宿主投递的颜色/字体/圆角变量应用到根元素
+    var flat = flattenTokens(theme.tokens, "", {});
+
+    // 编辑器字体/字号可能不在 tokens 里，而在 theme.editor 结构里，单独提取
+    if (theme.editor) {
+      if (theme.editor.fontFamily) {
+        var ef = toCssValue(theme.editor.fontFamily);
+        if (ef) { flat["--font-mono"] = ef; }
+      }
+      if (theme.editor.fontSize) {
+        var es = toCssValue(theme.editor.fontSize);
+        // fontSize 可能是纯数字（px）或带单位，纯数字补 px
+        if (es) { flat["--editor-font-size"] = /^\d+(\.\d+)?$/.test(es) ? (es + "px") : es; }
+      }
+    }
+
+    // 别名补齐：--font-sans ↔ --font-family 等
+    for (var a = 0; a < TOKEN_ALIAS_PAIRS.length; a++) {
+      var left = TOKEN_ALIAS_PAIRS[a][0], right = TOKEN_ALIAS_PAIRS[a][1];
+      if (flat[left] && !flat[right]) { flat[right] = flat[left]; }
+      else if (flat[right] && !flat[left]) { flat[left] = flat[right]; }
+    }
+
+    // 宿主 token → 本项目语义变量。
+    // 只在宿主确实投递了该 token 时才映射，避免把 CSS 兜底值冲掉。
+    var mapped = 0;
+    for (var m = 0; m < HOST_TOKEN_MAP.length; m++) {
+      var hostName = HOST_TOKEN_MAP[m][0], localName = HOST_TOKEN_MAP[m][1];
+      if (flat[hostName]) { flat[localName] = flat[hostName]; mapped++; }
+    }
+
+    // 应用本次的 token
+    var names = Object.keys(flat);
+    for (var n = 0; n < names.length; n++) {
+      try { root.style.setProperty(names[n], flat[names[n]]); } catch (e) { /* 单个失败不影响其余 */ }
+    }
+    // 移除上一次应用过、这次不再投递的 token（主题切换后避免旧值残留）
+    for (var prev in appliedTokens) {
+      if (Object.prototype.hasOwnProperty.call(appliedTokens, prev) && !(prev in flat)) {
+        try { root.style.removeProperty(prev); } catch (e) { /* 忽略 */ }
+      }
+    }
+    appliedTokens = flat;
+
+    // 记录到诊断，便于排查「主题没跟随」时确认宿主到底投递了什么
+    if (S && S.log) {
+      S.log("应用宿主主题", true,
+        "appearance=" + appearance + " tokens=" + names.length +
+        " 映射到语义变量=" + mapped +
+        (flat["--font-sans"] ? " font-sans=有" : " font-sans=无(用兜底)") +
+        (flat["--font-mono"] ? " font-mono=有" : " font-mono=无(用兜底)"));
+    }
+  }
+
+  // renderAppearanceInfo 在设置页只读展示当前跟随到的外观信息。
+  //
+  // 主题与语言一律跟随宿主，不提供手动覆盖入口（用户要求）。
+  // 但仍展示「当前跟随到什么」，让用户确认插件确实跟上了 DBX 的设置，
+  // 也便于排查「为什么我的插件是深色而 DBX 是浅色」这类问题。
+  function renderAppearanceInfo() {
+    var theme = (S && typeof S.themeObject === "function") ? S.themeObject() : null;
+    var appearance = theme ? theme.appearance : (S && S.theme ? S.theme() : "light");
+    var tokenCount = theme ? Object.keys(flattenTokens(theme.tokens, "", {})).length : 0;
+    var fontSans = theme ? (flattenTokens(theme.tokens, "", {})["--font-sans"] || "") : "";
+    var locale = (window.TranslationI18N && window.TranslationI18N.locale)
+      ? window.TranslationI18N.locale() : "zh-CN";
+
+    txt("info-theme", (appearance === "dark" ? t("themeDark") : t("themeLight")) +
+      "  ·  " + t("followHost"));
+    txt("info-locale", locale === "en" ? "English" : "简体中文");
+    txt("info-font", fontSans || t("fontFollowHost"));
+    txt("info-token-count", String(tokenCount));
+  }
+
+  /* ============ 视图切换 ============ */
+
+  var VIEWS = ["translate", "engines", "history", "settings"];
+
+  function switchView(name) {
+    if (VIEWS.indexOf(name) < 0) { name = "translate"; }
+    state.view = name;
+    VIEWS.forEach(function (v) {
+      show("view-" + v, v === name);
+      var btn = $("btn-view-" + v);
+      if (btn) {
+        if (v === name) { btn.classList.add("active"); btn.setAttribute("aria-selected", "true"); }
+        else { btn.classList.remove("active"); btn.setAttribute("aria-selected", "false"); }
+      }
+    });
+    // 切到历史页时刷新（可能在别的页面翻译过）
+    if (name === "history" && H) { H.load(true); }
+    if (name === "engines" && E) { E.reload(); }
+    if (name === "settings") { renderSettings(); }
+    // 记住上次视图，重开工作台时恢复
+    if (S && S.isPersistent() && state.prefs.lastView !== name) {
+      state.prefs.lastView = name;
+      S.setPrefs({ lastView: name }).catch(function () { /* 偏好保存失败不影响使用 */ });
+    }
+  }
+
+  /* ============ 语言下拉 ============ */
+
+  function renderLangSelects() {
+    var langs = (E && E.languages) ? E.languages() : [];
+    var kind = currentEngineKind();
+
+    fillLangSelect("sel-source-lang", langs, kind, true, state.sourceLang);
+    fillLangSelect("sel-target-lang", langs, kind, false, state.targetLang);
+    fillLangSelect("set-default-source", langs, kind, true, state.prefs.defaultSourceLang || "auto");
+    fillLangSelect("set-default-target", langs, kind, false, state.prefs.defaultTargetLang || "zh");
+  }
+
+  // fillLangSelect 填充语言下拉框。
+  //
+  // 当前引擎不支持的语言会被【禁用】而不是隐藏 —— 隐藏会让用户以为
+  // 「这个插件不支持日语」，禁用并标注原因才能引导他去换引擎。
+  function fillLangSelect(id, langs, kind, allowAuto, selected) {
+    var sel = $(id);
+    if (!sel) { return; }
+    sel.textContent = "";
+    var supported = {};
+    if (kind && E && E.kindInfo) {
+      var info = E.kindInfo(kind);
+      (info && info.languages ? info.languages : []).forEach(function (c) { supported[c] = true; });
+    } else {
+      // 没有引擎时全部可选（新建引擎后才会真正校验）
+      langs.forEach(function (l) { supported[l.code] = true; });
+    }
+
+    langs.forEach(function (l) {
+      if (l.code === "auto" && !allowAuto) { return; }
+      var ok = supported[l.code] !== false;
+      var name = isZh() ? l.zh : l.en;
+      sel.appendChild(h("option", {
+        value: l.code,
+        text: ok ? name : (name + "（当前引擎不支持）"),
+        disabled: !ok,
+        selected: l.code === selected
+      }));
+    });
+
+    // 选中的语言若不被支持，回退到第一个可用项
+    if (selected && supported[selected] === false) {
+      for (var i = 0; i < langs.length; i++) {
+        var c = langs[i].code;
+        if (c === "auto" && !allowAuto) { continue; }
+        if (supported[c] !== false) { sel.value = c; onLangChanged(id, c); break; }
+      }
+    }
+  }
+
+  function isZh() {
+    return !(window.TranslationI18N && window.TranslationI18N.locale() === "en");
+  }
+
+  function onLangChanged(id, code) {
+    if (id === "sel-source-lang") { state.sourceLang = code; }
+    else if (id === "sel-target-lang") { state.targetLang = code; }
+  }
+
+  function currentEngineKind() {
+    var e = currentEngine();
+    return e ? e.kind : "";
+  }
+
+  // engineName 返回引擎的显示名，内置引擎会换成随界面语言的类型名。
+  //
+  // 实现优先走 engines.js 的 E.displayName（那里有完整的 kindMap），
+  // 取不到时退回记录里的名字 —— 降级模式下（侧车不可用）也必须能显示。
+  function engineName(e) {
+    if (!e) { return ""; }
+    if (isHostAiEngine(e)) { return e.name || t("hostAiEngine"); }
+    if (E && E.displayName) { return E.displayName(e); }
+    return e.name || e.kind || "";
+  }
+
+  function currentEngine() {
+    if (state.currentEngineId === HOST_AI_ID) {
+      return state.hostAi.configured ? makeHostAiEngine() : null;
+    }
+    if (state.currentEngineId && E) {
+      var found = E.findById(state.currentEngineId);
+      if (found) { return found; }
+    }
+    return (E && E.defaultEngine) ? E.defaultEngine() : null;
+  }
+
+  /* ============ 引擎下拉 ============ */
+
+  function renderEngineSelect() {
+    var menu = $("sel-engine-menu");
+    var btn = $("sel-engine-btn");
+    if (!menu || !btn) { return; }
+    var list = orderedEngineList();
+    state.engineList = list;
+    menu.textContent = "";
+
+    if (!list.length) {
+      btn.disabled = true;
+      state.currentEngineId = "";
+      // 仍提供「管理引擎」入口
+      appendManageEngineItem(menu);
+      updateEngineButton();
+      updateEngineBadge();
+      updateNoEngineState();
+      return;
+    }
+    btn.disabled = false;
+
+    list.forEach(function (e) {
+      var active = e.id === state.currentEngineId;
+      var badges = [];
+      if (e.isDefault) { badges.push(h("span", { class: "badge primary", text: t("defaultBadge") })); }
+      if (e.id === HOST_AI_ID) { badges.push(h("span", { class: "badge ok", text: t("hostAiBadge") })); }
+      var item = h("li", {
+        class: "kind-item" + (active ? " is-active" : ""),
+        role: "option",
+        "aria-selected": active ? "true" : "false",
+        tabindex: "-1"
+      }, [
+        S.engineIcon(engineKindInfo(e), engineName(e)),
+        h("span", { class: "kind-item-label", text: engineName(e) })
+      ].concat(badges));
+      item.addEventListener("click", function () { selectEngine(e.id); });
+      menu.appendChild(item);
+    });
+    appendManageEngineItem(menu);
+
+    // 选中项恢复顺序：
+    //   1) state.currentEngineId —— 本次会话里用户的选择（含刚发生的变化）
+    //   2) state.prefs.currentEngineId —— 跨会话记住的最后选择
+    //   3) 默认引擎 —— 按 isDefault 标记找，【不是】列表第一项：
+    //      列表顺序只由用户拖动决定，默认引擎可能排在任何位置
+    //      （defaultEngineId 找不到显式默认时才退回首项）。
+    var wanted = state.currentEngineId || state.prefs.currentEngineId || "";
+    if (!list.some(function (x) { return x.id === wanted; })) { wanted = defaultEngineId(list); }
+    state.currentEngineId = wanted;
+    updateEngineButton();
+    updateEngineBadge();
+    updateNoEngineState();
+  }
+
+  function appendManageEngineItem(menu) {
+    if (!menu) { return; }
+    var item = h("li", {
+      class: "kind-item is-action",
+      role: "option",
+      tabindex: "-1"
+    }, [
+      h("span", { class: "kind-item-label", text: t("manageEngines") })
+    ]);
+    item.addEventListener("click", function () {
+      closeEngineMenu();
+      switchView("engines");
+    });
+    menu.appendChild(item);
+  }
+
+  /* ============ 内置免费引擎的使用提示 ============ */
+
+  // updateFreeNotice 控制翻译页那条免费服务提示。
+  //
+  // 为什么【不是常驻】也【不是每次弹框】：
+  //  - 常驻警告会让用户把它当装饰忽略（banner blindness），
+  //    而真正把 skipTlsVerify / 密钥降级这类红色警告淹在噪音里更危险；
+  //  - 每次选免费引擎都弹一个模态框是打断式体验，用户会烦。
+  // 所以规则是：只在「当前引擎是内置免费服务」时出现在原位，
+  // 用户点「不再提示」就把选择写进偏好，跨会话记住；
+  // 切到别的引擎自动隐藏，切回来时若没关过会再次出现。
+  // 放在「管理」按钮与「输入即译」之间：它既要指向配置入口，
+  // 又紧邻用户正在使用的开关，位置本身就在说明「这是关于当前引擎的」。
+  function updateFreeNotice() {
+    var box = $("free-notice");
+    if (!box) { return; }
+    var e = currentEngine();
+    var hidden = state.prefs && state.prefs.freeNoticeHidden === true;
+    box.hidden = !(!!(e && e.builtin) && !hidden);
+  }
+
+  // hideFreeNotice 记住「不再提示」。写偏好失败也照常隐藏：
+  // 这条信息不该因为落盘问题反复骚扰用户（下次启动最多再出现一次）。
+  function hideFreeNotice() {
+    state.prefs = state.prefs || {};
+    state.prefs.freeNoticeHidden = true;
+    updateFreeNotice();
+    if (S && S.setPrefs) {
+      S.setPrefs({ freeNoticeHidden: true }).catch(function () { /* 忽略 */ });
+    }
+  }
+
+  // orderedEngineList 返回【按用户拖动顺序排列】的启用引擎列表 ——
+  // 与「引擎」页看到的顺序完全一致（用户明确要求两处顺序必须相同）。
+  //
+  // 只按 ord，【不按 isDefault】：设为默认不该把引擎插队到第一位，
+  // 顺序的唯一来源是用户在引擎列表里的拖动。
+  // 后端 ListEngines 已按 ord 排，这里再排一次是双保险：
+  // 降级模式（内存后端）不走 SQL，顺序只由这份前端逻辑保证。
+  //
+  // 宿主 AI 可用时追加一条合成引擎（不落库）。
+  function orderedEngineList() {
+    var list = (E && E.enabledEngines) ? E.enabledEngines() : [];
+    list = list.slice().sort(function (a, b) {
+      return (a.ord || 0) - (b.ord || 0);
+    });
+    if (state.hostAi && state.hostAi.configured) {
+      list.push(makeHostAiEngine());
+    }
+    return list;
+  }
+
+  function makeHostAiEngine() {
+    var label = t("hostAiEngine");
+    if (state.hostAi.profileName) { label = label + " · " + state.hostAi.profileName; }
+    return {
+      id: HOST_AI_ID,
+      kind: "host_ai",
+      name: label,
+      enabled: true,
+      isDefault: false,
+      builtin: false,
+      hostAi: true,
+      ord: 9999
+    };
+  }
+
+  function isHostAiEngine(e) {
+    return !!(e && (e.id === HOST_AI_ID || e.hostAi || e.kind === "host_ai"));
+  }
+
+  function engineKindInfo(e) {
+    if (isHostAiEngine(e)) {
+      return {
+        kind: "host_ai",
+        label: t("hostAiEngine"),
+        labelEn: "Host AI",
+        streaming: true,
+        icon: "default.svg",
+        languages: ((E && E.languages) ? E.languages() : []).map(function (l) { return l.code; })
+      };
+    }
+    return (E && E.kindInfo) ? (E.kindInfo(e.kind) || {}) : {};
+  }
+
+  function refreshHostAi() {
+    if (!S || typeof S.hostAiStatus !== "function") {
+      state.hostAi = { configured: false, profileName: "", model: "" };
+      return Promise.resolve(state.hostAi);
+    }
+    return S.hostAiStatus().then(function (st) {
+      state.hostAi = {
+        configured: !!(st && st.configured),
+        profileName: (st && st.profileName) || "",
+        model: (st && st.model) || ""
+      };
+      show("btn-err-use-host-ai", state.hostAi.configured);
+      return state.hostAi;
+    });
+  }
+
+  // updateEngineButton 同步下拉按钮上显示的图标与文案（= 当前选中引擎）。
+  function updateEngineButton() {
+    var lbl = $("sel-engine-btn-label");
+    var box = $("sel-engine-btn-icon");
+    var e = currentEngine();
+    if (lbl) { lbl.textContent = e ? engineName(e) : (state.engineList.length ? "—" : t("noEngine")); }
+    if (box) {
+      box.textContent = "";
+      if (e) { box.appendChild(S.engineIcon(engineKindInfo(e), engineName(e))); }
+    }
+    var btn = $("sel-engine-btn");
+    if (btn) { btn.setAttribute("aria-expanded", state.engineMenuOpen ? "true" : "false"); }
+    // 提示条跟着「当前引擎」走，而 updateEngineButton 是所有变化的汇聚点，
+    // 挂在这里就不会出现「换了引擎但提示没更新」这种漏网路径。
+    updateFreeNotice();
+  }
+
+  // selectEngine 是「换引擎」的唯一入口：写状态 + 持久化 + 刷新界面。
+  // 换引擎后语言支持范围会变（不同引擎语言集不同），所以要重算语言下拉。
+  function selectEngine(id) {
+    if (!id) { return; }
+    if (id !== state.currentEngineId) {
+      state.currentEngineId = id;
+      persistEngineSelection(id);
+      renderEngineSelect();
+      renderLangSelects();
+    }
+    closeEngineMenu();
+  }
+
+  function openEngineMenu() {
+    // 开菜单前轻量再探测宿主 AI；配置变化才重绘，避免下拉闪烁
+    var was = !!(state.hostAi && state.hostAi.configured);
+    refreshHostAi().then(function () {
+      var now = !!(state.hostAi && state.hostAi.configured);
+      if (now !== was && state.engineMenuOpen) {
+        renderEngineSelect();
+        var m2 = $("sel-engine-menu");
+        var anchor2 = $("sel-engine");
+        if (m2) {
+          m2.hidden = false;
+          if (S && S.fitDropdownMenu) { S.fitDropdownMenu(m2, anchor2); }
+        }
+      }
+    }).catch(function () { /* ignore */ });
+    var m = $("sel-engine-menu");
+    var anchor = $("sel-engine");
+    if (m) {
+      m.hidden = false;
+      // 取消隐藏之后才能量到最长选项的宽度，顺序不能反
+      if (S && S.fitDropdownMenu) { S.fitDropdownMenu(m, anchor); }
+    }
+    state.engineMenuOpen = true;
+    updateEngineButton();
+  }
+
+  function closeEngineMenu() {
+    var m = $("sel-engine-menu");
+    if (m) { m.hidden = true; }
+    state.engineMenuOpen = false;
+    updateEngineButton();
+  }
+
+  // defaultEngineId 返回列表里的默认引擎 id；没有默认则返回第一个（有序列表的第一项）。
+  function defaultEngineId(list) {
+    for (var i = 0; i < list.length; i++) { if (list[i].isDefault) { return list[i].id; } }
+    return list.length ? list[0].id : "";
+  }
+
+  // persistEngineSelection 把当前选择的引擎 id 写进 prefs，跨会话记住。
+  // 只有用户在翻译页主动切换引擎、或顺序/默认变化触发重置时才会写，
+  // 其它情况（例如临时回退默认）不覆盖用户记忆。
+  function persistEngineSelection(id) {
+    state.prefs.currentEngineId = id || "";
+    if (S && S.setPrefs) { S.setPrefs({ currentEngineId: id || "" }).catch(function () { /* 忽略 */ }); }
+  }
+
+  function updateEngineBadge() {
+    // 徽标要带引擎图标，所以不能再用 txt()（它只写纯文本）。
+    // 这里全程用 createElement + textContent，绝不拼 innerHTML ——
+    // 引擎名是用户输入，属于不可信数据（见 AGENTS.md 铁律与 XSS 约束）。
+    var box = $("engine-badge");
+    if (!box) { return; }
+    box.textContent = "";
+    var e = currentEngine();
+    if (!e) { box.appendChild(document.createTextNode("\u2014")); return; }
+    var kindInfo = (typeof E !== "undefined" && E && E.kindInfo) ? (E.kindInfo(e.kind) || {}) : {};
+    box.appendChild(S.engineIcon(kindInfo, engineName(e)));
+    var name = document.createElement("span");
+    name.textContent = engineName(e);
+    box.appendChild(name);
+  }
+
+  function updateNoEngineState() {
+    var has = orderedEngineList().length > 0;
+    show("no-engine", !has);
+    var panes = document.querySelector(".translate-panes");
+    if (panes) { panes.hidden = !has; }
+    var toolbar = document.querySelector(".translate-toolbar");
+    if (toolbar) { toolbar.hidden = !has; }
+    var actions = document.querySelector(".translate-actions");
+    if (actions) { actions.hidden = !has; }
+    var notice = $("free-notice");
+    if (notice && !has) { notice.hidden = true; }
+    if (!has) { hideErrorActions(); }
+  }
+
+  /* ============ 翻译执行 ============ */
+
+  // doTranslate 执行一次翻译。
+  //
+  // instant=true 表示由「输入即译」触发：此时会先取消上一个在飞任务，
+  // 并且长度超限时不报错、只在提示区说明（用户还在打字，弹错误太吵）。
+  function doTranslate(instant) {
+    var text = val("src-text");
+    if (!text || !text.trim()) {
+      if (!instant) { toast(t("emptySource"), "warn"); }
+      return;
+    }
+    var eng = currentEngine();
+    if (!eng) {
+      if (!instant) { toast(t("noEngineTitle"), "warn"); }
+      return;
+    }
+
+    // 即时翻译的长度上限：超长文本自动翻译会打爆配额，
+    // 而且用户还在打字，翻译到一半就被下一次输入取消了，纯属浪费。
+    var maxAuto = Number(state.prefs.instantMaxLength || 2000);
+    if (instant && text.length > maxAuto) {
+      setHint(t("tooLongForInstant", { n: text.length }), "warn");
+      return;
+    }
+
+    // 取消上一个在飞任务：这是即时翻译不浪费配额的关键。
+    // 不取消的话，用户打一句话会触发十几次翻译请求，全部跑完。
+    cancelCurrentTask(true);
+    hideErrorActions();
+
+    var useStream = state.prefs.streamEnabled !== false;
+    setTranslating(true);
+    resetTarget();
+    state.streamBuffer = "";
+    state.streamStart = Date.now();
+
+    if (isHostAiEngine(eng)) {
+      doHostAiTranslate(text, useStream);
+      return;
+    }
+
+    if (!S.isSidecarAlive()) {
+      setTranslating(false);
+      toast(t("statusNoSidecar"), "error");
+      return;
+    }
+
+    var payload = {
+      engineId: eng.id,
+      text: text,
+      sourceLang: state.sourceLang || "auto",
+      targetLang: state.targetLang || "zh"
+    };
+
+    if (useStream) {
+      S.translateStart(payload).then(function (res) {
+        if (!res || res.ok === false) {
+          var msg = (res && res.message) || t("unknownError");
+          setTranslating(false);
+          setHint(msg, "error");
+          return;
+        }
+        // 记录 taskId：后续所有事件都靠它做竞态过滤
+        state.taskId = res.taskId || "";
+        S.log("translate/start", true, "taskId=" + state.taskId);
+      }).catch(function (err) {
+        setTranslating(false);
+        setHint((err && err.message) || String(err), "error");
+      });
+    } else {
+      // 非流式：一次性拿完整结果
+      state.taskId = "";
+      S.translateRun(payload).then(function (res) {
+        setTranslating(false);
+        if (!res || res.ok === false) {
+          setHint((res && res.message) || t("unknownError"), "error");
+          return;
+        }
+        appendTarget(res.target || "", true);
+        showMeta(res);
+        setHint("", "");
+        refreshHistoryIfVisible();
+      }).catch(function (err) {
+        setTranslating(false);
+        setHint((err && err.message) || String(err), "error");
+      });
+    }
+  }
+
+  function buildHostAiSystemPrompt(srcLang, dstLang) {
+    var src = srcLang || state.sourceLang || "auto";
+    var dst = dstLang || state.targetLang || "zh";
+    var srcLabel = src === "auto" ? "auto-detect" : (langLabel(src) || src);
+    var dstLabel = langLabel(dst) || dst;
+    return "You are a professional translator. Translate the user's text from " +
+      srcLabel + " to " + dstLabel +
+      ". Output ONLY the translation — no quotes, no preamble, no explanation.";
+  }
+
+  function doHostAiTranslate(originalText, useStream) {
+    var requestId = "tr-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+    state.taskId = requestId;
+
+    var run = function (prepared) {
+      if (state.taskId !== requestId) { return; }
+      var promptText = (prepared && prepared.text) || originalText;
+      var srcLang = (prepared && prepared.sourceLang) || state.sourceLang || "auto";
+      var dstLang = (prepared && prepared.targetLang) || state.targetLang || "zh";
+      if (prepared && prepared.direction) { applyDirection(prepared.direction); }
+
+      var params = {
+        prompt: promptText,
+        systemPrompt: buildHostAiSystemPrompt(srcLang, dstLang),
+        requestId: requestId,
+        stream: !!useStream
+      };
+      return S.hostAiChat(params).then(function (res) {
+        if (state.taskId !== requestId) { return; }
+        state.taskId = "";
+        setTranslating(false);
+        var reply = (res && res.reply) || "";
+        // 流式结束偶发空 reply：保留已增量拼好的译文
+        if (!reply && state.streamBuffer) { reply = state.streamBuffer; }
+        if (!reply) {
+          setHint(t("unknownError"), "error");
+          return;
+        }
+        setTarget(reply);
+        var elapsed = Date.now() - state.streamStart;
+        showMeta({
+          elapsedMs: elapsed,
+          engine: t("hostAiEngine"),
+          model: (res && (res.model || res.profileName)) || state.hostAi.model || ""
+        });
+        setHint("", "");
+        hideErrorActions();
+        recordHostAiHistory(originalText, reply, srcLang, dstLang, elapsed);
+        refreshHistoryIfVisible();
+      }).catch(function (err) {
+        if (state.taskId !== requestId) { return; }
+        state.taskId = "";
+        setTranslating(false);
+        var msg = (err && err.message) || String(err);
+        if (/cancel/i.test(msg)) { setHint(t("cancelled"), "warn"); }
+        else { setHint(msg, "error"); }
+      });
+    };
+
+    // 侧车可用时走 prepare（分词 + 方向自适应）；不可用则直接送原文
+    if (S.isSidecarAlive && S.isSidecarAlive() && S.prepareText) {
+      S.prepareText({
+        text: originalText,
+        sourceLang: state.sourceLang || "auto",
+        targetLang: state.targetLang || "zh"
+      }).then(function (prep) {
+        return run(prep && prep.ok !== false ? prep : null);
+      }).catch(function () { return run(null); });
+    } else {
+      run(null);
+    }
+  }
+
+  function recordHostAiHistory(source, target, srcLang, dstLang, elapsedMs) {
+    if (!S || typeof S.addHistory !== "function" || !S.isSidecarAlive()) { return; }
+    S.addHistory({
+      engineId: HOST_AI_ID,
+      engineName: t("hostAiEngine"),
+      engineKind: "host_ai",
+      source: source,
+      target: target,
+      sourceLang: srcLang || "auto",
+      targetLang: dstLang || "zh",
+      elapsedMs: elapsedMs || 0
+    }).catch(function (err) {
+      S.log("history/add (host AI)", false, (err && err.message) || String(err));
+    });
+  }
+
+  // cancelCurrentTask 取消当前在飞任务。
+  //
+  // silent=true 时不弹提示（用于「新翻译开始前取消旧的」这种内部场景，
+  // 用户并没有主动点取消，弹提示会很吵）。
+  function cancelCurrentTask(silent) {
+    if (!state.taskId) { return; }
+    var id = state.taskId;
+    state.taskId = "";   // 立即清空，让后续事件被竞态过滤丢弃
+    if (id.indexOf("tr-") === 0 && S.hostAiCancel) {
+      S.hostAiCancel(id).catch(function () { /* ignore */ });
+    } else {
+      S.translateCancel(id).catch(function () { /* 取消失败不影响新任务 */ });
+    }
+    if (!silent) {
+      setTranslating(false);
+      setHint(t("cancelled"), "warn");
+    }
+  }
+
+  /* ============ 流式事件处理 ============
+   * 这是整个前端最关键的正确性保证。
+   *
+   * 竞态场景：用户输入 "hello world"，防抖触发了两次翻译
+   * （"hello" 和 "hello world"）。如果 "hello" 的响应晚到，
+   * 没有 taskId 过滤就会把 "hello world" 的正确译文覆盖掉。
+   *
+   * 因此每个事件都先比对 taskId，不匹配直接丢弃。
+   */
+  function onSidecarEvent(method, params) {
+    if (!params) { return; }
+
+    // 宿主 AI 流式增量（requestId 对齐 taskId）
+    if (method === "host.ai.chat.delta") {
+      if (state.taskId && params.requestId && params.requestId !== state.taskId) { return; }
+      if (params.delta) { appendTarget(params.delta, false); }
+      return;
+    }
+
+    // 结果视图 / 右键菜单写入 pending：工作台已开时立即取走
+    if (method === "translate/pending") {
+      if (state.bootDone) { takePendingText(); }
+      return;
+    }
+
+    // 竞态过滤：不属于当前任务的事件一律丢弃
+    if (state.taskId && params.taskId && params.taskId !== state.taskId) {
+      return;
+    }
+
+    if (method === "translate/chunk") {
+      appendTarget(params.text || "", false);
+      return;
+    }
+
+    if (method === "translate/end") {
+      // 任务结束：清空 taskId，之后该任务的迟到事件会被上面的过滤丢弃
+      state.taskId = "";
+      setTranslating(false);
+      // 用 end 事件里的完整译文覆盖增量拼接结果：
+      // 侧车做过 cleanTranslation 清洗（剥离「译文：」前缀、包裹引号等），
+      // 而增量拼接的原始流没有清洗过。以清洗后的为准。
+      if (params.target) { setTarget(params.target); }
+      showMeta(params);
+      setHint("", "");
+      hideErrorActions();
+      refreshHistoryIfVisible();
+      return;
+    }
+
+    if (method === "translate/error") {
+      state.taskId = "";
+      setTranslating(false);
+      // -32034 是用户主动取消，不算错误，不弹红色提示
+      if (params.code === -32034) {
+        setHint(t("cancelled"), "warn");
+      } else {
+        setHint(params.message || t("unknownError"), "error");
+      }
+      return;
+    }
+  }
+
+  /* ============ 译文区渲染 ============ */
+
+  function resetTarget() {
+    var el = $("dst-text");
+    if (el) { el.textContent = ""; }
+    show("dst-empty", true);
+    txt("dst-count", "0");
+    txt("translate-meta", "");
+    state.autoScroll = true;
+  }
+
+  // appendTarget 增量追加译文。
+  //
+  // 用 textContent 拼接而非 innerHTML：译文来自不可信的上游模型，
+  // 用 innerHTML 会让「模型返回 <img onerror=...>」变成 XSS。
+  function appendTarget(text, isFinal) {
+    var el = $("dst-text");
+    if (!el) { return; }
+    if (!text) { return; }
+    show("dst-empty", false);
+    state.streamBuffer += text;
+    el.textContent = state.streamBuffer;
+    txt("dst-count", String(state.streamBuffer.length));
+    showCursor(!isFinal && state.streaming);
+    if (state.autoScroll) { scrollDstToBottom(); }
+  }
+
+  function setTarget(text) {
+    var el = $("dst-text");
+    if (!el) { return; }
+    state.streamBuffer = text || "";
+    el.textContent = state.streamBuffer;
+    txt("dst-count", String(state.streamBuffer.length));
+    show("dst-empty", !state.streamBuffer);
+    showCursor(false);
+  }
+
+  function showCursor(yes) {
+    state.streaming = !!yes;
+    show("dst-cursor", !!yes);
+  }
+
+  function scrollDstToBottom() {
+    var wrap = $("dst-wrap");
+    if (wrap) { wrap.scrollTop = wrap.scrollHeight; }
+  }
+
+  // applyDirection 把侧车「方向自适应」的结果落到界面上。
+  //
+  // 为什么要动下拉框：用户设的是 中→英，贴进来一段中文时侧车会换成 英→中（或反向）。
+  // 只悄悄换而不显示，用户会以为「目标语言选错了」；把下拉同步过去，
+  // 界面说的就是实际发生的事（IDEA 插件也是这么做的）。
+  //
+  // 【只改本次会话的选择，不写 prefs.defaultSourceLang/defaultTargetLang】：
+  // 用户设置的默认方向不该被一次输入悄悄改掉。
+  function applyDirection(d) {
+    if (!d || !d.toTarget) { return; }
+    if (d.toSource === d.fromSource && d.toTarget === d.fromTarget) { return; }
+    state.sourceLang = d.toSource;
+    state.targetLang = d.toTarget;
+    setVal("sel-source-lang", d.toSource);
+    setVal("sel-target-lang", d.toTarget);
+    var msg = t("directionSwapped")
+      .replace("{detected}", langLabel(d.detected))
+      .replace("{from}", langLabel(d.toSource === "auto" ? d.detected : d.toSource))
+      .replace("{to}", langLabel(d.toTarget));
+    setHint(msg, "");
+  }
+
+  // langLabel 取语言码的界面显示名；查不到就退回码本身，不抛错。
+  function langLabel(code) {
+    if (!code) { return ""; }
+    var langs = (E && E.languages) ? E.languages() : [];
+    for (var i = 0; i < langs.length; i++) {
+      if (langs[i].code === code) { return isZh() ? langs[i].zh : langs[i].en; }
+    }
+    return code;
+  }
+
+  function showMeta(res) {
+    if (!res) { return; }
+    applyDirection(res.direction);
+    var parts = [];
+    if (res.elapsedMs) { parts.push(res.elapsedMs + " ms"); }
+    if (res.chunks && res.chunks > 1) {
+      parts.push(t("metaChunks", { n: res.chunks }));
+    }
+    if (res.engine) { parts.push(res.engine); }
+    if (res.model) { parts.push(res.model); }
+    txt("translate-meta", parts.join(" · "));
+  }
+
+  function setTranslating(yes) {
+    setDisabled("btn-translate", yes);
+    var btn = $("btn-translate");
+    if (btn) { btn.textContent = yes ? t("translating") : t("translate"); }
+    show("btn-cancel", yes);
+    if (yes) { showCursor(true); }
+  }
+
+  function setHint(msg, kind) {
+    var el = $("translate-hint");
+    if (!el) { return; }
+    el.textContent = msg || "";
+    el.className = "hint" + (kind ? " " + kind : "");
+    if (kind === "error" && msg) { maybeShowErrorActions(msg); }
+    else if (!msg) { hideErrorActions(); }
+  }
+
+  function hideErrorActions() {
+    show("translate-error-actions", false);
+  }
+
+  // 免费引擎失败时给出可操作引导（换 OpenAI / 改用宿主 AI）。
+  function maybeShowErrorActions(msg) {
+    var eng = currentEngine();
+    if (!eng || !eng.builtin) { hideErrorActions(); return; }
+    var low = String(msg || "").toLowerCase();
+    var guide = "";
+    if (/400|too long|过长|字符|char|limit|上限/.test(low)) {
+      guide = t("errTooLong");
+    } else if (/429|rate|限流|quota|qps|繁忙|timeout|超时|503|502|网络/.test(low)) {
+      guide = t("errRateLimit");
+    }
+    if (guide) {
+      var el = $("translate-hint");
+      if (el && el.textContent.indexOf(guide) < 0) {
+        el.textContent = el.textContent + " · " + guide;
+      }
+    }
+    show("translate-error-actions", true);
+    // 失败瞬间再探测一次：用户可能刚配好宿主 AI
+    refreshHostAi().then(function () {
+      show("btn-err-use-host-ai", !!(state.hostAi && state.hostAi.configured));
+    }).catch(function () {
+      show("btn-err-use-host-ai", !!(state.hostAi && state.hostAi.configured));
+    });
+  }
+
+  function refreshHistoryIfVisible() {
+    if (state.view === "history" && H) { H.load(); }
+  }
+
+  /* ============ 即时翻译 ============
+   * 防抖 + 最小长度 + 长度上限三重控制。
+   *
+   * 为什么需要最小长度：用户刚打第一个字符就发请求，
+   * 翻译 "h" 毫无意义，还白白消耗一次配额。
+   */
+  function onSourceInput() {
+    var text = val("src-text");
+    txt("src-count", String(text.length));
+
+    if (!isChecked("chk-instant") || state.prefs.instantEnabled === false) { return; }
+
+    var minChars = Number(state.prefs.instantMinChars || 2);
+    var debounce = Number(state.prefs.instantDebounceMs || 600);
+
+    if (state.instantTimer) { clearTimeout(state.instantTimer); state.instantTimer = null; }
+
+    // 与上次自动翻译的文本相同就不重复触发
+    // （例如用户只是移动了光标，内容没变）
+    if (text === state.lastInstantText) { return; }
+    if (text.trim().length < minChars) { return; }
+
+    state.instantTimer = setTimeout(function () {
+      state.instantTimer = null;
+      var cur = val("src-text");
+      if (cur === state.lastInstantText) { return; }
+      state.lastInstantText = cur;
+      doTranslate(true);
+    }, debounce);
+  }
+
+  /* ============ 设置页 ============ */
+
+  function renderSettings() {
+    var st = S.status();
+    txt("info-datadir", st.dataDir || "—");
+    txt("info-dbpath", st.dbPath || "—");
+    txt("info-version", st.sidecarVersion || "—");
+
+    var scheme = st.secretScheme || "—";
+    // 文案必须走 i18n：硬编码中文会让英文界面下仍显示中文，
+    // 而这类问题在中文环境里测不出来，只有切到英文才暴露。
+    var secure = st.secretSecure ? t("secretSecureYes") : t("secretSecureNo");
+    txt("info-secret", scheme + " " + secure);
+
+    setChecked("set-instant-enabled", state.prefs.instantEnabled !== false);
+    setVal("set-instant-debounce", state.prefs.instantDebounceMs || 600);
+    setVal("set-instant-minchars", state.prefs.instantMinChars || 2);
+    setVal("set-instant-maxlength", state.prefs.instantMaxLength || 2000);
+    setChecked("set-stream-enabled", state.prefs.streamEnabled !== false);
+    // 缺省即开启：不拆词时机器翻译多半原样吐回，那才是更糟的默认
+    setChecked("set-identifier-split", state.prefs.identifierSplitEnabled !== false);
+    // 缺省即开启：目标语系和原文撞车时，不换向的结果就是「译文=原文」
+    setChecked("set-auto-direction", state.prefs.autoDirectionEnabled !== false);
+    setVal("set-chunk-delay", state.prefs.chunkDelayMs === undefined ? 1100 : state.prefs.chunkDelayMs);
+    setVal("set-history-limit", state.prefs.historyLimit || 500);
+    setVal("set-default-source", state.prefs.defaultSourceLang || "auto");
+    setVal("set-default-target", state.prefs.defaultTargetLang || "zh");
+
+    // 外观信息（只读展示，不可修改 —— 主题与语言一律跟随宿主 DataWise）
+    renderAppearanceInfo();
+  }
+
+  function saveSettings() {
+    var payload = {
+      instantEnabled: isChecked("set-instant-enabled"),
+      instantDebounceMs: Number(val("set-instant-debounce")) || 600,
+      instantMinChars: Number(val("set-instant-minchars")) || 2,
+      instantMaxLength: Number(val("set-instant-maxlength")) || 2000,
+      streamEnabled: isChecked("set-stream-enabled"),
+      identifierSplitEnabled: isChecked("set-identifier-split"),
+      autoDirectionEnabled: isChecked("set-auto-direction"),
+      chunkDelayMs: Number(val("set-chunk-delay")) || 0,
+      historyLimit: Number(val("set-history-limit")) || 500,
+      defaultSourceLang: val("set-default-source") || "auto",
+      defaultTargetLang: val("set-default-target") || "zh"
+    };
+    txt("settings-status", "");
+    S.setPrefs(payload).then(function (res) {
+      if (res && res.prefs) { state.prefs = res.prefs; }
+      applyPrefsToUI();
+      txt("settings-status", t("settingsSaved"));
+      toast(t("settingsSaved"), "ok");
+    }).catch(function (err) {
+      txt("settings-status", (err && err.message) || String(err));
+      reportErr("保存设置", err);
+    });
+  }
+
+  // applyPrefsToUI 把偏好同步到翻译页的控件上。
+  function applyPrefsToUI() {
+    setChecked("chk-instant", state.prefs.instantEnabled !== false);
+    // 流式开关只留在设置页（set-stream-enabled），工具栏不再重复。
+    if (typeof state.prefs.paneRatio === "number") {
+      state.paneRatio = Math.min(0.8, Math.max(0.2, state.prefs.paneRatio));
+    }
+    if (!state.sourceLang) { state.sourceLang = state.prefs.defaultSourceLang || "auto"; }
+    if (!state.targetLang) { state.targetLang = state.prefs.defaultTargetLang || "zh"; }
+    applyPaneLayout();
+  }
+
+  /* ============ 状态条与警示条 ============ */
+
+  function renderStatus() {
+    var st = S.status();
+    var dot = $("status-dot");
+    var text = $("status-text");
+
+    if (!st.sidecarAvailable) {
+      if (dot) { dot.className = "status-dot err"; }
+      if (text) { text.textContent = st.sidecarError || t("statusNoSidecar"); }
+    } else if (!st.dbOk) {
+      if (dot) { dot.className = "status-dot warn"; }
+      if (text) { text.textContent = t("statusNoDb"); }
+    } else {
+      if (dot) { dot.className = "status-dot ok"; }
+      if (text) { text.textContent = t("statusReady"); }
+    }
+    txt("status-version", "v" + (st.sidecarVersion || S.VERSION));
+
+    // 未持久化警示条：数据只在内存里，刷新即丢。必须醒目告知。
+    show("banner-not-persistent", !st.persistent);
+    if (!st.persistent) {
+      txt("banner-not-persistent-text",
+        st.sidecarAvailable ? t("statusNoDb") : (st.sidecarError || t("statusNoSidecar")));
+    }
+
+    // 密钥仅混淆保护的警示条（secretSecure=false）
+    show("banner-insecure-secret", st.sidecarAvailable === true && st.secretSecure === false);
+    if (st.secretSecure === false && st.sidecarAvailable) {
+      txt("banner-insecure-secret-text", t("insecureSecretBanner"));
+    }
+  }
+
+  /* ============ 导出 / 导入 ============ */
+
+  function actExport() {
+    confirmDialog({
+      title: t("exportTitle"),
+      lines: [
+        { text: t("exportQuestion") }
+      ],
+      options: [
+        { value: "no", label: t("exportWithoutSecrets") },
+        { value: "yes", label: t("exportWithSecrets") }
+      ],
+      yesText: t("exportData"),
+      danger: false
+    }).then(function (yes) {
+      if (!yes) { return; }
+      var includeSecrets = confirmChoice() === "yes";
+      var go = function () {
+        S.exportData(includeSecrets).then(function (res) {
+          if (!res || !res.ok) {
+            toast((res && res.message) || t("unknownError"), "error");
+            return;
+          }
+          return saveExported(res);
+        }).catch(function (err) { reportErr("导出", err); });
+      };
+      if (!includeSecrets) { go(); return; }
+      // 含密钥时再确认一次明文风险（默认「不含」时不吓人）
+      confirmDialog({
+        title: t("exportTitle"),
+        lines: [{ text: t("exportSecretWarning"), cls: "warn" }],
+        yesText: t("exportData"),
+        danger: true
+      }).then(function (ok) { if (ok) { go(); } });
+    });
+  }
+
+  // saveExported 把导出内容交给用户。
+  //
+  // DataWise 下优先复制到剪贴板（saveFile 并非总是可用），并明确告知
+  // 「粘贴到文件保存」。若宿主另有 saveFile，再额外尝试一次「另存为」。
+  function saveExported(res) {
+    var bytes = base64ToBytes(res.dataBase64 || "");
+    var text = "";
+    try { text = new TextDecoder("utf-8").decode(bytes); } catch (e) { text = ""; }
+    return S.copyText(text).then(function (ok) {
+      if (!ok) {
+        toast(t("copyFailed"), "error");
+        return;
+      }
+      toast(t("exportCopied"), "ok", 5000);
+      if (!S.hasHostSave()) { return; }
+      // 可选：再弹一次另存为（用户可取消，不影响剪贴板已有内容）
+      return S.saveFile(res.fileName, "application/json", bytes).then(function (r) {
+        if (r && r.ok) { toast(t("exportDone", { path: r.path || res.fileName }), "ok", 4000); }
+      });
+    });
+  }
+
+  function base64ToBytes(b64) {
+    var bin = atob(String(b64 || "").replace(/\s+/g, ""));
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) { out[i] = bin.charCodeAt(i) & 0xff; }
+    return out;
+  }
+
+  function actImport() {
+    confirmDialog({
+      title: t("importTitle"),
+      lines: [{ text: t("importSourceQuestion") }],
+      options: [
+        { value: "clipboard", label: t("importFromClipboard") },
+        { value: "file", label: t("importFromFile") }
+      ],
+      yesText: t("importData"),
+      danger: false
+    }).then(function (yes) {
+      if (!yes) { return; }
+      var src = confirmChoice() || "clipboard";
+      if (src === "file") {
+        var input = $("file-input");
+        if (!input) { return; }
+        input.value = "";
+        input.click();
+        return;
+      }
+      S.readClipboard().then(function (text) {
+        if (!text || !String(text).trim()) {
+          toast(t("pasteEmpty"), "warn");
+          return;
+        }
+        var raw = String(text);
+        var bytes = 0;
+        try { bytes = new TextEncoder().encode(raw).length; } catch (e) { bytes = raw.length; }
+        if (bytes > S.LIMITS.maxUpstreamBytes) {
+          toast(t("importTooLarge", { kb: Math.round(bytes / 1024) }), "error", 5000);
+          return;
+        }
+        var b64;
+        try { b64 = arrayBufferToBase64(raw); } catch (e) { reportErr("读取剪贴板", e); return; }
+        askImportMode(b64);
+      }).catch(function (err) {
+        toast(t("pasteFailed") + ": " + ((err && err.message) || String(err)), "error", 5000);
+      });
+    });
+  }
+
+  function onFileChosen(ev) {
+    var input = ev.target;
+    var file = input && input.files && input.files[0];
+    if (!file) { return; }
+    // 侧车限制导入数据 1.5MB，前端先拦一道，避免读完才发现太大
+    if (file.size > S.LIMITS.maxUpstreamBytes) {
+      toast(t("importTooLarge", { kb: Math.round(file.size / 1024) }), "error", 5000);
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var text = String(reader.result || "");
+      var b64;
+      try { b64 = arrayBufferToBase64(text); } catch (e) { reportErr("读取文件", e); return; }
+      askImportMode(b64);
+    };
+    reader.onerror = function () { toast(t("importReadFailed"), "error"); };
+    reader.readAsText(file, "utf-8");
+  }
+
+  function arrayBufferToBase64(text) {
+    // FileReader.readAsText 给的是字符串，直接对 UTF-8 字节做 base64
+    var bytes = new TextEncoder().encode(text);
+    var bin = "";
+    for (var i = 0; i < bytes.length; i++) { bin += String.fromCharCode(bytes[i]); }
+    return btoa(bin);
+  }
+
+  function askImportMode(b64) {
+    confirmDialog({
+      title: t("importTitle"),
+      lines: [{ text: t("importQuestion") }],
+      options: [
+        { value: "merge", label: t("importMerge") },
+        { value: "replace", label: t("importReplace") }
+      ],
+      yesText: t("importData"),
+      danger: true
+    }).then(function (yes) {
+      if (!yes) { return; }
+      var mode = confirmChoice() || "merge";
+      S.importData(b64, mode).then(function (res) {
+        if (!res || !res.ok) { toast((res && res.message) || t("unknownError"), "error"); return; }
+        var c = res.counts || {};
+        toast(t("importDone", {
+          engines: c.engines || 0, history: c.history || 0, secrets: c.secrets || 0
+        }), "ok", 5000);
+        // 导入后所有缓存都失效了，全部重载
+        return reloadAll();
+      }).catch(function (err) { reportErr("导入", err); });
+    });
+  }
+
+  /* ============ 诊断报告 ============ */
+
+  function actDiag() {
+    var el = $("diag-content");
+    if (el) { el.textContent = S.report(); }
+    show("diag-modal", true);
+  }
+
+  function actCopyDiag() {
+    S.copyText(S.report()).then(function (ok) {
+      toast(ok ? t("copied") : t("copyFailed"), ok ? "ok" : "error");
+    });
+  }
+
+  /* ============ 重连 ============ */
+
+  // reconnect 重新与侧车握手。
+  //
+  // 侧车可能被宿主重启（崩溃、更新、用户手动重启后端），
+  // 此时前端的桥接对象还在但侧车是新进程，需要重新 ping 并刷新状态。
+  function reconnect() {
+    toast(t("reconnecting"), "warn");
+    return S.ping().then(function () {
+      var st = S.status();
+      renderStatus();
+      if (st.sidecarAvailable) {
+        toast(t("reconnected"), "ok");
+        return reloadAll();
+      }
+      toast(t("reconnectFailed"), "error");
+    }).catch(function () {
+      renderStatus();
+      toast(t("reconnectFailed"), "error");
+    });
+  }
+
+  function reloadAll() {
+    return Promise.all([
+      S.getPrefs().then(function (p) { state.prefs = p || {}; applyPrefsToUI(); }),
+      (E ? E.reload() : Promise.resolve())
+    ]).then(function () {
+      renderEngineSelect();
+      renderLangSelects();
+      renderSettings();
+      renderStatus();
+      if (state.view === "history" && H) { H.load(true); }
+    }).catch(function (err) { reportErr("重载数据", err); });
+  }
+
+  /* ============ 事件绑定 ============ */
+
+  function bindEvents() {
+    // 视图切换
+    click("btn-view-translate", function () { switchView("translate"); });
+    click("btn-view-engines", function () { switchView("engines"); });
+    click("btn-view-history", function () { switchView("history"); });
+    click("btn-view-settings", function () { switchView("settings"); });
+
+    // 「更多」菜单
+    click("btn-more", function (ev) {
+      var menu = $("more-menu");
+      var btn = $("btn-more");
+      if (!menu || !btn) { return; }
+      var willShow = menu.hidden;
+      menu.hidden = !willShow;
+      btn.setAttribute("aria-expanded", willShow ? "true" : "false");
+      if (ev && ev.stopPropagation) { ev.stopPropagation(); }
+    });
+    // 点击页面其他地方收起菜单
+    document.addEventListener("click", function (ev) {
+      var menu = $("more-menu");
+      if (!menu || menu.hidden) { return; }
+      var wrap = document.querySelector(".more-wrap");
+      if (wrap && wrap.contains(ev.target)) { return; }
+      menu.hidden = true;
+      var btn = $("btn-more");
+      if (btn) { btn.setAttribute("aria-expanded", "false"); }
+    });
+    click("btn-export", function () { closeMore(); actExport(); });
+    click("btn-import", function () { closeMore(); actImport(); });
+    click("btn-diag", function () { closeMore(); actDiag(); });
+
+    function closeMore() {
+      show("more-menu", false);
+      var btn = $("btn-more");
+      if (btn) { btn.setAttribute("aria-expanded", "false"); }
+    }
+
+    // 翻译页
+    click("btn-translate", function () { doTranslate(false); });
+    click("btn-cancel", function () { cancelCurrentTask(false); });
+    click("btn-swap", swapLang);
+    click("btn-clear-src", function () {
+      setVal("src-text", "");
+      txt("src-count", "0");
+      state.lastInstantText = "";
+      var el = $("src-text");
+      if (el) { el.focus(); }
+    });
+    click("btn-clear-dst", function () { resetTarget(); setHint("", ""); hideErrorActions(); });
+    click("btn-copy-dst", function () {
+      var text = state.streamBuffer || "";
+      if (!text) { return; }
+      S.copyText(text).then(function (ok) {
+        toast(ok ? t("copied") : t("copyFailed"), ok ? "ok" : "error");
+      });
+    });
+    click("btn-paste", actPaste);
+    click("btn-err-add-openai", function () {
+      switchView("engines");
+      if (E && E.openEditor) { E.openEditor(null); }
+    });
+    click("btn-err-use-host-ai", function () {
+      if (!state.hostAi.configured) {
+        toast(t("hostAiUnavailable"), "warn");
+        return;
+      }
+      selectEngine(HOST_AI_ID);
+      hideErrorActions();
+      doTranslate(false);
+    });
+
+    on("src-text", "input", onSourceInput);
+    on("sel-source-lang", "change", function () {
+      state.sourceLang = val("sel-source-lang");
+    });
+    on("sel-target-lang", "change", function () {
+      state.targetLang = val("sel-target-lang");
+    });
+    // 引擎下拉已从原生 <select> 换成自绘下拉：按钮开合，选项走 selectEngine()
+    click("btn-free-notice-go", function () { switchView("engines"); });
+    click("btn-free-notice-close", hideFreeNotice);
+    click("sel-engine-btn", function () {
+      if (state.engineMenuOpen) { closeEngineMenu(); } else { openEngineMenu(); }
+    });
+    // 点击下拉以外区域 / 按 Esc 收起
+    document.addEventListener("click", function (ev) {
+      var sel = $("sel-engine");
+      if (sel && !sel.contains(ev.target)) { closeEngineMenu(); }
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") { closeEngineMenu(); }
+    });
+    // 引擎下拉键盘：↑↓ 移动，Enter 选择
+    document.addEventListener("keydown", function (ev) {
+      if (!state.engineMenuOpen) { return; }
+      var menu = $("sel-engine-menu");
+      if (!menu || menu.hidden) { return; }
+      var items = menu.querySelectorAll(".kind-item");
+      if (!items.length) { return; }
+      var idx = -1;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].classList.contains("is-active") || items[i] === document.activeElement) {
+          idx = i; break;
+        }
+      }
+      if (ev.key === "ArrowDown") {
+        ev.preventDefault();
+        idx = Math.min(items.length - 1, idx + 1);
+        items[idx].focus();
+      } else if (ev.key === "ArrowUp") {
+        ev.preventDefault();
+        idx = Math.max(0, idx < 0 ? 0 : idx - 1);
+        items[idx].focus();
+      } else if (ev.key === "Enter" && document.activeElement && document.activeElement.classList.contains("kind-item")) {
+        ev.preventDefault();
+        document.activeElement.click();
+      }
+    });
+    on("chk-instant", "change", function () {
+      var v = isChecked("chk-instant");
+      state.prefs.instantEnabled = v;
+      S.setPrefs({ instantEnabled: v }).catch(function () { /* 忽略 */ });
+    });
+
+    // 译文区滚动：用户手动上滚后暂停自动滚动，避免"抢滚动条"
+    on("dst-wrap", "scroll", function () {
+      var wrap = $("dst-wrap");
+      if (!wrap) { return; }
+      var atBottom = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 40;
+      state.autoScroll = atBottom;
+    });
+
+    bindPaneSplitter();
+
+    // 设置页
+    click("btn-save-settings", saveSettings);
+
+    click("btn-reconnect", reconnect);
+    click("btn-banner-retry", reconnect);
+    click("btn-banner-diag", actCopyDiag);
+    click("btn-settings-export", actExport);
+    click("btn-settings-import", actImport);
+    click("btn-settings-diag", actDiag);
+
+    // 诊断弹框
+    click("btn-close-diag", function () { show("diag-modal", false); });
+    click("btn-diag-copy", actCopyDiag);
+    var diagModal = $("diag-modal");
+    if (diagModal) {
+      diagModal.addEventListener("click", function (ev) {
+        if (ev.target && ev.target.getAttribute && ev.target.getAttribute("data-close") === "1") {
+          show("diag-modal", false);
+        }
+      });
+    }
+
+    // 确认弹框
+    click("btn-confirm-yes", function () { closeConfirm(true); });
+    click("btn-confirm-no", function () { closeConfirm(false); });
+
+    // 导入文件选择
+    on("file-input", "change", onFileChosen);
+
+    // 快捷键：Ctrl/Cmd+Enter 翻译；Ctrl/Cmd+1/2 原文/译文；Esc 取消
+    document.addEventListener("keydown", function (ev) {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") {
+        ev.preventDefault();
+        if (state.view === "translate") { doTranslate(false); }
+        return;
+      }
+      if ((ev.ctrlKey || ev.metaKey) && (ev.key === "1" || ev.key === "2") && state.view === "translate") {
+        ev.preventDefault();
+        var target = ev.key === "1" ? $("src-text") : $("dst-wrap");
+        if (target) { try { target.focus(); } catch (e) { /* ignore */ } }
+        return;
+      }
+      if (ev.key === "Escape") {
+        if (state.taskId) { cancelCurrentTask(false); return; }
+        show("diag-modal", false);
+      }
+    });
+
+    // 关闭工作台前取消在飞任务（含宿主 AI 的 tr-*）
+    window.addEventListener("beforeunload", function () {
+      try { cancelCurrentTask(true); } catch (e) { /* 忽略 */ }
+    });
+
+    // KeepAlive：切回本工作台时取 pending + 刷新宿主 AI 可用性
+    var onWorkbenchResume = function () {
+      if (!state.bootDone) { return; }
+      takePendingText();
+      refreshHostAi().then(function () { renderEngineSelect(); }).catch(function () { /* ignore */ });
+    };
+    if (S && typeof S.onActive === "function") {
+      try {
+        S.onActive(function (active) {
+          if (active) { onWorkbenchResume(); }
+        });
+      } catch (e) { /* ignore */ }
+    }
+    if (S && typeof S.onFocus === "function") {
+      try { S.onFocus(function () { onWorkbenchResume(); }); } catch (e) { /* ignore */ }
+    }
+    document.addEventListener("datawise-plugin-active", function (ev) {
+      var active = ev && ev.detail && ev.detail.active;
+      if (active) { onWorkbenchResume(); }
+    });
+
+    // 宿主环境变化（主题 / 调色板 / 字体 / 语言切换）
+    // DataWise：优先 onAppearanceChange / onLocaleChange / onHostInfo；
+    // 兼容保留 dbx-plugin-env（capture + window/document 双注册）。
+    var onEnv = function (ev) {
+      try {
+        if (window.TranslationI18N) { window.TranslationI18N.detect(); }
+        applyI18N();
+        applyTheme();
+        renderLangSelects();
+        renderEngineSelect();
+        renderStatus();
+        renderAppearanceInfo();
+        lastEnvSignature = envSignature();
+        var hostLoc = (window.TranslationI18N && window.TranslationI18N.hostLocale)
+          ? window.TranslationI18N.hostLocale() : "?";
+        S.log("宿主环境变化", true,
+          "已刷新主题/字体/语言（宿主 locale=" + hostLoc +
+          "，事件 target=" + (ev && ev.target ? (ev.target === document ? "document" : "window") : "?") + "）");
+      } catch (e) { reportErr("响应环境变化", e); }
+    };
+    window.addEventListener("dbx-plugin-env", onEnv, true);
+    document.addEventListener("dbx-plugin-env", onEnv, true);
+
+    if (S && typeof S.onAppearanceChange === "function") {
+      try { S.onAppearanceChange(function () { onEnv({ target: "appearance" }); }); } catch (e) { /* ignore */ }
+    }
+    if (S && typeof S.onLocaleChange === "function") {
+      try {
+        S.onLocaleChange(function () {
+          if (window.TranslationI18N) { window.TranslationI18N.detect(); }
+          onEnv({ target: "locale" });
+        });
+      } catch (e) { /* ignore */ }
+    }
+    if (S && typeof S.onHostInfo === "function") {
+      try { S.onHostInfo(function () { onEnv({ target: "hostInfo" }); }); } catch (e) { /* ignore */ }
+    }
+
+    if (S && typeof S.onInit === "function") {
+      try {
+        S.onInit(function () {
+          applyTheme();
+          if (window.TranslationI18N) { window.TranslationI18N.detect(); }
+          applyI18N();
+        });
+      } catch (e) { /* ignore */ }
+    }
+
+    startEnvPolling();
+  }
+
+  /* ============ 环境轮询兜底 ============
+   *
+   * 为什么在已有 dbx-plugin-env 监听 + onInit 的情况下还要轮询：
+   *
+   *   事件通道有三重不确定性 —— 新版宿主把事件 target 在 document 且不冒泡、
+   *   老宿主 target 在 window、某些宿主桥接就绪时只发 init 不发 env。
+   *   我已经用「window + document 双注册 + capture + onInit」覆盖了已知情况，
+   *   但宿主行为没有文档保证，未来版本仍可能变。
+   *
+   *   而「语言/主题不跟随」的症状是【静默的】：界面看起来完全正常，
+   *   用户只会觉得「这插件不支持中文」，不会想到是事件没收到。
+   *   这类静默失效最难排查，值得用一层廉价的轮询兜底。
+   *
+   * 成本极低：每 1.5 秒读两个 getter（locale 与 theme.appearance）并比较，
+   *   没有变化就什么都不做。只有真的变了才触发重绘。
+   */
+  // envSignature 是「当前语言 + 外观 + token 数量」的指纹。
+  // 用 token 数量而非内容做比较：宿主换调色板时数量通常也会变，
+  // 而逐 token 深比较每 1.5 秒做一次太浪费。
+  function envSignature() {
+    var loc = "?", app = "?", n = 0;
+    try {
+      if (window.datawisePlugin) {
+        loc = String(window.datawisePlugin.locale || "");
+        var th = (S && typeof S.themeObject === "function") ? S.themeObject() : null;
+        if (th) {
+          app = th.appearance || "?";
+          n = th.tokens ? Object.keys(th.tokens).length : 0;
+        }
+      }
+    } catch (e) { /* 忽略 */ }
+    return loc + "|" + app + "|" + n;
+  }
+
+  function startEnvPolling() {
+    if (envPollTimer) { return; }
+    lastEnvSignature = envSignature();
+    envPollTimer = setInterval(function () {
+      try {
+        var sig = envSignature();
+        if (sig === lastEnvSignature) { return; }   // 无变化，什么都不做
+        lastEnvSignature = sig;
+        S.log("轮询发现宿主环境变化", true, "signature=" + sig);
+        // 与 env 事件走同一条刷新路径，保证行为一致
+        if (window.TranslationI18N) { window.TranslationI18N.detect(); }
+        applyI18N();
+        applyTheme();
+        renderLangSelects();
+        renderEngineSelect();
+        renderStatus();
+        renderAppearanceInfo();
+      } catch (e) { /* 轮询里的异常绝不能中断定时器 */ }
+    }, 1500);
+  }
+
+  // swapLang 交换源语言与目标语言。
+  //
+  // 交换后若源语言变成 auto 是不允许的（目标语言不能是 auto），
+  // 因此当目标是 auto 时改为用「上一次的源语言」，避免产生非法组合。
+  function swapLang() {
+    var src = state.sourceLang, dst = state.targetLang;
+    if (src === "auto") {
+      // 自动检测时无法交换：不知道源语言是什么，交换后目标就成了 auto
+      toast(t("swapLangAutoBlock"), "warn", 3500);
+      return;
+    }
+    state.sourceLang = dst;
+    state.targetLang = src;
+    setVal("sel-source-lang", state.sourceLang);
+    setVal("sel-target-lang", state.targetLang);
+    // 交换后若已有译文，把它搬回原文框，方便"回译校验"
+    if (state.streamBuffer) {
+      setVal("src-text", state.streamBuffer);
+      txt("src-count", String(state.streamBuffer.length));
+      resetTarget();
+    }
+  }
+
+  // actPaste 经 host.clipboard.readText 真正粘贴到原文框。
+  function actPaste() {
+    var el = $("src-text");
+    if (!el) { return; }
+    if (!S || typeof S.readClipboard !== "function") {
+      el.focus();
+      toast(t("pasteShortcutHint"), "warn", 3000);
+      return;
+    }
+    S.readClipboard().then(function (text) {
+      if (!text) { toast(t("pasteEmpty"), "warn"); return; }
+      var start = el.selectionStart != null ? el.selectionStart : el.value.length;
+      var end = el.selectionEnd != null ? el.selectionEnd : el.value.length;
+      var before = el.value.slice(0, start);
+      var after = el.value.slice(end);
+      el.value = before + text + after;
+      var pos = start + text.length;
+      try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+      el.focus();
+      onSourceInput();
+      toast(t("pasted"), "ok");
+    }).catch(function (err) {
+      el.focus();
+      toast(t("pasteFailed") + " · " + t("pasteShortcutHint"), "warn", 4000);
+      S.log("粘贴", false, (err && err.message) || String(err));
+    });
+  }
+
+  /* ============ 分栏布局与分隔条 ============ */
+
+  function applyPaneLayout() {
+    var panes = $("translate-panes");
+    if (!panes) { return; }
+    var wide = (window.innerWidth || 0) >= PANE_ROW_MIN;
+    if (wide) { panes.classList.add("is-row"); }
+    else { panes.classList.remove("is-row"); }
+    var splitter = $("pane-splitter");
+    if (splitter) {
+      splitter.setAttribute("aria-orientation", wide ? "vertical" : "horizontal");
+    }
+    var ratio = state.paneRatio || 0.5;
+    var src = panes.querySelector(".pane-src");
+    var dst = panes.querySelector(".pane-dst");
+    if (src) { src.style.flex = ratio + " 1 0"; }
+    if (dst) { dst.style.flex = (1 - ratio) + " 1 0"; }
+  }
+
+  function bindPaneSplitter() {
+    var splitter = $("pane-splitter");
+    var panes = $("translate-panes");
+    if (!splitter || !panes) { return; }
+    var dragging = false;
+
+    function onMove(ev) {
+      if (!dragging) { return; }
+      var rect = panes.getBoundingClientRect();
+      var row = panes.classList.contains("is-row");
+      var ratio = row
+        ? (ev.clientX - rect.left) / Math.max(1, rect.width)
+        : (ev.clientY - rect.top) / Math.max(1, rect.height);
+      state.paneRatio = Math.min(0.8, Math.max(0.2, ratio));
+      applyPaneLayout();
+    }
+    function onUp() {
+      if (!dragging) { return; }
+      dragging = false;
+      document.body.classList.remove("is-reordering");
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      if (S && S.setPrefs) {
+        S.setPrefs({ paneRatio: state.paneRatio }).catch(function () { /* ignore */ });
+      }
+    }
+    splitter.addEventListener("pointerdown", function (ev) {
+      if (ev.button !== undefined && ev.button !== 0) { return; }
+      dragging = true;
+      document.body.classList.add("is-reordering");
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      ev.preventDefault();
+    });
+    splitter.addEventListener("keydown", function (ev) {
+      var step = (ev.key === "ArrowLeft" || ev.key === "ArrowUp") ? -0.05
+        : (ev.key === "ArrowRight" || ev.key === "ArrowDown") ? 0.05 : 0;
+      if (!step) { return; }
+      ev.preventDefault();
+      state.paneRatio = Math.min(0.8, Math.max(0.2, (state.paneRatio || 0.5) + step));
+      applyPaneLayout();
+      if (S && S.setPrefs) {
+        S.setPrefs({ paneRatio: state.paneRatio }).catch(function () { /* ignore */ });
+      }
+    });
+    window.addEventListener("resize", function () { applyPaneLayout(); });
+    applyPaneLayout();
+  }
+
+  function pendingSourceLabel(source) {
+    if (source === "result-view") { return t("pendingSourceResult"); }
+    if (source === "context-menu") { return t("pendingSourceContext"); }
+    return source || "";
+  }
+
+  // takePendingText：结果视图 / 资源树右键送来的待译文本。
+  // 可被 boot / onActive / onFocus / translate/pending 事件多次调用；侧车取走后清空。
+  var pendingTakeInflight = false;
+  function takePendingText() {
+    if (!S || typeof S.invoke !== "function") { return Promise.resolve(); }
+    if (pendingTakeInflight) { return Promise.resolve(); }
+    pendingTakeInflight = true;
+    return S.invoke("translate/pendingTake", {}, S.TIMEOUTS.rpc).then(function (res) {
+      pendingTakeInflight = false;
+      if (!res || !res.has || !res.text) { return; }
+      setVal("src-text", res.text);
+      txt("src-count", String(res.text.length));
+      switchView("translate");
+      toast(t("pendingLoaded", { source: pendingSourceLabel(res.source) }), "ok", 3500);
+      var src = $("src-text");
+      if (src) { try { src.focus(); } catch (e) { /* ignore */ } }
+      // 有引擎则自动开译，减少多一步点击
+      if (currentEngine()) { doTranslate(false); }
+    }).catch(function (err) {
+      pendingTakeInflight = false;
+      S.log("pendingTake", false, (err && err.message) || String(err));
+    });
+  }
+
+  // applyI18N 刷新所有带 data-i18n 的节点，并同步动态文本。
+  function applyI18N() {
+    if (window.TranslationI18N) { window.TranslationI18N.apply(document); }
+    // 动态生成的文本不在 data-i18n 覆盖范围内，需要单独刷新
+    var btn = $("btn-translate");
+    if (btn && !state.streaming) { btn.textContent = t("translate"); }
+    renderStatus();
+  }
+
+  /* ============ 启动 ============ */
+
+  // boot 是启动入口。
+  //
+  // 【不用 datawisePlugin.ready.then(boot) 卡住启动】：如果宿主因为某种原因
+  // 不发 init 消息，整个界面会永远停在空白状态，用户什么也看不到。
+  // 正确做法是先渲染静态界面，再异步等桥接 —— 即使桥接失败，
+  // 用户至少能看到界面和明确的错误提示。
+  function boot() {
+    S.log("=== 应用启动 ===", null, "UI 版本 " + S.VERSION);
+
+    // 1. 先渲染静态界面（不依赖任何异步结果）
+    //
+    // 注意：此时宿主的 init 消息可能还没到达，datawisePlugin.locale / theme
+    // 读到的是桥接闭包的【初始值】而非真实值。所以这里只是先画出一个
+    // 可用的界面，真正的语言与主题要在 S.init() 完成后【重新探测一次】。
+    if (window.TranslationI18N) { window.TranslationI18N.detect(); }
+    applyI18N();
+    applyTheme();
+    bindEvents();
+    renderStatus();
+
+    // 2. 异步初始化桥接与数据
+    //
+    // E.init / H.init 必须放在 S.init() 【之后】：它们会立刻发起
+    // translate/schema 与 engines/list 调用，桥接未就绪时会失败。
+    // （storage.js 的 rpcRaw 现在会等待桥接，但顺序正确仍是更清晰的做法，
+    //   也能避免诊断日志里出现一堆无意义的 FAIL。）
+    S.init().then(function () {
+      // 桥接就绪后【重新探测语言与主题】—— 这是修复「切换宿主语言没反应」的关键。
+      // init 消息到达时宿主才把真实 locale/theme 写进桥接闭包，
+      // 第 1 步读到的只是初始值（通常是 en / light）。
+      if (window.TranslationI18N) { window.TranslationI18N.detect(); }
+      applyI18N();
+      renderStatus();
+      applyTheme();
+
+      // E.init 会加载 translate/schema（引擎表单的字段定义来源）。
+      // 失败必须显式记录并提示：否则引擎管理页的「新建引擎」表单会是空的，
+      // 用户只看到一个空白弹框，完全不知道是 schema 没加载出来。
+      if (E) {
+        Promise.resolve(E.init(onEnginesChanged)).catch(function (err) {
+          S.log("加载引擎 schema 失败", false, (err && err.message) || String(err));
+          toast(t("schemaLoadFailed"), "error", 6000);
+        });
+      }
+      if (H) { H.init(onReuseHistory); }
+
+      // 桥接不可用：停在降级状态，界面已经渲染出来了，
+      // 用户能看到红色警示条与诊断入口，不至于面对一片空白。
+      if (!S.isSidecarAlive()) {
+        S.log("侧车不可用，进入降级模式", false, S.status().sidecarError);
+        state.bootDone = true;
+        updateNoEngineState();
+        return;
+      }
+
+      // 3. 加载偏好与引擎 + 探测宿主 AI
+      return S.getPrefs().then(function (prefs) {
+        state.prefs = prefs || {};
+        applyPrefsToUI();
+        state.sourceLang = state.prefs.defaultSourceLang || "auto";
+        state.targetLang = state.prefs.defaultTargetLang || "zh";
+        return Promise.all([
+          E ? E.reload() : Promise.resolve(),
+          refreshHostAi()
+        ]);
+      }).then(function () {
+        renderEngineSelect();
+        renderLangSelects();
+        renderSettings();
+        renderStatus();
+        // 恢复上次视图
+        var last = state.prefs.lastView;
+        switchView(last && VIEWS.indexOf(last) >= 0 ? last : "translate");
+        state.bootDone = true;
+        S.log("=== 启动完成 ===", true, "视图=" + state.view +
+          " hostAi=" + (state.hostAi.configured ? "yes" : "no"));
+        // 首屏聚焦原文框，用户打开就能直接打字
+        var src = $("src-text");
+        if (src && state.view === "translate") { try { src.focus(); } catch (e) { /* 忽略 */ } }
+        return takePendingText();
+      });
+    }).catch(function (err) {
+      state.bootDone = true;
+      S.log("启动失败", false, (err && err.message) || String(err));
+      renderStatus();
+    });
+
+    // 4. 订阅侧车事件（流式翻译的通道）
+    //    即使桥接失败也注册：注册本身不会报错，且桥接恢复后能立即生效。
+    S.onSidecarEvent(onSidecarEvent);
+  }
+
+  function onEnginesChanged(engines) {
+    var first = !state.enginesSeen;
+    var prevSig = engineOrderSig(state.engines || []);
+    state.engines = engines || [];
+    state.enginesSeen = true;
+    var curSig = engineOrderSig(state.engines);
+
+    // 【列表顺序】或【默认引擎】变了，就把翻译页选中的引擎重置为默认引擎。
+    // 注意重置的是「选中哪一台」，不是「谁排在第一位」——
+    // 下拉的排列顺序始终等于引擎列表里用户自己拖出来的顺序。
+    // 第一次加载不算变化（prev 是空），否则启动时会把跨会话记住的选择清掉。
+    if (!first && prevSig !== curSig) {
+      state.currentEngineId = "";
+      persistEngineSelection("");
+    }
+    renderEngineSelect();
+    renderLangSelects();
+    updateNoEngineState();
+  }
+
+  // engineOrderSig 计算「顺序 + 默认引擎」的签名：两者之一变了签名就变。
+  //
+  // 顺序部分只关心 id 的排列（= 用户拖出来的 ord），
+  // 默认部分单独编码：设默认会重置「选中哪台」，但不会改变排列。
+  function engineOrderSig(list) {
+    var ids = list.map(function (e) { return e.id; }).join("|");
+    var def = list.filter(function (e) { return e.isDefault; }).map(function (e) { return e.id; }).join(",");
+    return ids + "#" + def;
+  }
+
+  // onReuseHistory 处理「用这条历史重新翻译」：
+  // 把原文与语言对填回翻译页并切过去。
+  function onReuseHistory(item) {
+    if (!item) { return; }
+    setVal("src-text", item.source || "");
+    txt("src-count", String((item.source || "").length));
+    if (item.srcLang) { state.sourceLang = item.srcLang; setVal("sel-source-lang", item.srcLang); }
+    if (item.dstLang) { state.targetLang = item.dstLang; setVal("sel-target-lang", item.dstLang); }
+    if (item.engineId && E && E.findById(item.engineId)) {
+      state.currentEngineId = item.engineId;
+      renderEngineSelect();   // 自绘下拉没有 .value 可写，必须走重渲染
+    }
+    switchView("translate");
+    resetTarget();
+    var src = $("src-text");
+    if (src) { try { src.focus(); } catch (e) { /* 忽略 */ } }
+  }
+
+  /* ============ 对外 API ============ */
+
+  App.boot = boot;
+  App.switchView = switchView;
+  App.toast = toast;
+  App.confirm = confirmDialog;
+  App.translate = function () { doTranslate(false); };
+  App.state = function () { return state; };
+  App.reconnect = reconnect;
+
+  // DOM 就绪后启动。
+  //
+  // 不用 datawisePlugin.ready 卡启动（理由见 boot 注释）。
+  // 兼容「脚本在 DOM 解析完成后才注入」的情况（宿主会把入口脚本内联）。
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+})();

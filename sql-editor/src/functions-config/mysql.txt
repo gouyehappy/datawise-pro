@@ -1,0 +1,15 @@
+# MySQL / MariaDB / OceanBase / TiDB / StarRocks / Doris 函数扩展
+
+[functions]
+DATABASE | () | string
+DATE | (expr: datetime) | date
+DATE_ADD | (date: datetime, INTERVAL expr unit) | datetime
+DATE_FORMAT | (date: date, format: string) | string
+DATE_SUB | (date: datetime, INTERVAL expr unit) | datetime
+DATEDIFF | (expr1: date, expr2: date) | int
+DAY | (date: date) | int
+DAYNAME | (date: date) | string
+DAYOFMONTH | (date: date) | int
+DAYOFWEEK | (date: date) | int
+IFNULL | (expr1, expr2) | any
+JSON_EXTRACT | (json_doc, path) | json

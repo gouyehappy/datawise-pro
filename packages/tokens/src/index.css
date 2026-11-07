@@ -1,0 +1,16 @@
+/**
+ * @datawise/tokens — core aggregate (variables → radii → typography → space → surface)
+ *
+ * Skins / density / text-scale MUST load AFTER feature CSS in the host so they can
+ * override atoms. Import them separately:
+ *   @import '@datawise/tokens/skins/index.css';
+ *   @import '@datawise/tokens/ui-density.css';
+ *   @import '@datawise/tokens/ui-text-scale.css';
+ *
+ * Chrome plugins: @datawise/tokens/plugins/*
+ */
+@import './variables.css';
+@import './radii.css';
+@import './typography.css';
+@import './space.css';
+@import './surface.css';

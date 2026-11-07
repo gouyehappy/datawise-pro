@@ -1,0 +1,60 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.runbook",
+  "name": "Runbook Runner",
+  "version": "0.1.0",
+  "publisher": "datawise-community",
+  "icon": "assets/plugin.svg",
+  "description": "Run local YAML ops playbooks: notes, SQL console, HTTP probes, copied commands, and checklists.",
+  "license": "Apache-2.0",
+  "tags": ["ops", "runbook", "sre"],
+  "permissions": ["host.workbench", "host.events", "host.clipboard", "host.sql"],
+  "engines": { "datawise": ">=4.1.0", "hostApi": "^1.5" },
+  "entrypoints": {
+    "backend": { "executable": "bin/runbook-plugin.jar", "transport": "stdio-jsonl" },
+    "ui": { "root": "ui", "entry": "ui/index.html" }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.runbook.connection",
+      "label": "Runbook library",
+      "capabilities": ["test", "connect"],
+      "fields": [
+        {
+          "key": "libraryPath",
+          "label": "Library path",
+          "type": "text",
+          "binding": "config",
+          "required": true,
+          "placeholder": "C:\\ops\\runbooks",
+          "description": "Folder of *.runbook.yml. Use the demo action if you do not have one yet."
+        }
+      ],
+      "workbench": "io.datawise.community.runbook.workbench",
+      "actions": [
+        {
+          "id": "use-demo",
+          "label": "Use bundled demo runbooks",
+          "variant": "outline",
+          "requires_valid_form": false
+        }
+      ]
+    },
+    { "type": "workbench", "id": "io.datawise.community.runbook.workbench", "label": "Runbook Runner" }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "运维剧本",
+      "description": "执行本机 YAML 运维剧本：说明、SQL 控制台、HTTP 探测、复制命令与检查清单。",
+      "contributions": {
+        "io.datawise.community.runbook.connection": {
+          "label": "剧本库",
+          "fields": { "libraryPath": { "label": "剧本目录" } },
+          "actions": { "use-demo": { "label": "使用自带示例剧本" } }
+        },
+        "io.datawise.community.runbook.workbench": { "label": "运维剧本" }
+      }
+    }
+  }
+}

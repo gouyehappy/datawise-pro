@@ -1,0 +1,37 @@
+/**
+ * Monaco 缩略图 — 窄条、浅色通道、轻量视口框
+ * Host class `.monaco-host` (legacy) + package `.dw-monaco-host`.
+ */
+.monaco-host :deep(.minimap),
+.dw-monaco-host :deep(.minimap) {
+    border-left: 1px solid var(--dw-minimap-border);
+    box-shadow: inset 6px 0 10px -10px var(--dw-minimap-inset-shadow);
+}
+
+.monaco-host :deep(.minimap-slider),
+.dw-monaco-host :deep(.minimap-slider) {
+    background: var(--dw-minimap-slider-bg) !important;
+    border: 1px solid var(--dw-minimap-slider-border) !important;
+    border-radius: var(--dw-control-radius-sm) !important;
+    box-shadow: 0 0 0 1px var(--dw-minimap-slider-ring) inset !important;
+    transition: var(--dw-transition-colors);
+}
+
+.monaco-host :deep(.minimap:hover .minimap-slider),
+.dw-monaco-host :deep(.minimap:hover .minimap-slider) {
+    background: var(--dw-minimap-slider-hover-bg) !important;
+    border-color: var(--dw-minimap-slider-hover-border) !important;
+}
+
+.monaco-host[data-minimap-tone='dark'],
+.dw-monaco-host[data-minimap-tone='dark'] {
+    --dw-minimap-border: rgba(255, 255, 255, 0.07);
+    --dw-minimap-inset-shadow: rgba(0, 0, 0, 0.18);
+    --dw-minimap-slider-bg: rgba(255, 255, 255, 0.05);
+    --dw-minimap-slider-border: rgba(255, 255, 255, 0.16);
+    --dw-minimap-slider-ring: rgba(255, 255, 255, 0.12);
+    --dw-minimap-slider-hover-bg: color-mix(in srgb, var(--dw-primary) 14%, transparent);
+    --dw-minimap-slider-hover-border: color-mix(in srgb, var(--dw-primary) 40%, transparent);
+}
+
+/* Monaco 滚动条由 MonacoEditor 引入 monaco-overlay-scrollbar.css */

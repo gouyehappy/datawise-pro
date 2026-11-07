@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "packId": "pack.migration",
+  "version": "1.0.0-dev",
+  "minCoreVersion": "4.1.0",
+  "maxCoreVersion": "4.99.99",
+  "capabilities": [
+    "migration.full",
+    "migration.wizard"
+  ],
+  "plugins": [
+    "p-migration"
+  ],
+  "extensionPoints": [
+    "explorer.migrate",
+    "wizard.migration"
+  ],
+  "requiresRestart": false,
+  "channel": "stable"
+}

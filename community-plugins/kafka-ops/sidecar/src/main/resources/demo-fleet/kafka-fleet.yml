@@ -1,0 +1,21 @@
+# Kafka Ops fleet inventory — many clusters in one workbench.
+# Optional per cluster: securityProtocol, saslMechanism, username, password, clientId.
+clusters:
+  - id: local
+    name: Local Kafka
+    bootstrapServers: 127.0.0.1:9092
+    securityProtocol: PLAINTEXT
+    tags: [dev, local]
+  - id: staging
+    name: Staging (placeholder)
+    bootstrapServers: 127.0.0.1:19092
+    securityProtocol: PLAINTEXT
+    tags: [staging]
+  - id: secure-demo
+    name: SASL demo (placeholder)
+    bootstrapServers: 127.0.0.1:9093
+    securityProtocol: SASL_PLAINTEXT
+    saslMechanism: PLAIN
+    username: demo
+    password: ""
+    tags: [sasl]

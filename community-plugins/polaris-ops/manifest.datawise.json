@@ -1,0 +1,224 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.polaris-ops",
+  "name": "Polaris Ops",
+  "version": "0.3.12",
+  "publisher": "datawise-community",
+  "description": "PolarIS ops workbench: namespaces, config create/update/delete/clone, and service discovery.",
+  "license": "Apache-2.0",
+  "source": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/polaris-ops",
+  "homepage": "https://github.com/phenixan/datawise-cli",
+  "icon": "assets/plugin.svg",
+  "tags": ["polaris", "config", "discovery", "ops"],
+  "permissions": ["host.workbench", "host.events", "host.clipboard"],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.6"
+  },
+  "entrypoints": {
+    "backend": {
+      "transport": "stdio-jsonl",
+      "executable": "bin/windows-x86_64/datawise-plugin-polaris-ops.exe"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.polaris-ops.connection",
+      "label": "Polaris",
+      "description": "Connect to a PolarIS console for config and discovery ops.",
+      "icon": "assets/plugin.svg",
+      "workbench": "io.datawise.community.polaris-ops.workbench",
+      "capabilities": ["test", "connect", "disconnect"],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Display name",
+          "type": "text",
+          "binding": "name",
+          "default": "Polaris"
+        },
+        {
+          "key": "connect_mode",
+          "label": "Connect by",
+          "type": "select",
+          "binding": "config",
+          "required": true,
+          "default": "url",
+          "options": [
+            { "label": "URL", "value": "url" },
+            { "label": "Host / Port", "value": "host" }
+          ]
+        },
+        {
+          "key": "base_url",
+          "label": "Console URL",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "http://10.0.0.1:8090",
+          "description": "Full PolarIS console URL. Protocol, host, port and path are parsed automatically.",
+          "visible_when": { "field": "connect_mode", "one_of": ["url"] },
+          "required_when": { "field": "connect_mode", "one_of": ["url"] }
+        },
+        {
+          "key": "protocol",
+          "label": "Protocol",
+          "type": "select",
+          "binding": "config",
+          "default": "http",
+          "options": [
+            { "label": "HTTP", "value": "http" },
+            { "label": "HTTPS", "value": "https" }
+          ],
+          "visible_when": { "field": "connect_mode", "one_of": ["host"] },
+          "required_when": { "field": "connect_mode", "one_of": ["host"] }
+        },
+        {
+          "key": "host",
+          "label": "Host",
+          "type": "text",
+          "binding": "host",
+          "placeholder": "127.0.0.1",
+          "visible_when": { "field": "connect_mode", "one_of": ["host"] },
+          "required_when": { "field": "connect_mode", "one_of": ["host"] }
+        },
+        {
+          "key": "port",
+          "label": "Port",
+          "type": "number",
+          "binding": "port",
+          "default": 8090,
+          "visible_when": { "field": "connect_mode", "one_of": ["host"] },
+          "required_when": { "field": "connect_mode", "one_of": ["host"] }
+        },
+        {
+          "key": "context_path",
+          "label": "Context path",
+          "type": "text",
+          "binding": "config",
+          "visible_when": { "field": "connect_mode", "one_of": ["host"] }
+        },
+        {
+          "key": "auth_method",
+          "label": "Authentication",
+          "type": "select",
+          "binding": "config",
+          "required": true,
+          "default": "password",
+          "options": [
+            { "label": "Username / Password", "value": "password" },
+            { "label": "Static token", "value": "token" }
+          ]
+        },
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "binding": "user",
+          "visible_when": { "field": "auth_method", "one_of": ["password"] },
+          "required_when": { "field": "auth_method", "one_of": ["password"] }
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "password",
+          "binding": "password",
+          "visible_when": { "field": "auth_method", "one_of": ["password"] },
+          "required_when": { "field": "auth_method", "one_of": ["password"] }
+        },
+        {
+          "key": "token",
+          "label": "Token",
+          "type": "password",
+          "binding": "secret",
+          "visible_when": { "field": "auth_method", "one_of": ["token"] },
+          "required_when": { "field": "auth_method", "one_of": ["token"] }
+        },
+        {
+          "key": "owner",
+          "label": "Owner",
+          "type": "text",
+          "binding": "config",
+          "default": "polaris"
+        },
+        {
+          "key": "read_only",
+          "label": "Read-only",
+          "type": "boolean",
+          "binding": "config",
+          "default": false
+        },
+        {
+          "key": "insecure_skip_tls",
+          "label": "Skip TLS verify",
+          "type": "boolean",
+          "binding": "config",
+          "default": false
+        },
+        {
+          "key": "connect_timeout_secs",
+          "label": "Connect timeout (s)",
+          "type": "number",
+          "binding": "config",
+          "default": 20
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.polaris-ops.workbench",
+      "label": "Polaris Ops",
+      "description": "Configs (create/update/delete/clone), namespaces, and service discovery for PolarIS.",
+      "icon": "assets/plugin.svg"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Polaris 运维",
+      "description": "PolarIS 运维台：命名空间、配置增删改克隆、服务发现。",
+      "contributions": {
+        "io.datawise.community.polaris-ops.connection": {
+          "label": "Polaris",
+          "description": "连接 PolarIS 控制台，管理配置与服务发现。",
+          "fields": {
+            "display_name": { "label": "显示名称" },
+            "connect_mode": {
+              "label": "连接方式",
+              "options": { "url": "完整 URL", "host": "主机/端口" }
+            },
+            "base_url": {
+              "label": "控制台 URL",
+              "description": "填写完整 PolarIS 控制台地址，自动解析协议、主机、端口与路径。"
+            },
+            "protocol": {
+              "label": "协议",
+              "options": { "http": "HTTP", "https": "HTTPS" }
+            },
+            "host": { "label": "主机" },
+            "port": { "label": "端口" },
+            "context_path": { "label": "上下文路径" },
+            "auth_method": {
+              "label": "认证方式",
+              "options": { "password": "用户名/密码", "token": "静态 Token" }
+            },
+            "username": { "label": "用户名" },
+            "password": { "label": "密码" },
+            "token": { "label": "Token" },
+            "owner": { "label": "Owner" },
+            "read_only": { "label": "只读模式" },
+            "insecure_skip_tls": { "label": "跳过 TLS 校验" },
+            "connect_timeout_secs": { "label": "连接超时(秒)" }
+          }
+        },
+        "io.datawise.community.polaris-ops.workbench": {
+          "label": "Polaris 运维",
+          "description": "配置增删改克隆与服务发现。"
+        }
+      }
+    }
+  }
+}

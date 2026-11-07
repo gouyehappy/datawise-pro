@@ -1,0 +1,25 @@
+name: datawise_dbt_sample
+version: 1.0.0
+config-version: 2
+profile: datawise_dbt_sample
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  active_status: "active"
+
+models:
+  datawise_dbt_sample:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
+
+seeds:
+  datawise_dbt_sample:
+    +quote_columns: false

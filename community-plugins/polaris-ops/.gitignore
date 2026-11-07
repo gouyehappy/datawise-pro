@@ -1,0 +1,6 @@
+.dwp-staging/
+.signing/
+dist/
+frontend/node_modules/
+backend/datawise-plugin-polaris-ops
+backend/datawise-plugin-polaris-ops.exe

@@ -1,0 +1,183 @@
+/**
+ * IDEA Activity / tool stripe — square buttons, icon + short caption.
+ * Metrics from JB SquareStripe: icon 20, pad 5, iconLabelGap 3.
+ */
+.tool-stripe {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    background: var(--dw-bg-chrome);
+}
+
+.tool-stripe--left {
+    width: var(--dw-tool-stripe-width);
+}
+
+.tool-stripe--right {
+    position: relative;
+    width: var(--dw-tool-stripe-width);
+}
+
+.tool-stripe__group {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: 2px;
+    padding: var(--dw-space-2);
+}
+
+.tool-stripe__group--bottom {
+    padding-top: var(--dw-space-2);
+    border-top: 1px solid var(--dw-panel-border);
+}
+
+.tool-stripe__spacer {
+    flex: 1;
+    min-height: 8px;
+}
+
+.tool-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--dw-text-muted);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color var(--dw-duration-fast) var(--dw-ease);
+}
+
+.tool-btn:focus {
+    outline: none;
+}
+
+.tool-btn--stack {
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    gap: var(--dw-tool-icon-caption-gap);
+    min-height: 0;
+    padding: var(--dw-tool-btn-pad) 2px calc(var(--dw-tool-btn-pad) - 1px);
+    border-radius: var(--dw-tool-pill-radius);
+    transition: color var(--dw-duration-fast) var(--dw-ease),
+    background 0.12s ease;
+}
+
+.tool-btn--stack:hover {
+    color: var(--dw-text-secondary);
+    background: var(--dw-tool-hover);
+}
+
+.tool-btn--stack.active {
+    color: var(--dw-text);
+    background: var(--dw-tool-pill-active);
+}
+
+.tool-btn--stack:focus-visible {
+    box-shadow: inset 0 0 0 1px var(--dw-primary-border);
+}
+
+.tool-btn__graphic {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-icon-size-rail);
+    height: var(--dw-icon-size-rail);
+    flex-shrink: 0;
+}
+
+.tool-btn__graphic svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    flex-shrink: 0;
+}
+
+.tool-btn__graphic .ai-icon--fit {
+    width: 100%;
+    height: 100%;
+}
+
+.tool-btn__caption {
+    max-width: 100%;
+    padding: 0;
+    color: inherit;
+    font-size: var(--dw-tool-caption-size);
+    font-weight: 400;
+    line-height: var(--dw-tool-caption-leading);
+    letter-spacing: 0;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tool-btn--stack.active .tool-btn__caption {
+    font-weight: 500;
+}
+
+.tool-btn--brand {
+    min-height: 0;
+    color: var(--dw-text-secondary);
+}
+
+.tool-btn--brand:hover {
+    color: var(--dw-text-secondary);
+    background: transparent;
+}
+
+.tool-btn--brand:hover .app-brand-logo {
+    transform: scale(1.06);
+}
+
+.tool-btn--brand.active {
+    color: var(--dw-text-secondary);
+    background: transparent;
+}
+
+.tool-btn--brand.active .app-brand-logo {
+    transform: scale(1.04);
+}
+
+.tool-btn__graphic--brand {
+    width: 28px;
+    height: var(--dw-btn-height);
+}
+
+.tool-btn__dot {
+    position: absolute;
+    top: -1px;
+    right: -3px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--dw-warning);
+    box-shadow: 0 0 0 1.5px var(--dw-bg-chrome);
+}
+
+.tool-btn__badge {
+    position: absolute;
+    top: -5px;
+    right: -8px;
+    min-width: var(--dw-icon-size-sm);
+    height: var(--dw-icon-size-sm);
+    padding: 0 var(--dw-space-2);
+    border-radius: var(--dw-radius-pill);
+    background: var(--dw-danger);
+    color: var(--dw-on-accent);
+    font-size: var(--dw-text-2xs);
+    font-weight: 600;
+    line-height: var(--dw-text-lg);
+    text-align: center;
+}
+
+.nav-brand {
+    position: relative;
+    flex-shrink: 0;
+    padding: var(--dw-space-2);
+}

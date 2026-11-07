@@ -1,0 +1,26 @@
+export default {
+    minimap: {
+        explorerTitle: 'Move explorer',
+        terminalTitle: 'Move terminal',
+        shortcutTitle: 'Move shortcut rail',
+        workspaceTitle: 'Move workspace',
+        workspace: 'Workspace',
+        center: 'Center',
+        left: 'Left',
+        right: 'Right',
+        bottom: 'Bottom',
+        float: 'Float',
+        escHint: 'Esc to cancel',
+        dragHint: 'Drag the title bar to reposition the panel',
+    },
+    float: {
+        pinBack: 'Pin back to default dock',
+        close: 'Close',
+        popOut: 'Pop out as floating window',
+        maximize: 'Maximize',
+        restore: 'Restore',
+    },
+    resetPlacement: 'Reset panel docking',
+    resetPlacementHint: 'Restore explorer to the left and terminal to the bottom (classic layout).',
+    resetPlacementSuccess: 'Panel docking reset',
+}

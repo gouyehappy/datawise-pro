@@ -1,0 +1,61 @@
+name: Query Library CI
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'examples/query-library/**'
+      - 'headless-cli/**'
+      - '.github/workflows/query-library-ci.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'examples/query-library/**'
+      - 'headless-cli/**'
+      - '.github/workflows/query-library-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: query-library-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: headless-cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: headless-cli/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+      - run: node dist/main.js query-library validate -m ../examples/query-library/query-library.json
+
+  run:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: headless-cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: headless-cli/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Run query library against DataWise
+        env:
+          DATAWISE_SERVER: ${{ secrets.DATAWISE_SERVER }}
+          DATAWISE_API_TOKEN: ${{ secrets.DATAWISE_API_TOKEN }}
+        run: node dist/main.js query-library run -m ../examples/query-library/query-library.json

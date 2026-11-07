@@ -1,0 +1,678 @@
+/**
+ * Settings chrome: shell bg, heads, blocks, selectors, info cards
+ * Split from settings-panel.css — do not import directly; use ../settings-panel.css
+ */
+
+/**
+ * 设置页统一样式 — 各 SettingsPanel 共用
+ * 作用域：.module-shell__main 内
+ */
+
+.module-shell__main {
+    background-color: var(--dw-bg-muted);
+    background-image: none;
+    --settings-page-max-width: clamp(800px, 86vw, 1000px);
+}
+
+[data-theme='dark'] .module-shell__main {
+    background-image: none;
+}
+
+/* ---- 页头 ---- */
+
+.module-shell__main .panel-head {
+    margin-bottom: clamp(18px, 2.2vmin, 24px);
+    padding-bottom: clamp(14px, 1.6vmin, 18px);
+    border-bottom: 1px solid var(--dw-border-light);
+}
+
+.module-shell__main .panel-head--row,
+.module-shell__main .panel-head:has(.panel-head__actions),
+.module-shell__main .panel-head:has(.reset-all-btn),
+.module-shell__main .panel-head:has(.settings-head-btn) {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--mp-gap-lg);
+}
+
+.module-shell__main .panel-head h2 {
+    margin: 0;
+    font-size: var(--dw-text-3xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: var(--dw-leading-tight);
+}
+
+.module-shell__main .panel-head p {
+    margin: var(--dw-gap) 0 0;
+    max-width: 56ch;
+    font-size: var(--dw-text-md);
+    color: var(--dw-text-secondary);
+    line-height: var(--dw-leading-loose);
+}
+
+.module-shell__main .settings-head-btn,
+.module-shell__main .reset-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dw-gap-sm);
+    flex-shrink: 0;
+    height: var(--dw-btn-height);
+    min-height: var(--dw-btn-height);
+    padding: 0 var(--dw-space-7);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-btn-radius);
+    background: var(--dw-bg-editor);
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-font-size-btn);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--dw-transition-colors);
+}
+
+.module-shell__main .settings-head-btn:hover:not(:disabled),
+.module-shell__main .reset-all-btn:hover:not(:disabled) {
+    background: var(--dw-bg-hover);
+    border-color: color-mix(in srgb, var(--dw-primary) 30%, var(--dw-border));
+    color: var(--dw-text);
+}
+
+/* ---- 访客只读提示 ---- */
+
+.module-shell__main .guest-notice {
+    margin: 0 0 var(--mp-gap-lg);
+    padding: var(--dw-pad-control-lg);
+    border: 1px solid color-mix(in srgb, var(--dw-warning) 28%, var(--dw-panel-border));
+    border-radius: var(--dw-panel-radius);
+    background: color-mix(in srgb, var(--dw-warning) 8%, var(--dw-bg-editor));
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-md);
+    line-height: var(--dw-leading-relaxed);
+}
+
+/* ---- 设置区块（卡片式） ---- */
+
+.module-shell__main .setting-block {
+    margin-bottom: var(--mp-gap-lg);
+    padding: var(--dw-space-7) clamp(16px, 1.8vmin, 20px);
+    border: 1px solid var(--dw-panel-border);
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg-panel);
+    box-shadow: var(--dw-panel-shadow);
+}
+
+.module-shell__main .setting-block:last-child {
+    margin-bottom: 0;
+}
+
+.module-shell__main .setting-block h3,
+.module-shell__main .setting-block__title {
+    margin: 0 0 var(--dw-space-2);
+    font-size: var(--dw-text-lg);
+    font-weight: 600;
+    line-height: var(--dw-leading-snug);
+}
+
+.module-shell__main .setting-block.is-readonly {
+    opacity: 0.72;
+    pointer-events: none;
+}
+
+.module-shell__main .hint,
+.module-shell__main .setting-block__hint,
+.module-shell__main .field-hint {
+    margin: 0 0 var(--dw-space-6);
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-muted);
+    line-height: var(--dw-leading-relaxed);
+}
+
+.module-shell__main .field-hint:last-child,
+.module-shell__main .hint:last-child {
+    margin-bottom: 0;
+}
+
+.module-shell__main .field-hint--warn {
+    color: var(--dw-color-warning, #b45309);
+    font-weight: 500;
+}
+
+/* ---- 选择器：外观 / 语言 / 色板 ---- */
+
+.module-shell__main .skin-grid,
+.module-shell__main .appearance-grid,
+.module-shell__main .dw-choice-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dw-gap-lg);
+}
+
+.module-shell__main .color-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dw-space-6);
+}
+
+.module-shell__main .color-swatch {
+    position: relative;
+    width: var(--dw-density-lg);
+    height: var(--dw-density-lg);
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: var(--dw-radius-pill);
+    background: transparent;
+    cursor: pointer;
+    transition: border-color 0.12s ease, transform 0.12s ease;
+}
+
+.module-shell__main .color-swatch:hover {
+    transform: scale(1.06);
+}
+
+.module-shell__main .color-swatch.active {
+    border-color: var(--dw-primary);
+    box-shadow: 0 0 0 2px var(--dw-primary-soft);
+}
+
+.module-shell__main .color-dot {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: var(--dw-radius-pill);
+    box-shadow: inset 0 0 0 1px var(--dw-panel-border);
+}
+
+.module-shell__main .check {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--dw-on-accent);
+    font-size: var(--dw-text-md);
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.module-shell__main .primary-label {
+    margin-top: clamp(6px, 0.8vmin, 8px);
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-secondary);
+}
+
+.module-shell__main .basic-ui-font-field {
+    max-width: clamp(280px, 36vw, 360px);
+}
+
+.module-shell__main .basic-ui-font-preview {
+    margin: var(--dw-space-3) 0 0;
+    padding: var(--dw-space-3) var(--dw-space-4);
+    border-radius: var(--dw-control-radius-sm);
+    background: color-mix(in srgb, var(--dw-text) 4%, var(--dw-bg-panel));
+    border: 1px solid color-mix(in srgb, var(--dw-border-light) 80%, transparent);
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-sm);
+    line-height: 1.45;
+}
+
+.module-shell__main .locale-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--dw-gap-md);
+    max-width: clamp(300px, 36vw, 360px);
+}
+
+.module-shell__main .locale-card {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-gap-md);
+    padding: var(--dw-pad-control-lg);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg-panel);
+    color: var(--dw-text);
+    font-size: var(--dw-text-md);
+    cursor: pointer;
+    transition: var(--dw-transition-colors), color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.module-shell__main .locale-card:hover {
+    border-color: color-mix(in srgb, var(--dw-primary) 22%, var(--dw-border));
+}
+
+.module-shell__main .locale-card.active {
+    border-color: var(--dw-primary-border);
+    background: var(--dw-primary-soft);
+    color: var(--dw-primary);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dw-primary) 12%, transparent);
+}
+
+.module-shell__main .locale-flag {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-control-h-sm);
+    height: var(--dw-control-h-sm);
+    border-radius: var(--dw-control-radius-sm);
+    background: var(--dw-bg-muted);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+}
+
+.module-shell__main .locale-card.active .locale-flag {
+    background: color-mix(in srgb, var(--dw-primary) 14%, var(--dw-bg-muted));
+    color: var(--dw-primary);
+}
+
+/* ---- 信息卡片（Profile / About / Tips） ---- */
+
+.module-shell__main .settings-card,
+.module-shell__main .profile-card,
+.module-shell__main .about-card,
+.module-shell__main .tips-card {
+    display: flex;
+    gap: var(--dw-space-8);
+    padding: clamp(16px, 1.8vmin, 22px);
+    border: 1px solid var(--dw-panel-border);
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg-editor);
+    box-shadow: var(--dw-panel-shadow);
+}
+
+.module-shell__main .tips-card {
+    margin-bottom: var(--mp-gap-lg);
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--dw-primary) 32%, var(--dw-panel-border));
+    background: var(--dw-bg-panel);
+}
+
+.module-shell__main .settings-card__icon,
+.module-shell__main .tips-card__icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-density-lg);
+    height: var(--dw-density-lg);
+    border-radius: var(--dw-control-radius);
+    background: color-mix(in srgb, var(--dw-primary) 12%, var(--dw-bg-panel));
+    color: var(--dw-primary);
+}
+
+.module-shell__main .tips-card__body h3,
+.module-shell__main .settings-card__body h3 {
+    margin: 0;
+    font-size: var(--dw-text-lg);
+    font-weight: 600;
+}
+
+.module-shell__main .tips-card__body p {
+    margin: var(--dw-space-2) 0 0;
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-muted);
+    line-height: var(--dw-leading-loose);
+}
+
+/* Profile 专用 */
+
+.module-shell__main .profile-card {
+    align-items: center;
+    margin-top: 0;
+    margin-bottom: var(--mp-gap-lg);
+}
+
+.module-shell__main .profile-card .avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-density-xl);
+    height: var(--dw-density-xl);
+    border-radius: var(--dw-control-radius);
+    background: color-mix(in srgb, var(--dw-primary) 12%, var(--dw-bg-panel));
+    border: 1px solid color-mix(in srgb, var(--dw-primary) 18%, var(--dw-border));
+    color: var(--dw-primary);
+    font-size: var(--dw-text-3xl);
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.module-shell__main .profile-card .name {
+    font-size: var(--dw-text-lg);
+    font-weight: 600;
+}
+
+.module-shell__main .profile-card .email {
+    margin-top: clamp(2px, 0.3vmin, 4px);
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-md);
+}
+
+.module-shell__main .profile-settings .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dw-gap-md);
+    margin-bottom: var(--mp-gap-lg);
+}
+
+.module-shell__main .action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: clamp(120px, 14vw, 140px);
+    height: var(--mp-btn-h);
+    padding: 0 var(--dw-space-7);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-control-radius);
+    background: var(--dw-bg-panel);
+    color: var(--dw-text);
+    font-size: var(--dw-text-md);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--dw-transition-colors);
+}
+
+.module-shell__main .action-btn:hover:not(:disabled) {
+    background: var(--dw-primary-softer);
+    border-color: var(--dw-primary-ring);
+    color: var(--dw-primary);
+}
+
+.module-shell__main .action-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.module-shell__main .session-policy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dw-space-6);
+}
+
+.module-shell__main .session-policy__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dw-gap-sm);
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-secondary);
+}
+
+.module-shell__main .session-policy__field .dw-input {
+    max-width: clamp(140px, 16vw, 160px);
+}
+
+.module-shell__main .session-policy__checkbox {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-gap);
+    font-size: var(--dw-text-md);
+    color: var(--dw-text-secondary);
+}
+
+/* About 专用 */
+
+.module-shell__main .about-card {
+    flex-direction: column;
+    margin-bottom: var(--mp-gap-lg);
+}
+
+.module-shell__main .about-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-space-8);
+}
+
+.module-shell__main .about-brand h3 {
+    margin: 0;
+    font-size: var(--dw-text-lg);
+    font-weight: 600;
+}
+
+.module-shell__main .latest-line {
+    margin: var(--dw-space-2) 0 0;
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-md);
+}
+
+.module-shell__main .about-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dw-gap-md);
+    margin-top: clamp(14px, 1.6vmin, 18px);
+}
+
+.module-shell__main .update-section > h3 {
+    margin: 0 0 var(--dw-space-2);
+    font-size: var(--dw-text-lg);
+    font-weight: 600;
+}
+
+.module-shell__main .update-intro {
+    margin: 0 0 var(--dw-space-8);
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-md);
+    line-height: var(--dw-leading-loose);
+}
+
+.module-shell__main .update-block {
+    margin-top: clamp(10px, 1.2vmin, 12px);
+    padding: var(--dw-space-6) var(--dw-space-8);
+    border: 1px solid var(--dw-panel-border);
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg-panel);
+}
+
+.module-shell__main .update-block h4 {
+    margin: 0;
+    font-size: var(--dw-text-md);
+    font-weight: 600;
+}
+
+.module-shell__main .update-block p {
+    margin: var(--dw-space-2) 0 0;
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-xs);
+    line-height: var(--dw-leading-loose);
+}
+
+.module-shell__main .update-options {
+    margin-top: clamp(10px, 1.2vmin, 12px);
+    padding-top: clamp(8px, 1vmin, 10px);
+    border-top: 1px solid var(--dw-border-light);
+}
+
+/* ---- 路径 / 代码展示 ---- */
+
+.module-shell__main .settings-code,
+.module-shell__main .config-dir-path,
+.module-shell__main .scripts-dir-path {
+    display: block;
+    padding: var(--dw-pad-control-lg);
+    border: 1px solid var(--dw-border-light);
+    border-radius: var(--dw-control-radius-sm);
+    background: var(--dw-bg-muted);
+    font-family: var(--dw-mono);
+    font-size: var(--dw-text-xs);
+    line-height: var(--dw-leading);
+    word-break: break-all;
+    color: var(--dw-text-secondary);
+}
+
+.module-shell__main .settings-meta,
+.module-shell__main .config-dir-meta {
+    display: grid;
+    gap: var(--dw-gap-md);
+    margin: var(--dw-space-6) 0 0;
+}
+
+.module-shell__main .settings-meta dt,
+.module-shell__main .config-dir-meta dt {
+    margin: 0 0 var(--dw-space-2);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    color: var(--dw-text-muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.module-shell__main .settings-meta dd,
+.module-shell__main .config-dir-meta dd {
+    margin: 0;
+    font-size: var(--dw-text-md);
+    color: var(--dw-text-secondary);
+    line-height: var(--dw-leading);
+}
+
+.module-shell__main .config-dir-meta__row {
+    display: grid;
+    gap: var(--dw-space-2);
+}
+
+.module-shell__main .workspace-root__path {
+    margin: var(--dw-space-4) 0 0;
+}
+
+.module-shell__main .workspace-root__path code,
+.module-shell__main .workspace-root__path-code {
+    display: block;
+    padding: var(--dw-space-3) var(--dw-space-4);
+    border-radius: var(--dw-control-radius-sm);
+    background: var(--dw-bg-muted);
+    font-family: var(--dw-mono);
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-secondary);
+    word-break: break-all;
+    line-height: var(--dw-leading);
+}
+
+.module-shell__main .workspace-root__subs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dw-gap-sm);
+    margin-top: var(--dw-space-5);
+}
+
+.module-shell__main .workspace-root__sub {
+    padding: 2px 8px;
+    border: 1px solid var(--dw-border-light);
+    border-radius: var(--dw-control-radius-sm);
+    background: color-mix(in srgb, var(--dw-bg-muted) 55%, transparent);
+    font-family: var(--dw-mono);
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-secondary);
+}
+
+.module-shell__main .workspace-root__subs-hint {
+    margin: var(--dw-space-3) 0 0;
+}
+
+.module-shell__main .workspace-recent {
+    margin-top: clamp(14px, 1.6vmin, 18px);
+    padding-top: clamp(12px, 1.4vmin, 16px);
+    border-top: 1px solid var(--dw-border-light);
+}
+
+.module-shell__main .workspace-recent__title {
+    margin: 0 0 var(--dw-space-2);
+    font-size: var(--dw-text-md);
+    font-weight: 600;
+    color: var(--dw-text);
+}
+
+.module-shell__main .workspace-recent__hint {
+    margin: 0 0 var(--dw-space-6);
+}
+
+.module-shell__main .workspace-recent__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--dw-gap);
+}
+
+.module-shell__main .workspace-recent__item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--dw-gap);
+    padding: var(--dw-space-5);
+    border: 1px solid var(--dw-border-light);
+    border-radius: var(--dw-control-radius);
+    background: color-mix(in srgb, var(--dw-bg-muted) 35%, transparent);
+}
+
+.module-shell__main .workspace-recent__item.is-active {
+    border-color: color-mix(in srgb, var(--dw-primary) 35%, var(--dw-border-light));
+    background: color-mix(in srgb, var(--dw-primary) 6%, var(--dw-bg-muted));
+}
+
+.module-shell__main .workspace-recent__switch {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--dw-gap-xs);
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.module-shell__main .workspace-recent__switch:disabled {
+    cursor: default;
+}
+
+.module-shell__main .workspace-recent__switch:not(:disabled):hover .workspace-recent__name {
+    color: var(--dw-primary);
+}
+
+.module-shell__main .workspace-recent__name {
+    font-size: var(--dw-text-md);
+    font-weight: 600;
+    color: var(--dw-text);
+}
+
+.module-shell__main .workspace-recent__path {
+    display: block;
+    max-width: 100%;
+    font-family: var(--dw-mono);
+    font-size: var(--dw-text-xs);
+    line-height: var(--dw-leading);
+    color: var(--dw-text-muted);
+    word-break: break-all;
+}
+
+.module-shell__main .workspace-recent__badge {
+    flex-shrink: 0;
+    padding: var(--dw-pad-chip);
+    border-radius: var(--dw-radius-pill);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    color: var(--dw-primary);
+    background: color-mix(in srgb, var(--dw-primary) 12%, transparent);
+}
+
+.module-shell__main .workspace-recent__remove {
+    flex-shrink: 0;
+    width: var(--dw-control-h-xs);
+    height: var(--dw-control-h-xs);
+    border: none;
+    border-radius: var(--dw-control-radius-sm);
+    background: transparent;
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-xl);
+    line-height: 1;
+    cursor: pointer;
+}
+
+.module-shell__main .workspace-recent__remove:hover:not(:disabled) {
+    color: var(--dw-text);
+    background: var(--dw-bg-hover);
+}
+
+.module-shell__main .workspace-recent__remove:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}

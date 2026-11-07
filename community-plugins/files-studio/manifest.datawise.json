@@ -1,0 +1,299 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.files-studio",
+  "name": "Files Studio",
+  "version": "0.1.0",
+  "publisher": "datawise-community",
+  "description": "Unified file workbench for local folders and OpenDAL storage (S3, Azure Blob, GCS, OBS, WebDAV, FTP, SFTP). Browse, transfer, archive, and guarded ops in one K8s-style UI.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/phenixan/datawise-cli/tree/main/community-plugins/files-studio",
+  "icon": "assets/plugin.svg",
+  "tags": ["files", "storage", "s3", "opendal", "transfer", "workbench"],
+  "permissions": [
+    "host.workbench",
+    "host.events",
+    "host.filesystem",
+    "host.clipboard"
+  ],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.3"
+  },
+  "entrypoints": {
+    "backend": {
+      "transport": "stdio-framed",
+      "executable": "bin/windows-x86_64/datawise-plugin-files-studio.exe"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.files-studio.connection",
+      "label": "Files Studio storage",
+      "description": "Local folder or OpenDAL-compatible object/file storage.",
+      "icon": "assets/plugin.svg",
+      "workbench": "io.datawise.community.files-studio.workbench",
+      "capabilities": ["test", "connect", "disconnect"],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Connection name",
+          "type": "text",
+          "binding": "name",
+          "required": true,
+          "default": "Storage"
+        },
+        {
+          "key": "scheme",
+          "label": "Protocol",
+          "type": "select",
+          "binding": "config",
+          "required": true,
+          "default": "fs",
+          "options": [
+            { "label": "Local folder", "value": "fs" },
+            { "label": "S3 compatible", "value": "s3" },
+            { "label": "Huawei OBS", "value": "obs" },
+            { "label": "Azure Blob", "value": "azblob" },
+            { "label": "Google Cloud Storage", "value": "gcs" },
+            { "label": "WebDAV", "value": "webdav" },
+            { "label": "FTP", "value": "ftp" },
+            { "label": "SFTP", "value": "sftp" },
+            { "label": "SMB/CIFS", "value": "smb" }
+          ]
+        },
+        {
+          "key": "root",
+          "label": "Root path",
+          "type": "text",
+          "binding": "config",
+          "required": true,
+          "placeholder": "C:/data or /var/data",
+          "visible_when": { "field": "scheme", "one_of": ["fs"] }
+        },
+        {
+          "key": "bucket",
+          "label": "Bucket",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "S3 可留空浏览全部桶；OBS / GCS 必填",
+          "required_when": { "field": "scheme", "one_of": ["obs", "gcs"] },
+          "visible_when": { "field": "scheme", "one_of": ["s3", "obs", "gcs"] }
+        },
+        {
+          "key": "container",
+          "label": "Container",
+          "type": "text",
+          "binding": "config",
+          "required": true,
+          "visible_when": { "field": "scheme", "one_of": ["azblob"] }
+        },
+        {
+          "key": "endpoint",
+          "label": "Endpoint",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "https://s3.amazonaws.com or MinIO URL",
+          "visible_when": { "field": "scheme", "one_of": ["s3", "obs", "azblob", "webdav"] }
+        },
+        {
+          "key": "region",
+          "label": "Region",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "us-east-1",
+          "visible_when": { "field": "scheme", "one_of": ["s3"] }
+        },
+        {
+          "key": "share",
+          "label": "Share name",
+          "type": "text",
+          "binding": "config",
+          "required": true,
+          "placeholder": "data",
+          "visible_when": { "field": "scheme", "one_of": ["smb"] }
+        },
+        {
+          "key": "host",
+          "label": "Host",
+          "type": "text",
+          "binding": "host",
+          "visible_when": { "field": "scheme", "one_of": ["ftp", "sftp", "smb"] }
+        },
+        {
+          "key": "port",
+          "label": "Port",
+          "type": "number",
+          "binding": "port",
+          "default": 22,
+          "visible_when": { "field": "scheme", "one_of": ["ftp", "sftp", "smb"] }
+        },
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "binding": "user",
+          "visible_when": { "field": "scheme", "one_of": ["webdav", "ftp", "sftp", "smb"] }
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "password",
+          "binding": "password",
+          "visible_when": { "field": "scheme", "one_of": ["webdav", "ftp", "sftp", "smb"] }
+        },
+        {
+          "key": "access_key_id",
+          "label": "Access key ID",
+          "type": "text",
+          "binding": "secret",
+          "required": true,
+          "required_when": { "field": "scheme", "one_of": ["s3", "obs"] },
+          "visible_when": { "field": "scheme", "one_of": ["s3", "obs"] }
+        },
+        {
+          "key": "secret_access_key",
+          "label": "Secret access key",
+          "type": "password",
+          "binding": "secret",
+          "required": true,
+          "required_when": { "field": "scheme", "one_of": ["s3", "obs"] },
+          "visible_when": { "field": "scheme", "one_of": ["s3", "obs"] }
+        },
+        {
+          "key": "account_name",
+          "label": "Storage account",
+          "type": "text",
+          "binding": "config",
+          "visible_when": { "field": "scheme", "one_of": ["azblob"] }
+        },
+        {
+          "key": "account_key",
+          "label": "Account key",
+          "type": "password",
+          "binding": "secret",
+          "visible_when": { "field": "scheme", "one_of": ["azblob"] }
+        },
+        {
+          "key": "sas_token",
+          "label": "SAS token",
+          "type": "password",
+          "binding": "secret",
+          "visible_when": { "field": "scheme", "one_of": ["azblob"] }
+        },
+        {
+          "key": "credential",
+          "label": "GCS credentials JSON",
+          "type": "textarea",
+          "binding": "secret",
+          "visible_when": { "field": "scheme", "one_of": ["gcs"] }
+        },
+        {
+          "key": "private_key",
+          "label": "SFTP private key (PEM)",
+          "type": "textarea",
+          "binding": "secret",
+          "visible_when": { "field": "scheme", "one_of": ["sftp"] }
+        },
+        {
+          "key": "private_key_passphrase",
+          "label": "Private key passphrase",
+          "type": "password",
+          "binding": "secret",
+          "visible_when": { "field": "scheme", "one_of": ["sftp"] }
+        },
+        {
+          "key": "enable_path_style",
+          "label": "Path-style addressing (MinIO)",
+          "type": "boolean",
+          "binding": "config",
+          "default": true,
+          "visible_when": { "field": "scheme", "one_of": ["s3"] }
+        },
+        {
+          "key": "default_prefix",
+          "label": "Default prefix",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "optional/path/"
+        },
+        {
+          "key": "readonly",
+          "label": "Read-only (Guard)",
+          "type": "boolean",
+          "binding": "config",
+          "default": false
+        },
+        {
+          "key": "deny_delete",
+          "label": "Deny delete (Guard)",
+          "type": "boolean",
+          "binding": "config",
+          "default": false
+        },
+        {
+          "key": "require_confirm_delete",
+          "label": "Confirm deletes (Guard)",
+          "type": "boolean",
+          "binding": "config",
+          "default": true
+        },
+        {
+          "key": "allowed_prefix",
+          "label": "Allowed prefix (Guard)",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "leave empty for all"
+        },
+        {
+          "key": "max_upload_bytes",
+          "label": "Max upload bytes (0 = unlimited)",
+          "type": "number",
+          "binding": "config",
+          "default": 0
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.files-studio.workbench",
+      "label": "Files Studio"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Files Studio",
+      "description": "统一管理本地目录与 OpenDAL 存储（S3、Azure Blob、GCS、OBS、WebDAV、FTP、SFTP）：浏览、传输、归档与受控运维。",
+      "contributions": {
+        "io.datawise.community.files-studio.connection": {
+          "label": "Files Studio 存储",
+          "fields": {
+            "display_name": { "label": "连接名称" },
+            "scheme": { "label": "协议" },
+            "root": { "label": "根路径" },
+            "bucket": { "label": "存储桶", "placeholder": "留空则先显示全部存储桶" },
+            "container": { "label": "容器" },
+            "endpoint": { "label": "端点" },
+            "region": { "label": "区域" },
+            "host": { "label": "主机" },
+            "port": { "label": "端口" },
+            "username": { "label": "用户名" },
+            "password": { "label": "密码 / 密钥" },
+            "readonly": { "label": "只读（Guard）" },
+            "deny_delete": { "label": "禁止删除（Guard）" },
+            "require_confirm_delete": { "label": "删除需确认（Guard）" },
+            "allowed_prefix": { "label": "允许前缀（Guard）" },
+            "default_prefix": { "label": "默认前缀" }
+          }
+        },
+        "io.datawise.community.files-studio.workbench": {
+          "label": "Files Studio"
+        }
+      }
+    }
+  }
+}

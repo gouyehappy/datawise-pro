@@ -1,0 +1,38 @@
+name: Release DataWise plugin
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release-tag:
+        description: Existing GitHub Release tag that receives the plugin assets
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Package
+        run: |
+          corepack enable
+          corepack pnpm --dir ui install --frozen-lockfile
+          node package.mjs
+      - name: Upload assets
+        if: github.event_name == 'release' || inputs.release-tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.release-tag }}
+        run: |
+          gh release upload "$TAG" dist/*.dwp --clobber

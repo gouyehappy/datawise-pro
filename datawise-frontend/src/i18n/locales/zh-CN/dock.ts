@@ -1,0 +1,26 @@
+export default {
+    minimap: {
+        explorerTitle: '移动连接树',
+        terminalTitle: '移动终端',
+        shortcutTitle: '移动快捷栏',
+        workspaceTitle: '移动工作区',
+        workspace: '工作区',
+        center: '居中',
+        left: '左侧',
+        right: '右侧',
+        bottom: '底部',
+        float: '浮动',
+        escHint: '按 Esc 取消',
+        dragHint: '拖动标题栏即可调整面板位置',
+    },
+    float: {
+        pinBack: '钉回默认停靠位置',
+        close: '关闭',
+        popOut: '弹出为浮动窗口',
+        maximize: '最大化',
+        restore: '还原',
+    },
+    resetPlacement: '恢复默认停靠',
+    resetPlacementHint: '将连接树恢复到左侧、终端恢复到底部（与经典布局一致）。',
+    resetPlacementSuccess: '面板停靠已恢复默认',
+}

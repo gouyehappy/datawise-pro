@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DuckDB Workbench</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: var(--color-background, #131416);
+      --fg: var(--color-foreground, #d7d7db);
+      --muted: var(--color-muted-foreground, #97989d);
+      --card: var(--color-popover, #1e1e20);
+      --surface: var(--color-muted, #2a2a2d);
+      --accent: #e6c200;
+      --accent-fg: #1a1600;
+      --border: var(--color-border, rgb(110 110 114 / 0.28));
+      --input: var(--color-background, #131416);
+      --hover: var(--color-accent, #2e2f33);
+      font-family: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+    }
+    :root[data-theme="light"],
+    :root[data-dw-theme="light"] {
+      color-scheme: light;
+      --bg: var(--color-background, #ffffff);
+      --fg: var(--color-foreground, #18181b);
+      --muted: var(--color-muted-foreground, #52525b);
+      --card: var(--color-popover, #ffffff);
+      --surface: var(--color-muted, #f4f4f5);
+      --border: var(--color-border, #e4e4e7);
+      --input: var(--color-background, #ffffff);
+      --hover: var(--color-accent, #ececef);
+      --accent-fg: #fffbeb;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); }
+    html, body { height: 100%; }
+    main { min-height: 100vh; height: 100%; }
+    aside { border-right: 1px solid var(--border); padding: 14px; overflow: auto; background: var(--card); }
+    section { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+    h1 { font-size: 1.1rem; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: var(--dw-font-size); margin-bottom: 10px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    button {
+      background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 8px;
+      padding: 7px 12px; font-weight: 700; cursor: pointer; font-size: var(--dw-font-size);
+    }
+    button.secondary { background: var(--surface); color: var(--fg); font-weight: 600; }
+    button:disabled { opacity: 0.45; cursor: default; }
+    .item {
+      width: 100%; text-align: left; background: transparent; color: var(--fg);
+      border: 1px solid transparent; border-radius: 8px; padding: 7px 8px; margin-bottom: 3px; font-weight: 500;
+    }
+    .item:hover { background: var(--hover); }
+    .item small { display: block; color: var(--muted); font-size: var(--dw-text-xs); font-weight: 400; }
+    textarea {
+      width: 100%; min-height: 140px; resize: vertical; background: var(--input); color: var(--fg);
+      border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+      font-family: var(--font-mono, "Source Code Pro", Consolas, monospace); font-size: var(--dw-font-size);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: var(--dw-font-size); }
+    th, td { border-bottom: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--card); }
+    .grid { flex: 1; overflow: auto; background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
+    .empty { color: var(--muted); font-size: var(--dw-font-size); padding: 8px; }
+    .err { color: #fca5a5; white-space: pre-wrap; font-size: var(--dw-font-size); }
+  </style>
+</head>
+<body>
+<main>
+  <aside>
+    <h1>DuckDB</h1>
+    <div class="sub" id="status">Waiting for host…</div>
+    <div class="row" style="margin-bottom:10px">
+      <button id="refresh" disabled>Refresh</button>
+      <button id="files" class="secondary" disabled>Files</button>
+    </div>
+    <div class="sub">Tables / views</div>
+    <div id="tables" class="empty">—</div>
+    <div class="sub" style="margin-top:12px">Register file as view</div>
+    <div id="fileList" class="empty">Open Files to scan dataDir.</div>
+  </aside>
+  <section>
+    <textarea id="sql" spellcheck="false" disabled>SELECT 1 AS ok;</textarea>
+    <div class="row">
+      <button id="run" disabled>Run</button>
+      <button id="copy" class="secondary" disabled>Copy SQL</button>
+      <span class="sub" id="meta" style="margin:0"></span>
+    </div>
+    <div class="grid" id="grid"><div class="empty">Results appear here.</div></div>
+  </section>
+</main>
+<script src="dw-split-pane.js"></script>
+<script>
+  DwSplitPane.mount({
+    root: 'main',
+    storageKey: 'dw.split.duckdb',
+    defaultRatio: 'sidebar',
+    defaultWidth: 260,
+    minWidth: 180,
+    maxWidth: 420,
+  })
+  let connectionId = ''
+  const statusEl = document.getElementById('status')
+  const tablesEl = document.getElementById('tables')
+  const fileListEl = document.getElementById('fileList')
+  const gridEl = document.getElementById('grid')
+  const sqlEl = document.getElementById('sql')
+  const metaEl = document.getElementById('meta')
+
+  function ready() {
+    return window.datawisePlugin && typeof window.datawisePlugin.invoke === 'function'
+  }
+
+  function setReady(on) {
+    ;['refresh', 'files', 'run', 'copy'].forEach(id => { document.getElementById(id).disabled = !on })
+    sqlEl.disabled = !on
+  }
+
+  async function invoke(method, params = {}) {
+    return window.datawisePlugin.invoke(method, Object.assign({ connectionId }, params))
+  }
+
+  async function boot() {
+    if (!ready()) return
+    try {
+      const ctx = await window.datawisePlugin.context
+      connectionId = (ctx && ctx.connectionId) || (ctx && ctx.connection && ctx.connection.id) || ''
+      statusEl.textContent = 'Ready · ' + (connectionId || 'anon')
+      setReady(true)
+      await refreshTables()
+    } catch (e) {
+      statusEl.textContent = String(e && e.message ? e.message : e)
+    }
+  }
+
+  async function refreshTables() {
+    try {
+      const res = await invoke('duckdb/tables')
+      const list = res.tables || []
+      if (!list.length) {
+        tablesEl.className = 'empty'
+        tablesEl.textContent = 'No tables yet. Register a file or CREATE TABLE.'
+        return
+      }
+      tablesEl.className = ''
+      tablesEl.innerHTML = ''
+      for (const t of list) {
+        const btn = document.createElement('button')
+        btn.className = 'item'
+        const q = (t.schema && t.schema !== 'main') ? '"' + t.schema + '"."' + t.name + '"' : '"' + t.name + '"'
+        btn.innerHTML = '<span>' + esc(t.name) + '</span><small>' + esc(t.type || '') + '</small>'
+        btn.onclick = () => { sqlEl.value = 'SELECT * FROM ' + q + ' LIMIT 100;' }
+        tablesEl.appendChild(btn)
+      }
+    } catch (e) {
+      tablesEl.className = 'err'
+      tablesEl.textContent = String(e && e.message ? e.message : e)
+    }
+  }
+
+  async function refreshFiles() {
+    fileListEl.textContent = 'Scanning…'
+    try {
+      const res = await invoke('duckdb/list-files')
+      const files = res.files || []
+      if (!files.length) {
+        fileListEl.className = 'empty'
+        fileListEl.textContent = res.message || 'No Parquet/CSV under dataDir.'
+        return
+      }
+      fileListEl.className = ''
+      fileListEl.innerHTML = ''
+      for (const f of files) {
+        const btn = document.createElement('button')
+        btn.className = 'item'
+        btn.innerHTML = '<span>' + esc(f.name) + '</span><small>' + esc(f.relative || f.path) + '</small>'
+        btn.onclick = async () => {
+          metaEl.textContent = 'Registering…'
+          try {
+            const r = await invoke('duckdb/register', { path: f.path })
+            sqlEl.value = 'SELECT * FROM "' + r.viewName + '" LIMIT 100;'
+            metaEl.textContent = 'View ' + r.viewName
+            await refreshTables()
+          } catch (e) {
+            metaEl.textContent = String(e && e.message ? e.message : e)
+          }
+        }
+        fileListEl.appendChild(btn)
+      }
+    } catch (e) {
+      fileListEl.className = 'err'
+      fileListEl.textContent = String(e && e.message ? e.message : e)
+    }
+  }
+
+  function renderResult(res) {
+    if (res.kind === 'update') {
+      gridEl.innerHTML = '<div class="empty">Update count: ' + res.updateCount + '</div>'
+      metaEl.textContent = 'OK'
+      return
+    }
+    const cols = res.columns || []
+    const rows = res.rows || []
+    if (!cols.length) {
+      gridEl.innerHTML = '<div class="empty">Empty result.</div>'
+      return
+    }
+    let html = '<table><thead><tr>' + cols.map(c => '<th>' + esc(c.name) + '</th>').join('') + '</tr></thead><tbody>'
+    for (const row of rows) {
+      html += '<tr>' + row.map(cell => '<td>' + esc(cell === null || cell === undefined ? '∅' : cell) + '</td>').join('') + '</tr>'
+    }
+    html += '</tbody></table>'
+    gridEl.innerHTML = html
+    metaEl.textContent = res.rowCount + ' rows' + (res.truncated ? ' (truncated)' : '')
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+  }
+
+  document.getElementById('refresh').onclick = () => refreshTables()
+  document.getElementById('files').onclick = () => refreshFiles()
+  document.getElementById('run').onclick = async () => {
+    metaEl.textContent = 'Running…'
+    try {
+      renderResult(await invoke('duckdb/query', { sql: sqlEl.value, maxRows: 200 }))
+    } catch (e) {
+      gridEl.innerHTML = '<div class="err">' + esc(e && e.message ? e.message : e) + '</div>'
+      metaEl.textContent = 'Error'
+    }
+  }
+  document.getElementById('copy').onclick = async () => {
+    const text = sqlEl.value
+    try {
+      if (window.datawisePlugin.clipboard && window.datawisePlugin.clipboard.writeText) {
+        await window.datawisePlugin.clipboard.writeText(text)
+      } else {
+        await navigator.clipboard.writeText(text)
+      }
+      metaEl.textContent = 'SQL copied'
+    } catch (e) {
+      metaEl.textContent = String(e && e.message ? e.message : e)
+    }
+  }
+
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'datawise-plugin-env') boot()
+  })
+  boot()
+  setInterval(() => { if (ready() && !connectionId) boot() }, 500)
+</script>
+</body>
+</html>

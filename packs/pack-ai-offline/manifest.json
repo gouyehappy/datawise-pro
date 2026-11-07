@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "packId": "pack.ai.offline",
+  "version": "1.0.0-dev",
+  "minCoreVersion": "4.1.0",
+  "maxCoreVersion": "4.99.99",
+  "capabilities": [
+    "ai.workbench",
+    "ai.console",
+    "ai.analyze",
+    "ai.rag",
+    "ai.offline"
+  ],
+  "plugins": [
+    "p-ai-workbench",
+    "p-console-ai",
+    "p-ai-sql-fix",
+    "p-ai-result-summary",
+    "p-ai-explain",
+    "p-ai-index-suggest"
+  ],
+  "extensionPoints": [
+    "nav.ai",
+    "console.ai",
+    "result.aiSummary",
+    "settings.ai"
+  ],
+  "requiresRestart": true,
+  "channel": "stable"
+}

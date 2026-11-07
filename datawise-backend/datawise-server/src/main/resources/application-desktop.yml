@@ -1,0 +1,94 @@
+# Packaged desktop (same JVM as JCEF): faster cold start, loopback-only HTTP.
+# Port matches datawise-frontend/runtime-ports.json → desktop.backend.
+server:
+  port: 18423
+  # 仅本机回环，避免 Windows 首次启动弹出 Java 防火墙放行框
+  address: 127.0.0.1
+
+spring:
+  main:
+    banner-mode: off
+    lazy-initialization: true
+  jmx:
+    enabled: false
+
+management:
+  endpoints:
+    enabled-by-default: false
+  endpoint:
+    health:
+      enabled: true
+
+logging:
+  level:
+    root: WARN
+    org.apache.datawise.backend: INFO
+    org.springframework: WARN
+    org.apache.thrift: WARN
+    org.apache.hive: WARN
+
+# 桌面包不需要 OpenAPI UI，避免启动期扫描 Controllers
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+datawise:
+  # Wave 2: non-critical ApplicationRunners (secrets migrate / legacy scan / sample-hash warn)
+  # run on a daemon thread. Kill switch: -Ddatawise.startup.defer-noncritical=false
+  startup:
+    defer-noncritical: true
+  security:
+    auth:
+      # Bind is already 127.0.0.1; reject DNS-rebinding Host/Origin spoofing
+      allowed-hosts:
+        - localhost
+        - 127.0.0.1
+        - "::1"
+        - 0:0:0:0:0:0:0:1
+    connection-probe:
+      # 桌面客户端连接内网库是主场景
+      allow-private-networks: true
+  connectors:
+    # Wave C1: packaged desktop trusts marketplace manifest by default (dev profile stays off)
+    require-manifest-integrity: true
+  community-plugin:
+    # 本机桌面可装未签名开发包；UI「允许未签名」仍须一并打开
+    allow-unsigned: true
+  query:
+    # 单用户桌面：交互 SQL 不设进程内并发闸
+    max-concurrent-global: 0
+    max-concurrent-per-user: 0
+  jdbc:
+    # 驱动在首次连接时再加载，避免启动扫描 config/drivers/
+    preload-drivers-on-startup: false
+  # JCEF desktop: server-side PTY over loopback WebSocket
+  terminal:
+    websocket:
+      enabled: true
+      path: /ws/terminal
+      # server.address 已绑 127.0.0.1；再收紧握手来源
+      allowed-ips:
+        - 127.0.0.1
+        - ::1
+        - 0:0:0:0:0:0:0:1
+  ai:
+    analysis:
+      semantic-check: lenient
+  migration:
+    task-concurrency-priority:
+      small-table-threshold: 1
+      medium-table-threshold: 3
+      large-table-threshold: 5
+      huge-table-threshold: 10
+      small-table-bonus: 1
+      medium-table-bonus: 1
+      large-table-penalty: 1
+      huge-table-penalty: 2
+      resume-bonus: 1
+      small-batch-threshold: 200
+      large-batch-threshold: 2000
+      small-batch-bonus: 0
+      large-batch-penalty: 1
+      throttle-penalty: 1

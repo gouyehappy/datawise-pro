@@ -1,0 +1,533 @@
+/**
+ * 全局设计令牌（颜色、尺寸、字体）
+ *
+ * 明暗配色由 theme.service.ts 在运行时统一写入；
+ * 此处仅保留首屏兜底（index.html 内联脚本设置 data-theme 后生效）。
+ */
+:root {
+    /* 视口缩放尺度 — 全应用统一，布局固定，仅尺寸随屏变化 */
+    --mp-pad: clamp(10px, 1.4vmin, 20px);
+    --mp-gap: clamp(6px, 0.9vmin, 12px);
+    --mp-gap-lg: clamp(10px, 1.2vmin, 16px);
+    /*
+     * Typography body + ladder live in ui-text-scale.css (--dw-font-size, --dw-text-*,
+     * --mp-title/body/…). Keep layout clamps here only.
+     */
+    /* First-paint fallbacks until ui-text-scale.css loads */
+    --dw-font-size: 13.5px;
+    --dw-text-2xs: calc(var(--dw-font-size) * 0.75);
+    --dw-text-xs: calc(var(--dw-font-size) * 0.85);
+    --dw-text-sm: var(--dw-font-size);
+    --dw-text-md: calc(var(--dw-font-size) * 1.08);
+    --dw-text-lg: calc(var(--dw-font-size) * 1.15);
+    --dw-text-xl: calc(var(--dw-font-size) * 1.25);
+    --dw-text-2xl: calc(var(--dw-font-size) * 1.35);
+    --dw-text-3xl: calc(var(--dw-font-size) * 1.55);
+    --dw-text-display-sm: calc(var(--dw-font-size) * 1.65);
+    --dw-text-display: calc(var(--dw-font-size) * 1.85);
+    --mp-caption: var(--dw-text-xs);
+    --mp-body: var(--dw-text-sm);
+    --mp-sub: var(--dw-text-md);
+    --mp-section: var(--dw-text-lg);
+    --mp-title-sm: var(--dw-text-xl);
+    --mp-title: var(--dw-text-3xl);
+    --mp-stat-num: var(--dw-text-display);
+
+    /*
+     * 语义字号别名（壳层一律用这些，禁止写死 px）
+     * 跟随 --dw-text-*；html[data-ui-text-scale] 在 ui-text-scale.css 覆写 body 后自动生效。
+     */
+    --dw-font-size-label: var(--dw-text-xs);
+    --dw-font-size-control: var(--dw-text-md);
+    --dw-font-size-btn: var(--dw-text-md);
+    --dw-font-size-btn-sm: var(--dw-text-sm);
+    --dw-font-size-menu: var(--dw-text-md);
+    --dw-font-size-menu-caption: var(--dw-text-xs);
+    --dw-font-size-tab: var(--dw-text-xs);
+    --dw-font-size-titlebar: var(--dw-text-sm);
+    --dw-font-size-kbd: var(--dw-text-2xs);
+    --dw-font-size-badge: var(--dw-text-2xs);
+    /*
+     * Density scale (classic defaults). Skins override only these;
+     * all control heights alias into this ladder.
+     *   md — buttons / inputs / search / select / segment (same toolbar row)
+     *   sm — compact toolbar peers, menus, icon buttons
+     *   xs — clear / icon-only cells / chips
+     *   lg — page-head / quick-action / avatar boxes
+     */
+    --dw-density-md: clamp(30px, 3.3vmin, 34px);
+    --dw-density-sm: clamp(26px, 2.9vmin, 28px);
+    --dw-density-xs: clamp(22px, 2.5vmin, 24px);
+    --dw-density-lg: clamp(36px, 4vmin, 42px);
+    --dw-density-xl: clamp(48px, 5.5vmin, 56px);
+
+    /* 按钮 / 输入同高（legacy aliases → density） */
+    --mp-btn-h: var(--dw-density-md);
+    --mp-input-h: var(--dw-density-md);
+    --mp-radius: clamp(6px, 0.7vmin, 8px);
+    --mp-head-h: var(--dw-density-md);
+    --mp-nav-w: clamp(168px, 15vmin, 220px);
+    --mp-stat-min-h: clamp(56px, 7vmin, 72px);
+    --mp-quick-h: var(--dw-density-lg);
+    --mp-page-max: clamp(1180px, 92vw, 1520px);
+    --mp-hero-radius: clamp(14px, 1.4vmin, 20px);
+    --mp-tone-sky: #0ea5e9;
+    --mp-tone-amber: #d97706;
+    --mp-tone-emerald: #059669;
+    --mp-tone-rose: #e11d48;
+    --mp-tone-indigo: #4f46e5;
+
+    /* Ambient 模块壳（Dashboard / Plugins / Connectors / Dev 共用） */
+    --mp-shell-accent: color-mix(in srgb, var(--dw-primary) 72%, var(--mp-tone-sky));
+    --mp-shell-surface: color-mix(in srgb, var(--dw-bg-elevated, var(--dw-bg-panel)) 88%, transparent);
+    --mp-shell-tile: var(--dw-bg-elevated, var(--dw-bg-panel));
+    --mp-shell-rail: 3px;
+    --mp-shell-radius: clamp(14px, 1.3vmin, 18px);
+    --mp-shell-gap: clamp(14px, 1.6vmin, 22px);
+    /* Classic 卡片网格间距（Plugin / Pack / Connector / Community 共用） */
+    --mp-card-gap: var(--dw-space-5);
+    --mp-shell-border: color-mix(in srgb, var(--dw-text) 8%, transparent);
+    --mp-shell-control-h: var(--dw-density-md);
+    --mp-shell-control-radius: clamp(10px, 1vmin, 12px);
+    --mp-shell-control-bg: color-mix(in srgb, var(--dw-text) 5%, var(--mp-shell-tile));
+    --mp-shell-control-bg-hover: color-mix(in srgb, var(--mp-shell-accent) 10%, var(--mp-shell-tile));
+    --mp-shell-control-bg-active: color-mix(in srgb, var(--mp-shell-accent) 14%, var(--mp-shell-tile));
+    --mp-shell-focus-ring: 0 0 0 3px color-mix(in srgb, var(--mp-shell-accent) 16%, transparent);
+
+    /* 默认主色 blue（与 theme-presets PRIMARY_PRESETS.blue 一致） */
+    --dw-primary: #2563eb;
+    --dw-primary-hover: #1d4ed8;
+    --dw-accent: var(--dw-primary);
+    --mp-tone: var(--dw-primary);
+    --dw-primary-softer: rgba(37, 99, 235, 0.06);
+    --dw-primary-mild: rgba(37, 99, 235, 0.1);
+    --dw-primary-soft: rgba(37, 99, 235, 0.12);
+    --dw-primary-tint: color-mix(in srgb, #2563eb 11%, #ffffff);
+    --dw-primary-border: rgba(37, 99, 235, 0.45);
+    --dw-primary-ring: rgba(37, 99, 235, 0.22);
+
+    /* 默认背景 cool（与 BACKGROUND_PRESETS_LIGHT.cool 一致） */
+    --dw-bg: #f8fafc;
+    --dw-bg-base: var(--dw-bg);
+    --dw-bg-muted: #f1f5f9;
+    --dw-bg-subtle: var(--dw-bg-muted);
+    --dw-bg-panel: #f4f7fb;
+    --dw-bg-hover: #e8eef5;
+    --dw-bg-input: var(--dw-bg);
+    --dw-bg-rail: #eef2f7;
+    --dw-bg-editor: #f8fafc;
+    --dw-bg-chrome: #dce4ee;
+
+    /*
+     * 终端调色板（附录 D / color-exception：独立暗色 PTY 表面）。
+     * 与 features/terminal/services/terminal-palette.ts 保持同值。
+     */
+    --dw-terminal-bg: #1a1d24;
+    --dw-terminal-fg: #d1d5db;
+    --dw-terminal-border: #2d3340;
+    --dw-terminal-input-bg: #151820;
+    --dw-terminal-cursor: #16a34a;
+    --dw-terminal-selection: #264f78;
+    --terminal-bg: var(--dw-terminal-bg);
+    --terminal-text: var(--dw-terminal-fg);
+    --terminal-border: var(--dw-terminal-border);
+    --terminal-input-bg: var(--dw-terminal-input-bg);
+
+    --dw-border: #e2e8f0;
+    --dw-border-light: #eef2f7;
+    --dw-border-subtle: color-mix(in srgb, var(--dw-border) 72%, transparent);
+    --dw-border-strong: color-mix(in srgb, var(--dw-text) 18%, var(--dw-border));
+    --dw-border-width: 1px;
+    --dw-panel-border: rgba(15, 23, 42, 0.08);
+    --dw-surface: var(--dw-bg);
+    --dw-surface-muted: var(--dw-bg-muted);
+    --dw-surface-raised: var(--dw-bg-panel);
+
+    /* 圆角刻度（原料，一般不要直接写业务样式） */
+    --dw-radius-xs: 2px;
+    --dw-radius-sm: clamp(3px, 0.4vmin, 4px);
+    --dw-radius-md: var(--mp-radius);
+    --dw-radius-lg: clamp(8px, 0.95vmin, 10px);
+    --dw-radius-xl: clamp(8px, 1vmin, 10px);
+    --dw-radius-pill: 999px;
+    --dw-radius-full: 50%;
+
+    /*
+     * 圆角指挥官（业务只许用这几档语义别名）：
+     *   面板 / 卡片 / 内嵌壳 → --dw-panel-radius（IDE=0，跟壳层一起直角）
+     *   按钮 / 芯片 / 导航项 / 图标块 → --dw-control-radius / --dw-control-radius-sm
+     *   菜单浮层 → --dw-menu-radius；模态 → --dw-modal-radius
+     * 禁止业务再写 --dw-radius-lg 当面板圆角（IDE 下仍是 6px，会跟直角壳打架）。
+     */
+    --dw-control-radius: var(--dw-radius-md);
+    --dw-control-radius-sm: clamp(4px, 0.5vmin, 5px);
+    --dw-input-radius: var(--dw-control-radius);
+    --dw-btn-radius: var(--dw-control-radius);
+    --dw-menu-radius: 12px;
+    --dw-menu-item-radius: 8px;
+    --dw-menu-gutter: 32px;
+    --dw-menu-item-h: var(--dw-density-md);
+    --dw-menu-pad-y: 8px;
+    --dw-menu-pad-x: 8px;
+    /* 菜单项右侧内边距：与面板 pad-x 对齐，避免「左松右紧」 */
+    --dw-menu-item-pad-end: 8px;
+    --dw-menu-hover: color-mix(in srgb, var(--dw-text) 6%, transparent);
+    --dw-menu-active: color-mix(in srgb, var(--dw-primary) 16%, transparent);
+    --dw-menu-border: color-mix(in srgb, var(--dw-border) 88%, transparent);
+    --dw-chip-radius: var(--dw-radius-pill);
+    --dw-modal-radius: var(--dw-radius-xl);
+    --dw-panel-radius: var(--dw-radius-md);
+    --dw-titlebar-chip-radius: 8px;
+
+    /* 间距刻度（gap / 内边距优先引用，禁止散落写死） */
+    --dw-space-1: 2px;
+    --dw-space-2: 4px;
+    --dw-space-3: 6px;
+    --dw-space-4: 8px;
+    --dw-space-5: 10px;
+    --dw-space-6: 12px;
+    --dw-space-7: 14px;
+    --dw-space-8: 16px;
+    --dw-space-9: 20px;
+    --dw-space-10: 24px;
+    --dw-space-11: 28px;
+    --dw-space-12: 32px;
+    --dw-gap-xs: var(--dw-space-2);
+    --dw-gap-sm: var(--dw-space-3);
+    --dw-gap: var(--dw-space-4);
+    --dw-gap-md: var(--dw-space-5);
+    --dw-gap-lg: var(--mp-gap-lg);
+    --dw-pad-xs: var(--dw-space-2);
+    --dw-pad-sm: var(--dw-space-3);
+    --dw-pad: var(--mp-pad);
+    --dw-pad-md: var(--dw-space-5);
+
+    /* 行高 */
+    --dw-leading-tight: 1.3;
+    --dw-leading-snug: 1.4;
+    --dw-leading: 1.5;
+    --dw-leading-relaxed: 1.55;
+    --dw-leading-loose: 1.65;
+
+    /* 状态色（成功 / 警告 / 危险 / 信息） */
+    --dw-success: #16a34a;
+    --dw-success-fg: #15803d;
+    --dw-success-soft: color-mix(in srgb, #22c55e 16%, transparent);
+    --dw-warning: #f59e0b;
+    --dw-warning-fg: #b45309;
+    --dw-warning-soft: color-mix(in srgb, #f59e0b 16%, transparent);
+    --dw-danger: #dc2626;
+    --dw-danger-fg: #b91c1c;
+    --dw-danger-soft: color-mix(in srgb, #ef4444 14%, transparent);
+    --dw-info: #0ea5e9;
+    --dw-info-fg: #0369a1;
+    --dw-info-soft: color-mix(in srgb, #0ea5e9 14%, transparent);
+    --dw-link: #2563eb;
+    --dw-on-accent: #ffffff;
+    --dw-shade: #000000;
+    --dw-ink-deep: #1e1f26;
+    --dw-graph-node-dark: #303038;
+    --dw-selection-bg: #2d4f7c;
+
+    /* 焦点环 / 动效 */
+    --dw-focus-border: var(--dw-primary-border);
+    --dw-focus-ring: 0 0 0 3px var(--dw-primary-soft);
+    --dw-duration-fast: 0.12s;
+    --dw-duration: 0.15s;
+    --dw-duration-slow: 0.2s;
+    --dw-ease: ease;
+    --dw-transition-colors: background var(--dw-duration-fast) var(--dw-ease),
+        color var(--dw-duration-fast) var(--dw-ease),
+        border-color var(--dw-duration-fast) var(--dw-ease);
+    --dw-transition-shadow: border-color var(--dw-duration) var(--dw-ease),
+        box-shadow var(--dw-duration) var(--dw-ease);
+    --dw-transition-bg: background var(--dw-duration-fast) var(--dw-ease);
+
+    /* 按钮交互压暗（inset wash，不覆盖原有背景色） */
+    --dw-btn-hover-wash: color-mix(in srgb, var(--dw-text) 8%, transparent);
+    --dw-btn-active-wash: color-mix(in srgb, var(--dw-text) 14%, transparent);
+    --dw-btn-hover-wash-on-accent: color-mix(in srgb, var(--dw-shade) 14%, transparent);
+    --dw-btn-active-wash-on-accent: color-mix(in srgb, var(--dw-shade) 22%, transparent);
+
+    /* 阴影补充 */
+    --dw-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.03);
+    --dw-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --dw-shadow-md: 0 4px 14px rgba(15, 23, 42, 0.06);
+    --dw-shadow-float: 0 10px 28px rgba(15, 23, 42, 0.12);
+
+    /* 控件高度（全部 alias 到 density，禁止在业务 CSS 写死 px） */
+    --dw-control-h: var(--dw-density-md);
+    --dw-control-h-sm: var(--dw-density-sm);
+    --dw-control-h-xs: var(--dw-density-xs);
+    /* 单行输入 / 下拉触发器同高同水平内边距（源头统一） */
+    --dw-input-height: var(--dw-control-h);
+    --dw-input-height-sm: var(--dw-control-h-sm);
+    --dw-control-pad-x: var(--dw-space-5);
+    --dw-control-pad-x-sm: var(--dw-space-4);
+    --dw-btn-height: var(--dw-density-md);
+    --dw-btn-height-sm: var(--dw-density-sm);
+    --dw-btn-gap: var(--dw-space-1);
+    --dw-icon-btn-size: var(--dw-density-sm);
+    --dw-icon-btn-size-sm: var(--dw-density-xs);
+    --dw-icon-btn-size-lg: var(--dw-density-lg);
+    --dw-icon-glyph-size: clamp(13px, 1.5vmin, 15px);
+    /* Disabled controls stay readable (was ~0.3 and looked “missing”). */
+    --dw-control-disabled-opacity: 0.55;
+    --dw-select-font: var(--dw-font-size-control);
+    --dw-select-trigger-h: var(--dw-input-height);
+    --dw-select-trigger-h-sm: var(--dw-input-height-sm);
+    --dw-titlebar-chip-size: var(--dw-density-sm);
+    --dw-titlebar-height: clamp(40px, 4.5vmin, 44px);
+    --dw-wb-head-min-height: var(--dw-density-xl);
+    /* 工作台主窗格 / 预览区最小高度（P5-3；禁止业务散落 120px/180px） */
+    --dw-wb-pane-min-height: 120px;
+    --dw-wb-preview-min-height: 180px;
+    --dw-titlebar-chip-hover: color-mix(in srgb, var(--dw-text) 8%, transparent);
+    --dw-titlebar-chip-active: color-mix(in srgb, var(--dw-text) 11%, transparent);
+
+    /* 遮罩 / 弹层 */
+    --dw-overlay-bg: color-mix(in srgb, var(--dw-text) 42%, transparent);
+    --dw-overlay-bg-strong: color-mix(in srgb, var(--dw-text) 58%, transparent);
+    --dw-overlay-blur: 8px;
+
+    /* 编辑器 minimap（亮色默认；暗色由 data-minimap-tone 覆盖） */
+    --dw-minimap-border: var(--dw-panel-border);
+    --dw-minimap-inset-shadow: rgba(15, 23, 42, 0.04);
+    --dw-minimap-slider-bg: rgba(15, 23, 42, 0.04);
+    --dw-minimap-slider-border: var(--dw-panel-border);
+    --dw-minimap-slider-ring: rgba(255, 255, 255, 0.6);
+    --dw-minimap-slider-hover-bg: color-mix(in srgb, var(--dw-primary) 6%, transparent);
+    --dw-minimap-slider-hover-border: var(--dw-primary-ring);
+
+    /* 常用内边距简写（与同高控件匹配） */
+    --dw-pad-control: var(--dw-space-3) var(--dw-space-5);
+    --dw-pad-control-lg: var(--dw-space-4) var(--dw-space-6);
+    --dw-pad-tight: var(--dw-space-2) var(--dw-space-4);
+    --dw-pad-chip: var(--dw-space-1) var(--dw-space-4);
+
+    /* 层级 */
+    --dw-z-base: 1;
+    --dw-z-raised: 2;
+    --dw-z-rail: 10;
+    --dw-z-toolbar: 20;
+    --dw-z-sticky: 30;
+    --dw-z-drawer: 60;
+    --dw-z-dropdown: 120;
+    --dw-z-popover: 140;
+    --dw-z-overlay: 1000;
+    --dw-z-modal: 1100;
+    --dw-z-toast: 1200;
+    --dw-z-tooltip: 1300;
+    /* dock float ≈1020–1023、drop 1080 — 右键/子菜单须高于浮动面板 */
+    --dw-z-context-menu: 1500;
+    --dw-z-select-portal: 2100;
+    /** AppModal 为 select-portal+1；Portal 下拉须在其之上 */
+    --dw-z-select-above-modal: calc(var(--dw-z-select-portal) + 2);
+    --dw-z-spotlight: 2600;
+    --dw-z-window: 3000;
+    --dw-z-max: 3300;
+
+    --dw-panel-gap: var(--mp-gap);
+    --dw-panel-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --dw-shell-padding: var(--mp-gap);
+    --dw-splitter-size: 6px;
+    /* Activity / tool stripe — :root = classic（文案可读）；ide 在 skins/ide.css */
+    --dw-tool-stripe-width: 64px;
+    --dw-tool-btn-pad: 8px;
+    --dw-tool-icon-caption-gap: 5px;
+    --dw-tool-caption-leading: 1.2;
+    --dw-workbench-inset: calc(var(--dw-shell-padding) + var(--dw-tool-stripe-width) + var(--dw-panel-gap));
+    --dw-explorer-min-width: 180px;
+    --dw-side-panel-max-width: min(960px, 55vw);
+
+    --dw-text: #111827;
+    --dw-text-primary: var(--dw-text);
+    --dw-text-secondary: #6b7280;
+    --dw-text-muted: #9ca3af;
+    --dw-text-dim: #808080;
+
+    --dw-tool-pill-radius: var(--dw-control-radius);
+    --dw-tool-caption-size: var(--dw-text-2xs);
+    --dw-rail-width: var(--dw-tool-stripe-width);
+    --dw-shortcut-width: var(--dw-tool-stripe-width);
+    --dw-menu-height: var(--dw-density-sm);
+    --dw-toolbar-height: var(--dw-density-lg);
+    /* Includes shell bottom pad so status content centers in the full bottom chrome strip. */
+    --dw-status-height: calc(var(--dw-density-md) + var(--dw-shell-padding) + 4px);
+    --dw-tab-height: var(--dw-density-md);
+    --dw-tab-pill-height: var(--dw-density-xs);
+    --dw-tab-pill-radius: var(--dw-control-radius);
+    --dw-tab-gap: clamp(2px, 0.35vmin, 3px);
+    --dw-tab-title-size: var(--dw-font-size-tab);
+    --dw-tab-title-line: var(--dw-leading-snug);
+
+    --dw-tab-bar-bg: var(--dw-bg-chrome);
+    --dw-tab-bar-border: #c5cdd8;
+    --dw-tab-active-bg: #ffffff;
+    --dw-tab-active-border: #2563eb;
+    --dw-tab-active-text: #1f2937;
+    --dw-tab-inactive-text: #6b7280;
+    --dw-tab-hover-bg: rgba(0, 0, 0, 0.08);
+    --dw-tab-close-hover: rgba(0, 0, 0, 0.08);
+
+    --dw-tool-hover: color-mix(in srgb, var(--dw-text) 6%, transparent);
+    --dw-tool-active: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg-rail));
+    --dw-tool-pill-active: color-mix(in srgb, var(--dw-text) 9%, var(--dw-bg-hover));
+
+    --dw-radius: var(--dw-radius-md);
+    --dw-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+    --dw-menu-shadow: 0 12px 28px rgba(15, 23, 42, 0.14),
+    0 0 0 1px rgba(15, 23, 42, 0.04);
+    --dw-composer-shell-shadow: 0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 28px rgba(15, 23, 42, 0.05);
+    --dw-composer-focus-shadow: 0 0 0 1px color-mix(in srgb, var(--dw-primary) 22%, transparent),
+    0 8px 24px color-mix(in srgb, var(--dw-primary) 14%, transparent),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+    --dw-surface-inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    --dw-kbd-elev-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+    --dw-btn-elev-shadow: 0 1px 2px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    --dw-btn-elev-shadow-hover: 0 4px 12px color-mix(in srgb, var(--dw-primary) 34%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+    --dw-console-chrome-inset: clamp(6px, 0.8vmin, 8px);
+    --dw-console-action-inset: clamp(6px, 0.8vmin, 8px);
+    --dw-console-toolbar-height: var(--dw-density-md);
+    /* 热区 = icon-btn；glyph 对齐 md，避免工具栏「小而碎」 */
+    --dw-console-btn-size: var(--dw-icon-btn-size);
+    --dw-console-icon-size: clamp(14px, 1.55vmin, 16px);
+    --dw-console-icon-stroke: 1.75;
+    /* 结果集 / DataGrid 工具栏：与 btn-height-sm 同排，glyph 吃满热区 */
+    --dw-grid-toolbar-control-h: var(--dw-btn-height-sm);
+    --dw-grid-toolbar-icon-size: clamp(16px, 1.8vmin, 18px);
+    --dw-grid-toolbar-icon-stroke: 1.75;
+
+    --dw-icon-size-xs: clamp(10px, 1.15vmin, 12px);
+    --dw-icon-size-sm: clamp(12px, 1.35vmin, 14px);
+    --dw-icon-size-md: clamp(14px, 1.55vmin, 16px);
+    --dw-icon-size-lg: clamp(18px, 2vmin, 20px);
+    --dw-icon-size-xl: clamp(20px, 2.35vmin, 22px);
+    --dw-icon-size-rail: 20px;
+    --dw-icon-size-console: var(--dw-console-icon-size);
+    --dw-icon-size-tab: clamp(13px, 1.45vmin, 14px);
+    --dw-icon-size-menu: clamp(13px, 1.5vmin, 15px);
+    --dw-icon-size: var(--dw-icon-size-md);
+    --dw-console-ctx-height: var(--dw-density-xs);
+    /*
+     * UI 字体（默认 Geist + Noto Sans SC）：
+     * - Geist Variable：拉丁界面（OFL，非 Inter/Roboto）
+     * - Noto Sans SC Variable：中文统一字形
+     * - JetBrains Mono Variable：等宽（代码/日志/表格键）
+     */
+    --dw-font:
+        'Geist Variable',
+        'Geist',
+        'Noto Sans SC Variable',
+        'Noto Sans SC',
+        'Segoe UI Variable',
+        'Segoe UI',
+        'PingFang SC',
+        'Hiragino Sans GB',
+        'Microsoft YaHei UI',
+        'Microsoft YaHei',
+        'Source Han Sans SC',
+        'HarmonyOS Sans SC',
+        system-ui,
+        sans-serif;
+    --dw-mono:
+        'JetBrains Mono Variable',
+        'JetBrains Mono',
+        ui-monospace,
+        'Cascadia Mono',
+        'Sarasa Mono SC',
+        SFMono-Regular,
+        Menlo,
+        Monaco,
+        Consolas,
+        monospace;
+    --dw-font-mono: var(--dw-mono);
+
+    /* 自绘 / Monaco 轨宽；原生：hit=热区，size=默认可视细条（靠近边缘胀满 hit） */
+    --dw-scrollbar-size: 4px;
+    --dw-scrollbar-hit: 10px;
+    --dw-scrollbar-thumb: color-mix(in srgb, var(--dw-text-muted) 36%, transparent);
+    --dw-scrollbar-thumb-hover: color-mix(in srgb, var(--dw-text-secondary) 52%, transparent);
+    --dw-scrollbar-track: transparent;
+    --dw-autohide-sb-size: var(--dw-scrollbar-size);
+    --dw-autohide-sb-thumb: var(--dw-scrollbar-thumb);
+    --dw-autohide-sb-thumb-hover: var(--dw-scrollbar-thumb-hover);
+}
+
+/* 首屏兜底：完整深色令牌，避免 :root 浅色残留（theme-boot.js / theme-init 加载前） */
+[data-theme='dark'] {
+    color-scheme: dark;
+    --dw-primary: #2563eb;
+    --dw-primary-hover: #1d4ed8;
+    --dw-accent: var(--dw-primary);
+    --dw-primary-softer: rgba(37, 99, 235, 0.08);
+    --dw-primary-mild: rgba(37, 99, 235, 0.16);
+    --dw-primary-soft: rgba(37, 99, 235, 0.14);
+    --dw-primary-tint: color-mix(in srgb, #2563eb 18%, #171e27);
+    --dw-primary-border: rgba(37, 99, 235, 0.45);
+    --dw-primary-ring: rgba(37, 99, 235, 0.34);
+    /* 默认背景 cool dark（更深更纯，与 theme-presets BACKGROUND_PRESETS_DARK.cool 同步） */
+    --dw-bg: #0c1015;
+    --dw-bg-base: var(--dw-bg);
+    --dw-bg-muted: #121820;
+    --dw-bg-subtle: var(--dw-bg-muted);
+    --dw-bg-panel: #171e27;
+    --dw-bg-hover: #1f2936;
+    --dw-bg-input: var(--dw-bg);
+    --dw-bg-rail: #090c10;
+    --dw-bg-editor: var(--dw-bg);
+    --dw-bg-chrome: var(--dw-bg-rail);
+    --dw-border: #2e3440;
+    --dw-border-light: #252b33;
+    --dw-border-subtle: color-mix(in srgb, var(--dw-border) 80%, transparent);
+    --dw-border-strong: color-mix(in srgb, #fff 18%, var(--dw-border));
+    /* Panel chrome: ~12% white — readable on dark without looking chalky */
+    --dw-panel-border: rgba(255, 255, 255, 0.12);
+    --dw-surface: var(--dw-bg);
+    --dw-surface-muted: var(--dw-bg-muted);
+    --dw-surface-raised: var(--dw-bg-panel);
+    --dw-panel-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    --dw-text: #f0f0f3;
+    --dw-text-primary: var(--dw-text);
+    --dw-text-secondary: #d4d4d8;
+    --dw-text-muted: #c4c7cc;
+    --dw-text-dim: #a8adb6;
+    --dw-tool-hover: color-mix(in srgb, #fff 9%, transparent);
+    --dw-tool-active: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg-rail));
+    --dw-tool-pill-active: #2a3038;
+    --dw-tab-bar-bg: #161a20;
+    --dw-tab-bar-border: #1e242c;
+    --dw-tab-active-bg: #222831;
+    --dw-tab-active-border: #3574f0;
+    --dw-tab-active-text: #f4f4f7;
+    --dw-tab-inactive-text: #c8c8d0;
+    --dw-tab-hover-bg: rgba(255, 255, 255, 0.1);
+    --dw-tab-close-hover: rgba(255, 255, 255, 0.12);
+    --dw-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --dw-menu-shadow: 0 12px 28px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+    --dw-menu-hover: color-mix(in srgb, #fff 8%, transparent);
+    --dw-menu-active: color-mix(in srgb, var(--dw-primary) 18%, transparent);
+    --dw-menu-border: color-mix(in srgb, var(--dw-border) 85%, transparent);
+    --dw-composer-shell-shadow: 0 1px 2px rgba(0, 0, 0, 0.32),
+    0 6px 16px rgba(0, 0, 0, 0.24);
+    --dw-composer-focus-shadow: 0 0 0 1px color-mix(in srgb, var(--dw-primary) 28%, transparent),
+    0 6px 20px color-mix(in srgb, var(--dw-primary) 18%, transparent),
+    0 2px 6px rgba(0, 0, 0, 0.28);
+    --dw-surface-inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    --dw-kbd-elev-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.35);
+    --dw-btn-elev-shadow: 0 1px 2px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    --dw-btn-elev-shadow-hover: 0 4px 12px color-mix(in srgb, var(--dw-primary) 28%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    --dw-scrollbar-thumb: color-mix(in srgb, var(--dw-text-muted) 72%, #000);
+    --dw-scrollbar-thumb-hover: color-mix(in srgb, var(--dw-text-secondary) 88%, #000);
+}
+
+.keyword {
+    color: var(--dw-primary);
+    font-weight: 600;
+}

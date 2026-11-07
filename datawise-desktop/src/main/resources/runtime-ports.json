@@ -1,0 +1,12 @@
+{
+  "dev": {
+    "backend": 18421,
+    "frontend": 28413
+  },
+  "desktop": {
+    "backend": 18423,
+    "frontend": 28423
+  },
+  "frontendE2e": 28414,
+  "cdsTrain": 18422
+}

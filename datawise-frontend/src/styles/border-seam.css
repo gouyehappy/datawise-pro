@@ -1,0 +1,5 @@
+/**
+ * @deprecated Prefer `styles/plugins/seam-collapse.css` (loaded via global.css).
+ * Kept as a one-line redirect for any stray direct imports.
+ */
+@import './plugins/seam-collapse.css';

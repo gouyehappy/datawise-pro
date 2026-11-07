@@ -1,0 +1,198 @@
+{
+  "manifestVersion": 1,
+  "id": "io.datawise.community.redis-ops",
+  "name": "Redis Ops",
+  "version": "0.3.0",
+  "publisher": "datawise-community",
+  "icon": "assets/plugin.svg",
+  "description": "Redis ops workbench (IDE rail): Keys tree by :, Console, Slowlog/Clients/Config, Pulse/Memory — single / Sentinel / Cluster / fleet.",
+  "license": "Apache-2.0",
+  "tags": ["redis", "ops", "sre", "fleet", "sentinel", "cluster"],
+  "permissions": ["host.workbench", "host.events", "host.clipboard"],
+  "engines": {
+    "datawise": ">=4.1.0",
+    "hostApi": "^1.2"
+  },
+  "entrypoints": {
+    "backend": {
+      "executable": "bin/redis-ops-plugin.jar",
+      "transport": "stdio-jsonl"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "io.datawise.community.redis-ops.connection",
+      "label": "Redis Ops workspace",
+      "icon": "assets/plugin.svg",
+      "capabilities": ["test", "connect"],
+      "fields": [
+        {
+          "key": "workspaceKind",
+          "label": "Workspace",
+          "type": "select",
+          "binding": "config",
+          "default": "single",
+          "options": [
+            { "label": "Single instance", "value": "single" },
+            { "label": "Sentinel", "value": "sentinel" },
+            { "label": "Cluster", "value": "cluster" },
+            { "label": "Fleet inventory (many Redis)", "value": "fleet" }
+          ]
+        },
+        {
+          "key": "host",
+          "label": "Host",
+          "type": "text",
+          "binding": "host",
+          "placeholder": "127.0.0.1",
+          "visible_when": { "field": "workspaceKind", "one_of": ["single"] }
+        },
+        {
+          "key": "port",
+          "label": "Port",
+          "type": "text",
+          "binding": "port",
+          "default": "6379",
+          "visible_when": { "field": "workspaceKind", "one_of": ["single"] }
+        },
+        {
+          "key": "sentinelNodes",
+          "label": "Sentinel nodes",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "10.0.0.1:26379,10.0.0.2:26379",
+          "description": "Comma-separated host:port list of Sentinel nodes.",
+          "visible_when": { "field": "workspaceKind", "one_of": ["sentinel"] }
+        },
+        {
+          "key": "masterName",
+          "label": "Master name",
+          "type": "text",
+          "binding": "config",
+          "default": "mymaster",
+          "placeholder": "mymaster",
+          "description": "Sentinel monitored master name (SENTINEL masters).",
+          "visible_when": { "field": "workspaceKind", "one_of": ["sentinel"] }
+        },
+        {
+          "key": "sentinelPassword",
+          "label": "Sentinel password",
+          "type": "password",
+          "binding": "config",
+          "description": "Optional AUTH for Sentinel nodes themselves (not Redis data nodes).",
+          "visible_when": { "field": "workspaceKind", "one_of": ["sentinel"] }
+        },
+        {
+          "key": "clusterNodes",
+          "label": "Cluster nodes",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "10.0.0.1:7000,10.0.0.2:7001",
+          "description": "Seed nodes (host:port). Cluster topology is discovered from them.",
+          "visible_when": { "field": "workspaceKind", "one_of": ["cluster"] }
+        },
+        {
+          "key": "username",
+          "label": "Username (ACL)",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "optional · Redis 6+ ACL",
+          "visible_when": { "field": "workspaceKind", "one_of": ["single", "sentinel", "cluster"] }
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "password",
+          "binding": "password",
+          "visible_when": { "field": "workspaceKind", "one_of": ["single", "sentinel", "cluster"] }
+        },
+        {
+          "key": "database",
+          "label": "Database",
+          "type": "text",
+          "binding": "config",
+          "default": "0",
+          "description": "Logical DB index. Not used in Cluster mode.",
+          "visible_when": { "field": "workspaceKind", "one_of": ["single", "sentinel"] }
+        },
+        {
+          "key": "ssl",
+          "label": "TLS / SSL",
+          "type": "select",
+          "binding": "config",
+          "default": "false",
+          "options": [
+            { "label": "Off", "value": "false" },
+            { "label": "On (rediss)", "value": "true" }
+          ],
+          "description": "Use TLS to Redis / Sentinel / Cluster seeds. Host trust store applies; custom CA not configured here.",
+          "visible_when": { "field": "workspaceKind", "one_of": ["single", "sentinel", "cluster"] }
+        },
+        {
+          "key": "inventoryPath",
+          "label": "Inventory YAML",
+          "type": "text",
+          "binding": "config",
+          "placeholder": "C:\\ops\\redis-fleet.yml",
+          "description": "List many Redis endpoints in one workbench. Use demo action if needed. Supports username/ssl per instance.",
+          "visible_when": { "field": "workspaceKind", "one_of": ["fleet"] }
+        }
+      ],
+      "workbench": "io.datawise.community.redis-ops.workbench",
+      "actions": [
+        {
+          "id": "use-demo-fleet",
+          "label": "Use bundled demo fleet file",
+          "variant": "outline",
+          "requires_valid_form": false
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.redis-ops.workbench",
+      "label": "Redis Ops"
+    },
+    {
+      "type": "context-menu",
+      "id": "io.datawise.community.redis-ops.open",
+      "label": "Open Redis Ops",
+      "menu": "connection"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Redis 运维台",
+      "description": "Redis 运维台：单实例 / Sentinel / Cluster / 舰队清单；概览自动刷新、Keys 批量删除与 ZSet/Stream 编辑、Config 白名单 SET。",
+      "contributions": {
+        "io.datawise.community.redis-ops.connection": {
+          "label": "Redis Ops 工作区",
+          "fields": {
+            "workspaceKind": { "label": "工作区类型" },
+            "host": { "label": "主机" },
+            "port": { "label": "端口" },
+            "sentinelNodes": { "label": "Sentinel 节点" },
+            "masterName": { "label": "Master 名称" },
+            "sentinelPassword": { "label": "Sentinel 密码" },
+            "clusterNodes": { "label": "Cluster 节点" },
+            "username": { "label": "用户名 (ACL)" },
+            "password": { "label": "密码" },
+            "database": { "label": "数据库" },
+            "ssl": { "label": "TLS / SSL" },
+            "inventoryPath": { "label": "实例清单 YAML" }
+          },
+          "actions": {
+            "use-demo-fleet": { "label": "使用自带示例舰队文件" }
+          }
+        },
+        "io.datawise.community.redis-ops.workbench": { "label": "Redis 运维台" },
+        "io.datawise.community.redis-ops.open": { "label": "打开 Redis 运维台" }
+      }
+    }
+  }
+}

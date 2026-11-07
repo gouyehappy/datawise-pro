@@ -1,0 +1,1187 @@
+/* Host-synced Discover surfaces (follow html[data-theme] / EuiProvider) */
+:root {
+  --dsc-bg: #fff;
+  --dsc-bg-subtle: #f5f7fa;
+  --dsc-bg-muted: #eef2f7;
+  --dsc-text: #343741;
+  --dsc-text-strong: #1a1c21;
+  --dsc-text-muted: #69707d;
+  --dsc-text-disabled: #98a2b3;
+  --dsc-border: #d3dae6;
+  --dsc-control-border: #abb4c4;
+  --dsc-control-focus: #006bb4;
+  --dsc-link: #006bb4;
+  --dsc-primary: #006bb4;
+  --dsc-primary-hover: #005a9e;
+  --dsc-row-stripe: #fcfdfe;
+  --dsc-row-hover: #f5f9fc;
+  --dsc-row-open: #eef5fb;
+  --dsc-row-highlight: #e6f0fa;
+  --dsc-item-hover: #e6f0fa;
+  --dsc-item-selected: #d9ecf9;
+  --dsc-type-string-bg: #d3f1df;
+  --dsc-type-string-fg: #007b3c;
+  --dsc-type-number-bg: #f8e9d5;
+  --dsc-type-number-fg: #a65b00;
+  --dsc-type-date-bg: #e6f0fa;
+  --dsc-danger-bg: #f8e9e9;
+  --dsc-danger-border: #f1c5c5;
+  --dsc-mark: #ffff00;
+}
+:root[data-theme="dark"],
+:root[data-dw-theme="dark"] {
+  --dsc-bg: #1d1e24;
+  --dsc-bg-subtle: #25262e;
+  --dsc-bg-muted: #2b2d35;
+  --dsc-text: #dfe5ef;
+  --dsc-text-strong: #f5f7fa;
+  --dsc-text-muted: #98a2b3;
+  --dsc-text-disabled: #69707d;
+  --dsc-border: #343741;
+  --dsc-control-border: #515761;
+  --dsc-control-focus: #1ba9f5;
+  --dsc-link: #1ba9f5;
+  --dsc-primary: #1ba9f5;
+  --dsc-primary-hover: #0b8dcd;
+  --dsc-row-stripe: #23242c;
+  --dsc-row-hover: #2a3140;
+  --dsc-row-open: #243247;
+  --dsc-row-highlight: #243247;
+  --dsc-item-hover: #2a3140;
+  --dsc-item-selected: #1e3a5f;
+  --dsc-type-string-bg: #1a3d2e;
+  --dsc-type-string-fg: #6dccb1;
+  --dsc-type-number-bg: #3d2e1a;
+  --dsc-type-number-fg: #f0b15b;
+  --dsc-type-date-bg: #1a2f45;
+  --dsc-danger-bg: #3a1f1f;
+  --dsc-danger-border: #6b2d2d;
+  --dsc-mark: #8a6d00;
+}
+/* Classic Kibana 7 / OSD Discover layout */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+  background: var(--dsc-bg);
+  color: var(--dsc-text);
+  font-size: var(--dw-font-size, calc(13.5px * var(--dw-ui-text-scale, 1)));
+}
+
+.dscApp {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Top chrome: hits + actions */
+.dscChrome {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px 2px;
+  background: var(--dsc-bg);
+  flex-shrink: 0;
+}
+
+.dscChrome__hits {
+  font-size: var(--dw-font-size);
+  font-weight: 400;
+  color: var(--dsc-text-strong);
+  margin-right: 12px;
+}
+
+.dscChrome__hits strong {
+  font-weight: 600;
+}
+
+.dscChrome__link {
+  border: 0;
+  background: transparent;
+  color: var(--dsc-link);
+  font-size: var(--dw-font-size);
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.dscChrome__link:hover {
+  text-decoration: underline;
+  background: var(--dsc-bg-subtle);
+}
+
+.dscChrome__link:disabled {
+  color: var(--dsc-text-disabled);
+  cursor: default;
+  text-decoration: none;
+}
+
+.dscChrome__spacer {
+  flex: 1;
+}
+
+.dscChrome__meta {
+  font-size: var(--dw-font-size);
+  color: var(--dsc-text-muted);
+}
+
+/*
+ * Unified control height for Discover chrome.
+ * Query bar / date picker / Refresh / index select all use --dsc-control-h.
+ */
+:root {
+  --dsc-control-h: 36px;
+  --dsc-control-radius: 4px;
+}
+
+.dscSearchBlock {
+  background: var(--dsc-bg);
+  border-bottom: 1px solid var(--dsc-border);
+  flex-shrink: 0;
+  padding: 8px 12px 4px;
+}
+
+.dscSearchRow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-height: var(--dsc-control-h);
+}
+
+.dscQueryBar {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  height: var(--dsc-control-h);
+  border: 1px solid var(--dsc-control-border);
+  border-radius: var(--dsc-control-radius);
+  overflow: hidden;
+  box-sizing: border-box;
+  /* EUI-style focus underline: gradient painted on the control bottom edge. */
+  background-color: var(--dsc-bg);
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  background-image: linear-gradient(
+    to top,
+    var(--dsc-control-focus),
+    var(--dsc-control-focus) 2px,
+    transparent 2px,
+    transparent 100%
+  );
+  transition: background-size 150ms ease-in, border-color 150ms ease-in;
+}
+
+.dscQueryBar__filtersLabel {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--dsc-bg-subtle);
+  border-right: 1px solid var(--dsc-control-border);
+  font-size: var(--dw-font-size);
+  font-weight: 600;
+  color: var(--dsc-text);
+  white-space: nowrap;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.dscQueryBar__lang {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 0;
+  border-left: 1px solid var(--dsc-control-border);
+  background: var(--dsc-bg-subtle);
+  font-size: var(--dw-font-size);
+  font-weight: 700;
+  color: var(--dsc-link);
+  cursor: default;
+  white-space: nowrap;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.dscQueryBar__inputWrap {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+}
+
+.dscQueryBar__inputWrap .euiFormControlLayout {
+  height: 100% !important;
+  max-width: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.dscQueryBar__inputWrap .euiFormControlLayout,
+.dscQueryBar__inputWrap .euiFormControlLayout:hover,
+.dscQueryBar__inputWrap .euiFormControlLayout:focus,
+.dscQueryBar__inputWrap .euiFormControlLayout:focus-within,
+.dscQueryBar__inputWrap .euiFieldText,
+.dscQueryBar__inputWrap .euiFieldText:focus,
+.dscQueryBar__inputWrap input,
+.dscQueryBar__inputWrap input:focus {
+  border: 0 !important;
+  border-radius: 0 !important;
+  /* Suppress EUI inset focus on the inner field (sits mid-bar).
+     Focus underline is drawn on .dscQueryBar:focus-within instead. */
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  line-height: calc(var(--dsc-control-h) - 2px) !important;
+  font-size: var(--dw-font-size) !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Focus: blue border + underline flush with the bar bottom edge (OSD/EUI). */
+.dscQueryBar:focus-within {
+  border-color: var(--dsc-control-focus);
+  background-size: 100% 100%;
+}
+
+.dscSearchRow__time {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex-shrink: 0;
+  height: var(--dsc-control-h);
+}
+
+/* Force EUI SuperDatePicker internals to our height */
+.dscSearchRow__time .euiSuperDatePicker {
+  height: 100% !important;
+  align-items: stretch !important;
+}
+
+.dscSearchRow__time .euiSuperDatePicker > .euiFlexGroup,
+.dscSearchRow__time .euiSuperDatePicker .euiFlexGroup,
+.dscSearchRow__time .euiSuperDatePicker .euiFlexItem {
+  height: 100% !important;
+  align-items: stretch !important;
+  margin: 0 !important;
+}
+
+.dscSearchRow__time .euiFormControlLayout__childrenWrapper,
+.dscSearchRow__time .euiDatePopoverButton,
+.dscSearchRow__time .euiDatePopoverButton:focus,
+.dscSearchRow__time .euiSuperDatePicker__prettyFormat,
+.dscSearchRow__time .euiFieldText,
+.dscSearchRow__time .euiFieldText:focus,
+.dscSearchRow__time .euiButton,
+.dscSearchRow__time .euiButtonEmpty,
+.dscSearchRow__time button {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  box-sizing: border-box !important;
+  box-shadow: none !important;
+  outline: none !important;
+  /* Prevent EUI's own bottom-gradient from painting mid-control on children. */
+  background-image: none !important;
+  background-size: auto !important;
+}
+
+.dscSearchRow__time .euiFormControlLayout,
+.dscSearchRow__time .euiFormControlLayout:hover,
+.dscSearchRow__time .euiFormControlLayout:focus,
+.dscSearchRow__time .euiFormControlLayout:focus-within {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  box-sizing: border-box !important;
+  outline: none !important;
+}
+
+.dscSearchRow__time .euiFormControlLayout {
+  border: 1px solid var(--dsc-control-border) !important;
+  border-radius: var(--dsc-control-radius) !important;
+  /* Kill misplaced inner focus; draw underline on this full-height layout. */
+  box-shadow: none !important;
+  background-color: var(--dsc-bg) !important;
+  background-repeat: no-repeat !important;
+  background-size: 0% 100% !important;
+  background-image: linear-gradient(
+    to top,
+    var(--dsc-control-focus),
+    var(--dsc-control-focus) 2px,
+    transparent 2px,
+    transparent 100%
+  ) !important;
+  transition: background-size 150ms ease-in, border-color 150ms ease-in !important;
+}
+
+.dscSearchRow__time .euiFormControlLayout:focus-within {
+  border-color: var(--dsc-control-focus) !important;
+  background-size: 100% 100% !important;
+  box-shadow: none !important;
+}
+
+.dscSearchRow__time .euiButton,
+.dscSearchRow__time .euiButtonEmpty,
+.dscSearchRow__time .euiDatePopoverButton {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 1 !important;
+}
+
+.dscSearchRow__time .euiSuperDatePicker__prettyFormat,
+.dscSearchRow__time .euiDatePopoverButton {
+  display: inline-flex !important;
+  align-items: center !important;
+  font-size: var(--dw-font-size) !important;
+}
+
+.dscSearchRow__time .euiButton__content,
+.dscSearchRow__time .euiButtonEmpty__content {
+  height: 100% !important;
+  padding: 0 8px !important;
+}
+
+.dscRefreshBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--dsc-control-h);
+  min-height: var(--dsc-control-h);
+  max-height: var(--dsc-control-h);
+  padding: 0 16px;
+  border: 1px solid var(--dsc-primary);
+  border-radius: var(--dsc-control-radius);
+  background: var(--dsc-primary);
+  color: #fff;
+  font-size: var(--dw-font-size);
+  font-weight: 500;
+  cursor: pointer;
+  box-sizing: border-box;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.dscRefreshBtn:hover:not(:disabled) {
+  background: var(--dsc-primary-hover);
+  border-color: #005a9e;
+}
+
+.dscRefreshBtn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.dscRefreshBtn__icon {
+  font-size: var(--dw-text-lg);
+  line-height: 1;
+}
+
+.dscSearchRow__extra {
+  padding-top: 2px;
+  min-height: 28px;
+}
+
+.dscAddFilterBar {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dscAddFilterBar__btn {
+  font-size: var(--dw-font-size) !important;
+}
+
+.dscEditFilter {
+  width: 320px;
+}
+
+.dscEditFilter__header {
+  font-size: var(--dw-font-size);
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+  color: var(--dsc-text-strong);
+}
+
+.dscEditFilter__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Index pattern searchable dropdown ??fixed width, ellipsis for long names */
+.dscIndexPattern {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+  height: var(--dsc-control-h);
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--dsc-control-border);
+  border-radius: var(--dsc-control-radius);
+  background: var(--dsc-bg);
+  cursor: pointer;
+  text-align: left;
+  gap: 6px;
+  box-sizing: border-box;
+}
+
+.dscIndexPattern:hover,
+.dscIndexPattern:focus {
+  border-color: var(--dsc-link);
+  outline: none;
+}
+
+.dscIndexPattern__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--dw-font-size);
+  color: var(--dsc-text-strong);
+}
+
+.dscIndexPattern__caret {
+  color: var(--dsc-text-muted);
+  font-size: var(--dw-text-2xs);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.dscIndexPattern__panel {
+  width: min(360px, 80vw);
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+.dscIndexPattern__search {
+  padding: 8px;
+  border-bottom: 1px solid var(--dsc-border);
+  flex-shrink: 0;
+}
+
+.dscIndexPattern__list {
+  overflow: auto;
+  max-height: 260px;
+  padding: 4px 0;
+}
+
+.dscIndexPattern__item {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 0 12px;
+  height: var(--dsc-control-h);
+  line-height: var(--dsc-control-h);
+  font-size: var(--dw-font-size);
+  color: var(--dsc-text);
+  cursor: pointer;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.dscIndexPattern__item:hover {
+  background: var(--dsc-item-hover);
+}
+
+.dscIndexPattern__item.is-selected {
+  background: var(--dsc-item-selected);
+  font-weight: 600;
+}
+
+.dscIndexPattern__empty {
+  padding: 12px;
+  color: var(--dsc-text-disabled);
+  font-size: var(--dw-font-size);
+  text-align: center;
+}
+
+/* —— Body: sidebar + main —— */
+.dscBody {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  background: var(--dsc-bg);
+}
+
+.dscSidebar {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--dsc-border);
+  background: var(--dsc-bg-subtle);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dscSidebar__index {
+  padding: 10px 10px 8px;
+  background: var(--dsc-bg);
+  border-bottom: 1px solid var(--dsc-border);
+}
+
+/* EuiPopover wraps the button ??force fixed full width regardless of label length */
+.dscSidebar__index .euiPopover,
+.dscSidebar__index .euiPopover__anchor {
+  display: block;
+  width: 100%;
+}
+
+.dscSidebar__sectionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 8px;
+}
+
+.dscSidebar__section {
+  padding: 10px 12px 4px;
+  font-size: var(--dw-font-size);
+  font-weight: 700;
+  color: var(--dsc-text);
+}
+
+.dscSidebar__sectionHint {
+  font-weight: 400;
+  color: var(--dsc-text-muted);
+  font-size: var(--dw-text-xs);
+  margin-left: 4px;
+}
+
+.dscSidebar__filter {
+  padding: 0 10px 8px;
+}
+
+.dscSidebar__filter .euiFormControlLayout,
+.dscSidebar__filter .euiFieldSearch,
+.dscSidebar__filter input {
+  height: var(--dsc-control-h) !important;
+  min-height: var(--dsc-control-h) !important;
+  box-sizing: border-box !important;
+}
+
+.dscSidebar__list {
+  flex: 1;
+  overflow: auto;
+  padding: 0 6px 10px;
+  background: var(--dsc-bg);
+  margin: 0 0;
+}
+
+.dscSidebar__list--selected {
+  flex: 0 0 auto;
+  max-height: 140px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--dsc-border);
+}
+
+.dscFieldItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  cursor: default;
+  font-size: var(--dw-font-size);
+  color: var(--dsc-text);
+  min-height: 26px;
+}
+
+.dscFieldItem:hover {
+  background: var(--dsc-item-hover);
+}
+
+.dscFieldItem__type {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--dw-text-2xs);
+  font-weight: 700;
+  font-family: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+  line-height: 1;
+}
+
+.dscFieldItem__type--string {
+  background: var(--dsc-type-string-bg);
+  color: var(--dsc-type-string-fg);
+}
+
+.dscFieldItem__type--number {
+  background: var(--dsc-type-number-bg);
+  color: var(--dsc-type-number-fg);
+}
+
+.dscFieldItem__type--date {
+  background: var(--dsc-type-date-bg);
+  color: var(--dsc-link);
+}
+
+.dscFieldItem__type--other {
+  background: var(--dsc-bg-muted);
+  color: var(--dsc-text-muted);
+}
+
+.dscFieldItem__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  font-size: var(--dw-font-size);
+}
+
+.dscFieldItem__btn {
+  opacity: 0;
+  border: 0;
+  background: var(--dsc-primary);
+  color: #fff;
+  cursor: pointer;
+  font-size: var(--dw-font-size);
+  line-height: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.dscFieldItem:hover .dscFieldItem__btn {
+  opacity: 1;
+}
+
+.dscFieldItem__btn--remove {
+  background: #bd271e;
+}
+
+.dscMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsc-bg);
+}
+
+/* —— Histogram (Kibana 7 style) —— */
+.dscHistogram {
+  height: 168px;
+  padding: 6px 12px 4px;
+  border-bottom: 1px solid var(--dsc-border);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsc-bg);
+}
+
+.dscHistogram__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--dw-text-xs);
+  color: var(--dsc-text-muted);
+  padding: 0 4px 4px;
+  flex-shrink: 0;
+}
+
+.dscHistogram__range {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Interval uses EuiSelect ??keep native EUI focus underline on the control edge. */
+.dscHistogram__interval {
+  min-width: 96px;
+  max-width: 140px;
+}
+
+.dscHistogram__toolbar .dscHistogram__interval.euiSelect,
+.dscHistogram__toolbar .euiFormControlLayout {
+  font-size: var(--dw-font-size);
+}
+
+.dscHistogram__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dsc-text-disabled);
+  font-size: var(--dw-font-size);
+}
+
+.dscHistogram__frame {
+  flex: 1;
+  min-height: 0;
+}
+
+.dscHistogram__chart {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.dscHistogram__bar {
+  fill: #6dccb1;
+}
+
+.dscHistogram__bar:hover {
+  fill: #54b399;
+}
+
+.dscHistogram__grid {
+  stroke: var(--dsc-border);
+  stroke-width: 1;
+}
+
+.dscHistogram__tick {
+  fill: #69707d;
+  font-size: var(--dw-text-2xs);
+  font-family: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+}
+
+.dscHistogram__axisTitle {
+  fill: #69707d;
+  font-size: var(--dw-text-2xs);
+  font-family: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+}
+
+.dscHistogram__xLabel {
+  text-align: center;
+  font-size: var(--dw-text-2xs);
+  color: var(--dsc-text-muted);
+  padding-top: 0;
+  flex-shrink: 0;
+}
+
+/* —— Doc table —— */
+.dscTableWrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dscTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--dw-font-size);
+  table-layout: fixed;
+}
+
+.dscTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--dsc-bg-subtle);
+  border-bottom: 1px solid var(--dsc-border);
+  text-align: left;
+  padding: 8px 10px;
+  font-weight: 600;
+  color: var(--dsc-text);
+  font-size: var(--dw-font-size);
+}
+
+.dscTable td {
+  border-bottom: 1px solid var(--dsc-border);
+  padding: 4px 8px;
+  vertical-align: top;
+  word-break: break-word;
+  background: var(--dsc-bg);
+  color: var(--dsc-text);
+}
+
+.dscTable tbody tr:nth-child(even of :not(.dscDocViewerRow)) > td {
+  background: var(--dsc-row-stripe);
+}
+
+.dscTable tr:hover > td {
+  background: var(--dsc-row-hover) !important;
+}
+
+.dscTable tr.is-open > td {
+  background: var(--dsc-row-open) !important;
+}
+
+.dscTable__toggle {
+  width: 24px;
+  text-align: center;
+  padding: 6px 0 0 2px !important;
+  vertical-align: top;
+  line-height: 18px;
+}
+
+.dscExpand.euiButtonIcon {
+  color: var(--dsc-text-muted) !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  vertical-align: top;
+}
+
+.dscExpand.euiButtonIcon .euiIcon {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+.dscExpand.euiButtonIcon:hover {
+  color: var(--dsc-text) !important;
+}
+
+.dscTable__time {
+  width: 200px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsc-text);
+  font-size: var(--dw-font-size);
+  line-height: 18px;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  vertical-align: top;
+}
+
+/* Kibana 7 classic _source: flat field: value + yellow marks */
+.dscSource {
+  margin: 0;
+  line-height: 1.55;
+  word-break: break-word;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  font-size: var(--dw-font-size);
+  color: var(--dsc-text);
+}
+
+.dscSource--classic .dscSource__key {
+  color: var(--dsc-link);
+  font-weight: 600;
+}
+
+.dscSource__more {
+  color: var(--dsc-text-disabled);
+  font-style: italic;
+}
+
+/*
+ * Classic Discover truncate-by-height.
+ * Avoid -webkit-line-clamp here: nested inline spans break it and rows blow up.
+ */
+.truncate-by-height {
+  overflow: hidden;
+  max-height: 4.8em; /* ~3 lines at 1.55 line-height */
+  line-height: 1.55;
+  position: relative;
+}
+
+.truncate-by-height--search {
+  max-height: 7.75em; /* ~5 lines ??keep more yellow marks visible */
+}
+
+.truncate-by-height::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.2em;
+  background: linear-gradient(to bottom, transparent, var(--dsc-bg) 85%);
+  pointer-events: none;
+}
+
+.osdDocTable__row:hover .truncate-by-height::after,
+.osdDocTable__row--highlight .truncate-by-height::after {
+  background: linear-gradient(to bottom, transparent, var(--dsc-row-hover) 85%);
+}
+
+.osdDocTable__row--highlight > td {
+  background-color: var(--dsc-row-highlight) !important;
+}
+
+/* Kibana Discover query-hit mark (bright yellow) */
+.dscMark {
+  background: var(--dsc-mark);
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 0;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.dscDocViewer {
+  background: var(--dsc-bg);
+  border-bottom: 1px solid var(--dsc-border);
+}
+
+.dscDocViewer__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 4px;
+  background: var(--dsc-bg);
+}
+
+.dscDocViewer__title {
+  font-size: var(--dw-font-size);
+  font-weight: 700;
+  color: var(--dsc-text-strong);
+}
+
+.dscDocViewer__links {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dscDocViewer__meta {
+  font-size: var(--dw-text-xs);
+  color: var(--dsc-text-muted);
+  margin-left: auto;
+  padding-right: 8px;
+  align-self: center;
+}
+
+.dscDocViewer__tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-bottom: 1px solid var(--dsc-border);
+  padding: 0 8px;
+  background: var(--dsc-bg);
+}
+
+.dscDocViewer__tab {
+  border: 0;
+  background: transparent;
+  padding: 8px 14px;
+  font-size: var(--dw-font-size);
+  cursor: pointer;
+  color: var(--dsc-text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.dscDocViewer__tab.is-active {
+  color: var(--dsc-link);
+  border-bottom-color: var(--dsc-link);
+  font-weight: 600;
+}
+
+.dscDocViewer__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--dw-font-size);
+  background: var(--dsc-bg);
+}
+
+.dscDocViewer__table th,
+.dscDocViewer__table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--dsc-border);
+  text-align: left;
+  vertical-align: middle;
+  color: var(--dsc-text);
+}
+
+.dscDocViewer__actions {
+  width: 1%;
+  white-space: nowrap;
+  padding-left: 8px !important;
+  padding-right: 4px !important;
+  background: var(--dsc-bg);
+}
+
+.dscDocViewer__actionGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.dscDocViewer__table tr:hover .dscDocViewer__actionGroup,
+.dscDocViewer__table tr:focus-within .dscDocViewer__actionGroup {
+  opacity: 1;
+}
+
+.dscDocViewer__actionSpacer {
+  display: inline-block;
+  width: 48px;
+}
+
+.dscDocViewer__table th.field-name {
+  width: 22%;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  color: var(--dsc-text);
+  font-weight: 700;
+  background: var(--dsc-bg);
+  white-space: nowrap;
+}
+
+.dscDocViewer__type {
+  display: inline-flex;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.dscDocViewer__table td:last-child {
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  word-break: break-word;
+  width: auto;
+}
+
+.dscDocViewer__json {
+  margin: 0;
+  padding: 12px;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  font-size: var(--dw-text-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow: auto;
+  background: var(--dsc-bg);
+}
+
+.dscStatus {
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--dsc-text-muted);
+  font-size: var(--dw-font-size);
+}
+
+.dscStatus--error {
+  color: #bd271e;
+  padding: 8px 12px;
+  text-align: left;
+  background: var(--dsc-danger-bg);
+  border-bottom: 1px solid var(--dsc-danger-border);
+  flex-shrink: 0;
+}
+
+:root[data-theme="dark"] .dscStatus--error,
+:root[data-dw-theme="dark"] .dscStatus--error {
+  color: #f87171;
+}
+
+/* —— Filter pills (Kibana filter bar) —— */
+.dscFilterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 12px 8px;
+  background: var(--dsc-bg);
+  border-bottom: 1px solid var(--dsc-border);
+  flex-shrink: 0;
+}
+
+.dscFilterPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--dsc-bg-subtle);
+  border-radius: 4px;
+  padding: 0 2px 0 0;
+}
+
+.dscFilterPill--negate {
+  background: var(--dsc-danger-bg);
+}
+
+/* —— Sidebar field actions —— */
+.dscFieldItem__info,
+.dscFieldItem__toggle {
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.dscFieldItem:hover .dscFieldItem__info,
+.dscFieldItem:hover .dscFieldItem__toggle,
+.dscFieldItem:focus-within .dscFieldItem__info,
+.dscFieldItem:focus-within .dscFieldItem__toggle {
+  opacity: 1;
+}
+
+.dscFieldPopover {
+  min-width: 280px;
+  max-width: 360px;
+}
+
+.dscFieldBuckets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 320px;
+}
+
+.dscFieldBucket__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  font-size: var(--dw-text-xs);
+}
+
+.dscFieldBuckets__footer {
+  margin-top: 4px !important;
+}
+
+/* —— Table cell filter +/- (OSD osdDocTableCell) —— */
+.osdDocTableCell {
+  position: relative;
+  padding-right: 52px;
+}
+
+.osdDocTableCell__dataField {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  font-size: var(--dw-font-size);
+}
+
+.osdDocTableCell__filter {
+  position: absolute;
+  display: flex;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  padding: 4px 4px 4px 12px;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  z-index: 2;
+}
+
+.osdDocTableCell__filter::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(to right, transparent 0, var(--dsc-bg) 12px);
+  z-index: 1;
+}
+
+.osdDocTableCell__filter > * {
+  z-index: 2;
+}
+
+.osdDocTableCell:hover .osdDocTableCell__filter,
+.osdDocTableCell:focus-within .osdDocTableCell__filter {
+  opacity: 1;
+}

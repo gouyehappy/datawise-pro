@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WixLocalization Culture="zh-cn" xmlns="http://schemas.microsoft.com/wix/2006/localization" Codepage="936">
+  <String Id="message.install.dir.exist">文件夹 [INSTALLDIR] 已存在。是否仍要安装到该文件夹？</String>
+  <String Id="MainFeatureTitle">DataWise CLI</String>
+  <String Id="DowngradeErrorMessage">已安装更高版本的 [ProductName]。不允许降级，安装即将退出。</String>
+  <String Id="DisallowUpgradeErrorMessage">已安装其他版本的 [ProductName]。请先在「设置 → 应用」中卸载后再安装。</String>
+
+  <String Id="ShortcutPromptDlg_Title">[ProductName] 安装程序</String>
+  <String Id="ShortcutPromptDlgTitle">{\WixUI_Font_Title}快捷方式</String>
+  <String Id="ShortcutPromptDlgBannerBitmap">WixUI_Bmp_Banner</String>
+  <String Id="ShortcutPromptDlgDescription">请选择安装完成后要创建的快捷方式。</String>
+  <String Id="ShortcutPromptDlgDesktopShortcutControlLabel">创建桌面快捷方式</String>
+  <String Id="ShortcutPromptDlgStartMenuShortcutControlLabel">创建「开始」菜单快捷方式</String>
+  <String Id="InstallDirNotEmptyDlg_Title">[ProductName] 安装程序</String>
+  <String Id="ContextMenuCommandLabel">使用 [ProductName] 打开</String>
+
+  <!-- WixUI common strings (InstallDir sequence) -->
+  <String Id="WixUIBack">&amp;上一步</String>
+  <String Id="WixUINext">&amp;下一步</String>
+  <String Id="WixUICancel">&amp;取消</String>
+  <String Id="WixUIFinish">&amp;完成</String>
+  <String Id="WixUIRetry">&amp;重试</String>
+  <String Id="WixUIIgnore">&amp;忽略</String>
+  <String Id="WixUIYes">&amp;是</String>
+  <String Id="WixUINo">&amp;否</String>
+
+  <String Id="WelcomeDlg_Title">[ProductName] 安装程序</String>
+  <String Id="WelcomeDlgTitle">{\WixUI_Font_Bigger}欢迎安装 [ProductName]</String>
+  <String Id="WelcomeDlgDescription">{\WixUI_Font_Normal}本向导将引导您完成 DataWise CLI 的安装。\n\nDataWise CLI 是面向数据开发与探索的一体化 SQL 工作台，将连接管理、智能问数与结果导出整合在同一界面。\n\n建议在继续之前关闭正在运行的 DataWise 实例。\n\n单击「下一步」继续。</String>
+
+  <String Id="LicenseAgreementDlg_Title">[ProductName] 安装程序</String>
+  <String Id="LicenseAgreementDlgTitle">{\WixUI_Font_Title}最终用户许可协议</String>
+  <String Id="LicenseAgreementDlgDescription">请仔细阅读下列许可条款，然后选择是否接受。</String>
+  <String Id="LicenseAgreementDlgLicenseAcceptedCheckBox">我接受「许可协议」中的条款(&amp;A)</String>
+
+  <String Id="InstallDirDlg_Title">[ProductName] 安装程序</String>
+  <String Id="InstallDirDlgTitle">{\WixUI_Font_Title}安装位置</String>
+  <String Id="InstallDirDlgDescription">请选择 [ProductName] 的安装文件夹。</String>
+  <String Id="InstallDirDlgFolderLabel">安装文件夹(&amp;F)：</String>
+  <String Id="InstallDirDlgChange">&amp;更改…</String>
+
+  <String Id="VerifyReadyDlg_Title">[ProductName] 安装程序</String>
+  <String Id="VerifyReadyDlgInstallTitle">{\WixUI_Font_Title}准备安装</String>
+  <String Id="VerifyReadyDlgInstall">单击「安装」开始安装 [ProductName]。\n\n若要检查或更改安装设置，请单击「上一步」；若要退出，请单击「取消」。</String>
+  <String Id="VerifyReadyDlgInstallBtn">&amp;安装</String>
+
+  <String Id="ExitDialog_Title">[ProductName] 安装程序</String>
+  <String Id="ExitDialogTitleInstalled">{\WixUI_Font_Bigger}完成 [ProductName] 安装向导</String>
+  <String Id="ExitDialogFinishText">[ProductName] 已成功安装。\n\n可从「开始」菜单或桌面快捷方式启动应用。\n\n卸载：打开「设置 → 应用」搜索 DataWise，或运行安装目录中的 Uninstall.cmd。</String>
+</WixLocalization>

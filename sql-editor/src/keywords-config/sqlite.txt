@@ -1,0 +1,17 @@
+# SQLite — 格式化方言扩展
+
+[format_keywords]
+PRAGMA
+VACUUM
+REINDEX
+GLOB
+NOT GLOB
+NOT REGEXP
+MATCH
+IFNULL
+NULLIF
+TOTAL
+
+[format_break_before]
+LIMIT
+OFFSET

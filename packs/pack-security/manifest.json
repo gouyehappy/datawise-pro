@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "packId": "pack.security",
+  "version": "1.0.0-dev",
+  "minCoreVersion": "4.1.0",
+  "maxCoreVersion": "4.99.99",
+  "capabilities": ["security.export.mask","security.audit.pro","security.webhook"],
+  "plugins": ["p-export-mask"],
+  "extensionPoints": ["plugin.exportMask","settings.security"],
+  "requiresRestart": false,
+  "channel": "stable"
+}

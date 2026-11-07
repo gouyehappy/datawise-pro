@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.apache.datawise</groupId>
+        <artifactId>datawise-backend</artifactId>
+        <version>5.0.0</version>
+    </parent>
+
+    <artifactId>datawise-connectors</artifactId>
+    <packaging>pom</packaging>
+    <name>datawise-connectors</name>
+    <description>Optional datasource connector plugins (MySQL, PostgreSQL, Redis, …)</description>
+
+    <modules>
+        <module>datawise-connector-spi</module>
+        <module>datawise-connector-jdbc-runtime</module>
+        <module>datawise-connector-api</module>
+        <module>datawise-connector-mysql</module>
+        <module>datawise-connector-postgresql</module>
+        <module>datawise-connector-kingbase</module>
+        <module>datawise-connector-opengauss</module>
+        <module>datawise-connector-starrocks</module>
+        <module>datawise-connector-doris</module>
+        <module>datawise-connector-redis</module>
+        <module>datawise-connector-kafka</module>
+        <module>datawise-connector-yarn</module>
+        <module>datawise-connector-jenkins</module>
+        <module>datawise-connector-ssh</module>
+        <module>datawise-connector-kubernetes</module>
+        <module>datawise-connector-nacos</module>
+        <module>datawise-connector-polaris</module>
+        <module>datawise-connector-mongodb</module>
+        <module>datawise-connector-sqlserver</module>
+        <module>datawise-connector-oracle</module>
+        <module>datawise-connector-dm</module>
+        <module>datawise-connector-oscar</module>
+        <module>datawise-connector-tidb</module>
+        <module>datawise-connector-tdengine</module>
+        <module>datawise-connector-sybase</module>
+        <module>datawise-connector-phoenix</module>
+        <module>datawise-connector-cachedb</module>
+        <module>datawise-connector-h2</module>
+        <module>datawise-connector-hsql</module>
+        <module>datawise-connector-clickhouse</module>
+        <module>datawise-connector-gbase8a</module>
+        <module>datawise-connector-elasticsearch</module>
+        <module>datawise-connector-kylin</module>
+        <module>datawise-connector-greenplum</module>
+        <module>datawise-connector-oceanbase</module>
+        <module>datawise-connector-highgo</module>
+        <module>datawise-connector-db2</module>
+        <module>datawise-connector-sqlite</module>
+        <module>datawise-connector-presto</module>
+        <module>datawise-connector-trino</module>
+        <module>datawise-connector-hive</module>
+        <module>datawise-connector-kudu</module>
+        <module>datawise-connector-flink</module>
+        <module>datawise-connector-gaussdb</module>
+        <module>datawise-connector-all</module>
+    </modules>
+
+    <properties>
+        <!-- 各 connector 模块 target/*.jar → 仓库 config/plugins/（相对模块目录） -->
+        <datawise.plugins.dir>${project.basedir}/../../../config/plugins</datawise.plugins.dir>
+        <datawise.connector.plugin.jar.suffix>.jar</datawise.connector.plugin.jar.suffix>
+    </properties>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-antrun-plugin</artifactId>
+                    <version>3.1.0</version>
+                    <executions>
+                        <execution>
+                            <id>install-connector-plugin</id>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>run</goal>
+                            </goals>
+                            <configuration>
+                                <target>
+                                    <mkdir dir="${datawise.plugins.dir}"/>
+                                    <copy file="${project.build.directory}/${project.build.finalName}${datawise.connector.plugin.jar.suffix}"
+                                          todir="${datawise.plugins.dir}"
+                                          overwrite="true"/>
+                                    <echo message="Installed connector plugin: ${datawise.plugins.dir}/${project.build.finalName}${datawise.connector.plugin.jar.suffix}"/>
+                                </target>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+</project>

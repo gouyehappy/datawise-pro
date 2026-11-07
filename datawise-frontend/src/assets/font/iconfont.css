@@ -1,0 +1,15 @@
+@font-face {
+    font-family: 'iconfont';
+    src: url('./iconfont.woff2') format('woff2');
+    font-display: swap;
+}
+
+.chat-iconfont {
+    font-family: 'iconfont' !important;
+    font-style: normal;
+    font-weight: normal;
+    line-height: 1;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}

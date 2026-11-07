@@ -1,0 +1,407 @@
+.dw-data-grid-table tr.grid-virtual-spacer td{
+  padding: 0 !important;
+  border: none !important;
+  line-height: 0;
+  pointer-events: none;
+}.dw-data-grid-table table.grid-table{
+  /* 固定列宽：总宽由列宽合计决定，不拉满容器 */
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}.dw-data-grid-table col.col-index{
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+}.dw-data-grid-table .grid-table.is-resizing{
+  cursor: col-resize;
+  user-select: none;
+}.dw-data-grid-table .grid-table.is-resizing th, .dw-data-grid-table .grid-table.is-resizing td{
+  pointer-events: none;
+}.dw-data-grid-table .grid-table.is-resizing .th-resize{
+  pointer-events: auto;
+}.dw-data-grid-table th, .dw-data-grid-table td{
+  height: var(--dw-control-h-sm);
+  max-height: var(--dw-control-h-sm);
+  padding: 0;
+  border-bottom: 1px solid var(--dw-grid-line);
+  border-right: 1px solid var(--dw-grid-line);
+  text-align: left;
+  white-space: nowrap;
+  font-size: var(--dw-text-sm);
+  vertical-align: middle;
+  overflow: hidden;
+}.dw-data-grid-table td{
+  color: var(--dw-text);
+  background: var(--dw-bg-editor);
+}.dw-data-grid-table td.is-numeric{
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}.dw-data-grid-table td.is-numeric .cell-text, .dw-data-grid-table td.is-numeric .cell-input{
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--dw-mono);
+}.dw-data-grid-table .index-col{
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  box-sizing: border-box;
+  padding: 0 var(--dw-space-1);
+  color: color-mix(in srgb, var(--dw-text) 42%, var(--dw-text-muted));
+  text-align: center;
+  font-size: var(--dw-text-2xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  background: var(--dw-grid-rail);
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: 1px 0 0 var(--dw-grid-line);
+}.dw-data-grid-table th.index-col{
+  color: color-mix(in srgb, var(--dw-text) 48%, var(--dw-text-muted));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  z-index: 3;
+}.dw-data-grid-table .index-col--selectable{
+  cursor: pointer;
+}.dw-data-grid-table th{
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: auto;
+  max-height: none;
+  background: linear-gradient(180deg, var(--dw-grid-chrome-top) 0%, var(--dw-grid-chrome) 100%);
+  color: var(--dw-text-secondary);
+  font-weight: 500;
+  font-size: var(--dw-text-sm);
+  padding: var(--dw-space-2) var(--dw-space-4) var(--dw-space-2) var(--dw-space-3);
+  border-bottom: 1px solid color-mix(in srgb, var(--dw-text) 12%, var(--dw-border));
+  box-shadow:
+      var(--dw-surface-inset-highlight),
+      0 1px 0 color-mix(in srgb, var(--dw-text) 4%, transparent);
+  vertical-align: top;
+}.dw-data-grid-table th.index-col{
+  vertical-align: middle;
+  padding: 0 var(--dw-space-3);
+  background: linear-gradient(180deg, var(--dw-grid-chrome-top) 0%, var(--dw-grid-chrome) 100%);
+  box-shadow:
+      var(--dw-surface-inset-highlight),
+      1px 0 0 var(--dw-grid-line),
+      0 1px 0 color-mix(in srgb, var(--dw-text) 4%, transparent);
+}.dw-data-grid-table th.is-sortable{
+  cursor: grab;
+  user-select: none;
+}.dw-data-grid-table th.is-sortable:active{
+  cursor: grabbing;
+}.dw-data-grid-table th.is-sortable:hover{
+  background: linear-gradient(180deg, var(--dw-grid-chrome) 0%, var(--dw-grid-chrome-deep) 100%);
+}.dw-data-grid-table th.is-stats-active, .dw-data-grid-table th.is-sorted{
+  background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dw-grid-accent) 8%, var(--dw-grid-chrome-top)),
+      color-mix(in srgb, var(--dw-grid-accent) 12%, var(--dw-grid-chrome))
+  );
+}.dw-data-grid-table th.is-dragging{
+  opacity: 0.45;
+  background: var(--dw-grid-chrome-deep);
+}.dw-data-grid-table th.is-drag-over{
+  box-shadow:
+      inset 2px 0 0 var(--dw-grid-accent),
+      var(--dw-surface-inset-highlight);
+  background: color-mix(in srgb, var(--dw-grid-accent) 10%, var(--dw-grid-chrome));
+}.dw-data-grid-table th.is-sorted .th-label{
+  color: var(--dw-grid-accent);
+}.dw-data-grid-table th.is-numeric .th-main{
+  justify-content: flex-end;
+}.dw-data-grid-table th.is-numeric .th-type{
+  text-align: right;
+}.dw-data-grid-table .th-main{
+  display: flex;
+  align-items: center;
+  gap: var(--dw-space-2);
+  min-width: 0;
+  padding-right: var(--dw-space-4);
+  line-height: 1;
+}.dw-data-grid-table .th-col-icon, .dw-data-grid-table .th-key{
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dw-icon-size-xs);
+  height: var(--dw-icon-size-xs);
+  /* 光学居中：矢量图标视觉重心略偏上，下移 1px 对齐文字 */
+  transform: translateY(1px);
+}.dw-data-grid-table .th-col-icon{
+  color: var(--dw-grid-accent);
+  opacity: 0.88;
+}.dw-data-grid-table .th-key{
+  color: color-mix(in srgb, var(--dw-warning) 78%, var(--dw-warning-fg));
+}.dw-data-grid-table .th-label{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--dw-text);
+  font-size: var(--dw-text-sm);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+}.dw-data-grid-table .th-type{
+  margin-top: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--dw-text-muted);
+  font-family: var(--dw-mono);
+  font-size: var(--dw-text-2xs);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  padding-right: var(--dw-space-4);
+}.dw-data-grid-table .th-comment{
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--dw-text-muted);
+  font-size: var(--dw-text-2xs);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  padding-right: var(--dw-space-4);
+  opacity: 0.85;
+}.dw-data-grid-table .th-sort{
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--dw-grid-accent);
+  opacity: 0.95;
+}.dw-data-grid-table .th-sort--asc{
+  transform: rotate(180deg);
+}.dw-data-grid-table .th-resize{
+  position: absolute;
+  top: 0;
+  right: -2px;
+  z-index: 3;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  opacity: 0;
+  transition: opacity var(--dw-duration-fast) var(--dw-ease);
+}.dw-data-grid-table .th-resize::after{
+  content: '';
+  position: absolute;
+  top: 18%;
+  bottom: 18%;
+  left: 50%;
+  width: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--dw-grid-accent) 60%, var(--dw-border));
+  transform: translateX(-50%);
+}.dw-data-grid-table th:hover .th-resize, .dw-data-grid-table th.is-sorted .th-resize, .dw-data-grid-table .th-resize:hover, .dw-data-grid-table .th-resize:active, .dw-data-grid-table .grid-table.is-resizing .th-resize{
+  opacity: 1;
+}.dw-data-grid-table .th-resize:hover::after, .dw-data-grid-table .th-resize:active::after{
+  background: var(--dw-grid-accent);
+}.dw-data-grid-table th.th--meta{
+  overflow: visible;
+}.dw-data-grid-table tbody tr.is-zebra td{
+  background: var(--dw-grid-zebra);
+}.dw-data-grid-table tbody tr.is-zebra .index-col{
+  background: color-mix(in srgb, var(--dw-text) 9.5%, var(--dw-bg-muted));
+}.dw-data-grid-table tbody tr:hover td{
+  background: color-mix(in srgb, var(--dw-grid-accent) 5.5%, var(--dw-bg-editor));
+}.dw-data-grid-table tbody tr:hover .index-col{
+  background: color-mix(in srgb, var(--dw-grid-accent) 8%, var(--dw-grid-rail));
+  color: var(--dw-grid-accent);
+}.dw-data-grid-table tbody tr.is-selected td{
+  background: color-mix(in srgb, var(--dw-grid-accent) 26%, var(--dw-bg-editor));
+  /* 选中块外缘不要用浅色 grid-line，否则暗色主题会看成「白框」 */
+  border-bottom-color: color-mix(in srgb, var(--dw-grid-accent) 22%, transparent);
+  border-right-color: color-mix(in srgb, var(--dw-grid-accent) 16%, transparent);
+}.dw-data-grid-table tbody tr.is-selected .index-col{
+  background: color-mix(in srgb, var(--dw-grid-accent) 36%, var(--dw-grid-rail));
+  color: var(--dw-grid-accent);
+  font-weight: 700;
+  border-bottom-color: color-mix(in srgb, var(--dw-grid-accent) 22%, transparent);
+  box-shadow:
+      1px 0 0 color-mix(in srgb, var(--dw-grid-accent) 28%, transparent),
+      inset 3px 0 0 var(--dw-grid-accent);
+}.dw-data-grid-table tbody tr.is-zebra.is-selected td{
+  background: color-mix(in srgb, var(--dw-grid-accent) 30%, var(--dw-bg-editor));
+}.dw-data-grid-table tbody tr.is-zebra.is-selected .index-col{
+  background: color-mix(in srgb, var(--dw-grid-accent) 40%, var(--dw-grid-rail));
+}.dw-data-grid-table .data-cell{
+  cursor: default;
+  position: relative;
+  /* 配合 table-layout:fixed，让 ellipsis 按列宽截断 */
+  max-width: 0;
+  /* tabindex=-1 获焦时抑制系统白框（Shift 多选时常见） */
+  outline: none;
+}.dw-data-grid-table .data-cell:focus,
+.dw-data-grid-table .data-cell:focus-visible,
+.dw-data-grid-table .index-col:focus,
+.dw-data-grid-table .index-col:focus-visible{
+  outline: none;
+  box-shadow: none;
+}.dw-data-grid-table .data-cell.is-cell-active .cell-shell{
+  box-shadow: inset 0 0 0 2px var(--dw-grid-accent);
+  background: var(--dw-grid-accent-soft);
+}.dw-data-grid-table .data-cell.is-cell-editing .cell-shell{
+  box-shadow: inset 0 0 0 2px var(--dw-grid-accent);
+  background: var(--dw-bg-panel);
+}.dw-data-grid-table .cell-shell{
+  position: relative;
+  display: block;
+  height: var(--dw-control-h-sm);
+  max-height: var(--dw-control-h-sm);
+  min-width: 0;
+  padding: 0 var(--dw-space-5);
+  box-sizing: border-box;
+  overflow: hidden;
+}.dw-data-grid-table .cell-text{
+  display: block;
+  height: var(--dw-control-h-sm);
+  line-height: var(--dw-control-h-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+  cursor: cell;
+}.dw-data-grid-table .cell-text--backing{
+  /* 编辑时保留占位宽度，文字透明；用户看到的是上层 input */
+  color: transparent;
+  user-select: none;
+  pointer-events: none;
+}.dw-data-grid-table .cell-text.null{
+  color: var(--dw-text-muted);
+  font-style: italic;
+}.dw-data-grid-table .cell-text.null.cell-text--backing{
+  color: transparent;
+}.dw-data-grid-table .cell-input{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0 var(--dw-space-5);
+  border: none;
+  border-radius: 0;
+  background: var(--dw-bg-panel);
+  color: var(--dw-text);
+  font: inherit;
+  line-height: var(--dw-control-h-sm);
+  outline: none;
+  box-sizing: border-box;
+}.dw-data-grid-table tbody tr.is-pending-delete td{
+  background: color-mix(in srgb, var(--dw-danger) 12%, var(--dw-bg-editor));
+  color: var(--dw-danger-fg);
+}.dw-data-grid-table tbody tr.is-pending-delete .index-col, .dw-data-grid-table tbody tr.is-pending-delete .cell-text.null{
+  color: var(--dw-danger-fg);
+  background: color-mix(in srgb, var(--dw-danger) 14%, var(--dw-bg-muted));
+}.dw-data-grid-table tbody tr.is-pending-delete.is-selected td{
+  background: color-mix(in srgb, var(--dw-danger) 20%, var(--dw-bg-editor));
+}.dw-data-grid-table tbody tr.is-modified td{
+  background: color-mix(in srgb, var(--dw-warning) 10%, var(--dw-bg-editor));
+}.dw-data-grid-table tbody tr.is-modified .index-col{
+  background: color-mix(in srgb, var(--dw-warning) 12%, var(--dw-bg-muted));
+}.dw-data-grid-table tbody tr.is-insert-row td{
+  background: color-mix(in srgb, var(--dw-success) 8%, var(--dw-bg-editor));
+}.dw-data-grid-table tbody tr.is-insert-row .index-col{
+  background: color-mix(in srgb, var(--dw-success) 10%, var(--dw-bg-muted));
+}.dw-data-grid-table .cell-shell.has-datetime{
+  padding-right: var(--dw-space-10);
+}.dw-data-grid-table .cell-input--datetime{
+  padding-right: var(--dw-space-10);
+}.dw-data-grid-table .cell-datetime-btn{
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  z-index: var(--dw-z-raised);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dw-icon-size-xl);
+  height: var(--dw-icon-size-xl);
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--dw-control-radius-sm);
+  background: transparent;
+  color: var(--dw-text-muted);
+  transform: translateY(-50%);
+  cursor: pointer;
+}.dw-data-grid-table .cell-datetime-btn:hover, .dw-data-grid-table .cell-datetime-btn.is-open{
+  border-color: color-mix(in srgb, var(--dw-info) 35%, var(--dw-border));
+  background: color-mix(in srgb, var(--dw-info) 10%, var(--dw-bg-panel));
+  color: var(--dw-info-fg);
+}
+
+
+.dw-data-grid-table th.is-pinned,
+.dw-data-grid-table td.is-pinned {
+  position: sticky;
+  /* left offset from columnColStyle (cumulative multi-pin) */
+  z-index: 2;
+  box-shadow: 1px 0 0 var(--dw-grid-line);
+}
+
+.dw-data-grid-table th.is-pinned {
+  z-index: 4;
+}
+
+.dw-data-grid-table th.is-pinned-right,
+.dw-data-grid-table td.is-pinned-right {
+  position: sticky;
+  /* right offset from columnColStyle (cumulative multi-pin) */
+  z-index: 2;
+  box-shadow: -1px 0 0 var(--dw-grid-line);
+}
+
+.dw-data-grid-table th.is-pinned-right {
+  z-index: 4;
+}
+
+.dw-data-grid-table .col-virtual-pad,
+.dw-data-grid-table .th--virtual-pad,
+.dw-data-grid-table .data-cell--virtual-pad {
+  pointer-events: none;
+  background: transparent;
+  contain: strict;
+}
+
+/*
+ * Native skip-paint for off-screen row content. Used when spacer row-virtualization
+ * is off (normal page sizes). Avoid content-visibility on <tr> itself — it breaks
+ * sticky index/pinned cells in some engines.
+ */
+.dw-data-grid-table tbody tr:not(.grid-virtual-spacer) .cell-shell {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 30px;
+}
+
+/* 单元格范围：只用填充，不用描边（描边在暗色主题下易看成白框） */
+.dw-data-grid-table td.is-cell-range {
+  background: color-mix(in srgb, var(--dw-grid-accent) 30%, var(--dw-bg-editor));
+  border-bottom-color: color-mix(in srgb, var(--dw-grid-accent) 22%, transparent);
+  border-right-color: color-mix(in srgb, var(--dw-grid-accent) 16%, transparent);
+  box-shadow: none;
+  outline: none;
+}
+.dw-data-grid-table tbody tr.is-selected td.is-cell-range {
+  background: color-mix(in srgb, var(--dw-grid-accent) 36%, var(--dw-bg-editor));
+}
+
+/* 禁止划词，避免浏览器 AI/翻译类外置插件弹出浮层 */
+.dw-data-grid-table,
+.dw-data-grid-table * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-user-drag: none;
+}
+.dw-data-grid-table::selection,
+.dw-data-grid-table *::selection {
+  background: transparent;
+  color: inherit;
+}
+
+.dw-data-grid-table .cell-input,
+.dw-data-grid-table .cell-input * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}

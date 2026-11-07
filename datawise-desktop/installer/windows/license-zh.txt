@@ -1,0 +1,31 @@
+DataWise CLI 最终用户许可协议
+End-User License Agreement
+================================
+
+安装或使用 DataWise CLI，即表示您同意以下条款。
+
+1. 授权
+在遵守本协议的前提下，授予您在指定设备上安装并使用本软件的非独占、不可转让许可。
+
+2. 限制
+未经授权，不得对本软件进行反向工程、反编译、破解或商业再分发。
+若包含开源组件，其许可以各组件自身条款为准。
+
+3. 免责
+本软件按「现状」提供。在适用法律允许的最大范围内，作者不对因使用本软件产生的任何直接或间接损失承担责任。
+
+4. 隐私与本地数据
+本软件默认在本地运行。工作区配置等用户数据通常保存在您设备上的用户目录中（例如 %APPDATA%\DataWiseCLI）。
+
+若您不同意上述条款，请勿安装或使用本软件。
+
+--------------------------------
+
+By installing or using DataWise CLI, you agree to these terms.
+
+1. License — non-exclusive, non-transferable right to install and run on devices you control.
+2. Restrictions — no reverse engineering or redistribution except as allowed by included open-source licenses.
+3. Disclaimer — provided "AS IS" without warranty; liability limited to the maximum extent permitted by law.
+4. Local data — workspace settings typically remain on your machine (e.g. %APPDATA%\DataWiseCLI).
+
+If you do not agree, do not install or use the software.

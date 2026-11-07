@@ -1,0 +1,102 @@
+/**
+ * 共用表面 / 选择网格 / 状态徽标 — 各面板壳与业务组件统一使用。
+ * 新增面板壳优先加 .dw-surface；历史类名挂接在同一声明块，保证样式一致。
+ * 间距 / 字号 / 圆角 / 颜色请只用 variables.css 令牌，勿在业务文件写死 px。
+ */
+
+.dw-surface,
+.module-panel,
+.dw-panel,
+.workbench-edge__panel {
+    border: 1px solid var(--dw-panel-border);
+    border-radius: var(--dw-panel-radius);
+    background: var(--dw-bg-panel);
+    box-shadow: var(--dw-panel-shadow);
+    overflow: hidden;
+}
+
+.dw-surface--editor,
+.module-panel,
+.dw-panel {
+    background: var(--dw-bg-editor);
+}
+
+.dw-surface--flat {
+    box-shadow: none;
+}
+
+.dw-choice-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dw-gap-lg);
+}
+
+.dw-divider {
+    height: 1px;
+    margin: var(--dw-space-3) 0;
+    background: var(--dw-border-light);
+    border: 0;
+}
+
+.dw-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dw-gap);
+}
+
+.dw-stack--sm {
+    gap: var(--dw-gap-sm);
+}
+
+.dw-row {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-gap);
+}
+
+.dw-row--sm {
+    gap: var(--dw-gap-sm);
+}
+
+/* 状态色文字 / 软底 */
+.dw-tone-success { color: var(--dw-success-fg); }
+.dw-tone-warning { color: var(--dw-warning-fg); }
+.dw-tone-danger { color: var(--dw-danger-fg); }
+.dw-tone-info { color: var(--dw-info-fg); }
+
+.dw-badge-soft {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dw-space-2);
+    padding: 1px var(--dw-space-4);
+    border-radius: var(--dw-chip-radius);
+    font-size: var(--dw-font-size-badge);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.dw-badge-soft--success {
+    color: var(--dw-success-fg);
+    background: var(--dw-success-soft);
+}
+
+.dw-badge-soft--warning {
+    color: var(--dw-warning-fg);
+    background: var(--dw-warning-soft);
+}
+
+.dw-badge-soft--danger {
+    color: var(--dw-danger-fg);
+    background: var(--dw-danger-soft);
+}
+
+.dw-badge-soft--info {
+    color: var(--dw-info-fg);
+    background: var(--dw-info-soft);
+}
+
+.dw-focus-ring:focus-visible {
+    outline: none;
+    border-color: var(--dw-focus-border);
+    box-shadow: var(--dw-focus-ring);
+}

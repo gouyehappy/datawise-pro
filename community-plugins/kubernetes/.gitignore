@@ -1,0 +1,16 @@
+﻿/dist/
+ui/dist/
+/.datawise-dev/
+.datawise-repository-signing-key.env
+.DS_Store
+*.log
+tmp/
+node_modules/*
+ui/node_modules/*
+.pnpm-store/
+.zcode
+.dwp-staging/
+.signing/
+backend/datawise-plugin-kubernetes
+backend/datawise-plugin-kubernetes.exe
+*.dwp

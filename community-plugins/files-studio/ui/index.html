@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Files Studio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="chrome">
+      <span class="chrome__mark" aria-hidden="true"></span>
+      <span class="chrome__title">Files Studio</span>
+      <span class="chrome__endpoint" id="endpointLabel">正在连接…</span>
+      <span class="badge" id="healthBadge">idle</span>
+      <div class="chrome__actions">
+        <button type="button" class="dw-text-btn" id="btnRefreshAll">刷新全部</button>
+      </div>
+    </header>
+
+    <div class="body">
+      <section class="main">
+        <nav class="tabs" id="resourceTabs">
+          <button type="button" class="tab is-active" data-tab="browser">浏览</button>
+          <button type="button" class="tab" data-tab="transfers">传输</button>
+          <button type="button" class="tab" data-tab="archives">归档</button>
+          <button type="button" class="tab" data-tab="guard">防护<span class="tab__badge hidden" id="guardTabBadge">0</span></button>
+        </nav>
+
+        <!-- Browser -->
+        <div class="panel is-active" id="panel-browser">
+          <div class="pathbar">
+            <div class="path-field">
+              <button type="button" class="path-up" id="btnUp" disabled title="返回上一层（Backspace）" aria-label="返回上一层">
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                  <path d="M10.2 3.2 5.4 8l4.8 4.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <div class="crumbs" id="crumbs"></div>
+              <button type="button" class="path-copy" id="btnCopyPath" title="复制当前路径" aria-label="复制当前路径">
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                  <rect x="5" y="3.4" width="7.2" height="9.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M4.2 11.6H3.6A1.2 1.2 0 0 1 2.4 10.4V3.2A1.2 1.2 0 0 1 3.6 2h6.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+              </button>
+              <label class="path-search">
+                <svg class="path-search__icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                  <circle cx="7" cy="7" r="3.4" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M9.6 9.6 12.4 12.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                <input type="search" id="filterInput" class="pathbar__filter" placeholder="筛选名称" aria-label="筛选名称" />
+                <button type="button" class="pathbar__clear hidden" id="btnClearFilter" title="清除筛选" aria-label="清除筛选">×</button>
+              </label>
+            </div>
+            <span id="scopeLabel" class="hidden"></span>
+          </div>
+          <div class="toolbar">
+            <button type="button" class="dw-btn dw-btn--primary" id="btnUpload">上传</button>
+            <input type="file" id="fileInput" class="hidden" multiple />
+            <button type="button" class="dw-btn" id="btnNewFolder">新建文件夹</button>
+            <span class="toolbar__gap"></span>
+            <button type="button" class="dw-btn" id="btnDownload" disabled>下载</button>
+            <button type="button" class="dw-btn" id="btnCopyTransfer" disabled>传输</button>
+            <button type="button" class="dw-btn dw-btn--danger" id="btnDelete" disabled>删除</button>
+            <button type="button" class="dw-text-btn" id="btnRefreshBrowser">刷新</button>
+            <span class="toolbar__status" id="browserStatus">0 项</span>
+          </div>
+          <div class="content-split">
+            <div class="list-pane" id="browserDropZone">
+              <div class="drop-hint" id="dropHint">松开即可上传到当前目录 · 也可把文件拖出到桌面下载</div>
+              <table class="table" id="browserTable">
+                <thead>
+                  <tr>
+                    <th class="col-check"><input type="checkbox" id="checkAll" title="全选" /></th>
+                    <th>名称</th>
+                    <th class="col-size">大小</th>
+                    <th class="col-time">修改时间</th>
+                  </tr>
+                </thead>
+                <tbody id="browserBody"></tbody>
+              </table>
+              <div class="empty hidden" id="browserEmpty">
+                <div class="empty__icon" aria-hidden="true"></div>
+                <strong id="browserEmptyTitle">这里是空的</strong>
+                <div id="browserEmptyDetail">可以上传文件，把文件拖进来；有文件时也可拖到桌面下载。</div>
+                <button type="button" class="dw-btn dw-btn--primary empty__cta" id="btnEmptyUpload">上传文件</button>
+              </div>
+              <div class="selection-bar hidden" id="selectionBar">
+                <span id="selectionHint">已选 0 项</span>
+                <button type="button" class="dw-btn" id="btnBarDownload">下载</button>
+                <button type="button" class="dw-btn" id="btnBarTransfer">传输</button>
+                <button type="button" class="dw-btn dw-btn--danger" id="btnBarDelete">删除</button>
+                <button type="button" class="dw-text-btn" id="btnBarClear">取消选择</button>
+              </div>
+            </div>
+            <aside class="inspector" id="inspector"></aside>
+          </div>
+        </div>
+
+        <!-- Transfers -->
+        <div class="panel" id="panel-transfers">
+          <div class="toolbar">
+            <div class="filter-pills" id="transferFilters">
+              <button type="button" class="pill is-active" data-state="all">全部</button>
+              <button type="button" class="pill" data-state="running">进行中</button>
+              <button type="button" class="pill" data-state="failed">失败</button>
+              <button type="button" class="pill" data-state="completed">完成</button>
+            </div>
+            <button type="button" class="dw-btn dw-btn--primary" id="btnNewTransfer">新建传输</button>
+            <button type="button" class="dw-text-btn" id="btnRefreshTransfers">刷新</button>
+            <span class="toolbar__status" id="transferStatus"></span>
+          </div>
+          <div class="list-pane">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>编号</th>
+                  <th>类型</th>
+                  <th>从 → 到</th>
+                  <th>进度</th>
+                  <th>速度</th>
+                  <th>状态</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="transferBody"></tbody>
+            </table>
+            <div class="empty hidden" id="transferEmpty">
+              <div class="empty__icon empty__icon--transfer" aria-hidden="true"></div>
+              <strong>还没有传输任务</strong>
+              <div>在浏览里勾选文件后，点「传输」。</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Archives -->
+        <div class="panel" id="panel-archives">
+          <div class="toolbar">
+            <button type="button" class="dw-btn dw-btn--primary" id="btnNewArchive">新建归档</button>
+            <button type="button" class="dw-text-btn" id="btnRefreshArchives">刷新</button>
+            <span class="toolbar__status" id="archiveStatus"></span>
+          </div>
+          <div class="list-pane">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>编号</th>
+                  <th>类型</th>
+                  <th>来源</th>
+                  <th>目标</th>
+                  <th>状态</th>
+                  <th>大小</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="archiveBody"></tbody>
+            </table>
+            <div class="empty hidden" id="archiveEmpty">
+              <div class="empty__icon empty__icon--archive" aria-hidden="true"></div>
+              <strong>还没有归档任务</strong>
+              <div>打包、解包，或更改 S3 对象的存储类。</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Guard -->
+        <div class="panel" id="panel-guard">
+          <div class="toolbar">
+            <span class="toolbar__lede">删除等危险操作会在这里二次确认</span>
+            <button type="button" class="dw-text-btn" id="btnRefreshGuard">刷新</button>
+          </div>
+          <div class="list-pane guard-pane">
+            <section class="guard-block">
+              <h3>当前策略</h3>
+              <div class="policy-chips" id="guardPolicy"></div>
+            </section>
+            <section class="guard-block">
+              <h3>待确认 <span class="section-count" id="pendingCount"></span></h3>
+              <table class="table">
+                <thead><tr><th>类型</th><th>路径</th><th>时间</th><th></th></tr></thead>
+                <tbody id="guardPendingBody"></tbody>
+              </table>
+              <div class="empty-inline hidden" id="pendingEmpty">暂无待确认操作</div>
+            </section>
+            <section class="guard-block">
+              <h3>操作记录</h3>
+              <table class="table">
+                <thead><tr><th>时间</th><th>操作</th><th>路径</th><th>结果</th><th>说明</th></tr></thead>
+                <tbody id="guardAuditBody"></tbody>
+              </table>
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="transferDrawer">
+    <h2>新建传输</h2>
+    <div class="field">
+      <label>类型</label>
+      <select id="tfKind">
+        <option value="copy">复制（连接 → 连接，支持目录）</option>
+            <option value="sync">目录树复制（覆盖已有，不删多余）</option>
+        <option value="upload">上传（本地 → 连接）</option>
+        <option value="download">下载（连接 → 本地）</option>
+      </select>
+    </div>
+    <div class="field" id="tfSrcMountWrap">
+      <label>来源连接</label>
+      <select id="tfSrcMount"></select>
+    </div>
+    <div class="field">
+      <label id="tfSrcPathLabel">来源路径</label>
+      <div class="field-row">
+        <input id="tfSrcPath" type="text" />
+        <button type="button" class="dw-btn hidden" id="tfPickSrcFile">选文件</button>
+        <button type="button" class="dw-btn hidden" id="tfPickSrcDir">选文件夹</button>
+      </div>
+    </div>
+    <div class="field" id="tfDestMountWrap">
+      <label>目标连接</label>
+      <select id="tfDestMount"></select>
+    </div>
+    <div class="field">
+      <label id="tfDestPathLabel">目标路径</label>
+      <div class="field-row">
+        <input id="tfDestPath" type="text" />
+        <button type="button" class="dw-btn hidden" id="tfPickDestFile">选保存</button>
+        <button type="button" class="dw-btn hidden" id="tfPickDestDir">选文件夹</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="check-label"><input type="checkbox" id="tfOverwrite" checked /> 覆盖已有文件</label>
+    </div>
+    <div class="drawer__actions">
+      <button type="button" class="dw-btn" id="tfCancel">取消</button>
+      <button type="button" class="dw-btn dw-btn--primary" id="tfCreate">创建</button>
+    </div>
+  </aside>
+
+  <aside class="drawer" id="archiveDrawer">
+    <h2>新建归档</h2>
+    <div class="field">
+      <label>类型</label>
+      <select id="arKind">
+        <option value="pack">打包当前目录</option>
+        <option value="unpack">解包选中文件</option>
+        <option value="lifecycle">更改存储类（S3）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>来源路径</label>
+      <input id="arSource" type="text" />
+    </div>
+    <div class="field" id="arDestWrap">
+      <label>目标路径</label>
+      <input id="arDest" type="text" />
+    </div>
+    <div class="field" id="arFormatWrap">
+      <label>格式</label>
+      <select id="arFormat">
+        <option value="tar.gz">tar.gz</option>
+        <option value="zip">zip</option>
+      </select>
+    </div>
+    <div class="field hidden" id="arClassWrap">
+      <label>存储类</label>
+      <select id="arClass">
+        <option value="STANDARD">STANDARD</option>
+        <option value="STANDARD_IA">STANDARD_IA</option>
+        <option value="ONEZONE_IA">ONEZONE_IA</option>
+        <option value="INTELLIGENT_TIERING">INTELLIGENT_TIERING</option>
+        <option value="GLACIER">GLACIER</option>
+        <option value="DEEP_ARCHIVE">DEEP_ARCHIVE</option>
+      </select>
+    </div>
+    <div class="drawer__actions">
+      <button type="button" class="dw-btn" id="arCancel">取消</button>
+      <button type="button" class="dw-btn dw-btn--primary" id="arCreate">创建</button>
+    </div>
+  </aside>
+
+  <div class="drawer-backdrop" id="confirmBackdrop"></div>
+  <aside class="drawer confirm-drawer" id="confirmDrawer">
+    <h2 id="confirmTitle">确认操作</h2>
+    <p class="confirm-body" id="confirmBody"></p>
+    <div class="field hidden" id="confirmInputWrap">
+      <label>文件夹名称</label>
+      <input id="confirmInput" type="text" placeholder="例如 reports" />
+    </div>
+    <div class="drawer__actions">
+      <button type="button" class="dw-btn" id="confirmCancel">取消</button>
+      <button type="button" class="dw-btn dw-btn--danger" id="confirmOk">确认删除</button>
+    </div>
+  </aside>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

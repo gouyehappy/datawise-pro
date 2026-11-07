@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "packId": "pack.lineage",
+  "version": "1.0.0-dev",
+  "minCoreVersion": "4.1.0",
+  "maxCoreVersion": "4.99.99",
+  "capabilities": ["lineage.parse","lineage.impact"],
+  "plugins": [],
+  "extensionPoints": ["explorer.lineage","api.lineage"],
+  "requiresRestart": false,
+  "channel": "stable"
+}

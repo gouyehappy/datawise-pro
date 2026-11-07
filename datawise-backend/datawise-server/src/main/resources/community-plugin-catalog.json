@@ -1,0 +1,306 @@
+{
+  "catalogs": [
+    {
+      "id": "datawise-examples",
+      "name": "DataWise Examples",
+      "entries": [
+        {
+          "id": "io.datawise.example.hello",
+          "name": "Hello Workbench",
+          "version": "1.0.0",
+          "publisher": "datawise-examples",
+          "description": "Demo community plugin: connection + workbench + hello:/ filesystem",
+          "packageUrl": "classpath:community-plugin-fixtures/io.datawise.example.hello-1.0.0.dwp",
+          "signingKeyId": "datawise-examples",
+          "permissions": [
+            "host.workbench",
+            "host.filesystem",
+            "host.events"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "datawise-community",
+      "name": "DataWise Community",
+      "entries": [
+        {
+          "id": "io.datawise.community.data-diff",
+          "name": "Data Diff",
+          "version": "0.2.0",
+          "publisher": "datawise-community",
+          "description": "Compare row counts and sampled keys between two DataWise SQL connections (dev vs staging). Optional JDBC fallback remains on the sidecar.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-data-diff-v0.2.0/io.datawise.community.data-diff-0.2.0-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard",
+            "host.sql"
+          ]
+        },
+        {
+          "id": "io.datawise.community.dbt",
+          "name": "dbt Project",
+          "version": "0.3.0",
+          "publisher": "datawise-community",
+          "description": "Bind a local dbt project: list models, compile, run, and copy compiled SQL back into the DataWise console.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-dbt-v0.3.0/io.datawise.community.dbt-0.3.0-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard",
+            "host.sql"
+          ]
+        },
+        {
+          "id": "io.datawise.community.docker",
+          "name": "Docker",
+          "version": "0.1.0",
+          "publisher": "datawise-community",
+          "description": "Connect to Docker Engine and manage containers, images, volumes, and networks from DataWise. Ported from Ezreal-byte/dbx-docker-plugin.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-docker-v0.1.0/io.datawise.community.docker-0.1.0-windows-x86_64-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.binary",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.duckdb",
+          "name": "DuckDB Files",
+          "version": "0.1.0",
+          "publisher": "datawise-community",
+          "description": "Ad-hoc SQL over a local DuckDB database or a folder of Parquet / CSV files — no warehouse load required.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-duckdb-v0.1.0/io.datawise.community.duckdb-0.1.0-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.files-studio",
+          "name": "Files Studio",
+          "version": "0.1.0",
+          "publisher": "datawise-community",
+          "description": "Unified file workbench for local folders and OpenDAL storage (S3, Azure Blob, GCS, OBS, WebDAV, FTP, SFTP). Browse, transfer, archive, and guarded ops in one K8s-style UI.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-files-studio-v0.1.0/io.datawise.community.files-studio-0.1.0-windows-x86_64-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.filesystem",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.git-ops",
+          "name": "Git Ops",
+          "version": "0.12.24",
+          "publisher": "datawise-community",
+          "description": "Beyond SourceTree: hunk stage/discard, checkbox staging, commit & push, keyboard-first, host theme.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-git-ops-v0.12.24/io.datawise.community.git-ops-0.12.24-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.health-check",
+          "name": "Health Checklist",
+          "version": "0.1.0",
+          "publisher": "datawise-community",
+          "description": "On-call probe board: TCP, HTTP, and read-only SQL checks with a copyable report.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-health-check-v0.1.0/io.datawise.community.health-check-0.1.0-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard",
+            "host.sql"
+          ]
+        },
+        {
+          "id": "io.datawise.community.httpclient",
+          "name": "HTTP Client",
+          "version": "0.1.0",
+          "publisher": "datawise-community",
+          "description": "A Postman-style HTTP workbench: compose requests, send them through a native sidecar, and inspect responses.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-http-client-v0.1.0/io.datawise.community.httpclient-0.1.0-windows-x86_64-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.jenkins",
+          "name": "Jenkins Ops",
+          "version": "0.3.26",
+          "publisher": "datawise-community",
+          "description": "Jenkins ops console: health overview, pinned jobs, queue triage, build follow, artifacts, and agent status.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-jenkins-v0.3.26/io.datawise.community.jenkins-0.3.26-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.kafka-ops",
+          "name": "Kafka Ops",
+          "version": "0.1.11",
+          "publisher": "datawise-community",
+          "description": "Kafka ops workbench: bootstrap or multi-cluster fleet, cluster pulse, topics, bounded message explorer, consumer lag & offset reset, brokers, gated mutations.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-kafka-ops-v0.1.11/io.datawise.community.kafka-ops-0.1.11-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.kibana",
+          "name": "Kibana Logs",
+          "version": "0.3.2",
+          "publisher": "datawise-community",
+          "description": "Kibana / OpenSearch Dashboards Discover-style workbench for Elasticsearch logs (UI adapted from open-source Discover patterns).",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-kibana-v0.3.2/io.datawise.community.kibana-0.3.2-windows-x86_64-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.kubernetes",
+          "name": "Kubernetes Manager",
+          "version": "0.1.14",
+          "publisher": "datawise-community",
+          "description": "Connect to Kubernetes clusters and manage resources from DataWise. Ported from eryajf/dbx-plugin-k8s.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-kubernetes-v0.1.14/io.datawise.community.kubernetes-0.1.14-windows-x86_64-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.log-controller",
+          "name": "Log Controller",
+          "version": "0.1.54",
+          "publisher": "datawise-community",
+          "description": "Multi-host log workbench: one menu entry; configure log directory, hosts and SSH credentials in the workbench when querying.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-log-controller-v0.1.54/io.datawise.community.log-controller-0.1.54-windows-x86_64-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.nacos-ops",
+          "name": "Nacos Ops",
+          "version": "0.5.12",
+          "publisher": "datawise-community",
+          "description": "Nacos / rNacos ops workbench: namespaces, config publish, and service discovery.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-nacos-ops-v0.5.12/io.datawise.community.nacos-ops-0.5.12-windows-x86_64-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.polaris-ops",
+          "name": "Polaris Ops",
+          "version": "0.3.12",
+          "publisher": "datawise-community",
+          "description": "PolarIS ops workbench: namespaces, config create/update/delete/clone, and service discovery.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-polaris-ops-v0.3.12/io.datawise.community.polaris-ops-0.3.12-windows-x86_64-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.redis-ops",
+          "name": "Redis Ops",
+          "version": "0.3.0",
+          "publisher": "datawise-community",
+          "description": "Redis ops workbench (IDE rail): Keys tree by :, Console, Slowlog/Clients/Config, Pulse/Memory — single / Sentinel / Cluster / fleet.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-redis-ops-v0.3.0/io.datawise.community.redis-ops-0.3.0-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.runbook",
+          "name": "Runbook Runner",
+          "version": "0.1.0",
+          "publisher": "datawise-community",
+          "description": "Run local YAML ops playbooks: notes, SQL console, HTTP probes, copied commands, and checklists.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-runbook-v0.1.0/io.datawise.community.runbook-0.1.0-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard",
+            "host.sql"
+          ]
+        },
+        {
+          "id": "io.datawise.community.ssh",
+          "name": "SSH Terminal",
+          "version": "0.7.11-beta.17",
+          "publisher": "datawise-community",
+          "description": "SSH terminal, SFTP, and remote operations.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-ssh-v0.7.11-beta.17/io.datawise.community.ssh-0.7.11-beta.17-windows-x86_64-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.events",
+            "host.binary",
+            "host.filesystem",
+            "host.workbench",
+            "host.clipboard",
+            "host.ai"
+          ]
+        },
+        {
+          "id": "io.datawise.community.translation",
+          "name": "Translation",
+          "version": "0.1.1",
+          "publisher": "datawise-community",
+          "description": "Instant translation workbench (MVP): built-in free engine, OpenAI-compatible LLMs, and optional DataWise host AI. Translate-as-you-type, streaming, engine management, history. Engines/secrets live in the plugin data directory (SQLite).",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-translation-v0.1.1/io.datawise.community.translation-0.1.1-windows-x86_64-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard",
+            "host.ai"
+          ]
+        }
+      ]
+    }
+  ]
+}

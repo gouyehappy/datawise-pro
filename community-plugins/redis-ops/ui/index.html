@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Redis Ops</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <aside class="rail" id="tabs" aria-label="Redis Ops"></aside>
+  <div class="shell">
+    <header class="topbar">
+      <div class="inst-picker" id="instPicker">
+        <button type="button" class="inst-trigger" id="instTrigger" title="实例与连接信息">
+          <span class="inst-dot" id="instDot"></span>
+          <span class="inst-label" id="instLabel">选择实例…</span>
+          <span class="inst-meta" id="instMeta"></span>
+          <span class="inst-caret"></span>
+        </button>
+        <div class="inst-panel" id="instPanel">
+          <div class="inst-id" id="instIdentity"></div>
+          <input class="inst-search" id="fleetFilter" type="search" placeholder="搜索实例…" autocomplete="off" />
+          <div class="inst-options" id="fleetList"></div>
+          <div class="inst-panel-foot">
+            <button type="button" class="btn btn-ghost" id="pingAllBtn">全部探测</button>
+            <button type="button" class="btn btn-ghost" id="refreshInstBtn">刷新</button>
+          </div>
+        </div>
+      </div>
+      <div class="db-slot" id="dbSlot"></div>
+      <div class="topbar-spacer"></div>
+      <div class="actions-top" id="topActions"></div>
+      <div class="status" id="status"><i></i><span id="statusText">连接中…</span></div>
+    </header>
+    <div class="body" id="body"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="dw-split-pane.js"></script>
+<script src="state.js"></script>
+<script src="util.js"></script>
+<script src="bridge.js"></script>
+<script src="nav.js"></script>
+<script src="fleet.js"></script>
+<script src="views-ops.js"></script>
+<script src="views-keys.js"></script>
+<script src="views-console.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

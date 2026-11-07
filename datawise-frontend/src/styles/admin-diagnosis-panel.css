@@ -1,0 +1,69 @@
+/* SQL Monitor — privileges / object storage diagnosis panels */
+
+.admin-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dw-gap-md);
+}
+
+.admin-panel__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--dw-space-4);
+}
+
+.admin-panel__title {
+    margin: 0;
+    font-size: var(--dw-text-sm);
+    font-weight: 600;
+}
+
+.admin-panel--embedded .admin-panel__title {
+    font-size: var(--dw-text-md);
+}
+
+.admin-panel__hint {
+    margin: var(--dw-space-1) 0 0;
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-muted);
+}
+
+.admin-panel__actions {
+    display: flex;
+    gap: var(--dw-space-2);
+    flex-shrink: 0;
+}
+
+.admin-panel__table-wrap {
+    overflow: auto;
+    max-height: 28rem;
+    border: var(--dw-border-width) solid var(--dw-border-subtle);
+    border-radius: var(--dw-control-radius-sm);
+}
+
+.admin-panel__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--dw-text-xs);
+}
+
+.admin-panel__table th,
+.admin-panel__table td {
+    padding: var(--dw-space-2) var(--dw-space-3);
+    text-align: left;
+    border-bottom: var(--dw-border-width) solid var(--dw-border-subtle);
+    white-space: nowrap;
+}
+
+.admin-panel__table th {
+    position: sticky;
+    top: 0;
+    background: var(--dw-surface-muted);
+    font-weight: 600;
+    color: var(--dw-text-muted);
+}
+
+.admin-panel__table td.admin-panel__mono {
+    font-family: var(--dw-mono);
+}

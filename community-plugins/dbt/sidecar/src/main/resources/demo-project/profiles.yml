@@ -1,0 +1,7 @@
+datawise_dbt_demo:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ":memory:"
+      schema: main

@@ -1,0 +1,560 @@
+[
+  {
+    "id": "p-grid-export",
+    "name": "结果集导出",
+    "version": "1.5.0",
+    "author": "DataWise",
+    "description": "查询结果网格支持导出 CSV、JSON、TSV、INSERT SQL。",
+    "enabled": true,
+    "category": "export"
+  },
+  {
+    "id": "p-sql-format",
+    "name": "SQL 格式化",
+    "version": "3.0.1",
+    "author": "DataWise",
+    "description": "控制台一键格式化 SQL，统一缩进与关键字风格。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-ai-workbench",
+    "name": "AI 数据分析",
+    "version": "1.0.0",
+    "author": "DataWise Labs",
+    "description": "独立 AI 工作台：自然语言问数、多轮分析与图表解读。",
+    "enabled": true,
+    "category": "ai"
+  },
+  {
+    "id": "p-console-ai",
+    "name": "控制台 AI 助手",
+    "version": "0.9.2",
+    "author": "DataWise Labs",
+    "description": "在 SQL 控制台内用自然语言生成/补全当前脚本。",
+    "enabled": true,
+    "category": "ai"
+  },
+  {
+    "id": "p-sql-snippets",
+    "name": "SQL 内置片段",
+    "version": "2.2.0",
+    "author": "DataWise",
+    "description": "编辑器 Tab 触发的内置片段与快捷芯片（sql-snippets.shared.json）。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-sql-snippets-team",
+    "name": "SQL 团队片段",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "设置页导入的团队/共享 SQL 片段层。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-sql-snippets-personal",
+    "name": "SQL 个人片段",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "个人 SQL 片段覆盖与补全行为偏好。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-sql-history",
+    "name": "SQL 执行历史",
+    "version": "1.3.0",
+    "author": "DataWise",
+    "description": "右侧 History 面板记录每次执行 SQL，可一键回填到控制台。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-sql-monitor",
+    "name": "SQL 会话监控",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "右侧 Monitor 面板：活跃会话、锁等待与终止会话（按数据源能力显隐）。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-redis-explorer",
+    "name": "Redis 连接",
+    "version": "1.2.0",
+    "author": "DataWise",
+    "description": "启用 Redis 数据源：连接测试、SCAN 键浏览（Lettuce 原生协议，非 JDBC）。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-kafka-explorer",
+    "name": "Kafka 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "启用 Kafka 数据源：Topic、Consumer Group 浏览与消息采样。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-yarn-explorer",
+    "name": "YARN 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "启用 Hadoop YARN 数据源：应用、队列与节点浏览。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-kubernetes-explorer",
+    "name": "Kubernetes 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "启用 Kubernetes 数据源：Namespace、Pod 与 Deployment 浏览。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-mongo-explorer",
+    "name": "MongoDB 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "启用 MongoDB 数据源：连接测试与集合/文档浏览。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-starrocks-explorer",
+    "name": "StarRocks 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 StarRocks，使用 OLAP 方言与 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-doris-explorer",
+    "name": "Doris 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 Apache Doris，使用 OLAP 方言与 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-trino-explorer",
+    "name": "Trino / Presto 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 Trino 或 Presto，支持 catalog/schema 懒加载 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-clickhouse-explorer",
+    "name": "ClickHouse 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 ClickHouse，使用 OLAP 方言与 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-sqlite-explorer",
+    "name": "SQLite 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 SQLite 本地/文件数据库。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-oracle-explorer",
+    "name": "Oracle 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 Oracle，使用 JDBC 方言与 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-hive-explorer",
+    "name": "Hive 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 Apache Hive，浏览 catalog/schema 与表。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-kudu-explorer",
+    "name": "Kudu 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "通过原生 kudu-client 连接 Apache Kudu Master，浏览表结构与数据。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-sqlserver-explorer",
+    "name": "SQL Server 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 Microsoft SQL Server，使用 JDBC 方言与 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-mariadb-explorer",
+    "name": "MariaDB 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 MariaDB，与 MySQL 协议兼容的 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-mysql-explorer",
+    "name": "MySQL 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 MySQL，使用默认 JDBC 方言与 Explorer（catalog 默认启用）。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-postgresql-explorer",
+    "name": "PostgreSQL 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 PostgreSQL，使用 JDBC 方言与 Explorer（catalog 默认启用）。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-dm-explorer",
+    "name": "达梦 DM 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选达梦 DM，使用 JDBC 方言与 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-db2-explorer",
+    "name": "DB2 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 IBM DB2，使用 JDBC 方言与 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-oceanbase-explorer",
+    "name": "OceanBase 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 OceanBase，使用 MySQL 协议兼容 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-kingbase-explorer",
+    "name": "Kingbase 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选人大金仓 Kingbase，使用 PostgreSQL 兼容 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-greenplum-explorer",
+    "name": "Greenplum 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 Greenplum，使用 PostgreSQL 兼容 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-opengauss-explorer",
+    "name": "openGauss 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 openGauss，使用 PostgreSQL 兼容 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-highgo-explorer",
+    "name": "HighGo 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选瀚高 HighGo，使用 PostgreSQL 兼容 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-gbase8a-explorer",
+    "name": "GBase 8a 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选南大通用 GBase 8a，使用 MySQL 协议兼容 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-elasticsearch-explorer",
+    "name": "Elasticsearch 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 Elasticsearch，使用 SQL JDBC 浏览索引。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-kylin-explorer",
+    "name": "Apache Kylin 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 Apache Kylin OLAP，浏览 Cube 与表。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-oscar-explorer",
+    "name": "神通 Oscar 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选神通 Oscar，使用 JDBC 方言与 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-tidb-explorer",
+    "name": "TiDB 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 TiDB，使用 MySQL 协议兼容 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-tdengine-explorer",
+    "name": "TDengine 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 TDengine 时序库，使用 RESTful JDBC Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-sybase-explorer",
+    "name": "Sybase 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 Sybase ASE，使用 JDBC 方言与 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-phoenix-explorer",
+    "name": "Phoenix 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 Apache Phoenix，浏览 HBase SQL 表。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-cachedb-explorer",
+    "name": "Caché 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 InterSystems Caché，使用 JDBC 方言与 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-h2-explorer",
+    "name": "H2 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 H2 嵌入式/远程数据库。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-hsql-explorer",
+    "name": "HSQLDB 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 HSQLDB 嵌入式/服务器模式。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-gaussdb-explorer",
+    "name": "GaussDB 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选华为 GaussDB，使用 PostgreSQL 兼容 Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-flink-explorer",
+    "name": "Flink 连接",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "在新建连接时可选 Apache Flink SQL Gateway，使用 JDBC catalog/schema Explorer。",
+    "enabled": true,
+    "category": "datasource"
+  },
+  {
+    "id": "p-explain-plan",
+    "name": "SQL 执行计划",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "控制台 EXPLAIN / EXPLAIN ANALYZE、计划树可视化与会话 SQL 查看计划。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-schema-compare",
+    "name": "Schema 对比",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "对比两库表结构差异，导出迁移 DDL 与 AI 迁移建议。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-cross-env-compare",
+    "name": "跨环境抽样对比",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "选两连接执行同一 SQL 并对比结果集差异。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-sql-bookmarks",
+    "name": "SQL 书签",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "保存常用 SQL 到书签面板；命令面板可快速打开。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-migration-tasks",
+    "name": "迁移任务",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "右侧 Migrate 面板跟踪表迁移与批量任务进度。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-export-progress",
+    "name": "导出任务",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "右侧 Export 面板显示 SQL/表数据导出进度与结果。",
+    "enabled": true,
+    "category": "export"
+  },
+  {
+    "id": "p-result-diff",
+    "name": "结果集 Diff",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "查询结果 Tab 右键与上一结果对比，高亮行/单元格差异。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-fake-data",
+    "name": "假数据生成",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "表 Tab 右键生成测试 INSERT 或导出假数据 SQL。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-ai-index-suggest",
+    "name": "AI 索引建议",
+    "version": "1.0.0",
+    "author": "DataWise Labs",
+    "description": "基于 EXPLAIN 计划或选区 SQL 生成 CREATE INDEX 草稿。",
+    "enabled": true,
+    "category": "ai"
+  },
+  {
+    "id": "p-export-mask",
+    "name": "脱敏导出",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "结果集导出时可按列套用手机/邮箱/身份证脱敏模板。",
+    "enabled": true,
+    "category": "export"
+  },
+  {
+    "id": "p-table-codegen",
+    "name": "表结构生成代码",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "表 Tab 右键生成 JPA / MyBatis / TypeScript 代码草稿。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-ai-sql-fix",
+    "name": "AI SQL 修复",
+    "version": "1.0.0",
+    "author": "DataWise Labs",
+    "description": "执行失败时根据错误信息生成修正 SQL 草稿。",
+    "enabled": true,
+    "category": "ai"
+  },
+  {
+    "id": "p-ai-result-summary",
+    "name": "AI 结果摘要",
+    "version": "1.0.0",
+    "author": "DataWise Labs",
+    "description": "对查询结果集生成自然语言摘要。",
+    "enabled": true,
+    "category": "ai"
+  },
+  {
+    "id": "p-ai-explain",
+    "name": "AI 计划解读",
+    "version": "1.0.0",
+    "author": "DataWise Labs",
+    "description": "对 EXPLAIN 计划树生成可读的性能解读。",
+    "enabled": true,
+    "category": "ai"
+  },
+  {
+    "id": "p-dml-generate",
+    "name": "DML 生成",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "从结果集生成 INSERT / UPDATE / DELETE 语句。",
+    "enabled": true,
+    "category": "tool"
+  },
+  {
+    "id": "p-grid-edit",
+    "name": "网格行内编辑",
+    "version": "1.0.0",
+    "author": "DataWise",
+    "description": "表数据 Tab 支持行内编辑、删除与批量提交变更。",
+    "enabled": true,
+    "category": "tool"
+  }
+]

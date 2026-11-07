@@ -1,0 +1,56 @@
+{
+  "name": "@datawise/chrome",
+  "version": "5.0.0",
+  "private": false,
+  "type": "module",
+  "description": "DataWise IDE chrome �� workbench shells, browse toolbar, split pane",
+  "license": "MIT",
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./style.css": "./src/style.css",
+    "./package.json": "./package.json",
+    "./*": "./src/*"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "peerDependencies": {
+    "@datawise/icons": "5.0.0",
+    "@datawise/overlays": "5.0.0",
+    "@datawise/ui": "5.0.0",
+    "vue": "^3.5.0"
+  },
+  "peerDependenciesMeta": {
+    "@datawise/ui": {
+      "optional": true
+    },
+    "@datawise/icons": {
+      "optional": true
+    },
+    "@datawise/overlays": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@datawise/theme": "file:../theme",
+    "@datawise/tokens": "file:../tokens"
+  },
+  "devDependencies": {
+    "@datawise/icons": "file:../icons",
+    "@datawise/overlays": "file:../overlays",
+    "@datawise/ui": "file:../ui",
+    "typescript": "~5.7.2",
+    "vue": "^3.5.13",
+    "vue-tsc": "^2.2.8"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
+  }
+}

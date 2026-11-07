@@ -1,0 +1,44 @@
+# SaaS / 多租户云部署 profile（--spring.profiles.active=cloud）
+# 默认开启商业门禁 + 新租户自动领取 14 天 Pro（§1.3）。
+# 本地 / 桌面请继续用 default=dev 或 desktop，勿误激活本 profile。
+datawise:
+  tenancy:
+    # SaaS multi-tenant: base defaults to single, cloud profile opts into multi
+    mode: multi
+  entitlement:
+    mode: enforced
+    # §1.3 云：新建租户自动领取 Pro 试用
+    auto-claim-tenant-pro-trial: true
+    tenant-pro-trial-days: 14
+    # 云站点申领也按 14 天（本地默认 7，见 application.yml）
+    site-pro-trial-days: 14
+    # 生产必须覆盖；保留默认会拒绝签发许可证
+    # signing-secret: ${DATAWISE_ENTITLEMENT_SIGNING_SECRET}
+  security:
+    auth:
+      # Cloud: no wildcard loopback CORS (set explicit SaaS frontend origins if cross-origin)
+      allowed-origin-patterns: []
+    master-key:
+      # Refuse auto-generated / config-colocated keys — require DATAWISE_MASTER_KEY(_FILE)
+      require-external: true
+    connection-probe:
+      # 公网 SaaS 默认禁止探测私网；专有云可在 overlay 覆盖为 true
+      allow-private-networks: false
+  connectors:
+    require-manifest-integrity: true
+  query:
+    # Cloud: prevent runaway queries from exhausting JDBC pools
+    timeout-seconds: 300
+    max-concurrent-global: 64
+    max-concurrent-per-user: 4
+  # Multi-instance: set storage.backend=jdbc, then task-concurrency.store-type=jdbc and
+  # sse.bus-type=jdbc. Console SQL sessions/cursors and AI analysis SSE stay process-local —
+  # sticky LB or single replica required (docs/DEPLOYMENT.md#affinity).
+  ai:
+    analysis:
+      semantic-check: strict
+      checkpoint:
+        storage: file
+    python:
+      # Cloud: real sandbox; desktop/dev keep application.yml simulated
+      executor: docker

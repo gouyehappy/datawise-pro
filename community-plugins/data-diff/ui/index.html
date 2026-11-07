@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Data Diff</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: var(--color-background, #131416);
+      --fg: var(--color-foreground, #d7d7db);
+      --muted: var(--color-muted-foreground, #97989d);
+      --card: var(--color-popover, #1e1e20);
+      --surface: var(--color-muted, #2a2a2d);
+      --accent: var(--color-primary, #38bdf8);
+      --accent-fg: var(--color-primary-foreground, #fff);
+      --border: var(--color-border, rgb(110 110 114 / 0.28));
+      --warn: var(--color-warning, #fbbf24);
+      --input: var(--color-background, #131416);
+      font-family: var(--font-sans, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif);
+    }
+    :root[data-theme="light"],
+    :root[data-dw-theme="light"] {
+      color-scheme: light;
+      --bg: var(--color-background, #ffffff);
+      --fg: var(--color-foreground, #18181b);
+      --muted: var(--color-muted-foreground, #52525b);
+      --card: var(--color-popover, #ffffff);
+      --surface: var(--color-muted, #f4f4f5);
+      --border: var(--color-border, #e4e4e7);
+      --input: var(--color-background, #ffffff);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); }
+    main { max-width: 960px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 1.25rem; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: var(--dw-font-size); margin-bottom: 16px; }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px; margin-bottom: 12px;
+    }
+    label { display: block; font-size: var(--dw-font-size); color: var(--muted); margin-bottom: 4px; }
+    input, select, textarea {
+      width: 100%; background: var(--input); border: 1px solid var(--border); color: var(--fg);
+      border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;
+      font-family: var(--font-mono, var(--font-mono, ui-monospace, monospace), Consolas, monospace); font-size: var(--dw-font-size);
+    }
+    textarea { min-height: 72px; resize: vertical; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    button {
+      background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 8px;
+      padding: 8px 14px; font-weight: 700; cursor: pointer;
+    }
+    button.secondary { background: var(--surface); color: var(--fg); font-weight: 600; }
+    button:disabled { opacity: 0.45; cursor: default; }
+    .stat { font-size: var(--dw-text-xl); font-weight: 700; }
+    .stat small { display: block; font-size: var(--dw-font-size); color: var(--muted); font-weight: 500; }
+    .delta { color: var(--warn); }
+    pre {
+      white-space: pre-wrap; word-break: break-word; background: #0a101c;
+      border-radius: 8px; padding: 12px; font-size: var(--dw-font-size); max-height: 40vh; overflow: auto;
+    }
+    @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Data Diff</h1>
+  <div class="sub" id="status">Waiting for host…</div>
+
+  <div class="card">
+    <div class="grid2">
+      <div>
+        <label>Left connection</label>
+        <select id="leftConn" disabled></select>
+        <label>Left database</label>
+        <input id="leftDb" placeholder="app" disabled />
+      </div>
+      <div>
+        <label>Right connection</label>
+        <select id="rightConn" disabled></select>
+        <label>Right database</label>
+        <input id="rightDb" placeholder="app" disabled />
+      </div>
+    </div>
+    <div class="grid2">
+      <div>
+        <label>Table (schema.table)</label>
+        <input id="table" placeholder="public.orders" disabled />
+      </div>
+      <div>
+        <label>Key columns (optional)</label>
+        <input id="keys" placeholder="id" disabled />
+      </div>
+    </div>
+    <label>SQL override (optional; same text runs on both sides)</label>
+    <textarea id="sql" placeholder="SELECT id, status FROM public.orders WHERE created_at >= current_date - 7" disabled></textarea>
+    <div class="row">
+      <button id="compare" disabled>Compare</button>
+      <button id="openLeft" class="secondary" disabled>Open left SQL</button>
+      <button id="copy" class="secondary" disabled>Copy report</button>
+    </div>
+  </div>
+
+  <div class="card grid2" id="stats" style="display:none">
+    <div><div class="stat" id="leftCount">—<small>Left</small></div></div>
+    <div><div class="stat" id="rightCount">—<small>Right</small></div></div>
+    <div><div class="stat delta" id="delta">—<small>Delta (left − right)</small></div></div>
+    <div><div class="stat" id="keyInfo">—<small>Only-left / only-right keys</small></div></div>
+  </div>
+
+  <div class="card">
+    <label>Report</label>
+    <pre id="out">(idle)</pre>
+  </div>
+</main>
+<script>
+  const statusEl = document.getElementById('status')
+  const outEl = document.getElementById('out')
+  const leftConn = document.getElementById('leftConn')
+  const rightConn = document.getElementById('rightConn')
+  let lastReport = null
+  let connections = []
+
+  function ready() {
+    return window.datawisePlugin && window.datawisePlugin.sql
+      && typeof window.datawisePlugin.sql.listConnections === 'function'
+  }
+
+  function setReady(on) {
+    ;['leftConn', 'rightConn', 'leftDb', 'rightDb', 'table', 'keys', 'sql'].forEach(id => {
+      document.getElementById(id).disabled = !on
+    })
+    ;['compare', 'openLeft', 'copy'].forEach(id => { document.getElementById(id).disabled = !on })
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+  }
+
+  function fillSelect(el) {
+    el.innerHTML = connections.map(c =>
+      '<option value="' + esc(c.id) + '">' + esc((c.env ? c.env + ' · ' : '') + (c.name || c.id) + ' · ' + (c.dbType || '')) + '</option>'
+    ).join('')
+  }
+
+  function quoteIdent(name) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('Unsafe identifier: ' + name)
+    return '"' + name + '"'
+  }
+
+  function quoteTable(table) {
+    const parts = table.trim().split('.')
+    if (!parts.length || parts.some(p => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(p))) {
+      throw new Error('Table must look like schema.table')
+    }
+    return parts.map(quoteIdent).join('.')
+  }
+
+  async function boot() {
+    if (!ready()) return
+    try {
+      await window.datawisePlugin.ready
+      connections = await window.datawisePlugin.sql.listConnections()
+      if (!Array.isArray(connections)) connections = []
+      fillSelect(leftConn)
+      fillSelect(rightConn)
+      if (connections.length > 1) rightConn.selectedIndex = 1
+      const ctx = window.datawisePlugin.context || {}
+      const cfg = (ctx.connection && (ctx.connection.external_config || ctx.connection.config)) || {}
+      if (cfg.defaultTable) document.getElementById('table').value = cfg.defaultTable
+      statusEl.textContent = connections.length + ' SQL connections'
+      setReady(connections.length > 0)
+      if (!connections.length) statusEl.textContent = 'No visible SQL connections'
+    } catch (e) {
+      statusEl.textContent = String(e && e.message ? e.message : e)
+    }
+  }
+
+  function scalar(result) {
+    const row = result && result.rows && result.rows[0]
+    if (!row) return 0
+    const key = Object.keys(row)[0]
+    const n = Number(row[key])
+    return Number.isFinite(n) ? n : 0
+  }
+
+  function keySet(result, keys) {
+    const set = new Set()
+    for (const row of (result.rows || [])) {
+      set.add(keys.map(k => row[k] == null ? '∅' : String(row[k])).join('|'))
+    }
+    return set
+  }
+
+  document.getElementById('compare').onclick = async () => {
+    outEl.textContent = 'Comparing…'
+    const leftId = leftConn.value
+    const rightId = rightConn.value
+    const leftDb = document.getElementById('leftDb').value.trim()
+    const rightDb = document.getElementById('rightDb').value.trim()
+    const table = document.getElementById('table').value.trim()
+    const sqlOverride = document.getElementById('sql').value.trim()
+    const keys = document.getElementById('keys').value.split(',').map(s => s.trim()).filter(Boolean)
+    try {
+      if (!leftId || !rightId) throw new Error('Pick both connections')
+      let leftCountSql
+      let rightCountSql
+      let leftKeySql = ''
+      let rightKeySql = ''
+      if (sqlOverride) {
+        leftCountSql = 'SELECT COUNT(*) AS c FROM (' + sqlOverride.replace(/;+\s*$/, '') + ') t'
+        rightCountSql = leftCountSql
+        if (keys.length) {
+          const cols = keys.map(quoteIdent).join(', ')
+          leftKeySql = 'SELECT ' + cols + ' FROM (' + sqlOverride.replace(/;+\s*$/, '') + ') t'
+          rightKeySql = leftKeySql
+        }
+      } else {
+        if (!table) throw new Error('Table or SQL is required')
+        const rel = quoteTable(table)
+        leftCountSql = 'SELECT COUNT(*) AS c FROM ' + rel
+        rightCountSql = leftCountSql
+        if (keys.length) {
+          const cols = keys.map(quoteIdent).join(', ')
+          leftKeySql = 'SELECT ' + cols + ' FROM ' + rel
+          rightKeySql = leftKeySql
+        }
+      }
+      const sqlApi = window.datawisePlugin.sql
+      const leftCount = scalar(await sqlApi.executeReadonly({ connectionId: leftId, database: leftDb || undefined, sql: leftCountSql, maxRows: 1 }))
+      const rightCount = scalar(await sqlApi.executeReadonly({ connectionId: rightId, database: rightDb || undefined, sql: rightCountSql, maxRows: 1 }))
+      const report = {
+        leftCount, rightCount, countDelta: leftCount - rightCount,
+        leftConnectionId: leftId, rightConnectionId: rightId
+      }
+      if (leftKeySql) {
+        const leftKeys = keySet(await sqlApi.executeReadonly({ connectionId: leftId, database: leftDb || undefined, sql: leftKeySql, maxRows: 500 }), keys)
+        const rightKeys = keySet(await sqlApi.executeReadonly({ connectionId: rightId, database: rightDb || undefined, sql: rightKeySql, maxRows: 500 }), keys)
+        const onlyLeft = [...leftKeys].filter(k => !rightKeys.has(k))
+        const onlyRight = [...rightKeys].filter(k => !leftKeys.has(k))
+        report.onlyInLeft = onlyLeft.slice(0, 50)
+        report.onlyInRight = onlyRight.slice(0, 50)
+        report.onlyInLeftTotal = onlyLeft.length
+        report.onlyInRightTotal = onlyRight.length
+        report.keyScanCapped = leftKeys.size >= 500 || rightKeys.size >= 500
+      }
+      lastReport = report
+      document.getElementById('stats').style.display = 'grid'
+      document.getElementById('leftCount').innerHTML = leftCount + '<small>Left rows</small>'
+      document.getElementById('rightCount').innerHTML = rightCount + '<small>Right rows</small>'
+      document.getElementById('delta').innerHTML = report.countDelta + '<small>Delta (left − right)</small>'
+      document.getElementById('keyInfo').innerHTML =
+        (report.onlyInLeftTotal ?? '—') + ' / ' + (report.onlyInRightTotal ?? '—') + '<small>Only-left / only-right</small>'
+      outEl.textContent = JSON.stringify(report, null, 2)
+    } catch (e) {
+      outEl.textContent = String(e && e.message ? e.message : e)
+    }
+  }
+
+  document.getElementById('openLeft').onclick = async () => {
+    const sql = document.getElementById('sql').value.trim()
+      || (document.getElementById('table').value.trim()
+        ? 'SELECT * FROM ' + quoteTable(document.getElementById('table').value.trim()) + ' LIMIT 100'
+        : '')
+    if (!sql || !leftConn.value) return
+    await window.datawisePlugin.sql.openConsole({
+      connectionId: leftConn.value,
+      database: document.getElementById('leftDb').value.trim() || undefined,
+      sql,
+      title: 'data-diff'
+    })
+  }
+
+  document.getElementById('copy').onclick = async () => {
+    const text = lastReport ? JSON.stringify(lastReport, null, 2) : outEl.textContent
+    try {
+      await window.datawisePlugin.clipboard.writeText(text)
+      statusEl.textContent = 'Report copied'
+    } catch (e) {
+      statusEl.textContent = String(e && e.message ? e.message : e)
+    }
+  }
+
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'datawise-plugin-env') boot()
+  })
+  boot()
+  setInterval(() => { if (ready() && !connections.length) boot() }, 800)
+</script>
+</body>
+</html>

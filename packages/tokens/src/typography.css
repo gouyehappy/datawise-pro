@@ -1,0 +1,18 @@
+/**
+ * 字号统一入口 — 刻度 / 语义 token 见 variables.css；
+ * 档位缩放见 ui-text-scale.css（html[data-ui-text-scale]）。
+ *
+ * 壳层 / 新组件：只用 var(--dw-text-*) 或 var(--dw-font-size-*)。
+ * 禁止写死 10px / 11px / 12px / 13px 或 0.875rem。
+ * 例外：Monaco、xterm、桌面 zoom、插件 iframe（独立设置）。
+ */
+
+.dw-text-2xs { font-size: var(--dw-text-2xs); }
+.dw-text-xs { font-size: var(--dw-text-xs); }
+.dw-text-sm { font-size: var(--dw-text-sm); }
+.dw-text-md { font-size: var(--dw-text-md); }
+.dw-text-lg { font-size: var(--dw-text-lg); }
+.dw-text-xl { font-size: var(--dw-text-xl); }
+.dw-text-2xl { font-size: var(--dw-text-2xl); }
+.dw-text-3xl { font-size: var(--dw-text-3xl); }
+.dw-text-display { font-size: var(--dw-text-display); }

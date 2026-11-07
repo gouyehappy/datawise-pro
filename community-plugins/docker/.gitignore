@@ -1,0 +1,10 @@
+node_modules/
+dist/
+ui/
+backend/*.exe
+backend/datawise-plugin-docker
+backend/datawise-plugin-docker.exe
+.dwp-staging*/
+.dwp-staging-*/
+*.dwp
+.DS_Store

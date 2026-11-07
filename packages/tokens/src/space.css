@@ -1,0 +1,9 @@
+/**
+ * 间距工具类 — 刻度见 variables.css --dw-space-* / --dw-gap-*
+ */
+
+.dw-gap-xs { gap: var(--dw-gap-xs); }
+.dw-gap-sm { gap: var(--dw-gap-sm); }
+.dw-gap { gap: var(--dw-gap); }
+.dw-gap-md { gap: var(--dw-gap-md); }
+.dw-gap-lg { gap: var(--dw-gap-lg); }

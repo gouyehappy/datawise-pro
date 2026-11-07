@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "packId": "pack.dataops",
+  "version": "1.0.0-dev",
+  "minCoreVersion": "4.1.0",
+  "maxCoreVersion": "4.99.99",
+  "capabilities": ["ops.monitor","ops.lock","ops.kill","ops.explain.pro"],
+  "plugins": ["p-sql-monitor"],
+  "extensionPoints": ["plugin.sqlMonitor","console.ops"],
+  "requiresRestart": false,
+  "channel": "stable"
+}
