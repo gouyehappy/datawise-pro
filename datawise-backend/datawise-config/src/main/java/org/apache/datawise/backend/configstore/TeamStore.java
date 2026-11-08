@@ -85,7 +85,7 @@ public interface TeamStore {
      * Returns empty when not found, not pending, or reviewer is the requester.
      */
     Optional<TeamProductionApprovalEntity> claimProductionApprovalExecution(
-            String teamId,
-            String approvalId,
-            Long reviewerUserId);
+                                                                            String teamId,
+                                                                            String approvalId,
+                                                                            Long reviewerUserId);
 }

@@ -130,8 +130,7 @@ public class UserAppConfigStore {
         configDirectory.ensureExists();
         Path path = aiPreferencesPath(userId);
         Map<String, Object> toWrite = payload != null ? AppConfigSections.deepCopy(payload) : new LinkedHashMap<>();
-        readAiPreferencesFile(userId).ifPresent(existing ->
-                AppConfigSecrets.preserveAiPreferencesSecrets(toWrite, existing));
+        readAiPreferencesFile(userId).ifPresent(existing -> AppConfigSecrets.preserveAiPreferencesSecrets(toWrite, existing));
         AppConfigSecrets.encryptAiPreferences(toWrite, secretValueCodec);
         ConfigFileSupport.writeJson(path, objectMapper, toWrite);
     }
@@ -241,12 +240,11 @@ public class UserAppConfigStore {
 
     @SuppressWarnings("unchecked")
     private boolean liftSectionToJsonFile(
-            long userId,
-            Map<String, Object> source,
-            String sectionKey,
-            Path targetPath,
-            boolean aiSecrets
-    ) {
+                                          long userId,
+                                          Map<String, Object> source,
+                                          String sectionKey,
+                                          Path targetPath,
+                                          boolean aiSecrets) {
         Object raw = source.get(sectionKey);
         if (!(raw instanceof Map<?, ?> map) || map.isEmpty()) {
             return false;
@@ -321,11 +319,10 @@ public class UserAppConfigStore {
     }
 
     private Optional<Map<String, Object>> readJsonSectionOrMigrate(
-            long userId,
-            Path path,
-            String appSectionKey,
-            String logLabel
-    ) {
+                                                                   long userId,
+                                                                   Path path,
+                                                                   String appSectionKey,
+                                                                   String logLabel) {
         if (ConfigFileSupport.exists(path)) {
             try {
                 Map<String, Object> payload = objectMapper.readValue(

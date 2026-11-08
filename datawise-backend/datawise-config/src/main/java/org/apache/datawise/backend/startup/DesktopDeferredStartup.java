@@ -8,6 +8,7 @@ package org.apache.datawise.backend.startup;
  * unless {@code datawise.startup.defer-noncritical=false}.
  */
 public final class DesktopDeferredStartup {
+
     private DesktopDeferredStartup() {
     }
 

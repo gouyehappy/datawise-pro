@@ -52,8 +52,7 @@ public class UserAiTableTagStore {
             return;
         }
         String normalized = connectionId.trim();
-        fileFor(userId).removeIf(entry ->
-                entry.getConnectionId() != null && normalized.equals(entry.getConnectionId().trim()));
+        fileFor(userId).removeIf(entry -> entry.getConnectionId() != null && normalized.equals(entry.getConnectionId().trim()));
     }
 
     /**

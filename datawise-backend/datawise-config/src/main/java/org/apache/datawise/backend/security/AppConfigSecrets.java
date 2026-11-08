@@ -110,10 +110,10 @@ public final class AppConfigSecrets {
 
     @SuppressWarnings("unchecked")
     private static void preserveMapSecret(
-            Map<String, Object> inAi,
-            Map<String, Object> exAi,
-            String section,
-            String field) {
+                                          Map<String, Object> inAi,
+                                          Map<String, Object> exAi,
+                                          String section,
+                                          String field) {
         Object inRaw = inAi.get(section);
         Object exRaw = exAi.get(section);
         if (inRaw instanceof Map<?, ?> inMap && exRaw instanceof Map<?, ?> exMap) {
@@ -286,9 +286,8 @@ public final class AppConfigSecrets {
     /** Preserve stored secrets when client sends masked placeholders. */
     @SuppressWarnings("unchecked")
     public static void preserveAiPreferencesSecrets(
-            Map<String, Object> incomingAi,
-            Map<String, Object> existingAi
-    ) {
+                                                    Map<String, Object> incomingAi,
+                                                    Map<String, Object> existingAi) {
         if (incomingAi == null || existingAi == null || existingAi.isEmpty()) {
             return;
         }

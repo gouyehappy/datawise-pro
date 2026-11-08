@@ -282,9 +282,9 @@ public class FileTeamStore implements TeamStore {
 
     @Override
     public synchronized Optional<TeamProductionApprovalEntity> claimProductionApprovalExecution(
-            String teamId,
-            String approvalId,
-            Long reviewerUserId) {
+                                                                                                String teamId,
+                                                                                                String approvalId,
+                                                                                                Long reviewerUserId) {
         Optional<TeamProductionApprovalEntity> found = findProductionApprovalById(teamId, approvalId);
         if (found.isEmpty()) {
             return Optional.empty();
