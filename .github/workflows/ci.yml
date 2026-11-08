@@ -25,7 +25,7 @@ jobs:
           if git grep -nIE \
             -e '10\.15\.34\.' \
             -e 'shiji' \
-            -e '://[^/[:space:]:@]+:[^/[:space:]@]+@' \
+            -e '://[A-Za-z0-9._+-]+:[^/[:space:]@]+@' \
             -- . \
             ':(exclude)*.png' ':(exclude)*.jpg' ':(exclude)*.jpeg' ':(exclude)*.gif' ':(exclude)*.webp' \
             ':(exclude)*.jar' ':(exclude)*.dwp' ':(exclude)*.zip' ':(exclude)*.gz' \

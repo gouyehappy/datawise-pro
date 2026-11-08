@@ -1,12 +1,30 @@
-import {describe, it} from 'node:test'
+import {before, describe, it} from 'node:test'
 import assert from 'node:assert/strict'
 import {
+    registerStatusDomain,
     resolveLogLevelVariant,
     resolveStatusVariant,
     statusVariantClass,
 } from '@/core/utils/status-variant'
+import type {StatusVariant} from '@/core/utils/status-variant'
 
 describe('status-variant', () => {
+    before(() => {
+        // Mirror AppShell registerStatusDomainsHost maps without pulling layout/Vue into unit tests.
+        registerStatusDomain('schema', (s): StatusVariant | null => {
+            if (s === 'added') return 'success'
+            if (s === 'removed') return 'error'
+            if (s === 'changed') return 'primary'
+            if (s === 'unchanged') return 'neutral'
+            return null
+        })
+        registerStatusDomain('connection', (s): StatusVariant | null => {
+            if (s === 'ok') return 'success'
+            if (s === 'error') return 'error'
+            return 'neutral'
+        })
+    })
+
     it('maps export statuses', () => {
         assert.equal(resolveStatusVariant('running', 'export'), 'running')
         assert.equal(resolveStatusVariant('failed', 'export'), 'error')
