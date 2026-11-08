@@ -85,6 +85,7 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             datawise-frontend/package-lock.json
             sql-editor/package-lock.json
 
@@ -94,9 +95,12 @@ jobs:
         run: node scripts/desktop/align-release-version.mjs --from-env
 
       - name: Install frontend deps
+        shell: bash
         run: |
           npm ci --prefix ../sql-editor --ignore-scripts
           npm ci --workspaces=false
+          # packages/* workspaces — required so vue-tsc can resolve @datawise/* from package sources
+          if [ -f ../package-lock.json ]; then npm ci --prefix .. --ignore-scripts; else npm install --prefix .. --ignore-scripts; fi
 
       - name: Cache jbr_jcef runtime
         uses: actions/cache@v4
@@ -148,6 +152,7 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             datawise-frontend/package-lock.json
             sql-editor/package-lock.json
 
@@ -160,6 +165,8 @@ jobs:
         run: |
           npm ci --prefix ../sql-editor --ignore-scripts
           npm ci --workspaces=false
+          # packages/* workspaces — required so vue-tsc can resolve @datawise/* from package sources
+          if [ -f ../package-lock.json ]; then npm ci --prefix .. --ignore-scripts; else npm install --prefix .. --ignore-scripts; fi
 
       - name: Cache jbr_jcef runtime
         uses: actions/cache@v4
@@ -191,7 +198,8 @@ jobs:
 
   release-macos:
     needs: reset-release
-    runs-on: macos-14
+    # macos-latest: macos-14 label maps to unsupported runner labels on some plans
+    runs-on: macos-latest
     defaults:
       run:
         working-directory: datawise-frontend
@@ -208,6 +216,7 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             datawise-frontend/package-lock.json
             sql-editor/package-lock.json
 
@@ -220,6 +229,8 @@ jobs:
         run: |
           npm ci --prefix ../sql-editor --ignore-scripts
           npm ci --workspaces=false
+          # packages/* workspaces — required so vue-tsc can resolve @datawise/* from package sources
+          if [ -f ../package-lock.json ]; then npm ci --prefix .. --ignore-scripts; else npm install --prefix .. --ignore-scripts; fi
 
       - name: Cache jbr_jcef runtime
         uses: actions/cache@v4
