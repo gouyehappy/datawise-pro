@@ -17,6 +17,11 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+/**
+ * Deliberately unauthenticated: the opaque share token is the credential, and callers
+ * have no session. Authorization is enforced per-token by {@link ShareSnapshotService}
+ * (expiry, revocation, scope). Do not add {@code @RequiresFeature} here.
+ */
 @RestController
 public class PublicShareController {
 

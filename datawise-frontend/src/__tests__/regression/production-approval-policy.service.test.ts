@@ -112,6 +112,35 @@ describe('production-approval-policy.service', () => {
         )
     })
 
+    it('B2-4: solo prod (connection not team-shared) stays confirm-only — no approval', () => {
+        const teams = [
+            team({
+                id: 't1',
+                name: 'Ops',
+                role: 'member',
+                sharedConnectionIds: ['other-conn'],
+            }),
+        ]
+        assert.equal(
+            requiresProductionApproval({
+                env: 'prod',
+                sql: 'DELETE FROM logs',
+                connectionId: 'conn-solo-prod',
+                teams,
+            }),
+            false,
+        )
+        assert.equal(
+            requiresProductionApproval({
+                env: 'prod',
+                sql: 'DELETE FROM logs',
+                connectionId: 'conn-solo-prod',
+                teams: [],
+            }),
+            false,
+        )
+    })
+
     it('filters approvals by status', () => {
         const filtered = filterProductionApprovalsByStatus(
             [{status: 'pending'}, {status: 'executed'}],

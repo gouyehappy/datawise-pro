@@ -3,10 +3,12 @@ import {storeToRefs} from 'pinia'
 import type {WorkspaceTab} from '@/core/types'
 import {findParentConnectionId} from '@/core/utils/tree'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
+import {useDatasourceCatalogStore} from '@/features/datasource/stores/datasource-catalog'
 import {isCatalogSchemaDbType} from '@/features/explorer/services/explorer-lazy-load'
 import {
     extractDataSources,
     findDataSource,
+    filterConsoleCapableDataSources,
     filterSelectableDataSources,
     includePinnedDataSource,
     pickDefaultDataSource,
@@ -17,13 +19,17 @@ import {getBoundConsoleSqlFile} from '@/features/workspace/services/console-tab-
 /** 控制台 Tab 的数据源 / 实例选择，与 explorer 树联动 */
 export function useConsoleConnectionContext(tab: WorkspaceTab) {
     const explorer = useExplorerStore()
+    const catalog = useDatasourceCatalogStore()
     const {connectionHealthById} = storeToRefs(explorer)
 
     const workspaceBound = computed(() => Boolean(getBoundConsoleSqlFile(tab)))
 
     const dataSources = computed(() => {
         void explorer.treeVersion
-        return extractDataSources(explorer.tree)
+        return filterConsoleCapableDataSources(
+            extractDataSources(explorer.tree),
+            catalog.items,
+        )
     })
     const selectableDataSources = computed(() =>
         filterSelectableDataSources(dataSources.value, connectionHealthById.value),

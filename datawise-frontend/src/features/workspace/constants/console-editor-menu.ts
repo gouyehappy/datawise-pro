@@ -23,6 +23,8 @@ export function getSqlEditorMenu(t: ComposerTranslation, options?: {previewRows?
         {id: 'rewrite', label: t('console.editorMenu.rewrite'), icon: 'optimize'},
         {id: 'generate-insert', label: t('console.editorMenu.generateInsert'), icon: 'edit'},
         {id: 'suggest-index', label: t('console.editorMenu.suggestIndex'), icon: 'explain'},
+        {id: 'ask-ai', label: t('console.editorMenu.askAi'), icon: 'bot'},
+        {id: 'fix-ai', label: t('console.editorMenu.fixAi'), icon: 'bot'},
         {id: 'divider-1', label: '', divider: true},
         {id: 'format', label: t('console.editorMenu.format'), icon: 'format'},
     ]

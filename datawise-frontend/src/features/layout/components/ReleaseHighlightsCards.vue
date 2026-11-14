@@ -67,8 +67,8 @@ function dismiss() {
 
 <style scoped>
 .release-cards {
-  margin: 0 0 var(--dw-space-6);
-  padding: var(--dw-space-6);
+  margin: 0;
+  padding: 8px 10px;
   border: 1px solid var(--dw-border-light);
   border-radius: var(--dw-panel-radius);
   background: linear-gradient(145deg, var(--dw-bg), color-mix(in srgb, var(--dw-primary) 4%, var(--dw-bg)));
@@ -77,9 +77,9 @@ function dismiss() {
 .release-cards__head {
   display: flex;
   justify-content: space-between;
-  gap: var(--dw-space-6);
+  gap: 8px;
   align-items: flex-start;
-  margin-bottom: var(--dw-space-5);
+  margin-bottom: 6px;
 }
 
 .release-cards__eyebrow {
@@ -111,7 +111,7 @@ function dismiss() {
 .release-cards__grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--dw-gap);
+  gap: 4px;
 }
 
 .release-card {

@@ -35,6 +35,7 @@ import {
     buildSuccessQueryResultItem,
     resolveQueryResultTabLabel,
 } from '@/features/workspace/services/query-result-item'
+import {expandExecuteSqlResults} from '@/features/workspace/services/expand-execute-sql-results'
 import {sumConsoleQueryTotals} from '@/features/workspace/services/query-result-refresh.service'
 import type {QueryResultItem} from '@/features/workspace/types'
 import {executeSqlBatch} from '@/features/workspace/services/sql-batch-execute.service'
@@ -338,14 +339,19 @@ export function useSqlEditorActions(options: SqlEditorActionsOptions) {
 
             function applySuccessResult(result: Awaited<ReturnType<typeof sqlApi.execute>>, sql: string, index: number) {
                 if (!workspace.isConsoleRunCurrent(tabId, runGeneration)) return
+                const expanded = expandExecuteSqlResults(result)
                 const labelIndex = isRefresh ? index : keptPrefix.length
-                const item = buildSuccessQueryResultItem(result, labelIndex, sql, connection.dbType)
                 if (isRefresh) {
+                    const item = buildSuccessQueryResultItem(expanded[0]!, labelIndex, sql, connection.dbType)
                     applyRefreshResult(refreshIndex!, item)
-                } else {
-                    publishConsoleResults(tabId, keptPrefix, [item])
-                    workspace.setExecutionResult(result.rowCount, result.durationMs)
+                    return
                 }
+                const items = expanded.map((part, offset) =>
+                    buildSuccessQueryResultItem(part, labelIndex + offset, sql, connection.dbType),
+                )
+                publishConsoleResults(tabId, keptPrefix, items)
+                const totalRows = items.reduce((sum, row) => sum + row.total, 0)
+                workspace.setExecutionResult(totalRows, result.durationMs)
             }
 
             function applyErrorResult(payload: {
@@ -542,6 +548,15 @@ export function useSqlEditorActions(options: SqlEditorActionsOptions) {
                     if (result.firstErrorLine) {
                         await jumpEditorToErrorLine(editor, result.firstErrorLine)
                     }
+                } else {
+                    // A3-2: first successful run → one-shot Alt+/ tip (StatusBar only)
+                    const {maybeNotifyConsoleAiPromptTip} = await import(
+                        '@/features/workspace/services/console-ai-prompt-tip.service'
+                    )
+                    maybeNotifyConsoleAiPromptTip(
+                        (message) => workspace.setStatus(message),
+                        t('console.aiPromptFirstSuccessTip'),
+                    )
                 }
             } catch (error) {
                 if (!workspace.isConsoleRunCurrent(tabId, runGeneration)) return

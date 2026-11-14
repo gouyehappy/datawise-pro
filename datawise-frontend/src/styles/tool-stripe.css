@@ -15,6 +15,7 @@
 
 .tool-stripe--right {
     position: relative;
+    /* 与左栏同宽：图标 + 文案常显，避免悬停变宽 */
     width: var(--dw-tool-stripe-width);
 }
 

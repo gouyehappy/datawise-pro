@@ -43,7 +43,7 @@ import {notifySshScriptRecordsChanged} from '@/features/ssh/services/ssh-script-
 import {SSH_COMMAND_TEMPLATE} from '@/features/ssh/services/ssh-script-record-content.service'
 import {createEmptySshScriptRecord} from '@/features/ssh/types/ssh-script-record.types'
 import {sshScriptRecordNodeId, sshScriptRecordsNodeId} from '@/features/explorer/services/ssh-feature-tree.service'
-import {resolveApiErrorMessage} from '@/shared/api/http/api-error-message'
+import {resolveCaughtApiErrorMessage} from '@/shared/api/http/api-error-message'
 import {
     readSshAutoReconnectEnabled,
     writeSshAutoReconnectEnabled,
@@ -218,7 +218,6 @@ function saveConnectionProfile(profile: SshConnectionProfile) {
   const connectionId = props.tab.connectionId
   if (!connectionId) return
   connectionProfile.value = writeSshConnectionProfile(connectionId, profile)
-  layout.showSuccessToast(t('ssh.profile.saved'))
 }
 
 function saveTerminalOutput() {
@@ -236,7 +235,12 @@ function saveTerminalOutput() {
   anchor.download = `ssh-${connectionId}-${stamp}.log`
   anchor.click()
   URL.revokeObjectURL(url)
-  layout.showSuccessToast(t('terminal.sshSaveOutputSuccess'))
+  layout.notifyQuiet({
+    category: 'export',
+    titleKey: 'exportDone',
+    bodyKey: 'exportDone',
+    params: {name: t('terminal.sshSaveOutputSuccess')},
+  })
 }
 
 function clearTerminal() {
@@ -250,7 +254,6 @@ async function reconnectTerminal() {
 async function copySelection() {
   const ok = await terminalRef.value?.copySelection()
   if (ok) {
-    layout.showSuccessToast(t('terminal.sshCopied'))
   }
 }
 
@@ -309,7 +312,7 @@ async function createScriptRecord() {
     await refreshScriptRecordsFolder(connectionId)
     openScriptRecordTab(connectionId, saved)
   } catch (error) {
-    layout.showErrorToast(resolveApiErrorMessage(error) || t('ssh.scriptRecord.createFailed'))
+    layout.showErrorToast(resolveCaughtApiErrorMessage(error, t, 'ssh.scriptRecord.createFailed'))
   }
 }
 
@@ -333,9 +336,14 @@ async function confirmSaveNewRecord(title: string) {
     const saved = await createScriptRecordFromTerminalSelection(connectionId, selection, nextTitle)
     await refreshScriptRecordsFolder(connectionId)
     openScriptRecordTab(connectionId, saved)
-    layout.showSuccessToast(t('terminal.sshSaveSelectionSuccess'))
+    layout.notifyQuiet({
+      category: 'export',
+      titleKey: 'exportDone',
+      bodyKey: 'exportDone',
+      params: {name: t('terminal.sshSaveSelectionSuccess')},
+    })
   } catch (error) {
-    layout.showErrorToast(resolveApiErrorMessage(error) || t('terminal.sshSaveSelectionFailed'))
+    layout.showErrorToast(resolveCaughtApiErrorMessage(error, t, 'terminal.sshSaveSelectionFailed'))
   }
 }
 
@@ -351,9 +359,14 @@ async function appendSelectionToRecord(recordId: string, selection: string) {
     const saved = await appendTerminalSelectionToScriptRecord(connectionId, recordId, trimmed)
     await refreshScriptRecordsFolder(connectionId)
     openScriptRecordTab(connectionId, saved)
-    layout.showSuccessToast(t('terminal.sshAppendSelectionSuccess'))
+    layout.notifyQuiet({
+      category: 'export',
+      titleKey: 'exportDone',
+      bodyKey: 'exportDone',
+      params: {name: t('terminal.sshAppendSelectionSuccess')},
+    })
   } catch (error) {
-    layout.showErrorToast(resolveApiErrorMessage(error) || t('terminal.sshAppendSelectionFailed'))
+    layout.showErrorToast(resolveCaughtApiErrorMessage(error, t, 'terminal.sshAppendSelectionFailed'))
   }
 }
 
@@ -463,7 +476,6 @@ function toggleAutoReconnect() {
 async function copyTerminalBuffer() {
   const ok = await terminalRef.value?.copyBuffer?.()
   if (ok) {
-    layout.showSuccessToast(t('terminal.sshBufferCopied'))
     return
   }
   layout.showErrorToast(t('terminal.sshBufferCopyFailed'))

@@ -1,0 +1,5 @@
+{
+  "dbType": "redis",
+  "extends": "specialized-browse",
+  "formKind": "redis"
+}

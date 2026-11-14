@@ -82,6 +82,20 @@ public class OutboundEventSignals {
         notifySupport.publish(OutboundEventType.TABLE_DELETED, data, userId);
     }
 
+    public void tableAltered(
+                             String connectionId,
+                             String name,
+                             String database,
+                             String tableName,
+                             Long userId) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("connectionId", nullToEmpty(connectionId));
+        data.put("name", nullToEmpty(name));
+        data.put("database", nullToEmpty(database));
+        data.put("tableName", nullToEmpty(tableName));
+        notifySupport.publish(OutboundEventType.TABLE_ALTERED, data, userId);
+    }
+
     public void sqlExecutionFailed(String connectionId, String name, String database, String message) {
         sqlExecutionFailed(connectionId, name, database, message, UserContext.getUserId());
     }

@@ -38,7 +38,7 @@ class LakehouseLineageParserTest {
             );
         });
 
-        LakehouseLineageParser parser = new LakehouseLineageParser(ast);
+        LakehouseLineageParser parser = new LakehouseLineageParser(() -> ast);
         LineageParseResult result = parser.parse(request(
                 "hive",
                 "SELECT id FROM orders DISTRIBUTE BY id"
@@ -71,7 +71,7 @@ class LakehouseLineageParserTest {
             );
         });
 
-        LakehouseLineageParser parser = new LakehouseLineageParser(ast);
+        LakehouseLineageParser parser = new LakehouseLineageParser(() -> ast);
         LineageParseResult result = parser.parse(request(
                 "hive",
                 "SELECT id FROM src LATERAL VIEW explode(arr) t AS x"
@@ -94,7 +94,7 @@ class LakehouseLineageParserTest {
                 "boom"
         ));
 
-        LakehouseLineageParser parser = new LakehouseLineageParser(ast);
+        LakehouseLineageParser parser = new LakehouseLineageParser(() -> ast);
         LineageParseResult result = parser.parse(request(
                 "hive",
                 "SELECT * FROM src LATERAL VIEW explode(arr) t AS x"
@@ -118,7 +118,7 @@ class LakehouseLineageParserTest {
                 "boom"
         ));
 
-        LakehouseLineageParser parser = new LakehouseLineageParser(ast);
+        LakehouseLineageParser parser = new LakehouseLineageParser(() -> ast);
         LineageParseResult result = parser.parse(request(
                 "flink",
                 "SELECT * FROM TABLE(TUMBLE(TABLE orders, DESCRIPTOR(ts), INTERVAL '1' HOUR))"
@@ -143,7 +143,7 @@ class LakehouseLineageParserTest {
                 LineageDialectCompatibility.FULL
         ));
 
-        LakehouseLineageParser parser = new LakehouseLineageParser(ast);
+        LakehouseLineageParser parser = new LakehouseLineageParser(() -> ast);
         LineageParseResult result = parser.parse(request("trino", "SELECT id FROM orders"));
 
         assertEquals(ParseStatus.COMPLETE, result.status());
@@ -153,7 +153,7 @@ class LakehouseLineageParserTest {
     @Test
     void supportsSparkAlias() {
         assertTrue(LakehouseSqlSupport.isLakehouseDialect("spark"));
-        assertTrue(new LakehouseLineageParser(mock(SqlFlowAstLineageParser.class)).supports("spark"));
+        assertTrue(new LakehouseLineageParser(() -> mock(SqlFlowAstLineageParser.class)).supports("spark"));
     }
 
     @Test

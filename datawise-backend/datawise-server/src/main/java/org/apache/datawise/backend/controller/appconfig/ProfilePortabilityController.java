@@ -18,8 +18,12 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/config/portability")
+@RequiresFeature(UserFeaturePermission.SETTINGS_PROFILE)
 public class ProfilePortabilityController {
 
     private final ProfilePortabilityService portabilityService;
@@ -46,7 +50,7 @@ public class ProfilePortabilityController {
     @PostMapping(value = "/import/preflight", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<ProfilePreflightResult> preflight(
             @RequestPart("file") MultipartFile file,
-            @RequestParam("passphrase") String passphrase
+            @RequestParam(value = "passphrase", required = false) String passphrase
     ) throws Exception {
         byte[] bytes = file != null ? file.getBytes() : null;
         return ApiResponse.ok(portabilityService.preflight(bytes, passphrase));
@@ -55,7 +59,7 @@ public class ProfilePortabilityController {
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<ProfileImportResult> importProfile(
             @RequestPart("file") MultipartFile file,
-            @RequestParam("passphrase") String passphrase,
+            @RequestParam(value = "passphrase", required = false) String passphrase,
             @RequestParam(value = "options", required = false) String optionsJson
     ) throws Exception {
         byte[] bytes = file != null ? file.getBytes() : null;

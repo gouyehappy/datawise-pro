@@ -1,7 +1,7 @@
 /** Package copy: @datawise/chrome overlay-scrollbar-controller. Host file kept until cutover. */
 /**
- * Ô­µØ¹ÒÔØ×Ô»æ¹ìµÄ¿ØÖÆÆ÷£¨×ÊÔ´Ê÷Í¬¿îÊÓ¾õ£©¡£
- * Óë DwOverlayScroll ¹²ÓÃ overlay-scrollbar-metrics¡£
+ * åŸåœ°æŒ‚è½½è‡ªç»˜è½¨çš„æ§åˆ¶å™¨ï¼ˆèµ„æºæ ‘åŒæ¬¾è§†è§‰ï¼‰ã€‚
+ * ä¸ DwOverlayScroll å…±ç”¨ overlay-scrollbar-metricsã€‚
  */
 import '@/styles/overlay-scrollbar.css'
 import {
@@ -46,9 +46,9 @@ function shouldSkipHost(el: HTMLElement) {
     if (el.closest('.monaco-editor, .xterm')) return true
     if (el.classList.contains('dw-overlay-scroll__rail')) return true
     if (el.classList.contains('dw-overlay-scroll__slider')) return true
-    // ĞéÄâ±í¸ñ¹ö¶¯¸ù£º½ûÖ¹Ô­µØ²å¹ì£¨¼û installOverlayScrollbarHosts ×¢ÊÍ£©
+    // è™šæ‹Ÿè¡¨æ ¼æ»šåŠ¨æ ¹ï¼šç¦æ­¢åŸåœ°æ’è½¨ï¼ˆè§ installOverlayScrollbarHosts æ³¨é‡Šï¼‰
     if (el.classList.contains('grid-body') || el.classList.contains('dw-data-grid__body')) return true
-    // Ç¶Ì×È¥ÖØ£º×æÏÈÒÑ¹ÒÔØÔòÌø¹ı£¬±ÜÃâË«¹ì
+    // åµŒå¥—å»é‡ï¼šç¥–å…ˆå·²æŒ‚è½½åˆ™è·³è¿‡ï¼Œé¿å…åŒè½¨
     const ancestor = el.parentElement?.closest('.dw-overlay-scroll-target')
     if (ancestor && ancestor !== el) return true
     return false
@@ -139,7 +139,7 @@ export function createOverlayScrollbarController(
         }, hideAfterMs)
     }
 
-    /** ÓÃ transform ¶¤ÔÚÊÓ¿Ú±ß£¬±ÜÃâ¸Ä top Óë¹ö¶¯ºÏ³É²»Í¬²½µ¼ÖÂºáÌõÌø¶¯ */
+    /** ç”¨ transform é’‰åœ¨è§†å£è¾¹ï¼Œé¿å…æ”¹ top ä¸æ»šåŠ¨åˆæˆä¸åŒæ­¥å¯¼è‡´æ¨ªæ¡è·³åŠ¨ */
     function pinRails() {
         const needV = overlayNeedV(box)
         const needH = overlayNeedH(box)
@@ -192,7 +192,7 @@ export function createOverlayScrollbarController(
     }
 
     function onScroll() {
-        // ¹ö¶¯ÖĞÔİÍ£×ÓÊ÷¹Û²ì£¬µ«³ß´çÈÔÃ¿Ö¡¶ÁÈ¡£¬±ÜÃâ»¬¿éÓëÕæÊµ scrollHeight ÍÑ½Ú
+        // æ»šåŠ¨ä¸­æš‚åœå­æ ‘è§‚å¯Ÿï¼Œä½†å°ºå¯¸ä»æ¯å¸§è¯»å–ï¼Œé¿å…æ»‘å—ä¸çœŸå® scrollHeight è„±èŠ‚
         pauseContentObservers()
         box.scrollTop = viewport.scrollTop
         box.scrollLeft = viewport.scrollLeft
@@ -201,7 +201,7 @@ export function createOverlayScrollbarController(
         box.scrollH = viewport.scrollHeight
         box.scrollW = viewport.scrollWidth
         pinRails()
-        // ¹ö¶¯ÖĞ²»Òª·´¸´ toggle class/hidden£¬·ñÔòºáÌõÒ²»áÉÁ
+        // æ»šåŠ¨ä¸­ä¸è¦åå¤ toggle class/hiddenï¼Œå¦åˆ™æ¨ªæ¡ä¹Ÿä¼šé—ª
         if (!revealed) {
             reveal()
         } else {
@@ -242,7 +242,7 @@ export function createOverlayScrollbarController(
         const onMove = (e: PointerEvent) => {
             if (!drag) return
             const delta = (drag.axis === 'v' ? e.clientY : e.clientX) - drag.startPointer
-            // Ë¢ĞÂ¶ÈÁ¿£¬±ÜÃâÍÏ×§ÖĞ scrollH ¹ıÆÚµ¼ÖÂ scrollPerPx=0£¨ÌõÔÚÍÏ²»¶¯£©
+            // åˆ·æ–°åº¦é‡ï¼Œé¿å…æ‹–æ‹½ä¸­ scrollH è¿‡æœŸå¯¼è‡´ scrollPerPx=0ï¼ˆæ¡åœ¨æ‹–ä¸åŠ¨ï¼‰
             box = readOverlayScrollBox(viewport)
             if (drag.axis === 'v') {
                 const t = computeVerticalThumb(box)

@@ -82,10 +82,18 @@
     --dw-icon-size: var(--dw-icon-size-tab);
 }
 
+/*
+ * 顶栏菜单图标：固定 18px 整数尺寸 + 绝对描边（DwIcon 的
+ * absolute-stroke-width 会保持物理像素宽度），避免 vmin 抖动和缩放发虚。
+ */
 .titlebar-menu-icon.dw-icon-root {
-    --dw-icon-size: var(--dw-icon-size-sm);
+    --dw-icon-size: 18px;
 }
 
 .titlebar-menu-icon.dw-icon-root.dw-icon--size-md {
-    --dw-icon-size: var(--dw-icon-size-md);
+    --dw-icon-size: 18px;
+}
+
+.titlebar-menu-icon.dw-icon-root .dw-icon__glyph {
+    shape-rendering: geometricPrecision;
 }

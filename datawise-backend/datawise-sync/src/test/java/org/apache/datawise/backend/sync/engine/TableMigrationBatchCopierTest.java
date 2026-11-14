@@ -54,8 +54,8 @@ class TableMigrationBatchCopierTest {
                         "insert into users (id) values (?)",
                         List.of("id")
                 ));
-        when(jdbcAccess.executeBatchInsertOnConnection(any(), anyString(), any(), any()))
-                .thenReturn(new int[]{1});
+        when(jdbcAccess.writePreparedBatchOnConnection(any(), anyString(), any(), any(), anyInt()))
+                .thenReturn(1);
     }
 
     @Test
@@ -89,11 +89,12 @@ class TableMigrationBatchCopierTest {
         assertEquals(1, result.rowsMigrated());
         assertEquals(1, result.batches());
         verify(jdbcAccess, never()).openPreparedConnection(any(), anyString());
-        verify(jdbcAccess).executeBatchInsertOnConnection(
+        verify(jdbcAccess).writePreparedBatchOnConnection(
                 same(targetConnection),
                 eq("insert into users (id) values (?)"),
                 eq(List.of("id")),
-                any()
+                any(),
+                eq(properties.getDefaultBatchSize())
         );
         verify(jdbcAccess, never()).executeUpdateOnConnection(any(), anyString());
     }

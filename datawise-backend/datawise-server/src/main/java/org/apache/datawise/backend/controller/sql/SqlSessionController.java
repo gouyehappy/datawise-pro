@@ -20,9 +20,13 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/sql/session")
 @Validated
+@RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_TRANSACTION)
 public class SqlSessionController {
 
     private static final Logger log = LoggerFactory.getLogger(SqlSessionController.class);

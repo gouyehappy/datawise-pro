@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed} from 'vue'
 import {useI18n} from 'vue-i18n'
 import DashboardWidgetFrame from '@/features/dashboard/components/DashboardWidgetFrame.vue'
@@ -108,7 +108,7 @@ const subtitle = computed(() =>
   gap: var(--dw-gap-md);
   width: 100%;
   padding: var(--dw-pad-control-lg);
-  border: 1px solid var(--dw-border-light);
+  border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
   border-radius: var(--dw-panel-radius);
   background: var(--dw-bg-panel);
   text-align: left;
@@ -120,7 +120,7 @@ const subtitle = computed(() =>
 }
 
 .dash-on-call:hover {
-  border-color: color-mix(in srgb, var(--dw-primary) 30%, var(--dw-border-light));
+  border-color: color-mix(in srgb, var(--dw-primary) 30%, var(--dw-panel-outline, var(--dw-border-light)));
 }
 
 .dash-on-call.is-missing {

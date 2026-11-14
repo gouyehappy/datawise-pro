@@ -1,6 +1,7 @@
 package org.apache.datawise.backend.service.outbound;
 
 import org.apache.datawise.backend.domain.OutboundEvent;
+import org.apache.datawise.backend.domain.OutboundEventCategory;
 import org.apache.datawise.backend.domain.OutboundEventDefinitionDto;
 import org.apache.datawise.backend.domain.OutboundEventType;
 import org.apache.datawise.backend.domain.OutboundEventVariableDto;
@@ -269,6 +270,17 @@ public class OutboundEventRegistry {
                 vars("database", "数据库名", "Database"),
                 vars("tableName", "表名", "Table name")));
         register(map, definition(
+                OutboundEventType.TABLE_ALTERED,
+                "表已变更",
+                "Table altered",
+                "表已变更：{{tableName}}",
+                "连接：{{name}}\n数据库：{{database}}\n表：{{tableName}}",
+                true,
+                vars("connectionId", "连接 ID", "Connection id"),
+                vars("name", "连接名称", "Connection name"),
+                vars("database", "数据库名", "Database"),
+                vars("tableName", "表名", "Table name")));
+        register(map, definition(
                 OutboundEventType.MIGRATION_JOB_COMPLETED,
                 "迁移任务完成",
                 "Migration job completed",
@@ -373,6 +385,7 @@ public class OutboundEventRegistry {
                                          Variable... variables) {
         return new Definition(
                 type,
+                OutboundEventCategory.of(type),
                 displayNameZh,
                 displayNameEn,
                 defaultTitleTemplate,
@@ -396,6 +409,7 @@ public class OutboundEventRegistry {
 
     public record Definition(
             String type,
+            String category,
             String displayNameZh,
             String displayNameEn,
             String defaultTitleTemplate,
@@ -408,6 +422,7 @@ public class OutboundEventRegistry {
         OutboundEventDefinitionDto toDto() {
             return new OutboundEventDefinitionDto(
                     type,
+                    category,
                     displayNameZh,
                     displayNameEn,
                     defaultTitleTemplate,

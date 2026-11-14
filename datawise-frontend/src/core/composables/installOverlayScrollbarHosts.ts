@@ -1,9 +1,9 @@
 /** Package copy: @datawise/chrome installOverlayScrollbarHosts. Host file kept until cutover. */
 /**
- * È«¾Ö°Ñ³£¼û¹ö¶¯¸ùÉı¼¶Îª Monaco / ×ÊÔ´Ê÷Í¬¿î×Ô»æµş¼ÓÌõ¡£
+ * å…¨å±€æŠŠå¸¸è§æ»šåŠ¨æ ¹å‡çº§ä¸º Monaco / èµ„æºæ ‘åŒæ¬¾è‡ªç»˜å åŠ æ¡ã€‚
  *
- * Ìø¹ı£ºÊı¾İÍø¸ñ¹ö¶¯¸ù¡¢DwOverlayScroll ÊÓ¿Ú¡¢Monaco¡¢xterm¡¢×æÏÈÒÑ¹ÒÔØµÄ×Ó¼¶¡£
- * ĞÂÇøÓòÒ²¿É£º`<DwOverlayScroll>` »ò `data-overlay-scroll`¡£
+ * è·³è¿‡ï¼šæ•°æ®ç½‘æ ¼æ»šåŠ¨æ ¹ã€DwOverlayScroll è§†å£ã€Monacoã€xtermã€ç¥–å…ˆå·²æŒ‚è½½çš„å­çº§ã€‚
+ * æ–°åŒºåŸŸä¹Ÿå¯ï¼š`<DwOverlayScroll>` æˆ– `data-overlay-scroll`ã€‚
  */
 import {
     attachOverlayScrollbar,
@@ -12,10 +12,10 @@ import {
 } from './attachOverlayScrollbar'
 
 /**
- * Êı¾İÍø¸ñ£¨.grid-body / .dw-data-grid__body£©²»¹Ò×Ô»æÌõ£º
- * ĞéÄâĞĞ + sticky ±íÍ·ÏÂ£¬¹ì²åÔÚ¹ö¶¯¸ùÄÚ²¢ÓÃ transform ¶¤ÊÓ¿ÚÊ±£¬
- * »¬¿éÒ×ÓëÕæÊµ scrollHeight ÍÑ½Ú£¨¿´ÆğÀ´¡¸ÌõÔÚ¡¢ÍÏ²»¶¯ / ¹ö²»¶¯¡¹£©¡£
- * Íø¸ñ×ß installAutohideScrollbar Ô­ÉúÏ¸Ìõ¡£
+ * æ•°æ®ç½‘æ ¼ï¼ˆ.grid-body / .dw-data-grid__bodyï¼‰ä¸æŒ‚è‡ªç»˜æ¡ï¼š
+ * è™šæ‹Ÿè¡Œ + sticky è¡¨å¤´ä¸‹ï¼Œè½¨æ’åœ¨æ»šåŠ¨æ ¹å†…å¹¶ç”¨ transform é’‰è§†å£æ—¶ï¼Œ
+ * æ»‘å—æ˜“ä¸çœŸå® scrollHeight è„±èŠ‚ï¼ˆçœ‹èµ·æ¥ã€Œæ¡åœ¨ã€æ‹–ä¸åŠ¨ / æ»šä¸åŠ¨ã€ï¼‰ã€‚
+ * ç½‘æ ¼èµ° installAutohideScrollbar åŸç”Ÿç»†æ¡ã€‚
  */
 export const OVERLAY_SCROLLBAR_HOST_SELECTOR = [
     '.dw-scrollbar-autohide',
@@ -70,7 +70,7 @@ export const OVERLAY_SCROLLBAR_HOST_SELECTOR = [
 
 let installed = false
 
-/** Íø¸ñÈôÈÔ¹Ò×Å¾É×Ô»æ¹ì£¬Ğ¶µô²¢»Ö¸´Ô­ÉúÌõ */
+/** ç½‘æ ¼è‹¥ä»æŒ‚ç€æ—§è‡ªç»˜è½¨ï¼Œå¸æ‰å¹¶æ¢å¤åŸç”Ÿæ¡ */
 const GRID_SCROLL_ROOT_SELECTOR = '.grid-body, .dw-data-grid__body'
 
 function detachGridOverlayHosts(root: ParentNode = document) {
@@ -108,7 +108,7 @@ function scan(root: ParentNode = document) {
 
 export function installOverlayScrollbarHosts() {
     if (typeof document === 'undefined') return
-    // Ã¿´Îµ÷ÓÃ¶¼Ğ¶Íø¸ñ²ĞÁô¹ì£¨º¬ HMR£©£»ÍêÕûÉ¨ÃèÖ»×°Ò»´Î
+    // æ¯æ¬¡è°ƒç”¨éƒ½å¸ç½‘æ ¼æ®‹ç•™è½¨ï¼ˆå« HMRï¼‰ï¼›å®Œæ•´æ‰«æåªè£…ä¸€æ¬¡
     detachGridOverlayHosts(document)
     if (installed) return
     installed = true
@@ -153,7 +153,7 @@ export function installOverlayScrollbarHosts() {
     )
 }
 
-// HMR£ºÄ£¿éÖØÔØÊ±Á¢¿ÌĞ¶µôÍø¸ñÉÏ¾É×Ô»æ¹ì
+// HMRï¼šæ¨¡å—é‡è½½æ—¶ç«‹åˆ»å¸æ‰ç½‘æ ¼ä¸Šæ—§è‡ªç»˜è½¨
 if (typeof document !== 'undefined') {
     detachGridOverlayHosts(document)
 }

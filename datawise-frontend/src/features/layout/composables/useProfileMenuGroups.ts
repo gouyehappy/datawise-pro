@@ -110,13 +110,19 @@ export function useProfileSidebarMenuGroups(onClose: () => void): ComputedRef<Re
 export function useTitleBarPreferenceMenuItems(
     onClose: () => void,
     onReloadExplorer: () => void,
+    options?: {tier?: 'primary' | 'secondary' | 'all'},
 ): ComputedRef<ResolvedProfileMenuItem[]> {
     const {can} = useFeaturePermission()
     const handlers = useProfileMenuActions(onClose)
+    const tier = options?.tier ?? 'all'
 
     return computed(() =>
         SHARED_PROFILE_MENU_ITEMS
             .filter((item) => item.titleBarLabelKey && isItemVisible(item, can))
+            .filter((item) => {
+                if (tier === 'all') return true
+                return (item.mainMenuTier ?? 'secondary') === tier
+            })
             .map((item) => mapMenuItem(item, 'titleBar', handlers, {onReloadExplorer})),
     )
 }

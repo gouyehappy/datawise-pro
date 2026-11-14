@@ -19,6 +19,12 @@ public class JdbcPoolProperties {
      * Default {@link java.sql.Statement#setFetchSize(int)} for SELECT reads; 0 keeps driver default.
      */
     private int defaultFetchSize = 500;
+    /**
+     * Ask MySQL Connector/J for server-side cursors ({@code useCursorFetch}) so the fetch size
+     * above actually streams. Without it the driver buffers the entire result set and the fetch
+     * size is advisory only. Only applied to drivers known to support the flag.
+     */
+    private boolean cursorFetch = true;
 
     public int getMaximumPoolSize() {
         return maximumPoolSize;
@@ -82,6 +88,14 @@ public class JdbcPoolProperties {
 
     public void setDefaultFetchSize(int defaultFetchSize) {
         this.defaultFetchSize = Math.max(0, defaultFetchSize);
+    }
+
+    public boolean isCursorFetch() {
+        return cursorFetch;
+    }
+
+    public void setCursorFetch(boolean cursorFetch) {
+        this.cursorFetch = cursorFetch;
     }
 
     public void applyFetchSize(java.sql.Statement statement) throws java.sql.SQLException {

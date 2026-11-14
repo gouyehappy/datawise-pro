@@ -1,12 +1,13 @@
 /* 侧边栏面板（聊天记录、目标数据库、设置导航等） */
 
 /**
- * 数据库侧栏 / 工具窗：右上角操作默认隐藏，悬停面板或聚焦时显示。
- * 编辑区、结果区不使用此类（见 ToolWindowShell / DatabaseExplorer）。
+ * 数据库侧栏 / 工具窗：右上角钉住/浮动/收起默认可点按（半透明），
+ * 悬停或聚焦时实显。编辑区、结果区不使用此类（见 ToolWindowShell / DatabaseExplorer）。
+ * IDE 皮肤可在 skins/ide.css 再压一档默认透明度。
  */
 .dw-panel-hover-chrome .dw-panel-hover-actions {
-    opacity: 0;
-    pointer-events: none;
+    opacity: 0.5;
+    pointer-events: auto;
     transition: opacity var(--dw-duration-fast) var(--dw-ease);
 }
 
@@ -25,11 +26,11 @@
 }
 
 .dw-side-panel--border-right {
-    border-right: 1px solid var(--dw-border-light);
+    border-right: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .dw-side-panel--border-left {
-    border-left: 1px solid var(--dw-border-light);
+    border-left: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .dw-side-panel__head {
@@ -38,7 +39,7 @@
     justify-content: space-between;
     gap: var(--dw-space-6);
     padding: var(--dw-space-8) var(--dw-space-7) var(--dw-space-6);
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .dw-side-panel__head h2 {
@@ -56,7 +57,7 @@
 
 .dw-side-panel__toolbar {
     padding: var(--dw-space-5) var(--dw-space-7);
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .dw-side-panel__toolbar-actions {
@@ -104,11 +105,11 @@
 .dw-list-item:hover,
 .dw-list-item.is-active {
     background: var(--dw-bg);
-    border-color: var(--dw-border-light);
+    border-color: var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .dw-list-item.is-active {
-    border-color: color-mix(in srgb, var(--dw-primary) 24%, var(--dw-border-light));
+    border-color: color-mix(in srgb, var(--dw-primary) 24%, var(--dw-panel-outline, var(--dw-border-light)));
     background: var(--dw-primary-soft);
 }
 

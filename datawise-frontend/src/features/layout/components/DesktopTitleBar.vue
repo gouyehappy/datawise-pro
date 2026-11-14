@@ -9,14 +9,33 @@ import TitleBarQuickActions from '@/features/layout/components/TitleBarQuickActi
 import WorkspaceSwitcher from '@/features/layout/components/WorkspaceSwitcher.vue'
 import WorkspaceActionDialogs from '@/features/layout/components/WorkspaceActionDialogs.vue'
 import {useDesktopTitleBar} from '@/features/layout/composables/useDesktopTitleBar'
+import {useConfirmDialog} from '@/core/composables/useConfirmDialog'
 import {useLocalFilesUnsavedExitGuard} from '@/features/local-files/composables/useLocalFilesUnsavedExitGuard'
 import {confirmLocalFilesExitIfNeeded} from '@/features/local-files/services/local-files-exit-guard'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 
 const {t} = useI18n()
 const {visible, maximized, isMac, minimize, toggleMaximize, close, beginFramelessWindowDrag} = useDesktopTitleBar()
-const {exitConfirm} = useLocalFilesUnsavedExitGuard()
 const appConfig = useAppConfigStore()
+
+function resolveExitConfirm() {
+  try {
+    return useLocalFilesUnsavedExitGuard()
+  } catch (error) {
+    console.warn('[titlebar] exit guard unavailable', error)
+    return useConfirmDialog('danger')
+  }
+}
+
+const {
+  open: exitOpen,
+  title: exitTitle,
+  message: exitMessage,
+  confirmLabel: exitConfirmLabel,
+  confirmVariant: exitConfirmVariant,
+  onOpenUpdate: onExitOpenUpdate,
+  onConfirm: onExitConfirm,
+} = resolveExitConfirm()
 
 async function onClose() {
   if (!(await confirmLocalFilesExitIfNeeded())) return
@@ -59,7 +78,7 @@ async function onClose() {
         @dblclick.stop="toggleMaximize"
     />
 
-    <TitleBarQuickActions/>
+    <TitleBarQuickActions class="desktop-titlebar__quick"/>
 
     <div v-if="!isMac" class="desktop-titlebar__controls">
       <button
@@ -93,13 +112,13 @@ async function onClose() {
   <WorkspaceActionDialogs/>
 
   <ConfirmDialog
-      :open="exitConfirm.open.value"
-      :title="exitConfirm.title.value"
-      :message="exitConfirm.message.value"
-      :confirm-label="exitConfirm.confirmLabel.value"
-      :confirm-variant="exitConfirm.confirmVariant.value"
-      @update:open="exitConfirm.onOpenUpdate"
-      @confirm="exitConfirm.onConfirm"
+      :open="exitOpen"
+      :title="exitTitle"
+      :message="exitMessage"
+      :confirm-label="exitConfirmLabel"
+      :confirm-variant="exitConfirmVariant"
+      @update:open="onExitOpenUpdate"
+      @confirm="onExitConfirm"
   />
 </template>
 
@@ -110,9 +129,19 @@ async function onClose() {
   flex-shrink: 0;
   min-width: 0;
   height: var(--dw-titlebar-height);
-  gap: 2px;
-  padding: 0 0 0 2px;
-  background: var(--dw-bg-chrome);
+  gap: 6px;
+  padding: 0 2px 0 8px;
+  /*
+   * 配色全部交给 --dw-titlebar-*：浅色 / 深色各一套中性灰，再混入当前
+   * data-bg-tone 的色调；四种界面款式各自决定混合比、渐变强度与控件高
+   * （见 packages/tokens/src/skins/*.css）。不再一个 color-mix 公式通吃。
+   * 左侧 36% 的低饱和主色渐变对应 IDEA 的 project-color header，不铺满整条。
+   */
+  background:
+    linear-gradient(90deg, var(--dw-titlebar-tint) 0, transparent 36%),
+    var(--dw-titlebar-bg);
+  box-shadow: inset 0 -1px 0 var(--dw-titlebar-seam);
+  color: var(--dw-titlebar-fg);
   position: relative;
   z-index: var(--dw-z-toolbar);
   user-select: none;
@@ -127,7 +156,7 @@ async function onClose() {
   align-items: center;
   flex-shrink: 0;
   height: 100%;
-  gap: 2px;
+  gap: 4px;
   -webkit-app-region: no-drag;
 }
 
@@ -137,19 +166,19 @@ async function onClose() {
   justify-content: center;
   flex-shrink: 0;
   height: 100%;
-  padding: 0 4px 0 10px;
+  padding: 0 6px 0 2px;
   -webkit-app-region: drag;
 }
 
-/* 项目 + 模块：同一工具条节奏，无竖分割线 */
+/* 项目 + 上下文：同一工具条节奏，无竖分割线 */
 .desktop-titlebar__toolbar {
   display: flex;
   align-items: center;
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
-  gap: 2px;
-  padding: 0 4px;
+  gap: 6px;
+  padding: 0 2px;
   -webkit-app-region: no-drag;
 }
 
@@ -159,10 +188,15 @@ async function onClose() {
 }
 
 .desktop-titlebar__drag {
-  flex: 0 1 24px;
-  min-width: 8px;
+  flex: 0 0 4px;
+  min-width: 4px;
   height: 100%;
   -webkit-app-region: drag;
+}
+
+/* 通用图标组与窗口控件之间靠留白分组，不画竖线（IDEA 原则） */
+.desktop-titlebar__quick {
+  margin-left: 6px;
 }
 
 .desktop-titlebar__controls {
@@ -180,18 +214,18 @@ async function onClose() {
   align-items: center;
   justify-content: center;
   width: 28px;
-  height: var(--dw-density-sm);
+  height: var(--dw-titlebar-widget-h);
   border: none;
   border-radius: var(--dw-titlebar-chip-radius);
   background: transparent;
-  color: var(--dw-text-secondary);
+  color: var(--dw-titlebar-fg);
   cursor: pointer;
   transition: background 100ms ease, color 100ms ease;
 }
 
 .desktop-titlebar__btn:hover {
   background: var(--dw-titlebar-chip-hover);
-  color: var(--dw-text);
+  color: var(--dw-titlebar-fg-strong);
 }
 
 .desktop-titlebar__btn--close:hover {

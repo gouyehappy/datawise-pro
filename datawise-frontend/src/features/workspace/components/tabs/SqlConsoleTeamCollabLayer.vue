@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, onUnmounted, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {defineAsyncComponent} from 'vue'
@@ -79,7 +79,6 @@ async function pullTeamSharedQuery() {
         collabBaseSql.value = detail.sql ?? ''
         collabRemoteChanged.value = false
         collabRemoteSqlPreview.value = null
-        layout.showSuccessToast(t('team.sharedQueries.collabPulled'))
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'team.sharedQueries.collabPullFailed')
         layout.showErrorToast(message)
@@ -130,7 +129,6 @@ async function acceptCollabRemote() {
         collabRemoteChanged.value = false
         collabRemoteSqlPreview.value = null
         collabConflictDialogOpen.value = false
-        layout.showSuccessToast(t('team.sharedQueries.collabPulled'))
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'team.sharedQueries.collabPullFailed')
         layout.showErrorToast(message)
@@ -162,12 +160,11 @@ async function pushTeamSharedQuery() {
         collabLastRemoteUpdatedAt.value = updated.updatedAt || null
         collabBaseSql.value = sql.value
         collabRemoteChanged.value = false
-        layout.showSuccessToast(t('team.sharedQueries.collabPushed'))
     } catch (error) {
         const rawMessage = error instanceof Error ? error.message : ''
-        if (rawMessage.includes('pull latest')) {
+        const conflict = /SHARED_QUERY_CONFLICT|pull latest|updated by others/i.test(rawMessage)
+        if (conflict) {
             collabRemoteChanged.value = true
-            layout.showSuccessToast(t('team.sharedQueries.collabConflictSave'))
         } else {
             layout.showErrorToast(resolveCaughtApiErrorMessage(error, t, 'team.sharedQueries.collabPushFailed'))
         }

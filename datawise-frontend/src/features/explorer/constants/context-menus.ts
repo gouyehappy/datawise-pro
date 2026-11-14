@@ -7,6 +7,7 @@ export function getContextMenuForNodeType(type: string, t: ComposerTranslation):
     const tableMenu: ContextMenuItem[] = [
         {id: 'open', label: c('openTable'), icon: 'open', shortcut: 'F4'},
         {id: 'console', label: c('console'), icon: 'console', shortcut: 'Ctrl+Shift+L'},
+        {id: 'ask-ai', label: c('askAi'), icon: 'bot'},
         {id: 'pin', label: c('favoriteTable'), icon: 'pin'},
         {id: 'refresh', label: c('refresh'), icon: 'refresh'},
         {id: 'divider-1', label: '', divider: true},
@@ -210,6 +211,14 @@ export function getContextMenuForNodeType(type: string, t: ComposerTranslation):
                 {id: 'divider-1', label: '', divider: true},
                 {id: 'refresh-project-files', label: c('refresh'), icon: 'refresh'},
                 {id: 'copy-name', label: c('copyName'), icon: 'copy'},
+                {id: 'divider-2', label: '', divider: true},
+                {
+                    id: 'delete-project-file',
+                    label: c('deleteProjectFile'),
+                    icon: 'delete',
+                    shortcut: 'Delete',
+                    danger: true,
+                },
             ]
         case 'project-scripts':
             return [
@@ -220,12 +229,28 @@ export function getContextMenuForNodeType(type: string, t: ComposerTranslation):
                 {id: 'divider-1', label: '', divider: true},
                 {id: 'refresh-project-files', label: c('refresh'), icon: 'refresh'},
                 {id: 'copy-name', label: c('copyName'), icon: 'copy'},
+                {id: 'divider-2', label: '', divider: true},
+                {
+                    id: 'delete-project-file',
+                    label: c('deleteProjectFile'),
+                    icon: 'delete',
+                    shortcut: 'Delete',
+                    danger: true,
+                },
             ]
         case 'project-file':
             return [
                 {id: 'open', label: c('openProjectFile'), icon: 'open'},
                 {id: 'rename-project-file', label: c('renameProjectFile'), icon: 'edit'},
                 {id: 'copy-name', label: c('copyName'), icon: 'copy'},
+                {id: 'divider-1', label: '', divider: true},
+                {
+                    id: 'delete-project-file',
+                    label: c('deleteProjectFile'),
+                    icon: 'delete',
+                    shortcut: 'Delete',
+                    danger: true,
+                },
             ]
         default:
             return [{id: 'copy-name', label: c('copyName'), icon: 'copy'}]

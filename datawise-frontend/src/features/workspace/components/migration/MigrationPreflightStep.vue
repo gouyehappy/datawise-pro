@@ -56,6 +56,17 @@ const preflightScanBannerMessage = computed(() => {
     }
     return message
 })
+
+const structureAtomicityBanner = computed(() => {
+    const atomicity = w.structureDeployAtomicity
+    if (!atomicity) return null
+    return {
+        variant: atomicity === 'guaranteed_rollback' ? 'info' : 'warning',
+        message: atomicity === 'guaranteed_rollback'
+            ? t('explorer.tableMigrationWizard.structureAtomicGuaranteed')
+            : t('explorer.tableMigrationWizard.structureAtomicPartial'),
+    } as const
+})
 </script>
 
 <template>
@@ -116,6 +127,15 @@ const preflightScanBannerMessage = computed(() => {
           :variant="w.preflightScanSummary.variant"
           class="preflight-scan-banner"
           :message="preflightScanBannerMessage"
+      />
+
+      <DwInlineAlert
+          v-if="structureAtomicityBanner"
+          density="banner"
+          :variant="structureAtomicityBanner.variant"
+          class="preflight-structure-atomic-banner"
+          data-testid="migration-structure-atomic-banner"
+          :message="structureAtomicityBanner.message"
       />
 
       <header class="preflight-inspector__head">
@@ -283,6 +303,10 @@ const preflightScanBannerMessage = computed(() => {
                     </template>
                   </li>
                 </ul>
+                <pre
+                    v-if="w.rowDiffResult.syncSql"
+                    class="preflight-detail__text preflight-detail__sync-sql"
+                >{{ w.rowDiffResult.syncSql }}</pre>
               </template>
             </div>
 

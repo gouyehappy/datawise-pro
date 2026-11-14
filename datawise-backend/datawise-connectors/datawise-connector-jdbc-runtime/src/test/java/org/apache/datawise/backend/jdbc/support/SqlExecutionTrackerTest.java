@@ -6,7 +6,9 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -65,5 +67,25 @@ class SqlExecutionTrackerTest {
 
         assertFalse(outcome.cancelled());
         assertTrue(outcome.message().contains("cancel failed"));
+    }
+
+    @Test
+    void cancelByQueryIdLeavesSiblingQueryRunning() throws SQLException {
+        SqlExecutionTracker tracker = new SqlExecutionTracker();
+        Statement first = mock(Statement.class);
+        Statement second = mock(Statement.class);
+        Connection connection = mock(Connection.class);
+
+        String firstId = tracker.register("1:tab-a", first, connection);
+        String secondId = tracker.register("1:tab-a", second, connection);
+        assertNotEquals(firstId, secondId);
+
+        SqlExecutionTracker.CancelOutcome outcome = tracker.cancelQuery(firstId);
+        assertTrue(outcome.cancelled());
+        assertEquals(firstId, outcome.queryId());
+        verify(first).cancel();
+
+        assertTrue(tracker.hasRunningQuery(secondId));
+        assertTrue(tracker.hasRunningExecution("1:tab-a"));
     }
 }

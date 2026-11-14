@@ -11,36 +11,43 @@ export const workbenchNavFeature = defineFeature({
             {
                 module: 'dashboard',
                 kind: 'module-page',
+                asyncName: 'DashboardView',
                 loader: () => import('@/features/dashboard/DashboardView.vue'),
             },
             {
                 module: 'packStore',
                 kind: 'module-page',
+                asyncName: 'PackStoreView',
                 loader: () => import('@/features/pack/PackStoreView.vue'),
             },
             {
                 module: 'plugin',
                 kind: 'module-page',
+                asyncName: 'PluginView',
                 loader: () => import('@/features/plugin/PluginView.vue'),
             },
             {
                 module: 'pluginDev',
                 kind: 'module-page',
+                asyncName: 'PluginDevToolsView',
                 loader: () => import('@/features/plugin/PluginDevToolsView.vue'),
             },
             {
                 module: 'connectorMarket',
                 kind: 'module-page',
+                asyncName: 'ConnectorMarketView',
                 loader: () => import('@/features/plugin/ConnectorMarketView.vue'),
             },
             {
                 module: 'team',
                 kind: 'module-page',
+                asyncName: 'TeamView',
                 loader: () => import('@/features/team/TeamView.vue'),
             },
             {
                 module: 'settings',
                 kind: 'module-page',
+                asyncName: 'SettingsView',
                 loader: () => import('@/features/settings/SettingsView.vue'),
             },
         ],

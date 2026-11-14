@@ -1,0 +1,25 @@
+{
+  "id": "jdbc-query",
+  "supportLevel": "query",
+  "specializedSurface": false,
+  "formKind": "jdbc",
+  "features": {
+    "queryExecution": true,
+    "metadataBrowse": true,
+    "objectBrowser": true,
+    "objectSource": false,
+    "schemaSearch": true,
+    "diagram": false,
+    "tableDataEdit": false,
+    "tableStructureEdit": false,
+    "tableImport": false,
+    "dataTransfer": false,
+    "sqlFileExecution": true,
+    "databaseCreate": false,
+    "fieldLineage": false,
+    "sqlExplain": true,
+    "visualQueryBuilder": false,
+    "schemaCompare": false,
+    "transactionalDdl": false
+  }
+}

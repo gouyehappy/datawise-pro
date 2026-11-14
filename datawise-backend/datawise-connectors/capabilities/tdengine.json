@@ -1,0 +1,9 @@
+{
+  "dbType": "tdengine",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false,
+    "diagram": false,
+    "schemaCompare": false
+  }
+}

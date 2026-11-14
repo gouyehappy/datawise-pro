@@ -2,6 +2,7 @@ package org.apache.datawise.backend.database.sql;
 
 import org.apache.datawise.backend.database.context.ConnectionExecutionContext;
 
+import org.apache.datawise.backend.common.DeepOffsetGuard;
 import org.apache.datawise.backend.common.SqlDeepOffsetException;
 import org.apache.datawise.backend.config.DatawiseQueryProperties;
 import org.apache.datawise.backend.connector.facade.ConnectorFacade;
@@ -234,6 +235,9 @@ public class SqlCursorService {
     }
 
     private void requireOffsetWithinLimit(int offset) {
+        if (DeepOffsetGuard.isDataMovement()) {
+            return;
+        }
         int maxOffset = queryProperties.getMaxCursorOffset();
         if (maxOffset > 0 && offset > maxOffset) {
             throw new SqlDeepOffsetException(offset, maxOffset);

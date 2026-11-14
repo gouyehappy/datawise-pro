@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {useI18n} from 'vue-i18n'
 import {StatusPill} from '@/core/components'
 import {useSqlEditorShortcutsStore} from '@/features/settings/stores/sql-editor-shortcuts-store'

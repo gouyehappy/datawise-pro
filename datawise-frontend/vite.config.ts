@@ -21,7 +21,7 @@ function packAwareManualChunks(id: string): string | undefined {
     const norm = id.replace(/\\/g, '/')
     if (norm.includes('node_modules/monaco-editor')) return 'monaco'
     if (norm.includes('node_modules/echarts')) return 'echarts'
-    if (norm.includes('node_modules/exceljs') || norm.includes('node_modules/xlsx')) {
+    if (norm.includes('node_modules/exceljs')) {
         return 'spreadsheet'
     }
     // Keep vue runtime together; locales are split so unused language stays out of first paint.
@@ -70,12 +70,30 @@ export default defineConfig(() => {
                 '@': resolve(__dirname, 'src'),
                 '@datawise/sql-editor': resolve(__dirname, '../sql-editor/src'),
                 '@sql-editor': resolve(__dirname, '../sql-editor/src'),
+                // Pin to frontend installs — packages/overlays AppModal resolves from
+                // packages/ and can otherwise pick repo-root vue/reka-ui (dual runtime →
+                // DialogRoot renderSlot null currentRenderingInstance → tab:local-text crash).
+                vue: resolve(__dirname, 'node_modules/vue'),
+                '@vue/runtime-core': resolve(__dirname, 'node_modules/@vue/runtime-core'),
+                '@vue/runtime-dom': resolve(__dirname, 'node_modules/@vue/runtime-dom'),
+                '@vue/reactivity': resolve(__dirname, 'node_modules/@vue/reactivity'),
+                '@vue/shared': resolve(__dirname, 'node_modules/@vue/shared'),
+                'reka-ui': resolve(__dirname, 'node_modules/reka-ui'),
             },
-            // sql-editor 经 alias 与 node_modules junction 双路径时，避免两份 cache 单例
-            dedupe: ['monaco-editor', '@datawise/sql-editor'],
+            // sql-editor 经 alias 与 node_modules junction 双路径时，避免两份 cache 单例。
+            dedupe: [
+                'monaco-editor',
+                '@datawise/sql-editor',
+                'vue',
+                '@vue/runtime-core',
+                '@vue/runtime-dom',
+                '@vue/reactivity',
+                '@vue/shared',
+                'reka-ui',
+            ],
         },
         optimizeDeps: {
-            include: ['monaco-editor'],
+            include: ['monaco-editor', 'vue', 'reka-ui'],
         },
         server: {
             host: '127.0.0.1',

@@ -11,7 +11,8 @@ import org.apache.datawise.backend.sync.api.TableMigrationProgressListener;
 import org.apache.datawise.backend.sync.engine.MigrationEndpoints;
 import org.apache.datawise.backend.sync.engine.TableMigrationBatchRequestPolicy;
 import org.apache.datawise.backend.sync.engine.TableMigrationBatchPlan;
-import org.apache.datawise.backend.sync.engine.TableMigrationExecutor;
+import org.apache.datawise.backend.sync.engine.MigrationExecutorProvider;
+import org.apache.datawise.backend.sync.engine.MigrationExecutorRegistry;
 import org.apache.datawise.backend.sync.engine.TableMigrationJobHooks;
 import org.apache.datawise.backend.sync.engine.TableMigrationRequestPolicy;
 import org.apache.datawise.backend.sync.job.MigrationJobCoordinator;
@@ -46,7 +47,7 @@ import java.util.concurrent.Executor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 
-/** 表迁移门面：校验上下文后委托 {@link TableMigrationExecutor}。 */
+/** 表迁移门面：校验上下文后委托 {@link MigrationExecutorRegistry} 解析的执行器。 */
 @Service
 public class TableMigrationService {
 
@@ -55,7 +56,7 @@ public class TableMigrationService {
     private final ConnectionExecutionContext connectionContext;
     private final UserAccountService userAccountService;
     private final ConnectionAccessService connectionAccessService;
-    private final TableMigrationExecutor migrationExecutor;
+    private final MigrationExecutorRegistry migrationExecutorRegistry;
     private final MigrationJobCoordinator jobCoordinator;
     private final MigrationJobRuntime jobRuntime;
     private final MigrationJobStreamHub jobStreamHub;
@@ -71,7 +72,7 @@ public class TableMigrationService {
             ConnectionExecutionContext connectionContext,
             UserAccountService userAccountService,
             ConnectionAccessService connectionAccessService,
-            TableMigrationExecutor migrationExecutor,
+            MigrationExecutorRegistry migrationExecutorRegistry,
             MigrationJobCoordinator jobCoordinator,
             MigrationJobRuntime jobRuntime,
             MigrationJobStreamHub jobStreamHub,
@@ -86,7 +87,7 @@ public class TableMigrationService {
         this.connectionContext = connectionContext;
         this.userAccountService = userAccountService;
         this.connectionAccessService = connectionAccessService;
-        this.migrationExecutor = migrationExecutor;
+        this.migrationExecutorRegistry = migrationExecutorRegistry;
         this.jobCoordinator = jobCoordinator;
         this.jobRuntime = jobRuntime;
         this.jobStreamHub = jobStreamHub;
@@ -124,7 +125,7 @@ public class TableMigrationService {
                 targetDatabase
         );
 
-        return migrationExecutor.migrate(source, target, sourceDatabase, targetDatabase, request);
+        return migrationExecutor().migrate(source, target, sourceDatabase, targetDatabase, request);
     }
 
     public TableMigrationBatchResult migrateTables(TableMigrationBatchRequest request) {
@@ -554,7 +555,7 @@ public class TableMigrationService {
                 executionControl,
                 false
         );
-        List<TableMigrationResult> results = migrationExecutor.migrateBatch(endpoints, plan, hooks);
+        List<TableMigrationResult> results = migrationExecutor().migrateBatch(endpoints, plan, hooks);
         jobCoordinator.finalizeJob(execution.job(), results);
         notifyMigrationCompletion(execution.job(), request, results);
         return new TableMigrationBatchResult(execution.jobId(), results);
@@ -573,7 +574,7 @@ public class TableMigrationService {
             return;
         }
         List<TableMigrationResult> safeResults = results != null ? results : List.of();
-        // Table results use "success"/"failed" (see TableMigrationExecutor); job status uses "completed".
+        // Table results use "success"/"failed" (see MigrationExecutorProvider); job status uses "completed".
         boolean failed = safeResults.stream()
                 .anyMatch(item -> item != null && !"success".equalsIgnoreCase(item.status()));
         if (failed) {
@@ -623,5 +624,9 @@ public class TableMigrationService {
                 request != null && request.tables() != null ? request.tables().size() : 0,
                 message != null ? message : ""
         );
+    }
+
+    private MigrationExecutorProvider migrationExecutor() {
+        return migrationExecutorRegistry.requireDefault();
     }
 }

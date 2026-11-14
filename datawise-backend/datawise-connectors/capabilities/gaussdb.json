@@ -1,0 +1,7 @@
+{
+  "dbType": "gaussdb",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": true
+  }
+}

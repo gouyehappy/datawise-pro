@@ -414,7 +414,6 @@ async function saveRagSettings() {
         appConfig.patchRagPreferences(cloneRagPreferences(ragDraft.value))
         await appConfig.persistConfigNowAsync()
         ragDraft.value = cloneRagPreferences(appConfig.aiPreferences.rag)
-        layout.showSuccessToast(t('settings.knowledge.ragSaveSuccess'))
         void loadRagStatus()
     } catch (error) {
         console.warn('[rag] save settings failed', error)
@@ -436,7 +435,12 @@ async function rebuildRag() {
         const scope = ragScopeParams()
         const result = await rebuildAiRagIndex(scope.connectionId, scope.database)
         await loadRagStatus()
-        layout.showSuccessToast(result.message || t('settings.knowledge.ragRebuildSuccess'))
+        layout.notifyQuiet({
+          category: 'workspace',
+          titleKey: 'operationDone',
+          bodyKey: 'operationDone',
+          params: {detail: result.message || t('settings.knowledge.ragRebuildSuccess')},
+        })
     } catch {
         ragError.value = t('settings.knowledge.ragRebuildFailed')
     } finally {
@@ -492,7 +496,6 @@ async function saveEntries() {
             selectedEntryId.value = rows.value[0]?.id ?? null
         }
         syncSavedSnapshot()
-        layout.showSuccessToast(t('settings.knowledge.saveSuccess'))
         if (showRagSection.value) {
             await loadRagStatus()
         }

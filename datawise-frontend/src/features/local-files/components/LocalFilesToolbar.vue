@@ -1,4 +1,4 @@
-<!-- 本地文件工作区工具栏：打开文件夹（含最近）、新建、刷新、定位、折叠、搜索（含类型下拉） -->
+<!-- 本地文件树工具栏：刷新 / 搜索 / 定位到磁盘目录等。 -->
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
@@ -31,7 +31,9 @@ const openFolderBtnRef = ref<HTMLElement | null>(null)
 const filterBtnRef = ref<HTMLElement | null>(null)
 const switchConfirm = useConfirmDialog('primary')
 
-const TOOLBAR_ICON_SIZE = 16
+/** Match ExplorerToolbar / connection tree optical size */
+const TOOLBAR_ICON_SIZE = 18
+const TOOLBAR_ICON_STROKE = 2
 const RECENT_PREFIX = 'recent:'
 const FAVORITE_PREFIX = 'favorite:'
 const FILTER_PREFIX = 'filter:'
@@ -198,7 +200,6 @@ async function onOpenFolderMenuSelect(id: string) {
 async function refresh() {
   try {
     await localFiles.refresh()
-    layout.showSuccessToast(t('explorer.localFiles.refreshDone'))
   } catch {
     layout.showErrorToast(t('explorer.localFiles.refreshFailed'))
   }
@@ -244,7 +245,7 @@ async function startNewFolder() {
               @click="toggleOpenFolderMenu"
           >
             <span class="toolbar-glyph">
-              <DwIcon name="open" :size="TOOLBAR_ICON_SIZE" :stroke-width="1.35"/>
+              <DwIcon name="open" :size="TOOLBAR_ICON_SIZE"  :stroke-width="TOOLBAR_ICON_STROKE"/>
             </span>
           </IconButton>
         </div>
@@ -255,7 +256,7 @@ async function startNewFolder() {
             @click="startNewFile"
         >
           <span class="toolbar-glyph">
-            <DwIcon name="file" :size="TOOLBAR_ICON_SIZE" :stroke-width="1.35"/>
+            <DwIcon name="file" :size="TOOLBAR_ICON_SIZE"  :stroke-width="TOOLBAR_ICON_STROKE"/>
           </span>
         </IconButton>
         <IconButton
@@ -265,7 +266,7 @@ async function startNewFolder() {
             @click="startNewFolder"
         >
           <span class="toolbar-glyph">
-            <DwIcon name="folder" :size="TOOLBAR_ICON_SIZE" :stroke-width="1.35"/>
+            <DwIcon name="folder" :size="TOOLBAR_ICON_SIZE"  :stroke-width="TOOLBAR_ICON_STROKE"/>
           </span>
         </IconButton>
         <IconButton
@@ -275,7 +276,7 @@ async function startNewFolder() {
             @click="refresh"
         >
           <span class="toolbar-glyph" :class="{ 'is-spinning': localFiles.loading }">
-            <DwIcon name="refresh" :size="TOOLBAR_ICON_SIZE" :stroke-width="1.35"/>
+            <DwIcon name="refresh" :size="TOOLBAR_ICON_SIZE"  :stroke-width="TOOLBAR_ICON_STROKE"/>
           </span>
         </IconButton>
         <IconButton
@@ -285,7 +286,7 @@ async function startNewFolder() {
             @click="locate"
         >
           <span class="toolbar-glyph">
-            <DwIcon name="locate" :size="TOOLBAR_ICON_SIZE" :stroke-width="1.35"/>
+            <DwIcon name="locate" :size="TOOLBAR_ICON_SIZE"  :stroke-width="TOOLBAR_ICON_STROKE"/>
           </span>
         </IconButton>
         <IconButton
@@ -295,7 +296,7 @@ async function startNewFolder() {
             @click="localFiles.collapseAll()"
         >
           <span class="toolbar-glyph">
-            <DwIcon name="chevrons-up" :size="TOOLBAR_ICON_SIZE" :stroke-width="1.35"/>
+            <DwIcon name="chevrons-up" :size="TOOLBAR_ICON_SIZE"  :stroke-width="TOOLBAR_ICON_STROKE"/>
           </span>
         </IconButton>
       </div>
@@ -392,10 +393,11 @@ async function startNewFolder() {
 .local-files-toolbar {
   display: flex;
   align-items: center;
-  gap: var(--dw-gap);
-  height: var(--dw-toolbar-height);
-  padding: 0 var(--dw-space-5) 0 var(--dw-space-3);
-  border-bottom: 1px solid var(--dw-border-light);
+  gap: 6px;
+  height: auto;
+  min-height: calc(var(--dw-toolbar-height) + 2px);
+  padding: 4px var(--dw-space-5) 8px var(--dw-space-3);
+  border-bottom: none;
   min-width: 0;
 }
 
@@ -417,28 +419,45 @@ async function startNewFolder() {
 .local-files-toolbar__search {
   display: flex;
   align-items: center;
-  gap: var(--dw-gap-sm);
+  gap: 7px;
   width: 100%;
   min-width: 0;
-  height: var(--dw-btn-height-sm);
-  padding: 0 4px 0 var(--dw-space-5);
+  height: 28px;
+  padding: 0 7px 0 8px;
   border: 1px solid transparent;
-  border-radius: var(--dw-radius-pill);
-  background: var(--dw-bg-muted);
-  color: var(--dw-text-secondary);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--dw-bg-editor, var(--dw-bg)) 55%, var(--dw-bg-muted));
+  color: var(--dw-text-muted);
+  transition:
+      background 120ms ease,
+      border-color 120ms ease,
+      box-shadow 120ms ease;
 }
 
-.local-files-toolbar__search.is-active,
+.local-files-toolbar__search:hover {
+  background: color-mix(in srgb, var(--dw-bg-editor, var(--dw-bg)) 35%, var(--dw-bg-muted));
+  border-color: color-mix(in srgb, var(--dw-border) 65%, transparent);
+}
+
+.local-files-toolbar__search.is-active {
+  background: color-mix(in srgb, var(--dw-primary) 8%, var(--dw-bg-muted));
+  border-color: color-mix(in srgb, var(--dw-primary) 22%, transparent);
+}
+
 .local-files-toolbar__search:focus-within {
-  border-color: var(--dw-focus-border);
-  background: var(--dw-bg);
+  background: color-mix(in srgb, var(--dw-bg-editor, var(--dw-bg)) 70%, var(--dw-bg-panel));
+  border-color: color-mix(in srgb, var(--dw-primary) 38%, var(--dw-border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dw-primary) 12%, transparent);
   color: var(--dw-text);
-  box-shadow: var(--dw-focus-ring);
 }
 
 .local-files-toolbar__search-icon {
   flex-shrink: 0;
-  opacity: 0.7;
+  opacity: 0.62;
+}
+
+.local-files-toolbar__search:focus-within .local-files-toolbar__search-icon {
+  opacity: 0.85;
 }
 
 .local-files-toolbar__search input {
@@ -447,9 +466,14 @@ async function startNewFolder() {
   border: 0;
   outline: none;
   background: transparent;
-  color: inherit;
+  color: var(--dw-text);
   font: inherit;
-  font-size: var(--dw-text-sm);
+  font-size: 12.5px;
+  line-height: 1.2;
+}
+
+.local-files-toolbar__search input::placeholder {
+  color: color-mix(in srgb, var(--dw-text-muted) 92%, transparent);
 }
 
 .local-files-toolbar__content {
@@ -457,12 +481,12 @@ async function startNewFolder() {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: calc(var(--dw-btn-height-sm) - 6px);
-  height: calc(var(--dw-btn-height-sm) - 6px);
+  width: 22px;
+  height: 22px;
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: var(--dw-radius-pill);
+  border-radius: 4px;
   background: transparent;
   color: var(--dw-text-muted);
   cursor: pointer;
@@ -470,7 +494,7 @@ async function startNewFolder() {
 
 .local-files-toolbar__content:hover {
   color: var(--dw-text);
-  background: color-mix(in srgb, var(--dw-bg) 70%, transparent);
+  background: color-mix(in srgb, var(--dw-text) 8%, transparent);
 }
 
 .local-files-toolbar__content.is-active {
@@ -484,22 +508,22 @@ async function startNewFolder() {
   gap: 2px;
   flex-shrink: 0;
   max-width: 7.5rem;
-  height: calc(var(--dw-btn-height-sm) - 6px);
+  height: 22px;
   margin: 0;
   padding: 0 8px 0 10px;
   border: 0;
-  border-radius: var(--dw-radius-pill);
-  background: color-mix(in srgb, var(--dw-bg) 70%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--dw-bg-muted) 70%, transparent);
   color: var(--dw-text-secondary);
   font: inherit;
-  font-size: var(--dw-text-xs);
+  font-size: 11px;
   cursor: pointer;
 }
 
 .local-files-toolbar__type:hover,
 .local-files-toolbar__type.is-active {
   color: var(--dw-text);
-  background: var(--dw-bg);
+  background: var(--dw-bg-hover);
 }
 
 .local-files-toolbar__type-label {

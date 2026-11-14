@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onMounted, watch} from 'vue'
+import {computed, defineAsyncComponent, onMounted, watch} from 'vue'
 import {storeToRefs} from 'pinia'
 import AppSideRail from '@/features/layout/components/AppSideRail.vue'
 import MainContent from '@/features/layout/components/MainContent.vue'
@@ -9,6 +9,7 @@ import GlobalObjectSearchPalette from '@/features/layout/components/GlobalObject
 import LoginDialog from '@/features/auth/components/LoginDialog.vue'
 import ChangePasswordDialog from '@/features/settings/components/ChangePasswordDialog.vue'
 import AppToast from '@/core/components/AppToast.vue'
+import AppConfirmHost from '@/core/components/AppConfirmHost.vue'
 import {useAuthStore} from '@/features/auth/stores/auth-store'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
@@ -26,17 +27,17 @@ import {useAppToast} from '@/features/layout/composables/useAppToast'
 import {useI18n} from 'vue-i18n'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
 
-import OnboardingSpotlightTour from '@/features/onboarding/components/OnboardingSpotlightTour.vue'
-import RuntimeSetupWizard from '@/features/onboarding/components/RuntimeSetupWizard.vue'
 import DriverInstallProgressModal from '@/features/connection/components/DriverInstallProgressModal.vue'
 import {useOnboardingGuide} from '@/features/onboarding/composables/useOnboardingGuide'
 import {useRuntimeSetupWizard} from '@/features/onboarding/composables/useRuntimeSetupWizard'
 import {shouldShowLoginDialog} from '@/features/onboarding/services/onboarding.service'
-import {
-    resolveFirstRunFunnelStep,
-    shouldContinueToUiTourAfterRuntime,
-} from '@/features/onboarding/services/onboarding-funnel.service'
+import {resolveFirstRunFunnelStep} from '@/features/onboarding/services/onboarding-funnel.service'
 import {isDesktopApp} from '@/features/layout/services/desktop-chrome'
+import {applyDeepLinkOpen} from '@/features/layout/services/deep-link-open.service'
+import {
+    parseDeepLinkQuery,
+    stripDeepLinkQueryParams,
+} from '@/shared/deep-link/deep-link.service'
 import {useDeepLinkListener} from '@/features/layout/composables/useDeepLinkListener'
 import {useDesktopFileOpenListener} from '@/features/layout/composables/useDesktopFileOpenListener'
 import {useUpdaterListener} from '@/features/settings/composables/useUpdaterListener'
@@ -48,8 +49,20 @@ import ShortcutCheatsheetOverlay from '@/features/layout/components/ShortcutChea
 import {useShortcutCheatsheet} from '@/features/layout/composables/useShortcutCheatsheet'
 import {useWorkbenchContextPublisher} from '@/features/ai/context/composables/useWorkbenchContextPublisher'
 import {useDockViewportSync} from '@/features/dock/composables/useDockViewportSync'
-import McpConfirmDrawer from '@/features/ai/mcp-confirm/components/McpConfirmDrawer.vue'
-import AssistantDrawer from '@/features/ai/assistant/components/AssistantDrawer.vue'
+
+/** PERF-03: keep AI / onboarding out of the shell critical graph. */
+const AssistantDrawer = defineAsyncComponent(() =>
+    import('@/features/ai/assistant/components/AssistantDrawer.vue'),
+)
+const McpConfirmDrawer = defineAsyncComponent(() =>
+    import('@/features/ai/mcp-confirm/components/McpConfirmDrawer.vue'),
+)
+const OnboardingSpotlightTour = defineAsyncComponent(() =>
+    import('@/features/onboarding/components/OnboardingSpotlightTour.vue'),
+)
+const RuntimeSetupWizard = defineAsyncComponent(() =>
+    import('@/features/onboarding/components/RuntimeSetupWizard.vue'),
+)
 
 const props = withDefaults(
     defineProps<{
@@ -68,7 +81,6 @@ const {loginDialogOpen, loginOverWizards, mustChangePassword} = storeToRefs(auth
 const {
     open: onboardingOpen,
     preset: onboardingPreset,
-    showGuide,
     finishGuide,
     skipGuide,
 } = useOnboardingGuide()
@@ -92,19 +104,13 @@ function onOnboardingSkip() {
 }
 
 function onRuntimeSetupClosed() {
-    if (shouldContinueToUiTourAfterRuntime()) {
-        showGuide()
-    }
+    // A0: land on Welcome after runtime setup; spotlight tour is opt-in via replay guide
 }
 
 async function maybeStartFirstRunFunnel() {
     const step = await resolveFirstRunFunnelStep()
     if (step === 'runtime-setup') {
         showRuntimeSetup()
-        return
-    }
-    if (step === 'ui-tour') {
-        showGuide()
     }
 }
 
@@ -118,7 +124,6 @@ function onLoginDialogOpen(open: boolean) {
 
 function onForcedPasswordChanged() {
     auth.clearMustChangePassword()
-    toast.success(t('profile.changePasswordSuccess'))
 }
 
 useAppShortcutListener()
@@ -166,7 +171,6 @@ onMounted(async () => {
   } else if (oidcSession) {
     try {
       await auth.completeOidcLogin(oidcSession, oidcUser || undefined)
-      toast.success(t('auth.oidcSuccess'))
     } catch (error) {
       toast.error(resolveCaughtApiErrorMessage(error, t, 'auth.failed'))
     }
@@ -177,6 +181,17 @@ onMounted(async () => {
     params.delete('oidcUser')
     const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`
     window.history.replaceState({}, '', next)
+  }
+
+  // Web deep links (FE-P2-3): reuse desktop applyDeepLinkOpen; desktop uses protocol bridge.
+  if (!desktopApp) {
+    const deepLink = parseDeepLinkQuery(params)
+    if (deepLink) {
+      stripDeepLinkQueryParams(params)
+      const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`
+      window.history.replaceState({}, '', next)
+      void applyDeepLinkOpen(deepLink)
+    }
   }
 
   // First-run funnel: runtime setup (desktop) → UI tour with team touchpoint.
@@ -242,6 +257,7 @@ watch(
     <ShortcutCheatsheetOverlay v-model:open="shortcutCheatsheetOpen"/>
     <PackPaywallDialog/>
     <McpConfirmDrawer/>
+    <AppConfirmHost/>
     <AppToast/>
   </div>
 </template>
@@ -259,9 +275,12 @@ watch(
   display: flex;
   flex: 1;
   min-height: 0;
-  gap: var(--dw-panel-gap);
-  /* Bottom chrome is the status bar (height includes --dw-shell-padding). */
-  padding: var(--dw-shell-padding);
+  /*
+   * IDEA：左右活动条贴窗框，不跟内容一起被 padding 推进去。
+   * 水平留白只包在 .shell-main 上，gutter 露出 chrome 底色。
+   */
+  gap: 0;
+  padding: var(--dw-shell-padding) 0 0;
   padding-bottom: 0;
   background: var(--dw-bg-chrome);
 }
@@ -273,6 +292,8 @@ watch(
   min-width: 0;
   min-height: 0;
   gap: var(--dw-panel-gap);
+  /* 内容岛：左右/底边留白，资源树·工作区·终端叠在底色上 */
+  padding: 0 var(--dw-shell-padding) var(--dw-shell-padding);
   background: transparent;
 }
 

@@ -2,6 +2,7 @@ package org.apache.datawise.backend.server.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.datawise.backend.service.FeaturePermissionAccess;
 import org.apache.datawise.backend.service.TeamService;
 import org.apache.datawise.backend.terminal.TerminalPtySessionManager;
 import org.junit.jupiter.api.Test;
@@ -28,13 +29,16 @@ class TerminalWebSocketHandlerTest {
     @Mock
     private TeamService teamService;
     @Mock
+    private FeaturePermissionAccess featurePermissionAccess;
+    @Mock
     private WebSocketSession webSocketSession;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void writeRejectsNonOwnerWithForbiddenError() throws Exception {
-        TerminalWebSocketHandler handler = new TerminalWebSocketHandler(sessionManager, teamService, objectMapper);
+        TerminalWebSocketHandler handler =
+                new TerminalWebSocketHandler(sessionManager, teamService, featurePermissionAccess, objectMapper);
         when(webSocketSession.getAttributes()).thenReturn(Map.of(TerminalSessionHandshakeInterceptor.ATTR_USER_ID, 2L));
         when(webSocketSession.isOpen()).thenReturn(true);
         when(sessionManager.isOwner("pty-1", 2L)).thenReturn(false);
@@ -57,7 +61,8 @@ class TerminalWebSocketHandlerTest {
 
     @Test
     void writeAllowsOwner() throws Exception {
-        TerminalWebSocketHandler handler = new TerminalWebSocketHandler(sessionManager, teamService, objectMapper);
+        TerminalWebSocketHandler handler =
+                new TerminalWebSocketHandler(sessionManager, teamService, featurePermissionAccess, objectMapper);
         when(webSocketSession.getAttributes()).thenReturn(Map.of(TerminalSessionHandshakeInterceptor.ATTR_USER_ID, 2L));
         when(sessionManager.isOwner("pty-1", 2L)).thenReturn(true);
         when(sessionManager.get("pty-1")).thenReturn(null);

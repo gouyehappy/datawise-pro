@@ -8,6 +8,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
@@ -34,7 +36,8 @@ class CommunityPluginHostConnectionTest {
     void setUp() throws Exception {
         ConfigDirectoryService configDirectory = new ConfigDirectoryService(temp);
         CommunityPluginInstaller installer = new CommunityPluginInstaller(configDirectory, mapper, "4.1.6");
-        host = new CommunityPluginHost(installer, configDirectory, mapper);
+        CommunityPluginPackageReplaceBarrier barrier = new CommunityPluginPackageReplaceBarrier(emptySidecarLifecycle());
+        host = new CommunityPluginHost(installer, configDirectory, mapper, barrier);
 
         PipedOutputStream pluginStdout = new PipedOutputStream();
         PipedInputStream hostStdout = new PipedInputStream(pluginStdout, 64 * 1024);
@@ -320,5 +323,29 @@ class CommunityPluginHostConnectionTest {
                 ),
                 null
         );
+    }
+
+    private static ObjectProvider<CommunityPluginSidecarLifecycle> emptySidecarLifecycle() {
+        return new ObjectProvider<>() {
+            @Override
+            public CommunityPluginSidecarLifecycle getObject() throws BeansException {
+                return null;
+            }
+
+            @Override
+            public CommunityPluginSidecarLifecycle getObject(Object... args) throws BeansException {
+                return null;
+            }
+
+            @Override
+            public CommunityPluginSidecarLifecycle getIfAvailable() throws BeansException {
+                return null;
+            }
+
+            @Override
+            public CommunityPluginSidecarLifecycle getIfUnique() throws BeansException {
+                return null;
+            }
+        };
     }
 }

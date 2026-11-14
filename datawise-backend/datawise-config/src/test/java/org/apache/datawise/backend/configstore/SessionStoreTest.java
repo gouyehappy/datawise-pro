@@ -54,17 +54,34 @@ class SessionStoreTest {
     }
 
     @Test
-    void authenticate_renewsExpiryWhenSlidingEnabled() {
+    void authenticate_skipsRenewWhenPlentyOfTtlRemains() {
         SessionEntity session = new SessionEntity();
-        session.setId("session-renew");
+        session.setId("session-renew-skip");
         session.setUserId(2L);
         session.setGuest(false);
         SessionEntity saved = sessionStore.create(session);
         Instant firstExpiry = saved.getExpiresAt();
 
+        SessionEntity again = sessionStore.authenticate("session-renew-skip").orElseThrow();
+
+        assertEquals(firstExpiry, again.getExpiresAt());
+    }
+
+    @Test
+    void authenticate_renewsExpiryWhenNearExpiry() {
+        SessionEntity session = new SessionEntity();
+        session.setId("session-renew");
+        session.setUserId(2L);
+        session.setGuest(false);
+        SessionEntity saved = sessionStore.create(session);
+        // Force remaining TTL under half of default (60m → renew when < 30m left)
+        saved.setExpiresAt(Instant.now().plus(10, ChronoUnit.MINUTES));
+        sessionStore.save(saved);
+        Instant firstExpiry = saved.getExpiresAt();
+
         SessionEntity renewed = sessionStore.authenticate("session-renew").orElseThrow();
 
-        assertTrue(renewed.getExpiresAt().isAfter(firstExpiry.minusSeconds(1)));
+        assertTrue(renewed.getExpiresAt().isAfter(firstExpiry));
     }
 
     @Test

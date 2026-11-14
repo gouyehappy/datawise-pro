@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {DwSegment, type DwSegmentTab} from '@/core/components'
 
 export type SettingsSegmentTab = DwSegmentTab

@@ -20,6 +20,10 @@ public class TableMigrationProperties {
     private boolean taskConcurrencyEnabled = true;
     /** Default allocated slots per user tenant when first enqueuing a migration job. */
     private int taskConcurrencyTenantSlots = 2;
+    /**
+     * MetaForge B3：迁移执行器 id（默认 {@code builtin}）。未知 id 在启动后首次迁移时失败。
+     */
+    private String executor = "builtin";
 
     public int getDefaultBatchSize() {
         return defaultBatchSize;
@@ -91,6 +95,14 @@ public class TableMigrationProperties {
 
     public void setTaskConcurrencyTenantSlots(int taskConcurrencyTenantSlots) {
         this.taskConcurrencyTenantSlots = Math.max(1, taskConcurrencyTenantSlots);
+    }
+
+    public String getExecutor() {
+        return executor;
+    }
+
+    public void setExecutor(String executor) {
+        this.executor = executor != null && !executor.isBlank() ? executor.trim() : "builtin";
     }
 
     private static final int MIN_BATCH_SIZE = 50;

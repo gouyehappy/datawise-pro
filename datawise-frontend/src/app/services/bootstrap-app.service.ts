@@ -33,6 +33,8 @@ const STEP_MIN_MS = desktopBoot ? 0 : 520
 const MIN_SPLASH_MS = desktopBoot ? 0 : 800
 const DESKTOP_BACKEND_WAIT_MS = 120_000
 const DESKTOP_BACKEND_RETRY_MS = 250
+/** Prefer prefs sync must not block shell forever (hung fetch / CEF stall). */
+const CONFIG_SYNC_TIMEOUT_MS = 12_000
 
 export type BootstrapStepId =
     | 'backend'
@@ -83,12 +85,43 @@ const state = reactive({
 
 export const bootstrapProgress = readonly(state)
 
+/** Failsafe for desktop boot timeout — leave skeleton even if a step never settles. */
+export function forceBootstrapStartupComplete(reason = 'failsafe'): void {
+    if (state.startupComplete) return
+    console.warn(`[bootstrap] forcing startupComplete (${reason})`)
+    state.progress = 100
+    state.startupComplete = true
+    state.steps.forEach((step) => {
+        step.done = true
+        step.active = false
+    })
+}
+
 function delay(ms: number) {
     return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
 
 function safeLoad(task: () => Promise<unknown>) {
     return task().catch(() => undefined)
+}
+
+function withTimeout<T>(task: () => Promise<T>, ms: number, label: string): Promise<T | undefined> {
+    return new Promise((resolve) => {
+        const timer = window.setTimeout(() => {
+            console.warn(`[bootstrap] ${label} timed out after ${ms}ms`)
+            resolve(undefined)
+        }, ms)
+        task()
+            .then((value) => {
+                window.clearTimeout(timer)
+                resolve(value)
+            })
+            .catch((error) => {
+                window.clearTimeout(timer)
+                console.warn(`[bootstrap] ${label} failed`, error)
+                resolve(undefined)
+            })
+    })
 }
 
 function stepIndex(id: BootstrapStepId) {
@@ -223,7 +256,11 @@ export async function bootstrapApp(): Promise<void> {
                 await safeLoad(() => bootstrapDesktopSession(auth, true))
                 markStartupPhase('session-ready')
                 reportDesktopBootstrapSyncProgress()
-                await safeLoad(() => useAppConfigStore().syncFromServer())
+                await withTimeout(
+                    () => useAppConfigStore().syncFromServer(),
+                    CONFIG_SYNC_TIMEOUT_MS,
+                    'syncFromServer',
+                )
             } else {
                 markStartupPhase('failed')
             }
@@ -262,7 +299,11 @@ export async function bootstrapApp(): Promise<void> {
 
     // 会话就绪后再拉配置，避免未登录并发 PUT/GET 刷屏
     if (state.backend.status === 'connected') {
-        await safeLoad(() => useAppConfigStore().syncFromServer())
+        await withTimeout(
+            () => useAppConfigStore().syncFromServer(),
+            CONFIG_SYNC_TIMEOUT_MS,
+            'syncFromServer',
+        )
     }
 
     await runStep('explorer', () => safeLoad(async () => {

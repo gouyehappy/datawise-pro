@@ -2,7 +2,9 @@ package org.apache.datawise.backend.ai.rag.embedding;
 
 import org.apache.datawise.backend.ai.domain.AiEmbeddingProfileDto;
 import org.apache.datawise.backend.ai.support.AiLlmCallPolicy;
+import org.apache.datawise.backend.security.UserContext;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,22 +47,34 @@ public class ResolvingAiEmbeddingService implements AiEmbeddingService {
         return delegate().embed(text);
     }
 
+    @Override
+    public List<float[]> embedAll(List<String> texts) {
+        return delegate().embedAll(texts);
+    }
+
     private AiEmbeddingService delegate() {
         Optional<AiEmbeddingProfileDto> userProfile = userResolver.resolveForCurrentUser();
         if (userProfile.isEmpty()) {
             return serverDefault;
         }
         AiEmbeddingProfileDto profile = userProfile.get();
+        Long userId = UserContext.getUserId();
+        String userKey = userId != null ? String.valueOf(userId) : "anon";
+        String apiKeyFingerprint = fingerprintSecret(profile.apiKey());
         if (profile.isHashProvider()) {
-            return cached("hash", () -> factory.createFromProfileOrHash(profile, callPolicy));
+            return cached("hash:" + userKey, () -> factory.createFromProfileOrHash(profile, callPolicy));
         }
         if (profile.isOpenAiConfigured()) {
             String cacheKey = "openai:"
+                    + userKey
+                    + ":"
                     + profile.baseUrl()
                     + ":"
                     + profile.model()
                     + ":"
-                    + profile.dimensions();
+                    + profile.dimensions()
+                    + ":"
+                    + apiKeyFingerprint;
             return cached(cacheKey, () -> factory.createFromProfile(profile, callPolicy));
         }
         return serverDefault;
@@ -68,5 +82,13 @@ public class ResolvingAiEmbeddingService implements AiEmbeddingService {
 
     private AiEmbeddingService cached(String key, java.util.function.Supplier<AiEmbeddingService> supplier) {
         return cache.computeIfAbsent(key, ignored -> supplier.get());
+    }
+
+    private static String fingerprintSecret(String secret) {
+        if (secret == null || secret.isBlank()) {
+            return "none";
+        }
+        // Length + first/last nibble — enough to separate credentials without storing the key.
+        return secret.length() + ":" + Integer.toHexString(secret.hashCode());
     }
 }

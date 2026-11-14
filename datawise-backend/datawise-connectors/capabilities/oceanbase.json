@@ -1,0 +1,7 @@
+{
+  "dbType": "oceanbase",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false
+  }
+}

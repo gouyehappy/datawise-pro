@@ -55,6 +55,11 @@ public class UserAiKnowledgeStore {
         entriesFor(userId).removeIf(entry -> id.equals(entry.getId()));
     }
 
+    /** Drop cached mirror so the next read reloads from disk (e.g. after profile import). */
+    public synchronized void invalidate(long userId) {
+        cache.remove(TenantScopedConfigSupport.cacheKey(userId));
+    }
+
     private JsonListFile<AiKnowledgeEntry> entriesFor(long userId) {
         return cache.computeIfAbsent(TenantScopedConfigSupport.cacheKey(userId), ignored -> loadUserEntries(userId));
     }

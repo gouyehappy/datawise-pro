@@ -234,6 +234,7 @@ function onSelect(dbType: DbType) {
   emit('select', dbType)
 }
 
+/** A2-3: 安装成功后 emit select，由 Welcome / 建连入口直接打开连接表单，不甩去市场页 */
 async function onInstallAndContinue(card: InstallableCard) {
   if (installingId.value) return
   if (!entitlement.guardDbType(card.id)) return
@@ -244,7 +245,12 @@ async function onInstallAndContinue(card: InstallableCard) {
     catalogStore.loaded = false
     await catalogStore.ensureLoaded().catch(() => undefined)
     await refreshMarket()
-    layout.showSuccessToast(t('explorer.dbTypeInstallDone', {type: card.label}))
+    layout.notifyQuiet({
+      category: 'system',
+      titleKey: 'installDone',
+      bodyKey: 'installDone',
+      params: {detail: t('explorer.dbTypeInstallDone', {type: card.label})},
+    })
     emit('select', card.id)
   } catch (error) {
     layout.showErrorToast(

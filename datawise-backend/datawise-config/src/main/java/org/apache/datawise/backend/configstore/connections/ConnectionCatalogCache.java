@@ -11,7 +11,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * connections.xml 解密 catalog 的 mtime 缓存，附带按 id / groupId 的索引。
+ * connections.xml at-rest (ciphertext) catalog mtime 缓存，附带按 id / groupId 的索引。
+ * 明文仅在 {@link org.apache.datawise.backend.security.ConnectionSecrets#copyAndDecrypt} 拷贝上出现。
  */
 public final class ConnectionCatalogCache {
 

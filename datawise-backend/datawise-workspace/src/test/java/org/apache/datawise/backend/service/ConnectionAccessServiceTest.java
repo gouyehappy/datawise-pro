@@ -33,13 +33,16 @@ class ConnectionAccessServiceTest {
     @Mock
     private ConnectionStore connectionStore;
 
+    @Mock
+    private WriteUnlockService writeUnlockService;
+
     private TeamStore teamStore;
     private ConnectionAccessService service;
 
     @BeforeEach
     void setUp() throws Exception {
         teamStore = TestTeamStoreFactory.create(tempDir);
-        service = new ConnectionAccessService(teamStore, connectionStore);
+        service = new ConnectionAccessService(teamStore, connectionStore, writeUnlockService);
     }
 
     @Test
@@ -53,6 +56,18 @@ class ConnectionAccessServiceTest {
         ConnectionEntity owned = connection("conn-owned", 2L);
         when(connectionStore.findConnectionById("conn-owned")).thenReturn(Optional.of(owned));
         assertEquals(ConnectionAccessLevel.DDL, service.resolveAccess(2L, "conn-owned"));
+    }
+
+    @Test
+    void ownedWriteGuardIsReadonlyUntilUnlocked() {
+        ConnectionEntity owned = connection("conn-guard", 2L);
+        owned.setWriteGuard(true);
+        when(connectionStore.findConnectionById("conn-guard")).thenReturn(Optional.of(owned));
+        when(writeUnlockService.isUnlockedForCurrentUiSession(2L, "conn-guard")).thenReturn(false);
+        assertEquals(ConnectionAccessLevel.READONLY, service.resolveAccess(2L, "conn-guard"));
+
+        when(writeUnlockService.isUnlockedForCurrentUiSession(2L, "conn-guard")).thenReturn(true);
+        assertEquals(ConnectionAccessLevel.DDL, service.resolveAccess(2L, "conn-guard"));
     }
 
     @Test
@@ -149,6 +164,37 @@ class ConnectionAccessServiceTest {
         assertThrows(
                 ConnectionAccessDeniedException.class,
                 () -> service.requireSqlWriteAccess(2L, "conn-1", "CREATE TABLE t (id INT)")
+        );
+    }
+
+    @Test
+    void requireEngineFeatureBlocksRedisQueryExecution() {
+        ConnectionEntity redis = connection("conn-redis", 2L);
+        redis.setDbType("redis");
+        when(connectionStore.findConnectionById("conn-redis")).thenReturn(Optional.of(redis));
+        ConnectionAccessDeniedException ex = assertThrows(
+                ConnectionAccessDeniedException.class,
+                () -> service.requireEngineFeature(2L, "conn-redis", "queryExecution")
+        );
+        assertEquals("capability:queryExecution", ex.getOperation());
+        assertEquals("queryExecution", ex.getRequiredAccess());
+    }
+
+    @Test
+    void requireEngineFeatureAllowsMysqlQueryExecution() {
+        ConnectionEntity mysql = connection("conn-mysql", 2L);
+        when(connectionStore.findConnectionById("conn-mysql")).thenReturn(Optional.of(mysql));
+        service.requireEngineFeature(2L, "conn-mysql", "queryExecution");
+    }
+
+    @Test
+    void requireEngineFeatureBlocksRedisSchemaCompare() {
+        ConnectionEntity redis = connection("conn-redis", 2L);
+        redis.setDbType("redis");
+        when(connectionStore.findConnectionById("conn-redis")).thenReturn(Optional.of(redis));
+        assertThrows(
+                ConnectionAccessDeniedException.class,
+                () -> service.requireEngineFeature(2L, "conn-redis", "schemaCompare")
         );
     }
 

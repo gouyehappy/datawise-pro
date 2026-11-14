@@ -10,7 +10,7 @@ export interface ReleaseHighlightCard {
     action?: ReleaseHighlightAction
 }
 
-export const RELEASE_HIGHLIGHTS_VERSION = 'v4.1.7'
+export const RELEASE_HIGHLIGHTS_VERSION = 'v5.0.0'
 
 export const RELEASE_HIGHLIGHT_CARDS: ReleaseHighlightCard[] = [
     {id: 'federatedJoin', action: 'open_federated_wizard'},

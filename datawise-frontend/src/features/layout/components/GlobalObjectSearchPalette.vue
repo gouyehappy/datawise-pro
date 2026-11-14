@@ -10,6 +10,7 @@ import {
     ComboboxViewport,
 } from 'reka-ui'
 import {AppPalette, EmptyState} from '@/core/components'
+import {DwIcon} from '@/core/icons'
 import {formatBindingParts} from '@/core/shortcuts/shortcut.service'
 import {useShortcutSettingsStore} from '@/features/settings/stores/shortcut-settings-store'
 import {useGlobalObjectSearch} from '@/features/layout/composables/useGlobalObjectSearch'
@@ -41,6 +42,7 @@ import {
     searchKnowledgeEntries,
 } from '@/features/layout/services/palette-knowledge.service'
 import {activatePaletteKnowledgeEntry} from '@/features/layout/services/palette-knowledge.actions'
+import {requestAiAsk} from '@/features/ai/shared/services/ai-ask.service'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useShortcutPanelStore} from '@/features/layout/stores/shortcut-panel-store'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
@@ -107,6 +109,10 @@ const navigationEntries = computed(() =>
             openPluginDevTools: () => pluginStore.openPluginDevTools(),
             openConnectorMarket: () => pluginStore.openConnectorMarket(),
             openDataCatalog: () => workspace.openDataCatalog(),
+            askAi: () => {
+                layout.setModule('ai')
+                void requestAiAsk({focusInput: true})
+            },
             openSettingsModule: (module, anchor) => layout.openSettingsModule(module, anchor),
             isPluginDevToolsVisible: () => appConfig.isPluginDevToolsVisible(),
             bookmarksEnabled: bookmarksEnabled.value,
@@ -307,27 +313,51 @@ function isSingleLineItem(item: PaletteListItem): boolean {
     if (item.kind === 'knowledge') return !knowledgeEntrySubtitle(item.entry)
     return false
 }
+
+function clearQuery() {
+    query.value = ''
+}
 </script>
 
 <template>
   <AppPalette
       :open="globalObjectSearchOpen"
       :ariaLabel="t('globalObjectSearch.title')"
-      width="min(680px, calc(100vw - 32px))"
-      :maxHeight="'min(64vh, 560px)'"
+      width="min(720px, calc(100vw - 32px))"
+      :maxHeight="'min(68vh, 600px)'"
       @close="closeGlobalObjectSearch"
   >
     <ComboboxRoot
+        class="app-palette__body"
         :open="true"
         :ignore-filter="true"
         model-value=""
     >
       <div class="app-palette__search">
-        <ComboboxInput
-            v-model="query"
-            class="app-palette__input"
-            :placeholder="t('globalObjectSearch.placeholder')"
-        />
+        <div class="app-palette__field">
+          <DwIcon
+              class="app-palette__field-icon"
+              name="search"
+              size="md"
+              :stroke-width="1.9"
+              aria-hidden="true"
+          />
+          <ComboboxInput
+              v-model="query"
+              class="app-palette__input"
+              :placeholder="t('globalObjectSearch.placeholder')"
+          />
+          <button
+              v-if="query"
+              type="button"
+              class="app-palette__clear"
+              :aria-label="t('globalObjectSearch.clear')"
+              @click="clearQuery"
+          >
+            <DwIcon name="x" size="sm" :stroke-width="2"/>
+          </button>
+          <kbd class="app-palette__esc" aria-hidden="true">Esc</kbd>
+        </div>
       </div>
 
       <div
@@ -356,71 +386,94 @@ function isSingleLineItem(item: PaletteListItem): boolean {
         </p>
       </div>
 
-      <ComboboxViewport v-if="listItems.length" class="app-palette__list">
-        <ComboboxGroup
-            v-for="section in listSections"
-            :key="section.key"
-        >
-          <ComboboxLabel class="app-palette__group">
-            {{ section.label }}
-          </ComboboxLabel>
-          <ComboboxItem
-              v-for="row in section.items"
-              :key="listItemKey(row.item)"
-              class="app-palette__item"
-              :class="{ 'is-single': isSingleLineItem(row.item) }"
-              :value="listItemKey(row.item)"
-              @select.prevent="runItem(row.item)"
+      <!-- AUDIT-02: explicit listbox owner (ComboboxViewport is role=presentation). -->
+      <div
+          v-if="listItems.length"
+          class="app-palette__list"
+          role="listbox"
+          :aria-label="t('globalObjectSearch.title')"
+      >
+        <ComboboxViewport class="app-palette__list-scroll">
+          <ComboboxGroup
+              v-for="section in listSections"
+              :key="section.key"
           >
-            <template v-if="row.item.kind === 'object'">
-              <span class="app-palette__label app-palette__label--mono">{{ row.item.entry.qualifiedLabel }}</span>
-              <span class="app-palette__meta">
-                {{ kindLabel(row.item.entry) }}
-                <span class="app-palette__dot" aria-hidden="true"/>
-                {{ row.item.entry.connectionLabel || '—' }}
-                <template v-if="row.item.entry.owner">
+            <ComboboxLabel class="app-palette__group">
+              {{ section.label }}
+            </ComboboxLabel>
+            <ComboboxItem
+                v-for="row in section.items"
+                :key="listItemKey(row.item)"
+                class="app-palette__item"
+                :class="{ 'is-single': isSingleLineItem(row.item) }"
+                :value="listItemKey(row.item)"
+                @select.prevent="runItem(row.item)"
+            >
+              <template v-if="row.item.kind === 'object'">
+                <span class="app-palette__label app-palette__label--mono">{{ row.item.entry.qualifiedLabel }}</span>
+                <span class="app-palette__meta">
+                  {{ kindLabel(row.item.entry) }}
                   <span class="app-palette__dot" aria-hidden="true"/>
-                  {{ row.item.entry.owner }}
-                </template>
-                <template v-else-if="row.item.entry.subtitle">
-                  <span class="app-palette__dot" aria-hidden="true"/>
-                  {{ row.item.entry.subtitle }}
-                </template>
-                <template v-if="row.item.entry.source === 'discovery'">
-                  <span class="app-palette__badge">{{ t('globalObjectSearch.discoveryBadge') }}</span>
-                </template>
-              </span>
-            </template>
-            <template v-else-if="row.item.kind === 'knowledge'">
-              <span class="app-palette__label">{{ row.item.entry.term }}</span>
-              <span v-if="knowledgeEntrySubtitle(row.item.entry)" class="app-palette__meta">
-                {{ knowledgeEntrySubtitle(row.item.entry) }}
-              </span>
-            </template>
-            <template v-else-if="row.item.kind === 'navigation'">
-              <span class="app-palette__row">
-                <span class="app-palette__label">{{ row.item.entry.label }}</span>
-                <span v-if="row.item.entry.hint" class="app-palette__meta app-palette__meta--trail">
-                  {{ row.item.entry.hint }}
+                  {{ row.item.entry.connectionLabel || '—' }}
+                  <template v-if="row.item.entry.owner">
+                    <span class="app-palette__dot" aria-hidden="true"/>
+                    {{ row.item.entry.owner }}
+                  </template>
+                  <template v-else-if="row.item.entry.subtitle">
+                    <span class="app-palette__dot" aria-hidden="true"/>
+                    {{ row.item.entry.subtitle }}
+                  </template>
+                  <template v-if="row.item.entry.source === 'discovery'">
+                    <span class="app-palette__badge">{{ t('globalObjectSearch.discoveryBadge') }}</span>
+                  </template>
                 </span>
-              </span>
-            </template>
-            <template v-else>
-              <span class="app-palette__row">
-                <span class="app-palette__label">{{ t(row.item.entry.labelKey) }}</span>
-                <span v-if="commandBindingChips(row.item.entry.id).length" class="app-palette__keys">
-                  <kbd
-                      v-for="chip in commandBindingChips(row.item.entry.id)"
-                      :key="chip"
-                      class="app-palette__chip"
-                  >{{ chip }}</kbd>
+              </template>
+              <template v-else-if="row.item.kind === 'knowledge'">
+                <span class="app-palette__label">{{ row.item.entry.term }}</span>
+                <span v-if="knowledgeEntrySubtitle(row.item.entry)" class="app-palette__meta">
+                  {{ knowledgeEntrySubtitle(row.item.entry) }}
                 </span>
-              </span>
-            </template>
-          </ComboboxItem>
-        </ComboboxGroup>
-      </ComboboxViewport>
+              </template>
+              <template v-else-if="row.item.kind === 'navigation'">
+                <span class="app-palette__row">
+                  <span class="app-palette__label">{{ row.item.entry.label }}</span>
+                  <span v-if="row.item.entry.hint" class="app-palette__meta app-palette__meta--trail">
+                    {{ row.item.entry.hint }}
+                  </span>
+                </span>
+              </template>
+              <template v-else>
+                <span class="app-palette__row">
+                  <span class="app-palette__label">{{ t(row.item.entry.labelKey) }}</span>
+                  <span v-if="commandBindingChips(row.item.entry.id).length" class="app-palette__keys">
+                    <kbd
+                        v-for="chip in commandBindingChips(row.item.entry.id)"
+                        :key="chip"
+                        class="app-palette__chip"
+                    >{{ chip }}</kbd>
+                  </span>
+                </span>
+              </template>
+            </ComboboxItem>
+          </ComboboxGroup>
+        </ComboboxViewport>
+      </div>
       <EmptyState v-else embedded compact :title="t('globalObjectSearch.empty')"/>
+
+      <div class="app-palette__footer" aria-hidden="true">
+        <span class="app-palette__hint">
+          <kbd class="app-palette__chip">↑↓</kbd>
+          {{ t('globalObjectSearch.footer.navigate') }}
+        </span>
+        <span class="app-palette__hint">
+          <kbd class="app-palette__chip">Enter</kbd>
+          {{ t('globalObjectSearch.footer.open') }}
+        </span>
+        <span class="app-palette__hint">
+          <kbd class="app-palette__chip">Esc</kbd>
+          {{ t('globalObjectSearch.footer.close') }}
+        </span>
+      </div>
     </ComboboxRoot>
   </AppPalette>
 </template>

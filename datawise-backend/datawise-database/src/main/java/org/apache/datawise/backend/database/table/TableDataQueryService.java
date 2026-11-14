@@ -10,6 +10,7 @@ import org.apache.datawise.backend.common.TableDataException;
 import org.apache.datawise.backend.domain.ExecuteSqlResult;
 import org.apache.datawise.backend.domain.TableDataResult;
 import org.apache.datawise.backend.database.table.TableDataSupport.ConnectionContext;
+import org.apache.datawise.backend.service.ConnectionAccessService;
 import org.springframework.stereotype.Service;
 
 import java.sql.SQLException;
@@ -21,15 +22,18 @@ public class TableDataQueryService {
     private final ConnectionExecutionContext connectionContext;
     private final ConnectorFacade connectorFacade;
     private final SqlCursorService sqlCursorService;
+    private final ConnectionAccessService connectionAccessService;
 
     public TableDataQueryService(
             ConnectionExecutionContext connectionContext,
             ConnectorFacade connectorFacade,
-            SqlCursorService sqlCursorService
+            SqlCursorService sqlCursorService,
+            ConnectionAccessService connectionAccessService
     ) {
         this.connectionContext = connectionContext;
         this.connectorFacade = connectorFacade;
         this.sqlCursorService = sqlCursorService;
+        this.connectionAccessService = connectionAccessService;
     }
 
     public TableDataResult fetch(String tableName, String connectionId, String database, Integer maxRows) {
@@ -59,6 +63,11 @@ public class TableDataQueryService {
                 tableName,
                 connectionId,
                 database
+        );
+        connectionAccessService.requireEngineFeature(
+                connectionContext.requireUserId(),
+                connectionId,
+                "metadataBrowse"
         );
         ConnectorCapabilityGuard.requireTableData(connectorFacade, context.entity());
         int pageSize = sqlCursorService.resolvePageSize(maxRows);

@@ -55,7 +55,7 @@
 .dw-step-nav {
     display: inline-flex;
     align-items: stretch;
-    border: 1px solid color-mix(in srgb, var(--dw-border) 75%, transparent);
+    border: 1px solid transparent;
     border-radius: var(--dw-control-radius-sm);
     background: color-mix(in srgb, var(--dw-bg-muted) 55%, transparent);
     overflow: hidden;
@@ -70,7 +70,7 @@
     height: var(--dw-control-h-xs);
     padding: 0;
     border: none;
-    border-right: 1px solid color-mix(in srgb, var(--dw-border) 55%, transparent);
+    border-right: none;
     background: transparent;
     color: var(--dw-text-secondary);
     cursor: pointer;
@@ -102,7 +102,7 @@
     min-width: 30px;
     height: var(--dw-control-h-xs);
     padding: 0 var(--dw-space-2);
-    border-right: 1px solid color-mix(in srgb, var(--dw-border) 55%, transparent);
+    border-right: none;
     background: color-mix(in srgb, var(--dw-bg-panel) 70%, transparent);
     color: var(--dw-text-primary);
     font-size: var(--dw-text-sm);
@@ -231,9 +231,9 @@
     height: var(--dw-grid-toolbar-control-h, var(--dw-btn-height-sm));
     min-height: var(--dw-grid-toolbar-control-h, var(--dw-btn-height-sm));
     padding: 0 var(--dw-space-4);
-    border: 1px solid color-mix(in srgb, var(--dw-border-light) 85%, transparent);
+    border: 1px solid transparent;
     border-radius: var(--dw-btn-radius);
-    background: color-mix(in srgb, var(--dw-bg) 88%, var(--dw-bg-muted));
+    background: transparent;
     color: var(--dw-text-secondary);
     font-size: var(--dw-text-sm);
     font-weight: 500;
@@ -245,7 +245,7 @@
 
 .grid-label-btn:hover:not(:disabled) {
     background: var(--dw-primary-softer);
-    border-color: color-mix(in srgb, var(--dw-primary) 22%, var(--dw-border-light));
+    border-color: transparent;
     color: var(--dw-primary);
     box-shadow: inset 0 0 0 999px var(--dw-btn-hover-wash);
 }
@@ -291,10 +291,15 @@
     height: var(--dw-control-h);
     min-height: var(--dw-control-h);
     padding: var(--dw-space-1);
-    border: 1px solid var(--dw-border);
+    border: 1px solid transparent;
     border-radius: var(--dw-btn-radius);
-    background: var(--dw-bg-muted);
+    background: color-mix(in srgb, var(--dw-bg-muted) 70%, transparent);
     flex-shrink: 0;
+}
+
+.dw-segment--ghost {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--dw-bg) 70%, var(--dw-bg-muted));
 }
 
 .dw-segment--sm {

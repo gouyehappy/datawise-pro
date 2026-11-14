@@ -4,14 +4,16 @@
  * Scoped Vue `border: 1px solid` loads after global CSS; seam suppressions use
  * !important on edge widths only (not colors).
  *
- * Classic: cards keep gutter; only internal flush stacks collapse.
- * IDE: flush splits (gap 0) collapse horizontal + vertical seams.
+ * Classic: cards keep gutter (panel-gap).
+ * IDE: 同结构，缝用 --dw-panel-gap（约为 classic 一半），面板直角；
+ *      不再 gap:0 贴成一整块。
  *
  * Opt in: `.dw-seam-split--direct`, `.dw-seam-stack`, `.dw-seam-stack--flush`
  */
 
 :root {
-    --dw-seam-divider: var(--dw-panel-border);
+    /* Prefer outline token so skins can quiet flush seams with the shell */
+    --dw-seam-divider: var(--dw-panel-outline, var(--dw-panel-border));
 }
 
 /* ---- Utilities ---- */
@@ -45,275 +47,99 @@
     border-right: 1px solid var(--dw-seam-divider) !important;
 }
 
-html[data-ui-skin='ide'] :is(
-    .dw-seam-split--direct,
-    .yarn-queues-tab__body,
-    .tn-workbench,
-    .perm-workbench,
-    .module-shell__main .snippets-workbench,
-    .module-shell__main .kb-rag-layout,
-    .setup-grid,
-    .preflight-inspector__grid,
-    .fake-data-panels:not(.is-preview):not(.is-sql),
-    .team-main,
-    .modal-code-split
-) {
-    gap: 0 !important;
-    column-gap: 0 !important;
-    row-gap: 0 !important;
-}
-
-html[data-ui-skin='ide'] :is(
-    .dw-seam-split--direct,
-    .yarn-queues-tab__body,
-    .tn-workbench,
-    .perm-workbench,
-    .module-shell__main .snippets-workbench,
-    .module-shell__main .kb-rag-layout,
-    .setup-grid,
-    .preflight-inspector__grid,
-    .fake-data-panels:not(.is-preview):not(.is-sql),
-    .team-main,
-    .modal-code-split
-) > :first-child {
-    border-right-width: 0 !important;
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-}
-
-html[data-ui-skin='ide'] :is(
-    .dw-seam-split--direct,
-    .yarn-queues-tab__body,
-    .tn-workbench,
-    .perm-workbench,
-    .module-shell__main .snippets-workbench,
-    .module-shell__main .kb-rag-layout,
-    .setup-grid,
-    .preflight-inspector__grid,
-    .fake-data-panels:not(.is-preview):not(.is-sql),
-    .team-main,
-    .modal-code-split
-) > :last-child {
-    border-left-width: 0 !important;
-    border-top-left-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-}
-
-html[data-ui-skin='ide'] :is(
-    .dw-seam-split--direct,
-    .yarn-queues-tab__body,
-    .tn-workbench,
-    .perm-workbench,
-    .module-shell__main .snippets-workbench,
-    .module-shell__main .kb-rag-layout,
-    .setup-grid,
-    .preflight-inspector__grid,
-    .fake-data-panels:not(.is-preview):not(.is-sql),
-    .team-main,
-    .modal-code-split
-) > :first-child {
-    border-right: 1px solid var(--dw-seam-divider) !important;
-}
-
 /* =============================================================================
-   IDE — workbench split (Kafka / Redis / …)
-   Flush panes: only the column draws the middle divider. Child cards drop
-   every edge that would stack against head / sibling / page chrome.
+   IDE — 多栏工作台：与 classic 同 gap，半缝 + 直角
    ============================================================================= */
 
-html[data-ui-skin='ide'] .dw-workbench-split {
-    column-gap: 0 !important;
+html[data-ui-skin='ide'] :is(
+    .dw-seam-split--direct,
+    .yarn-queues-tab__body,
+    .tn-workbench,
+    .perm-workbench,
+    .module-shell__main .snippets-workbench,
+    .module-shell__main .kb-rag-layout,
+    .setup-grid,
+    .preflight-inspector__grid,
+    .fake-data-panels:not(.is-preview):not(.is-sql),
+    .team-main,
+    .modal-code-split,
+    .dw-workbench-split,
+    .schema-compare__body,
+    .ai-workbench,
+    .ai-workbench > .workbench-center,
+    .module-shell__main .kb-entries-workspace,
+    .conn-layout,
+    .result-pane--split:not(.result-pane--messages-only),
+    .relation-graph
+) {
+    gap: var(--dw-panel-gap) !important;
+    column-gap: var(--dw-panel-gap) !important;
+    row-gap: var(--dw-panel-gap) !important;
 }
 
 html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--left,
 html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--right {
-    gap: 0 !important;
+    gap: var(--dw-panel-gap) !important;
 }
 
-html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--left {
-    border-right: 1px solid var(--dw-seam-divider) !important;
-}
-
-html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--left > :first-child {
-    border-top-width: 0 !important;
-    border-right-width: 0 !important;
-    border-bottom-width: 0 !important;
-    border-left-width: 0 !important;
+html[data-ui-skin='ide'] :is(
+    .dw-seam-split--direct,
+    .yarn-queues-tab__body,
+    .tn-workbench,
+    .perm-workbench,
+    .module-shell__main .snippets-workbench,
+    .module-shell__main .kb-rag-layout,
+    .setup-grid,
+    .preflight-inspector__grid,
+    .fake-data-panels:not(.is-preview):not(.is-sql),
+    .team-main,
+    .modal-code-split,
+    .dw-workbench-split,
+    .schema-compare__body,
+    .ai-workbench,
+    .conn-layout,
+    .relation-graph
+) :is(
+    .dw-surface,
+    .dw-panel,
+    .dw-workbench-card,
+    .ai-side-explorer,
+    .ai-workspace,
+    .conn-editor,
+    .table-list,
+    .table-detail,
+    .ddl-panel,
+    .kb-entry-sidebar
+) {
     border-radius: 0 !important;
-    box-shadow: none !important;
 }
 
-html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--right > :first-child {
-    border-top-width: 0 !important;
-    border-left-width: 0 !important;
-    border-right-width: 0 !important;
-    border-bottom-width: 0 !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-}
-
-html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--right > * + * {
-    border-top-width: 0 !important;
-    border-left-width: 0 !important;
-    border-right-width: 0 !important;
-    border-top-left-radius: 0 !important;
-    border-top-right-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    box-shadow: none !important;
-}
-
-html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--right > *:not(:last-child) {
-    border-bottom-width: 0 !important;
-}
-
-html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--right > :last-child {
-    border-bottom-width: 0 !important;
-}
-
-/* Placeholder panels inside split: solid fill, no dashed “second frame” */
+/* Placeholder panels inside split */
 html[data-ui-skin='ide'] .dw-workbench-split .dw-workbench-placeholder,
 html[data-ui-skin='ide'] .dw-workbench-split [class$='__placeholder'] {
     border-style: solid !important;
     border-color: transparent !important;
+    border-radius: 0 !important;
     background: var(--dw-wb-card-bg);
 }
 
-/* =============================================================================
-   IDE — schema compare grid
-   ============================================================================= */
-
-html[data-ui-skin='ide'] .schema-compare__body {
-    gap: 0 !important;
-    column-gap: 0 !important;
-    row-gap: 0 !important;
-}
-
-html[data-ui-skin='ide'] .schema-compare__body > .table-list {
-    border-right-width: 0 !important;
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    border-right: 1px solid var(--dw-seam-divider) !important;
-}
-
-html[data-ui-skin='ide'] .schema-compare__body > :not(.table-list) {
-    border-left-width: 0 !important;
-    border-top-left-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-}
-
-html[data-ui-skin='ide'] .schema-compare__body > .table-detail {
-    border-bottom-width: 0 !important;
-    border-bottom-left-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-}
-
-html[data-ui-skin='ide'] .schema-compare__body > .ddl-panel {
-    border-top-width: 0 !important;
-    border-top-left-radius: 0 !important;
-    border-top-right-radius: 0 !important;
-}
-
-/* =============================================================================
-   IDE — AI workbench (explorer ‖ chat)
-   ============================================================================= */
-
-html[data-ui-skin='ide'] .ai-workbench {
-    gap: 0 !important;
-}
-
-html[data-ui-skin='ide'] .ai-workbench > .workbench-center {
-    gap: 0 !important;
-}
-
-html[data-ui-skin='ide'] .ai-workbench .ai-side-explorer {
-    border-right-width: 0 !important;
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    border-right: 1px solid var(--dw-seam-divider) !important;
-}
-
-html[data-ui-skin='ide'] .ai-workbench .ai-workspace {
-    border-left-width: 0 !important;
-    border-top-left-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-}
-
-html[data-ui-skin='ide'] .ai-workbench .ai-side-explorer {
-    border-radius: 0 !important;
-    box-shadow: none !important;
-}
-
-/* =============================================================================
-   IDE — settings KB entries workspace
-   ============================================================================= */
-
-html[data-ui-skin='ide'] .module-shell__main .kb-entries-workspace {
-    gap: 0 !important;
-    column-gap: 0 !important;
-}
-
-html[data-ui-skin='ide'] .module-shell__main .kb-entry-sidebar {
-    border-right: 1px solid var(--dw-seam-divider) !important;
-}
-
-/* =============================================================================
-   IDE — SQL result messages rail
-   ============================================================================= */
-
-html[data-ui-skin='ide'] .result-pane--split:not(.result-pane--messages-only) > .messages-panel,
-html[data-ui-skin='ide'] .result-pane--split:not(.result-pane--messages-only) > .messages-rail {
-    border-right: 1px solid var(--dw-seam-divider) !important;
-}
-
-html[data-ui-skin='ide'] .result-pane--split:not(.result-pane--messages-only) > .result-pane__main {
-    border-left-width: 0 !important;
-}
-
-/* Collapse double lines inside messages panel */
+/* Messages 头/子条仍可贴合（同卡内） */
 html[data-ui-skin='ide'] .messages-panel__head + .messages-panel__sub {
     border-top-width: 0 !important;
 }
 
-/* =============================================================================
-   IDE — connection editor ‖ preview
-   ============================================================================= */
-
-html[data-ui-skin='ide'] .conn-layout {
-    gap: 0 !important;
-    column-gap: 0 !important;
+/* SSH / terminal：栈内用半缝，直角 */
+html[data-ui-skin='ide'] .dw-workbench-page--terminal .dw-workbench-page__body {
+    gap: var(--dw-panel-gap) !important;
 }
 
-html[data-ui-skin='ide'] .conn-layout > .conn-editor {
-    border-right: 1px solid var(--dw-seam-divider) !important;
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
+html[data-ui-skin='ide'] .dw-workbench-page--terminal .dw-workbench-page__body > * {
+    border-radius: 0 !important;
 }
 
-/* =============================================================================
-   IDE — SSH / terminal stacked panels
-   ============================================================================= */
-
-html[data-ui-skin='ide'] .dw-workbench-page--terminal .dw-workbench-page__body > * + * {
-    border-top-width: 0 !important;
-    border-top-left-radius: 0 !important;
-    border-top-right-radius: 0 !important;
-}
-
-html[data-ui-skin='ide'] .dw-workbench-page--terminal .dw-workbench-page__body > *:not(:last-child) {
-    border-bottom-width: 0 !important;
-    border-bottom-left-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-}
-
-/* =============================================================================
-   IDE — module settings shell (nav ‖ main)
-   ============================================================================= */
-
+/* Module settings：nav 直角，与 main 半缝靠壳层，不强制贴死发丝线 */
 html[data-ui-skin='ide'] .module-shell__nav {
-    border-right: 1px solid var(--dw-seam-divider) !important;
+    border-radius: 0 !important;
     box-shadow: none !important;
 }
 
@@ -321,43 +147,9 @@ html[data-ui-skin='ide'] .module-shell__main {
     padding-left: var(--mp-pad);
 }
 
-/* =============================================================================
-   IDE — lineage / graph section stacks
-   ============================================================================= */
-
-html[data-ui-skin='ide'] .lineage-panel__toolbar + .lineage-panel__warnings,
-html[data-ui-skin='ide'] .lineage-panel__warnings + .lineage-panel__impact,
-html[data-ui-skin='ide'] .lineage-panel__toolbar + .lineage-panel__impact {
-    border-top-width: 0 !important;
-}
-
-html[data-ui-skin='ide'] .lineage-panel__warnings,
-html[data-ui-skin='ide'] .lineage-panel__impact {
-    border-bottom-width: 0 !important;
-}
-
-html[data-ui-skin='ide'] .lineage-panel__impact:last-child {
-    border-bottom: 1px solid var(--dw-seam-divider) !important;
-}
-
-/* =============================================================================
-   IDE — mobile workbench split (vertical)
-   ============================================================================= */
-
 @media (max-width: 900px) {
     html[data-ui-skin='ide'] .dw-workbench-split {
-        row-gap: 0 !important;
-    }
-
-    html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--left {
-        border-right: none !important;
-        border-bottom: 1px solid var(--dw-seam-divider) !important;
-    }
-
-    html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--left > :first-child,
-    html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--right > :first-child {
-        border-width: 0 !important;
-        border-radius: 0 !important;
+        row-gap: var(--dw-panel-gap) !important;
     }
 }
 

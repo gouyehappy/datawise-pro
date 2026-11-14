@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * Visual dock-move affordance.
- * - edge: tall pill on panel headers (with the whole header as drag zone)
- * - bar: wide centered handle for workspace float / tool stripe
- * Set `interactive` when this element alone starts the drag (stripe / float top).
+ * - edge: tall ridges on panel headers (explorer / tool windows) — preferred look
+ * - bar: horizontal ridges when a top-centered handle is needed
+ * Set `interactive` when this element alone starts the drag (stripe / workspace top).
  */
 import {useI18n} from 'vue-i18n'
 
@@ -77,9 +77,9 @@ function onPointerDown(event: PointerEvent) {
   cursor: grabbing;
 }
 
-/* Left-edge handle on tool / explorer headers */
+/* Same visual language as explorer / tool-window headers */
 .dock-drag-grip--edge {
-  width: 16px;
+  width: 12px;
   height: var(--dw-density-sm);
   margin-inline: 0 2px;
   border-radius: var(--dw-control-radius);
@@ -87,7 +87,7 @@ function onPointerDown(event: PointerEvent) {
 
 .dock-drag-grip--edge .dock-drag-grip__ridges {
   width: 4px;
-  height: 14px;
+  height: 12px;
   border-radius: var(--dw-radius-xs);
   background:
       repeating-linear-gradient(
@@ -98,7 +98,7 @@ function onPointerDown(event: PointerEvent) {
   opacity: 0.9;
 }
 
-/* Centered float / stripe handle — easy to aim */
+/* Horizontal twin of edge ridges (rare; prefer edge placement) */
 .dock-drag-grip--bar {
   width: 44px;
   height: 14px;

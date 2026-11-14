@@ -1,4 +1,4 @@
-.k8s-session { border: 1px solid var(--wb-border, #2e3440); border-radius: 8px; padding: 14px; background: var(--wb-panel, #171e27); color: var(--wb-text, #f0f0f3); min-width: 0; }
+.k8s-session { border: 1px solid var(--wb-border, rgba(255, 255, 255, 0.08)); border-radius: 8px; padding: 14px; background: var(--wb-panel, #222326); color: var(--wb-text, #f0f0f3); min-width: 0; }
 .k8s-session header { display: flex; align-items: center; justify-content: space-between; gap: 12px; overflow-wrap: anywhere; }
 .k8s-session nav, .k8s-session-controls, .k8s-session-search { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .k8s-session button, .k8s-session select, .k8s-session input { font: inherit; border: 1px solid var(--wb-border-2, #374151); background: var(--wb-input, #0b1320); color: var(--wb-text, #f0f0f3); padding: 6px 9px; border-radius: 5px; }

@@ -1,0 +1,4 @@
+{
+  "dbType": "presto",
+  "extends": "jdbc-query"
+}

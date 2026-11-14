@@ -82,6 +82,16 @@ public abstract class OracleDictionaryTableIntrospector implements TableMetadata
         return new TableDdlResult(loadMetadataDdl(connection, owner(database), viewName, "VIEW"));
     }
 
+    @Override
+    public TableDdlResult loadSequenceDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String sequenceName
+    ) throws SQLException {
+        return new TableDdlResult(loadMetadataDdl(connection, owner(database), sequenceName, "SEQUENCE"));
+    }
+
     private TablePropertiesResult loadRelationProperties(
                                                          Connection connection,
                                                          String database,

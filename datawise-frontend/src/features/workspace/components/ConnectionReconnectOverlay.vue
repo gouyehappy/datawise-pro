@@ -1,9 +1,8 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {ref} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {DwIcon} from '@/core/icons'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
-import {useLayoutStore} from '@/features/layout/stores/layout'
 
 const props = defineProps<{
   connectionId: string
@@ -12,21 +11,14 @@ const props = defineProps<{
 
 const {t} = useI18n()
 const explorer = useExplorerStore()
-const layout = useLayoutStore()
 const reconnecting = ref(false)
 
 async function onReconnect() {
   if (reconnecting.value) return
   reconnecting.value = true
   try {
-    const ok = await explorer.connectConnection(props.connectionId, {notify: true})
-    if (ok) {
-      layout.showSuccessToast(
-          t('explorer.connectionReconnected', {
-            name: props.connectionName || props.connectionId,
-          }),
-      )
-    }
+    // 成功后叠加层会消失，树状态也会更新，无需再弹 toast。
+    await explorer.connectConnection(props.connectionId, {notify: true})
   } finally {
     reconnecting.value = false
   }

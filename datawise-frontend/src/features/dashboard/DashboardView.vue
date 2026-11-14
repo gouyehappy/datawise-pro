@@ -50,6 +50,8 @@ import {extractConnectionsFromTree} from '@/features/explorer/utils/tree-targets
 import type {ReleaseHighlightAction} from '@/features/layout/services/release-highlights.service'
 import {applySuggestedDashboardWidget} from '@/features/dashboard/services/dashboard-widget-ai.service'
 
+defineOptions({name: 'DashboardView'})
+
 const STAT_META: Record<DashboardStatKey, { tone: string }> = {
   connections: {tone: 'sky'},
   sqlRuns: {tone: 'violet'},
@@ -343,7 +345,6 @@ function applyAiWidget(payload: { prompt: string; widgetId: DashboardWidgetId; c
       payload.column,
   )
   appConfig.patchDashboardPreferences(next)
-  layout.showSuccessToast(t('dashboard.aiWidget.applied', {widget: t(`dashboard.widgets.${payload.widgetId}`)}))
 }
 </script>
 
@@ -633,9 +634,9 @@ function applyAiWidget(payload: { prompt: string; widgetId: DashboardWidgetId; c
 /* dash-layout / dash-col 布局已收编到 module-page.css（.mp-columns-3 别名） */
 
 :deep(.dash-card) {
-  border: 1px solid var(--mp-shell-border);
+  border: none;
   border-radius: var(--mp-shell-radius);
-  background: var(--mp-shell-tile);
+  background: var(--dw-bg-panel);
   box-shadow: none;
   overflow: hidden;
 }

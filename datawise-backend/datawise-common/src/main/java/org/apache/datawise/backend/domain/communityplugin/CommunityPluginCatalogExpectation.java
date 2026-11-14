@@ -54,6 +54,17 @@ public final class CommunityPluginCatalogExpectation {
                         "Catalog signingKeyId mismatch: expected '" + expectedKey + "' but package used '" + actualKey + "'");
             }
         }
+        // MetaForge B4：目录收据 — 有 packageSha256 时必须与下载包字节一致（可选字段，旧目录兼容）。
+        if (entry.hasNonNull("packageSha256") && !entry.path("packageSha256").asText("").isBlank()) {
+            String expectedSha = entry.path("packageSha256").asText().trim().toLowerCase();
+            String actualSha = verified.packageSha256() != null
+                    ? verified.packageSha256().trim().toLowerCase()
+                    : "";
+            if (!expectedSha.equals(actualSha)) {
+                throw new CommunityPluginException(
+                        "Catalog packageSha256 mismatch: expected '" + expectedSha + "' but package has '" + actualSha + "'");
+            }
+        }
     }
 
     private static void requireMatch(JsonNode entry, String field, String actual) {

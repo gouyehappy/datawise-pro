@@ -1,0 +1,51 @@
+{
+  "id": "redis",
+  "description": "Redis connection fields — optional credentials, database index.",
+  "fields": [
+    {
+      "key": "host",
+      "label": "connection.host",
+      "type": "text",
+      "binding": "host",
+      "required": true,
+      "placeholder": "localhost"
+    },
+    {
+      "key": "port",
+      "label": "connection.port",
+      "type": "number",
+      "binding": "port"
+    },
+    {
+      "key": "database",
+      "label": "connection.redisDbIndex",
+      "type": "text",
+      "binding": "database",
+      "description": "connection.hints.redisDbIndex",
+      "placeholder": "0"
+    },
+    {
+      "key": "url",
+      "label": "connection.url",
+      "type": "text",
+      "binding": "url",
+      "readonly": true
+    },
+    {
+      "key": "user",
+      "label": "connection.username",
+      "type": "text",
+      "binding": "user",
+      "description": "connection.hints.redisUsername",
+      "placeholder": "connection.redisUsernameOptional"
+    },
+    {
+      "key": "password",
+      "label": "connection.password",
+      "type": "password",
+      "binding": "password",
+      "description": "connection.hints.redisPassword",
+      "placeholder": "connection.redisPasswordOptional"
+    }
+  ]
+}

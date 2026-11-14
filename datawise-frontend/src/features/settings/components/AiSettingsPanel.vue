@@ -36,6 +36,7 @@ import type {
   AiLlmSettings,
   AiProviderId,
 } from '@/shared/config/app-config.types'
+import {resolveCaughtMessage} from '@/shared/api/http/api-error-message'
 
 type FilterKind = 'all' | 'chat' | 'embedding'
 type ModelKind = 'chat' | 'embedding'
@@ -388,7 +389,6 @@ function saveProfile() {
       }
       if (markDefaultOnSave.value) appConfig.setDefaultLlmProfile(payload.id)
       appConfig.persistConfigNow()
-      layout.showSuccessToast(t('settings.ai.saveSuccess'))
       discardDraft()
       viewMode.value = 'list'
     } finally {
@@ -413,7 +413,6 @@ function saveProfile() {
     }
     if (markDefaultOnSave.value) appConfig.setDefaultEmbeddingProfile(payload.id)
     appConfig.persistConfigNow()
-    layout.showSuccessToast(t('settings.ai.saveSuccess'))
     discardDraft()
     viewMode.value = 'list'
   } finally {
@@ -450,7 +449,13 @@ async function runChatTest() {
   testFeedback.value = null
   try {
     const result = await aiApi.testConnection(chatDraft.value)
-    testFeedback.value = {message: result.message, ok: result.ok !== false}
+    const ok = result.ok !== false
+    testFeedback.value = {
+      ok,
+      message: ok
+        ? (result.message?.trim() || t('settings.ai.testSuccess'))
+        : resolveCaughtMessage(result.message, t, 'settings.ai.testFailed'),
+    }
   } finally {
     testing.value = false
   }
@@ -462,7 +467,13 @@ async function runEmbeddingTest() {
   testFeedback.value = null
   try {
     const result = await aiApi.testEmbedding(embeddingDraft.value)
-    testFeedback.value = {message: result.message, ok: result.ok !== false}
+    const ok = result.ok !== false
+    testFeedback.value = {
+      ok,
+      message: ok
+        ? (result.message?.trim() || t('settings.ai.testSuccess'))
+        : resolveCaughtMessage(result.message, t, 'settings.ai.testFailed'),
+    }
   } finally {
     embeddingTesting.value = false
   }

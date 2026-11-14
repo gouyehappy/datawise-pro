@@ -227,23 +227,30 @@ async function installRemote(reinstall = false) {
         if (result.restartRequired) {
             layout.showWarningToast(result.message || t('plugin.connectorMarket.installSuccessRestart'))
         } else {
-            layout.showSuccessToast(
-                result.message
-                || (reinstall
-                    ? t('plugin.connectorMarket.reinstallSuccess')
-                    : t('plugin.connectorMarket.installSuccess')),
-            )
+            layout.notifyQuiet({
+                category: 'system',
+                titleKey: 'installDone',
+                bodyKey: 'installDone',
+                params: {
+                    detail: result.message
+                        || (reinstall
+                            ? t('plugin.connectorMarket.reinstallSuccess')
+                            : t('plugin.connectorMarket.installSuccess')),
+                },
+            })
         }
         emit('installed')
     } catch (error) {
         if (token !== opToken) return
         finishProgress(false)
         layout.showErrorToast(
-            error instanceof Error
-                ? error.message
-                : (reinstall
-                    ? t('plugin.connectorMarket.reinstallFailed')
-                    : t('plugin.connectorMarket.installFailed')),
+            resolveCaughtApiErrorMessage(
+                error,
+                t,
+                reinstall
+                    ? 'plugin.connectorMarket.reinstallFailed'
+                    : 'plugin.connectorMarket.installFailed',
+            ),
         )
     } finally {
         if (token !== opToken) return
@@ -264,7 +271,12 @@ async function uninstallRemote() {
         if (result.restartRequired) {
             layout.showWarningToast(result.message || t('plugin.connectorMarket.uninstallSuccessRestart'))
         } else {
-            layout.showSuccessToast(result.message || t('plugin.connectorMarket.uninstallSuccess'))
+            layout.notifyQuiet({
+              category: 'system',
+              titleKey: 'installDone',
+              bodyKey: 'installDone',
+              params: {detail: result.message || t('plugin.connectorMarket.uninstallSuccess')},
+            })
         }
         emit('installed')
     } catch (error) {
@@ -295,7 +307,6 @@ async function copyInstallGuide() {
     try {
         await navigator.clipboard.writeText(buildConnectorInstallGuide(props.entry))
         copied.value = true
-        layout.showSuccessToast(t('plugin.connectorMarket.copyInstallSuccess'))
         window.setTimeout(() => {
             copied.value = false
         }, 2000)
@@ -307,7 +318,6 @@ async function copyInstallGuide() {
 async function copyPluginDir() {
     try {
         await navigator.clipboard.writeText(CONNECTOR_PLUGIN_DIR)
-        layout.showSuccessToast(t('plugin.connectorMarket.copyPathSuccess'))
     } catch {
         layout.showErrorToast(t('plugin.connectorMarket.copyInstallFailed'))
     }

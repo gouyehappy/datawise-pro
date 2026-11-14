@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 // Session import: stream a third-party export into the sidecar for a sanitized
 // preview, then either create host connections via host.importConnections /
 // host.createConnections (when the host exposes that API) or fall back to

@@ -55,7 +55,10 @@ import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
 import {DATA_DIRECTORY_SUBDIRS} from '@/shared/config/data-directory-layout'
 import {isDesktopApp} from '@/features/layout/services/desktop-chrome'
-import {buildDeepLinkExample} from '@/shared/deep-link/deep-link.service'
+import {
+    buildDeepLinkExample,
+    buildWebDeepLinkExampleQuery,
+} from '@/shared/deep-link/deep-link.service'
 import {
     loadApiServerPreferences,
     normalizeApiServerUrl,
@@ -90,12 +93,16 @@ function onOpenHttpLinksChange(value: string) {
   appConfig.setOpenHttpLinksIn(value === 'system' ? 'system' : 'builtin')
 }
 const deepLinkExample = buildDeepLinkExample()
+const webDeepLinkExample = buildWebDeepLinkExampleQuery()
 const deepLinkCopied = ref(false)
+const webDeepLinkCopied = ref(false)
 let deepLinkCopiedTimer: ReturnType<typeof setTimeout> | null = null
+let webDeepLinkCopiedTimer: ReturnType<typeof setTimeout> | null = null
 const snapshotIncludePasswords = ref(false)
 const snapshotBusy = ref(false)
 
 const deepLinkParamDefs = [
+  {key: 'dwAction', optional: false, descKey: 'settings.basic.deepLink.dwAction'},
   {key: 'connectionId', optional: false, descKey: 'settings.basic.deepLink.connectionId'},
   {key: 'database', optional: true, descKey: 'settings.basic.deepLink.database'},
   {key: 'sql', optional: true, descKey: 'settings.basic.deepLink.sql'},
@@ -105,6 +112,15 @@ const deepLinkExampleParams = computed(() => {
   const url = new URL(deepLinkExample)
   return (['connectionId', 'database', 'sql'] as const)
       .map((key) => ({key, value: url.searchParams.get(key) ?? ''}))
+      .filter((entry) => entry.value)
+})
+
+const webDeepLinkExampleParams = computed(() => {
+  const params = new URLSearchParams(webDeepLinkExample.startsWith('?')
+      ? webDeepLinkExample.slice(1)
+      : webDeepLinkExample)
+  return (['dwAction', 'connectionId', 'database', 'sql'] as const)
+      .map((key) => ({key, value: params.get(key) ?? ''}))
       .filter((entry) => entry.value)
 })
 const {readOnly, hint, denyIfReadOnly} = useResourceWriteGuard(UserResource.AppConfig)
@@ -182,6 +198,11 @@ function onUiFontSizeCommit() {
   const next = clampUiFontSizePx(uiFontSizeDraft.value)
   uiFontSizeDraft.value = String(next)
   theme.setUiFontSizePx(next)
+}
+
+function onToggleColoredToolbarIcons() {
+  if (denyIfReadOnly()) return
+  theme.setColoredToolbarIcons(!theme.coloredToolbarIcons)
 }
 
 function onUiDensityChange(value: string) {
@@ -345,10 +366,10 @@ async function saveApiServer() {
             mode: apiServerMode.value,
             remoteUrl: apiServerMode.value === 'remote' ? remoteUrl : previous.remoteUrl,
         })
-        refreshApiServerEndpointLabel()
+        // CSP connect-src is baked at boot from localStorage; reload so the new remote origin applies.
         await auth.signOut({silent: true})
-        auth.openLoginDialog()
-        layout.showSuccessToast(t('settings.basic.apiServer.saved'))
+        window.location.reload()
+        return
     } catch {
         apiServerError.value = t('settings.basic.apiServer.saveFailed')
     } finally {
@@ -413,10 +434,23 @@ async function copyDeepLinkExample() {
   try {
     await navigator.clipboard.writeText(deepLinkExample)
     deepLinkCopied.value = true
-    layout.showSuccessToast(t('settings.basic.deepLink.copySuccess'))
+    // 按钮已切到「已复制」，无需 toast。
     if (deepLinkCopiedTimer) clearTimeout(deepLinkCopiedTimer)
     deepLinkCopiedTimer = setTimeout(() => {
       deepLinkCopied.value = false
+    }, 2000)
+  } catch {
+    layout.showErrorToast(t('settings.basic.deepLink.copyFailed'))
+  }
+}
+
+async function copyWebDeepLinkExample() {
+  try {
+    await navigator.clipboard.writeText(webDeepLinkExample)
+    webDeepLinkCopied.value = true
+    if (webDeepLinkCopiedTimer) clearTimeout(webDeepLinkCopiedTimer)
+    webDeepLinkCopiedTimer = setTimeout(() => {
+      webDeepLinkCopied.value = false
     }, 2000)
   } catch {
     layout.showErrorToast(t('settings.basic.deepLink.copyFailed'))
@@ -433,10 +467,17 @@ async function onExportConfigSnapshot() {
   snapshotBusy.value = true
   try {
     const result = await exportConfigSnapshot({includePasswords: snapshotIncludePasswords.value})
-    layout.showSuccessToast(t('settings.basic.configSnapshot.exportSuccess', {
-      connections: result.connectionCount,
-      consoles: result.savedConsoleCount,
-    }))
+    layout.notifyQuiet({
+      category: 'system',
+      titleKey: 'configSnapshotExported',
+      bodyKey: 'configSnapshotExported',
+      params: {
+        detail: t('settings.basic.configSnapshot.exportSuccess', {
+          connections: result.connectionCount,
+          consoles: result.savedConsoleCount,
+        }),
+      },
+    })
   } catch (error) {
     layout.showErrorToast(resolveCaughtApiErrorMessage(error, t, 'settings.basic.configSnapshot.exportFailed'))
   } finally {
@@ -452,10 +493,17 @@ async function onImportConfigSnapshot() {
   try {
     const result = await importConfigSnapshotText(await file.text())
     await Promise.all([explorer.refreshTree(), shortcutPanel.load()])
-    layout.showSuccessToast(t('settings.basic.configSnapshot.importSuccess', {
-      connections: result.connectionCount,
-      consoles: result.savedConsoleCount,
-    }))
+    layout.notifyQuiet({
+      category: 'system',
+      titleKey: 'configSnapshotImported',
+      bodyKey: 'configSnapshotImported',
+      params: {
+        detail: t('settings.basic.configSnapshot.importSuccess', {
+          connections: result.connectionCount,
+          consoles: result.savedConsoleCount,
+        }),
+      },
+    })
   } catch (error) {
     layout.showErrorToast(resolveCaughtApiErrorMessage(error, t, 'settings.basic.configSnapshot.importFailed'))
   } finally {
@@ -710,6 +758,15 @@ async function onImportConfigSnapshot() {
                 @update:model-value="onUiDensityChange"
             />
           </div>
+
+          <div class="basic-settings__group">
+            <LayoutToggleChip
+                :label="t('settings.basic.coloredToolbarIcons')"
+                :caption="t('settings.basic.coloredToolbarIconsHint')"
+                :active="theme.coloredToolbarIcons"
+                @toggle="onToggleColoredToolbarIcons"
+            />
+          </div>
         </SettingsSectionCard>
       </div>
 
@@ -832,13 +889,12 @@ async function onImportConfigSnapshot() {
         </SettingsSectionCard>
 
         <SettingsSectionCard
-            v-if="desktopApp"
             :title="t('settings.basic.deepLink.title')"
             :hint="t('settings.basic.deepLink.hint')"
             icon="link"
             tone="panel"
         >
-          <div class="deep-link-example-wrap">
+          <div v-if="desktopApp" class="deep-link-example-wrap">
             <p class="deep-link-example__label">{{ t('settings.basic.deepLink.exampleHint') }}</p>
             <div class="deep-link-example">
               <code class="deep-link-example__code">
@@ -863,7 +919,32 @@ async function onImportConfigSnapshot() {
             </div>
           </div>
 
-          <p class="hint">{{ t('settings.basic.deepLink.actionsHint') }}</p>
+          <p v-if="desktopApp" class="hint">{{ t('settings.basic.deepLink.actionsHint') }}</p>
+
+          <div class="deep-link-example-wrap">
+            <p class="deep-link-example__label">{{ t('settings.basic.deepLink.webExampleHint') }}</p>
+            <div class="deep-link-example">
+              <code class="deep-link-example__code">
+                <span class="tok-punct">?</span><template
+                    v-for="(entry, index) in webDeepLinkExampleParams"
+                    :key="entry.key"
+                ><span v-if="index > 0" class="tok-punct">&amp;</span><span class="tok-key">{{ entry.key }}</span><span
+                    class="tok-punct"
+                >=</span><span class="tok-value">{{ entry.value }}</span></template>
+              </code>
+              <IconButton
+                  size="sm"
+                  :title="webDeepLinkCopied ? t('settings.basic.deepLink.copied') : t('settings.basic.deepLink.copyExample')"
+                  :active="webDeepLinkCopied"
+                  @click="copyWebDeepLinkExample"
+              >
+                <DwIcon v-if="!webDeepLinkCopied" name="copy" size="sm" :stroke-width="1.5"/>
+                <DwIcon v-else name="submit" size="sm" :stroke-width="1.6"/>
+              </IconButton>
+            </div>
+          </div>
+
+          <p class="hint">{{ t('settings.basic.deepLink.webActionsHint') }}</p>
 
           <table class="basic-settings__param-table">
             <thead>
@@ -888,7 +969,7 @@ async function onImportConfigSnapshot() {
             </tbody>
           </table>
 
-          <p class="deep-link-footnote">
+          <p v-if="desktopApp" class="deep-link-footnote">
             <DwIcon name="about" size="sm" :stroke-width="1.5"/>
             {{ t('settings.basic.deepLink.desktopOnly') }}
           </p>

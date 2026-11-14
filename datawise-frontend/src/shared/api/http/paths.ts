@@ -41,6 +41,7 @@ export const API_PATHS = {
             `/api/projects/${encodeURIComponent(projectId)}/files/content`,
         mkdir: (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/files/mkdir`,
         rename: (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/files/rename`,
+        delete: (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/files/delete`,
         moveConnections: (projectId: string) =>
             `/api/projects/${encodeURIComponent(projectId)}/connections/move`,
         shareConnections: (projectId: string) =>
@@ -82,6 +83,7 @@ export const API_PATHS = {
         chatStream: '/api/ai/chat/stream',
         analyzeStream: '/api/ai/analyze/stream',
         analyzeResume: '/api/ai/analyze/resume',
+        writeGrants: '/api/ai/agent/write-grants',
         sqlGenerate: '/api/ai/sql/generate',
         testConnection: '/api/ai/test-connection',
         testEmbedding: '/api/ai/test-embedding',
@@ -128,7 +130,11 @@ export const API_PATHS = {
     },
     tableDataAuditRestore: (tableName: string, auditId: string) =>
         `/api/tables/${encodeURIComponent(tableName)}/data/audit/${encodeURIComponent(auditId)}/restore`,
-    tableProperties: (tableName: string, options?: { connectionId?: string; database?: string; kind?: 'table' | 'view' }) => {
+    tableProperties: (tableName: string, options?: {
+        connectionId?: string
+        database?: string
+        kind?: 'table' | 'view' | 'trigger' | 'function' | 'procedure' | 'sequence'
+    }) => {
         const base = `/api/tables/${encodeURIComponent(tableName)}/properties`
         const params = new URLSearchParams()
         if (options?.connectionId) params.set('connectionId', options.connectionId)
@@ -137,7 +143,11 @@ export const API_PATHS = {
         const qs = params.toString()
         return qs ? `${base}?${qs}` : base
     },
-    tableDdl: (tableName: string, options?: { connectionId?: string; database?: string; kind?: 'table' | 'view' }) => {
+    tableDdl: (tableName: string, options?: {
+        connectionId?: string
+        database?: string
+        kind?: 'table' | 'view' | 'trigger' | 'function' | 'procedure' | 'sequence'
+    }) => {
         const base = `/api/tables/${encodeURIComponent(tableName)}/ddl`
         const params = new URLSearchParams()
         if (options?.connectionId) params.set('connectionId', options.connectionId)
@@ -153,6 +163,13 @@ export const API_PATHS = {
         if (options?.database) params.set('database', options.database)
         const qs = params.toString()
         return qs ? `${base}?${qs}` : base
+    },
+    ddlHistory: (options: { connectionId: string; database?: string; limit?: number }) => {
+        const params = new URLSearchParams()
+        params.set('connectionId', options.connectionId)
+        if (options.database) params.set('database', options.database)
+        if (options.limit != null) params.set('limit', String(options.limit))
+        return `/api/ddl-history?${params.toString()}`
     },
     schemaRelations: (options?: { connectionId?: string; database?: string }) => {
         const base = '/api/schema/relations'
@@ -245,6 +262,9 @@ export const API_PATHS = {
     },
     connection: {
         test: '/api/connections/test',
+        writeUnlock: (id: string) =>
+            `/api/connections/${encodeURIComponent(id)}/write-unlock`,
+        writeUnlockAll: '/api/connections/write-unlock',
     },
     terminal: {
         execute: '/api/terminal/execute',
@@ -415,6 +435,10 @@ export const API_PATHS = {
             `/api/explorer/connections/${encodeURIComponent(connectionId)}/schemas`,
         mysqlCharsets: (connectionId: string) =>
             `/api/explorer/connections/${encodeURIComponent(connectionId)}/mysql/charsets`,
+        engines: (connectionId: string) =>
+            `/api/explorer/connections/${encodeURIComponent(connectionId)}/engines`,
+        dataTypes: (connectionId: string) =>
+            `/api/explorer/connections/${encodeURIComponent(connectionId)}/data-types`,
     },
     workspace: {
         sqlLogs: '/api/workspace/sql-logs',
@@ -560,6 +584,12 @@ export const API_PATHS = {
             export: '/api/config/portability/export',
             importPreflight: '/api/config/portability/import/preflight',
             import: '/api/config/portability/import',
+        },
+        cloudSync: {
+            settings: '/api/config/cloud-sync/settings',
+            webdavTest: '/api/config/cloud-sync/webdav/test',
+            webdavUpload: '/api/config/cloud-sync/webdav/upload',
+            webdavDownload: '/api/config/cloud-sync/webdav/download',
         },
     },
     teams: {

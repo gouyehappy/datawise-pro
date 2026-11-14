@@ -109,6 +109,7 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
                 streaming: true,
             },
             sessionId,
+            {touch: false},
         )
     }
 
@@ -243,6 +244,7 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
         const started = performance.now()
         const signal = beginStreamSignal()
         ensureStreamingMessage(sessionId)
+        aiChat.beginStreamPersistQuiet(sessionId)
 
         try {
             await streamAiAnalysis(
@@ -270,6 +272,10 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
             throw error
         } finally {
             clearStreamAbort(signal)
+            // Keep quiet while waiting on SQL confirm — resume path re-enters quiet.
+            if (!sqlConfirmPending.value) {
+                aiChat.endStreamPersistQuiet(sessionId)
+            }
         }
     }
 
@@ -278,21 +284,51 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
         if (!pending || resumingSql.value) return
 
         const sessionId = pending.sessionId
+        const session = aiChat.sessions.find((item) => item.id === sessionId)
+        if (approved && (session?.mode ?? 'agent') === 'ask') {
+            toast.warning(t('ai.askModeBlocksExecute'))
+            await resumeSqlConfirmation(false)
+            return
+        }
+
         resumingSql.value = true
         analysisStreaming.value = true
         aiChat.setSending(sessionId, true)
         const started = performance.now()
         const signal = beginStreamSignal()
         ensureStreamingMessage(sessionId)
+        aiChat.beginStreamPersistQuiet(sessionId)
         syncLiveProgress(sessionId)
 
         try {
+            let grantId: string | undefined
+            if (approved) {
+                const binding = session?.binding
+                const connectionId = binding?.connectionId
+                    || session?.selectedTargetIds?.[0]?.split(':')[0]
+                if (!connectionId) {
+                    throw new Error(t('ai.binding.unbound'))
+                }
+                const {issueAgentWriteGrant} = await import(
+                    '@/features/ai/shared/services/agent-write-grant.api'
+                )
+                const grant = await issueAgentWriteGrant({
+                    conversationId: sessionId,
+                    connectionId,
+                    database: binding?.database,
+                    schema: binding?.schema,
+                    confirmedSql: pending.sql,
+                })
+                grantId = grant.grantId
+            }
             await resumeAiAnalysis(
                 API_PATHS.ai.analyzeResume,
                 {
                     threadId: pending.threadId,
                     checkpointId: pending.checkpointId,
                     approved,
+                    grantId,
+                    confirmedSql: approved ? pending.sql : undefined,
                 },
                 buildStreamHandlers(sessionId, started),
                 signal,
@@ -312,6 +348,7 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
             analysisStreaming.value = false
             resumingSql.value = false
             aiChat.setSending(sessionId, false)
+            aiChat.endStreamPersistQuiet(sessionId)
             if (aiChat.activeSessionId === sessionId) await options.scrollToBottom()
         }
     }

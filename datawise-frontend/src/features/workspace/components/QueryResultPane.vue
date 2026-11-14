@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import {computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch} from 'vue'
+import {computed, defineAsyncComponent, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {CollapseButton, DwButton, DwInlineAlert, EmptyState} from '@/core/components'
+import {DwButton, DwInlineAlert} from '@/core/components'
 import {DwIcon} from '@/core/icons'
 import {ContextMenuHost} from '@/core/context-menu'
-import {usePopoverEscape} from '@/core/composables/usePopoverEscape'
 import TabBar from '@/core/components/TabBar.vue'
 import TabItem from '@/core/components/TabItem.vue'
 import DataGrid from '@/core/components/DataGrid.vue'
-import ExplainPlanTree from '@/features/workspace/components/ExplainPlanTree.vue'
-import GenerateDmlDialog from '@/features/workspace/components/GenerateDmlDialog.vue'
-import QueryResultDiffPanel from '@/features/workspace/components/QueryResultDiffPanel.vue'
-import QueryResultAiSummaryPanel from '@/features/workspace/components/QueryResultAiSummaryPanel.vue'
+import {flattenDataGridProps} from '@/core/data-grid/types/data-grid-prop-groups'
 import QueryResultViewToggle from '@/features/workspace/components/QueryResultViewToggle.vue'
-import QueryResultViewOptions from '@/features/workspace/components/QueryResultViewOptions.vue'
+import QueryResultPaneActions from '@/features/workspace/components/QueryResultPaneActions.vue'
+import QueryResultMessagesPanel from '@/features/workspace/components/QueryResultMessagesPanel.vue'
+import type {QueryResultMessageEntry} from '@/features/workspace/components/QueryResultMessagesPanel.vue'
+import QueryResultBatchSummary from '@/features/workspace/components/QueryResultBatchSummary.vue'
+import QueryResultErrorPane from '@/features/workspace/components/QueryResultErrorPane.vue'
+import QueryResultExecResultPane from '@/features/workspace/components/QueryResultExecResultPane.vue'
 import {useClosableTabMenu} from '@/core/composables/useClosableTabMenu'
 import type {DbType, TableColumn, TableRow} from '@/core/types'
 import type {TableColumnDetail} from '@/shared/api/types'
@@ -32,9 +33,6 @@ import {
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {usePluginStore} from '@/features/plugin/stores/plugin-store'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
-import {useCommunityPluginContributionStore} from '@/features/community-plugin/stores/community-plugin-contributions'
-import {createHttpCommunityPluginsApi} from '@/shared/api/http/community-plugins'
-import {resolveCaughtApiErrorMessage} from '@/shared/api'
 import {
     GOVERNANCE_DIFF_PREVIEW_LIMIT,
     isGovernancePreviewLimited,
@@ -52,27 +50,27 @@ import {
 import {canVisualizeQueryResult} from '@/features/workspace/services/query-result-chart.service'
 import {isNonGridResult} from '@/features/workspace/services/query-result-batch.utils'
 
-/** Chart + echarts stay off the console result critical path until the user switches to chart view. */
+/** PERF-16: secondary result UIs stay off the first-result critical path (chart already async). */
 const QueryResultChartPanel = defineAsyncComponent(
     () => import('@/features/workspace/components/QueryResultChartPanel.vue'),
+)
+const ExplainPlanTree = defineAsyncComponent(
+    () => import('@/features/workspace/components/ExplainPlanTree.vue'),
+)
+const GenerateDmlDialog = defineAsyncComponent(
+    () => import('@/features/workspace/components/GenerateDmlDialog.vue'),
+)
+const QueryResultDiffPanel = defineAsyncComponent(
+    () => import('@/features/workspace/components/QueryResultDiffPanel.vue'),
+)
+const QueryResultAiSummaryPanel = defineAsyncComponent(
+    () => import('@/features/workspace/components/QueryResultAiSummaryPanel.vue'),
 )
 
 const MESSAGES_TAB_ID = '__messages__'
 const PENDING_RESULT_TAB_ID = '__pending_result__'
 /** Console messages tab uses activeView = -1 (same bar as result sets). */
 const MESSAGES_VIEW_INDEX = -1
-
-interface MessageLogEntry {
-  key: string
-  resultIndex: number
-  statementNo: number
-  sql: string
-  status: 'success' | 'error'
-  durationMs: number
-  total: number
-  executedAtMs?: number
-  errorMessage?: string
-}
 
 const {t} = useI18n()
 
@@ -126,6 +124,8 @@ const props = withDefaults(
       aiSummaryLoading?: boolean
       aiSummaryOpen?: boolean
       aiSummaryText?: string
+      /** P2-2：结果区可直接把这份结果（SQL + 涉及表）交给 AI 工作台提问 */
+      showAiAsk?: boolean
       enableAiIndexSuggest?: boolean
       aiIndexSuggestLoading?: boolean
       enableAiExplain?: boolean
@@ -170,6 +170,7 @@ const emit = defineEmits<{
   'request-ai-fix': [payload: { sql: string; errorMessage: string; errorLine?: number }]
   'request-ai-summary': []
   'close-ai-summary': []
+  'request-ai-ask': []
   'request-index-suggest': [payload: { sql: string; explainPlan?: ExplainPlanNode[]; table?: string }]
   'request-ai-index-suggest': [payload: { sql: string; explainPlan?: ExplainPlanNode[] }]
   'request-ai-explain': []
@@ -189,102 +190,8 @@ const pluginStore = usePluginStore()
 const entitlement = useEntitlementStore()
 const editorSettings = useEditorSettingsStore()
 const resultPaneSettings = useQueryResultPaneSettingsStore()
-const communityContributions = useCommunityPluginContributionStore()
-const communityResultViews = computed(() => communityContributions.resultViews())
-const communityResultMenuOpen = ref(false)
-const communityResultMenuRef = ref<HTMLElement | null>(null)
-const communityResultTriggerRef = ref<HTMLElement | null>(null)
 const tabBarRef = ref<InstanceType<typeof TabBar>>()
-const batchSummaryRef = ref<HTMLElement | null>(null)
-const settingsMenuOpen = ref(false)
-const settingsMenuRef = ref<HTMLElement | null>(null)
-const settingsTriggerRef = ref<HTMLElement | null>(null)
-const viewOptionsRef = ref<{panelEl: HTMLElement | null} | null>(null)
-
-usePopoverEscape(
-    () => settingsMenuOpen.value,
-    () => {
-      settingsMenuOpen.value = false
-    },
-    {
-      containRefs: () => [
-        settingsMenuRef.value,
-        settingsTriggerRef.value,
-        viewOptionsRef.value?.panelEl ?? null,
-      ],
-    },
-)
-
-usePopoverEscape(
-    () => communityResultMenuOpen.value,
-    () => {
-      communityResultMenuOpen.value = false
-    },
-    {
-      containRefs: () => [
-        communityResultMenuRef.value,
-        communityResultTriggerRef.value,
-      ],
-    },
-)
-
-function toggleSettingsMenu() {
-  settingsMenuOpen.value = !settingsMenuOpen.value
-  if (settingsMenuOpen.value) communityResultMenuOpen.value = false
-}
-
-function toggleCommunityResultMenu() {
-  communityResultMenuOpen.value = !communityResultMenuOpen.value
-  if (communityResultMenuOpen.value) settingsMenuOpen.value = false
-}
-
-function communityInvokeMessage(result: unknown): string | null {
-  if (!result || typeof result !== 'object') return null
-  const record = result as Record<string, unknown>
-  for (const key of ['message', 'detail', 'status'] as const) {
-    const value = record[key]
-    if (typeof value === 'string' && value.trim()) return value
-  }
-  return null
-}
-
-async function invokeCommunityResultView(pluginId: string, contributionId: string) {
-  communityResultMenuOpen.value = false
-  const active = typeof currentView.value === 'number'
-      ? normalizedResults.value[currentView.value]
-      : null
-  try {
-    const api = createHttpCommunityPluginsApi()
-    const result = await api.invoke(pluginId, 'result-view/open', {
-      contributionId,
-      resultId: active?.id,
-      sql: active?.sql,
-      status: active?.status,
-      rowCount: active?.rows?.length,
-      columnCount: active?.columns?.length,
-    })
-    layout.showSuccessToast(
-        communityInvokeMessage(result) || t('communityPlugin.resultViewInvoked'),
-    )
-  } catch (error) {
-    layout.showErrorToast(
-        resolveCaughtApiErrorMessage(error, t, 'communityPlugin.resultViewFailed'),
-    )
-  }
-}
-
-function onCommunityPluginChanged() {
-  void communityContributions.refresh()
-}
-
-onMounted(() => {
-  communityContributions.ensureLoaded()
-  window.addEventListener('dw-community-plugin-changed', onCommunityPluginChanged)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('dw-community-plugin-changed', onCommunityPluginChanged)
-})
+const batchSummaryRef = ref<{ $el?: HTMLElement } | null>(null)
 
 const isConsoleMode = computed(() => props.results !== undefined)
 const showMessagesTab = computed(() => isConsoleMode.value && props.alwaysShowOverview)
@@ -398,10 +305,10 @@ const activeResult = computed(() => {
   return normalizedResults.value[index] ?? null
 })
 
-const messageLogEntries = computed<MessageLogEntry[]>(() => {
+const messageLogEntries = computed<QueryResultMessageEntry[]>(() => {
   let statementNo = 0
   // Build in chronological order first so statement numbers stay stable, then apply display sort.
-  const chronological: MessageLogEntry[] = []
+  const chronological: QueryResultMessageEntry[] = []
   normalizedResults.value.forEach((item, resultIndex) => {
     if (item.batchEntries?.length) {
       for (const [batchIndex, entry] of item.batchEntries.entries()) {
@@ -496,6 +403,12 @@ function compareWithPrevious(index: number) {
     diffMode.value = {baselineIndex: index - 1, currentIndex: index}
     currentView.value = index
     tabBarRef.value?.ensureActiveTabVisible()
+}
+
+/** 工具栏「对比上一结果」按钮：只在数字索引视图下可用 */
+function onComparePreviousResult() {
+    if (typeof currentView.value !== 'number') return
+    compareWithPrevious(currentView.value)
 }
 
 function exitDiffMode() {
@@ -616,7 +529,7 @@ function formatOutputTimestamp(ms?: number): string {
   ].join(' ')
 }
 
-function formatOutputMeta(entry: MessageLogEntry): string {
+function formatOutputMeta(entry: QueryResultMessageEntry): string {
   const duration = t('queryResult.outputDuration', {duration: entry.durationMs})
   if (entry.status === 'error') {
     return duration
@@ -644,7 +557,7 @@ watch(
     () => {
       if (!activeResult.value?.batchRunning) return
       requestAnimationFrame(() => {
-        const node = batchSummaryRef.value
+        const node = batchSummaryRef.value?.$el
         if (!node) return
         node.scrollTop = node.scrollHeight
       })
@@ -778,6 +691,68 @@ const canRequestAiSummary = computed(() => {
   return result.columns.length > 0
 })
 
+/** Four-group DataGrid bind (source/edit/chrome/view) → flat attrs for the host grid API. */
+const activeDataGridFlatProps = computed(() => {
+  const result = activeResult.value
+  if (!result) {
+    return flattenDataGridProps({
+      source: {columns: [], rows: []},
+    })
+  }
+  return flattenDataGridProps({
+    source: {
+      columns: result.columns,
+      rows: result.rows,
+      total: result.total,
+      where: result.where,
+      orderBy: result.orderBy,
+      columnDetails: props.columnDetails,
+      pkColumns: props.pkColumns,
+      tableAutoIncrement: props.tableAutoIncrement,
+      hasMore: gridHasMore.value,
+      truncatedAtCap: gridTruncatedAtCap.value,
+      truncatedCapRows: gridTruncatedCapRows.value,
+      canRaiseMaxRows: canRaiseMaxRows.value,
+      loading: props.loading,
+      cursorLoading: gridCursorLoading.value,
+      cursorTrimmedRows: gridCursorTrimmedRows.value,
+      productionPerfActive: props.productionPerfActive,
+    },
+    edit: {
+      editable: props.editable,
+      readOnlyHint: props.readOnlyHint,
+      canDelete: props.canDelete,
+      canUpdate: props.canUpdate,
+      showDmlActions: canGenerateDml.value,
+      onSubmitChanges: props.onSubmitChanges,
+    },
+    chrome: {
+      showFilter: props.showFilter,
+      fullToolbar: true,
+      exportBaseName: exportBaseName.value,
+      exportTableName: exportTableName.value,
+      suggestExportMask: props.exportSuggestMask,
+      showExport: props.showExport,
+      showAiSummary: canRequestAiSummary.value,
+      aiSummaryLoading: !!props.aiSummaryLoading,
+      showFakeData: canShowFakeData.value,
+      enableRowDocumentView: props.enableRowDocumentView,
+      enableSqlFill: props.enableSqlFill,
+      externalViewOptions: true,
+    },
+    view: {
+      showFieldTypes: showFieldTypes.value,
+      showFieldComments: showFieldComments.value,
+      wrapCells: resultPaneSettings.settings.wrapCells,
+      layoutMode: resultPaneSettings.settings.resultLayout,
+      columnDensity: resultPaneSettings.settings.columnDensity,
+      numericAlign: resultPaneSettings.settings.numericAlign,
+      hideNullColumns: resultPaneSettings.settings.hideNullColumns,
+      typeColoring: resultPaneSettings.settings.typeColoring,
+    },
+  })
+})
+
 function onRequestAiSummary() {
   if (!canRequestAiSummary.value) return
   emit('request-ai-summary')
@@ -832,7 +807,9 @@ watch(
               @select="handleTabSelect(MESSAGES_TAB_ID)"
           >
             <template #leading>
-              <DwIcon name="terminal" size="xs" :stroke-width="1.75"/>
+              <span class="dw-tab__icon dw-tab__icon--messages" aria-hidden="true">
+                <DwIcon name="history" size="tab" :stroke-width="1.85"/>
+              </span>
             </template>
           </TabItem>
         </template>
@@ -868,171 +845,43 @@ watch(
                   class="dw-tab__status dw-tab__status--running"
                   aria-hidden="true"
               />
-              <span v-else-if="item.status === 'success'" class="dw-tab__status" aria-hidden="true">✓</span>
               <span
                   v-else-if="item.status === 'error'"
-                  class="dw-tab__status dw-tab__status--error"
+                  class="dw-tab__icon"
                   aria-hidden="true"
-              >✕</span>
+              >
+                <DwIcon name="alert-circle" size="tab" :stroke-width="1.85"/>
+              </span>
+              <span v-else class="dw-tab__icon" aria-hidden="true">
+                <DwIcon name="table" size="tab" :stroke-width="1.85"/>
+              </span>
             </template>
           </TabItem>
         </template>
         <template #actions>
-          <button
-              v-if="typeof currentView === 'number' && canCompareWithPrevious(currentView)"
-              class="dw-icon-btn result-compare-btn"
-              type="button"
-              :title="t('queryResult.compareWithPrevious')"
-              :aria-label="t('queryResult.compareWithPrevious')"
-              @click="compareWithPrevious(currentView)"
-          >
-            <DwIcon name="arrow-up-down" size="lg" :stroke-width="1.55"/>
-          </button>
-          <div
-              v-if="communityResultViews.length"
-              ref="communityResultMenuRef"
-              class="result-pane-settings community-result-views"
-          >
-            <button
-                ref="communityResultTriggerRef"
-                class="dw-icon-btn result-pane-settings__trigger"
-                type="button"
-                :title="t('communityPlugin.resultViewMenu')"
-                :aria-label="t('communityPlugin.resultViewMenu')"
-                :aria-expanded="communityResultMenuOpen"
-                :class="{ 'is-open': communityResultMenuOpen }"
-                @click="toggleCommunityResultMenu"
-            >
-              <DwIcon name="star" size="lg" :stroke-width="1.55"/>
-            </button>
-            <div
-                v-if="communityResultMenuOpen"
-                class="community-result-views__menu"
-                role="menu"
-            >
-              <button
-                  v-for="view in communityResultViews"
-                  :key="`${view.pluginId}:${view.id}`"
-                  type="button"
-                  class="community-result-views__item"
-                  role="menuitem"
-                  @click="invokeCommunityResultView(view.pluginId, view.id)"
-              >
-                {{ view.label }}
-              </button>
-            </div>
-          </div>
-          <div ref="settingsMenuRef" class="result-pane-settings">
-            <button
-                ref="settingsTriggerRef"
-                class="dw-icon-btn result-pane-settings__trigger"
-                type="button"
-                :title="t('queryResult.settings.menu')"
-                :aria-label="t('queryResult.settings.menu')"
-                :aria-expanded="settingsMenuOpen"
-                :class="{ 'is-open': settingsMenuOpen }"
-                @click="toggleSettingsMenu"
-            >
-              <DwIcon name="tools" size="lg" :stroke-width="1.55"/>
-            </button>
-            <QueryResultViewOptions
-                v-if="settingsMenuOpen"
-                ref="viewOptionsRef"
-                :anchor-el="settingsTriggerRef"
-                :sort-order="resultSortOrder"
-                :keep-existing-results="resultPaneSettings.settings.keepExistingResults"
-                :show-field-types="resultPaneSettings.settings.showFieldTypes"
-                :show-field-comments="resultPaneSettings.settings.showFieldComments"
-                :wrap-cells="resultPaneSettings.settings.wrapCells"
-                :result-layout="resultPaneSettings.settings.resultLayout"
-                :column-density="resultPaneSettings.settings.columnDensity"
-                :numeric-align="resultPaneSettings.settings.numericAlign"
-                :hide-null-columns="resultPaneSettings.settings.hideNullColumns"
-                :type-coloring="resultPaneSettings.settings.typeColoring"
-                :show-grid-options="showGridViewOptions"
-                :show-layout-option="showLayoutViewOption"
-                @update:sort-order="resultPaneSettings.patchSettings({ sortOrder: $event })"
-                @update:keep-existing-results="resultPaneSettings.patchSettings({ keepExistingResults: $event })"
-                @update:show-field-types="resultPaneSettings.patchSettings({ showFieldTypes: $event })"
-                @update:show-field-comments="resultPaneSettings.patchSettings({ showFieldComments: $event })"
-                @update:wrap-cells="resultPaneSettings.patchSettings({ wrapCells: $event })"
-                @update:result-layout="resultPaneSettings.patchSettings({ resultLayout: $event })"
-                @update:column-density="resultPaneSettings.patchSettings({ columnDensity: $event })"
-                @update:numeric-align="resultPaneSettings.patchSettings({ numericAlign: $event })"
-                @update:hide-null-columns="resultPaneSettings.patchSettings({ hideNullColumns: $event })"
-                @update:type-coloring="resultPaneSettings.patchSettings({ typeColoring: $event })"
-            />
-          </div>
-          <CollapseButton v-if="collapsible" @click="emit('collapse')"/>
+          <QueryResultPaneActions
+              :can-compare="typeof currentView === 'number' && canCompareWithPrevious(currentView)"
+              :active-result="activeResult ?? null"
+              :show-grid-view-options="showGridViewOptions"
+              :show-layout-view-option="showLayoutViewOption"
+              :collapsible="collapsible"
+              @compare="onComparePreviousResult"
+              @collapse="emit('collapse')"
+          />
         </template>
       </TabBar>
 
-      <div v-if="isMessagesView" class="messages-tab">
-        <div class="messages-tab__sub">
-          {{ t('queryResult.messagesAll', {count: messageLogEntries.length}) }}
-        </div>
-        <div class="messages-log">
-          <p v-if="running && !messageLogEntries.length" class="messages-running">
-            <span class="messages-running__spinner" aria-hidden="true"/>
-            {{
-              runningElapsedMs != null && runningElapsedMs > 0
-                ? t('queryResult.messagesRunningElapsed', {duration: formatDurationMs(runningElapsedMs)})
-                : t('queryResult.messagesRunning')
-            }}
-          </p>
-          <EmptyState
-              v-else-if="!messageLogEntries.length"
-              embedded
-              compact
-              :title="t('queryResult.messagesEmpty')"
-          >
-            <template #icon>
-              <DwIcon name="info" size="md" :stroke-width="1.5"/>
-            </template>
-          </EmptyState>
-          <button
-              v-for="entry in messageLogEntries"
-              :key="entry.key"
-              type="button"
-              class="messages-entry"
-              :class="{
-                'is-active': currentView === entry.resultIndex,
-                'is-error': entry.status === 'error',
-              }"
-              @click="selectResult(entry.resultIndex)"
-          >
-            <div class="messages-entry__head">
-              <span v-if="formatOutputTimestamp(entry.executedAtMs)" class="messages-entry__time">
-                [{{ formatOutputTimestamp(entry.executedAtMs) }}]
-              </span>
-              <span class="messages-entry__stmt">
-                {{ t('queryResult.messageStatement', {n: entry.statementNo}) }}
-              </span>
-              <span
-                  class="messages-entry__badge"
-                  :class="entry.status === 'error' ? 'is-error' : 'is-ok'"
-              >
-                {{
-                  entry.status === 'error'
-                    ? t('queryResult.outputStatusFailed')
-                    : t('queryResult.outputStatusOk')
-                }}
-              </span>
-            </div>
-            <pre class="messages-entry__sql">{{ entry.sql || '—' }}</pre>
-            <pre
-                v-if="entry.status === 'error' && entry.errorMessage"
-                class="messages-entry__error"
-            >{{ entry.errorMessage }}</pre>
-            <p
-                class="messages-entry__meta"
-                :class="{ 'query-duration--slow': isSlowQueryDuration(entry.durationMs) }"
-            >
-              {{ formatOutputMeta(entry) }}
-            </p>
-          </button>
-        </div>
-      </div>
+      <QueryResultMessagesPanel
+          v-if="isMessagesView"
+          :entries="messageLogEntries"
+          :running="running"
+          :running-elapsed-ms="runningElapsedMs"
+          :active-result-index="typeof currentView === 'number' ? currentView : undefined"
+          :is-slow-duration="isSlowQueryDuration"
+          :format-timestamp="formatOutputTimestamp"
+          :format-meta="formatOutputMeta"
+          @select="selectResult"
+      />
 
       <div v-else-if="running && !activeResult" class="messages-log">
         <p class="messages-running">
@@ -1046,123 +895,29 @@ watch(
       </div>
 
       <template v-else>
-      <div
+      <QueryResultBatchSummary
           v-if="activeResult?.batchEntries && batchSummaryStats"
           ref="batchSummaryRef"
-          class="overview batch-summary"
-      >
-      <p v-if="activeResult.batchRunning" class="batch-running">
-        <span class="batch-running__spinner" aria-hidden="true"/>
-        {{
-          t('queryResult.batchSummaryRunning', {
-            current: batchSummaryStats.count,
-            total: batchSummaryStats.total,
-          })
-        }}
-      </p>
-      <p v-if="activeResult.status === 'error' && !activeResult.batchRunning" class="error-title">
-        {{ t('queryResult.errorTitle') }}
-      </p>
-      <p
-          v-if="activeResult.status === 'error' && !activeResult.batchRunning && activeResult.errorMessage"
-          class="error-message"
-      >
-        {{ activeResult.errorMessage }}
-      </p>
-      <div
-          v-if="activeResult.status === 'error' && !activeResult.batchRunning && activeResult.errorLine"
-          class="error-actions"
-      >
-        <button
-            type="button"
-            class="error-jump"
-            @click="jumpToErrorLine(activeResult.errorLine!)"
-        >
-          {{ t('queryResult.jumpToLine', {line: activeResult.errorLine}) }}
-        </button>
-      </div>
-      <p v-if="batchSummaryStats.count > 0" class="overview-head">
-        {{
-          t('queryResult.overviewSummaryPrefix', {
-            count: batchSummaryStats.count,
-            rows: batchSummaryStats.totalRows,
-          })
-        }}
-        <span
-            class="query-duration"
-            :class="{ 'query-duration--slow': isSlowQueryDuration(batchSummaryStats.totalDuration) }"
-        >{{ batchSummaryStats.totalDuration }}ms</span>{{ t('queryResult.overviewDurationSuffix') }}
-      </p>
-      <p v-else-if="activeResult.batchRunning" class="overview-empty">
-        {{ t('queryResult.batchSummaryWaiting') }}
-      </p>
-      <ul v-if="batchSummaryStats.count > 0" class="overview-list">
-        <li v-for="(entry, index) in activeResult.batchEntries" :key="index">
-          <div class="overview-item overview-item--static">
-            <span
-                class="overview-ok"
-                :class="{ 'overview-err': entry.status === 'error' }"
-                aria-hidden="true"
-            >{{ entry.status === 'error' ? '✕' : '✓' }}</span>
-            <span class="overview-meta">
-              {{
-                t('queryResult.overviewItemPrefix', {
-                  label: entry.label,
-                  rows: entry.total,
-                })
-              }}
-              <span
-                  class="query-duration"
-                  :class="{ 'query-duration--slow': isSlowQueryDuration(entry.durationMs) }"
-              >{{ entry.durationMs }}ms</span>
-            </span>
-            <span class="overview-sql">{{ entry.sql }}</span>
-          </div>
-          <pre v-if="entry.status === 'error' && entry.errorMessage" class="batch-entry-error">{{
-              entry.errorMessage
-            }}</pre>
-        </li>
-      </ul>
-    </div>
+          :entries="activeResult.batchEntries"
+          :batch-running="!!activeResult.batchRunning"
+          :status="activeResult.status"
+          :error-message="activeResult.errorMessage"
+          :error-line="activeResult.errorLine"
+          :stats="batchSummaryStats"
+          :is-slow-duration="isSlowQueryDuration"
+          @jump-error-line="jumpToErrorLine"
+      />
 
-    <div v-else-if="activeResult?.status === 'error'" class="error-pane">
-      <div class="error-callout" role="alert">
-        <div class="error-callout__icon" aria-hidden="true">
-          <DwIcon name="alert-circle" size="md" :stroke-width="1.8"/>
-        </div>
-        <div class="error-callout__body">
-          <p class="error-callout__title">{{ t('queryResult.errorTitle') }}</p>
-          <pre class="error-callout__message">{{ activeResult.errorMessage }}</pre>
-          <div v-if="(enableAiFix && activeResult.sql?.trim() && activeResult.errorMessage) || activeResult.errorLine" class="error-callout__actions">
-            <button
-                v-if="enableAiFix && activeResult.sql?.trim() && activeResult.errorMessage"
-                type="button"
-                class="error-ai-fix"
-                :disabled="aiFixLoading"
-                @click="onRequestAiFix"
-            >
-              <DwIcon name="ai" size="xs" :stroke-width="1.5"/>
-              <span>{{ aiFixLoading ? t('queryResult.aiFixLoading') : t('queryResult.aiFix') }}</span>
-            </button>
-            <button
-                v-if="activeResult.errorLine"
-                type="button"
-                class="error-jump"
-                @click="jumpToErrorLine(activeResult.errorLine!)"
-            >
-              {{ t('queryResult.jumpToLine', {line: activeResult.errorLine}) }}
-            </button>
-          </div>
-        </div>
-      </div>
-      <details v-if="activeResult.sql?.trim()" class="error-sql" open>
-        <summary class="error-sql__summary">
-          <DwIcon class="error-sql__chevron" name="chevron-down" size="sm" :stroke-width="2.25"/>
-          <span>{{ t('queryResult.failedSql') }}</span>
-        </summary>
-        <pre class="error-sql__code">{{ activeResult.sql }}</pre>
-      </details>
-    </div>
+    <QueryResultErrorPane
+        v-else-if="activeResult?.status === 'error'"
+        :error-message="activeResult.errorMessage"
+        :error-line="activeResult.errorLine"
+        :sql="activeResult.sql"
+        :enable-ai-fix="enableAiFix"
+        :ai-fix-loading="!!aiFixLoading"
+        @request-ai-fix="onRequestAiFix"
+        @jump-error-line="jumpToErrorLine"
+    />
 
     <div v-else-if="activeResult?.explainPlan?.length" class="explain-plan-pane">
       <QueryResultAiSummaryPanel
@@ -1217,23 +972,13 @@ watch(
       />
     </div>
 
-    <div v-else-if="showExecResultPane" class="exec-result-pane">
-      <p class="exec-result-pane__title">{{ t('queryResult.execResultTitle') }}</p>
-      <p class="exec-result-pane__rows">{{ t('queryResult.dmlAffectedRows', {count: activeResult?.total ?? 0}) }}</p>
-      <p
-          class="exec-result-pane__duration"
-          :class="{ 'query-duration--slow': isSlowQueryDuration(activeResult?.durationMs ?? 0) }"
-      >
-        {{ t('queryResult.messageSuccess', {duration: activeResult?.durationMs ?? 0}) }}
-      </p>
-      <details v-if="activeResult?.sql?.trim()" class="exec-result-pane__sql" open>
-        <summary class="exec-result-pane__sql-summary">
-          <DwIcon class="exec-result-pane__chevron" name="chevron-down" size="sm" :stroke-width="2.25"/>
-          <span>{{ t('queryResult.failedSql') }}</span>
-        </summary>
-        <pre class="exec-result-pane__code">{{ activeResult.sql }}</pre>
-      </details>
-    </div>
+    <QueryResultExecResultPane
+        v-else-if="showExecResultPane"
+        :total="activeResult?.total ?? 0"
+        :duration-ms="activeResult?.durationMs ?? 0"
+        :sql="activeResult?.sql"
+        :is-slow-duration="isSlowQueryDuration"
+    />
 
     <div v-else-if="activeResult" class="result-grid-pane">
       <QueryResultAiSummaryPanel
@@ -1252,48 +997,7 @@ watch(
       <DataGrid
           v-else
           v-model:view-state="viewState"
-          :columns="activeResult.columns"
-          :rows="activeResult.rows"
-          :total="activeResult.total"
-          :where="activeResult.where"
-          :order-by="activeResult.orderBy"
-          :show-filter="showFilter"
-          :export-base-name="exportBaseName"
-          :export-table-name="exportTableName"
-          :suggest-export-mask="exportSuggestMask"
-          :editable="editable"
-          :read-only-hint="readOnlyHint"
-          :can-delete="canDelete"
-          :can-update="canUpdate"
-          :column-details="columnDetails"
-          :pk-columns="pkColumns"
-          :table-auto-increment="tableAutoIncrement"
-          :on-submit-changes="onSubmitChanges"
-          :show-dml-actions="canGenerateDml"
-          :show-export="showExport"
-          :show-ai-summary="canRequestAiSummary"
-          :ai-summary-loading="!!aiSummaryLoading"
-          :show-fake-data="canShowFakeData"
-          :enable-row-document-view="enableRowDocumentView"
-          :enable-sql-fill="enableSqlFill"
-          :show-field-types="showFieldTypes"
-          :show-field-comments="showFieldComments"
-          external-view-options
-          :wrap-cells="resultPaneSettings.settings.wrapCells"
-          :layout-mode="resultPaneSettings.settings.resultLayout"
-          :column-density="resultPaneSettings.settings.columnDensity"
-          :numeric-align="resultPaneSettings.settings.numericAlign"
-          :hide-null-columns="resultPaneSettings.settings.hideNullColumns"
-          :type-coloring="resultPaneSettings.settings.typeColoring"
-          full-toolbar
-          :has-more="gridHasMore"
-          :truncated-at-cap="gridTruncatedAtCap"
-          :truncated-cap-rows="gridTruncatedCapRows"
-          :can-raise-max-rows="canRaiseMaxRows"
-          :loading="props.loading"
-          :cursor-loading="gridCursorLoading"
-          :cursor-trimmed-rows="gridCursorTrimmedRows"
-          :production-perf-active="props.productionPerfActive"
+          v-bind="activeDataGridFlatProps"
           @exported="onExported"
           @refresh="onRefreshGrid"
           @load-more="onLoadMoreRows"
@@ -1321,8 +1025,18 @@ watch(
             <span>{{ t('workspace.fakeData.toolbar') }}</span>
           </button>
         </template>
-        <template v-if="canRequestAiSummary" #toolbar-tail>
+        <template v-if="canRequestAiSummary || showAiAsk" #toolbar-tail>
           <button
+              v-if="showAiAsk"
+              type="button"
+              class="grid-label-btn"
+              @click="emit('request-ai-ask')"
+          >
+            <DwIcon class="grid-glyph grid-glyph--optical" name="bot" fit :stroke-width="1.75"/>
+            <span>{{ t('queryResult.askAi') }}</span>
+          </button>
+          <button
+              v-if="canRequestAiSummary"
               type="button"
               class="grid-label-btn"
               :disabled="!!aiSummaryLoading"
@@ -1362,646 +1076,4 @@ watch(
   />
 </template>
 
-<style scoped>
-.result-diff-wrap {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--dw-gap);
-}
-
-.result-diff-wrap__banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--dw-gap);
-  padding: var(--dw-space-6) var(--dw-space-8) 0;
-}
-.result-pane {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  background: var(--dw-bg-editor);
-}
-
-.result-pane__main {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-}
-
-.messages-tab {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  background: var(--dw-bg-editor);
-}
-
-.messages-tab__sub {
-  flex-shrink: 0;
-  padding: var(--dw-space-2) var(--dw-space-4);
-  border-bottom: 1px solid var(--dw-border-light);
-  background: var(--dw-bg-panel);
-  color: var(--dw-text-secondary);
-  font-size: var(--dw-text-xs);
-}
-
-.messages-log {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: var(--dw-space-4);
-}
-
-.messages-empty,
-.messages-running,
-.result-main-empty {
-  margin: 0;
-  padding: var(--dw-space-6);
-  color: var(--dw-text-muted);
-  font-size: var(--dw-text-sm);
-}
-
-.messages-running {
-  display: flex;
-  align-items: center;
-  gap: var(--dw-space-3);
-}
-
-.messages-running__spinner {
-  width: var(--dw-icon-size-xs);
-  height: var(--dw-icon-size-xs);
-  border: 2px solid color-mix(in srgb, var(--dw-link) 25%, transparent);
-  border-top-color: var(--dw-link);
-  border-radius: 50%;
-  animation: batch-spin 0.8s linear infinite;
-  flex-shrink: 0;
-}
-
-.result-main-empty {
-  flex: 1;
-  justify-content: center;
-}
-
-.messages-entry {
-  display: block;
-  width: 100%;
-  margin: 0 0 var(--dw-space-4);
-  padding: var(--dw-space-3) var(--dw-space-4);
-  border: 1px solid transparent;
-  border-radius: var(--dw-control-radius-sm);
-  background: var(--dw-bg);
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.messages-entry:hover {
-  border-color: var(--dw-border);
-  background: var(--dw-bg-panel);
-}
-
-.messages-entry.is-active {
-  border-color: color-mix(in srgb, var(--dw-primary) 35%, var(--dw-border));
-  box-shadow: inset 2px 0 0 var(--dw-primary);
-}
-
-.messages-entry__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--dw-space-2);
-  margin-bottom: var(--dw-space-2);
-  font-size: var(--dw-text-xs);
-  line-height: 1.35;
-}
-
-.messages-entry__time {
-  color: var(--dw-text-muted);
-  font-family: var(--dw-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.messages-entry__stmt {
-  color: var(--dw-text-secondary);
-  font-weight: 600;
-}
-
-.messages-entry__badge {
-  margin-left: auto;
-  padding: 0 var(--dw-space-2);
-  border-radius: var(--dw-radius-xs);
-  font-size: var(--dw-text-2xs);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.messages-entry__badge.is-ok {
-  background: color-mix(in srgb, var(--dw-success) 18%, transparent);
-  color: var(--dw-success-fg);
-}
-
-.messages-entry__badge.is-error {
-  background: var(--dw-danger-soft);
-  color: var(--dw-danger-fg);
-}
-
-.messages-entry__sql {
-  margin: 0 0 var(--dw-space-2);
-  padding: var(--dw-space-2) var(--dw-space-3);
-  border-radius: var(--dw-radius-xs);
-  background: color-mix(in srgb, var(--dw-bg-muted) 70%, transparent);
-  color: var(--dw-text);
-  font-family: var(--dw-mono);
-  font-size: var(--dw-text-xs);
-  line-height: var(--dw-leading-relaxed);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.messages-entry__meta {
-  margin: 0;
-  color: var(--dw-text-secondary);
-  font-size: var(--dw-text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.messages-entry.is-error .messages-entry__meta {
-  color: var(--dw-danger-fg);
-}
-
-.messages-entry__error {
-  margin: 0 0 var(--dw-space-2);
-  padding: var(--dw-space-2) var(--dw-space-3);
-  border-radius: var(--dw-radius-xs);
-  background: var(--dw-danger-soft);
-  color: var(--dw-danger-fg);
-  font-family: var(--dw-mono);
-  font-size: var(--dw-text-2xs);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.result-tab-bar {
-  padding: 0 var(--dw-space-2);
-}
-
-.result-compare-btn {
-  margin-right: 4px;
-}
-
-.result-pane-settings {
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-}
-
-.result-pane-settings__trigger.is-open {
-  background: color-mix(in srgb, var(--dw-bg-muted) 70%, transparent);
-  border-color: color-mix(in srgb, var(--dw-border) 88%, var(--dw-text) 12%);
-  color: var(--dw-text);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dw-text) 6%, transparent);
-}
-
-.community-result-views__menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 40;
-  min-width: 180px;
-  padding: 4px;
-  border: 1px solid var(--dw-border);
-  border-radius: var(--dw-radius-md, 8px);
-  background: var(--dw-bg-elevated, var(--dw-bg));
-  box-shadow: var(--dw-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
-}
-
-.community-result-views__item {
-  display: block;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--dw-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.community-result-views__item:hover {
-  background: color-mix(in srgb, var(--dw-bg-muted) 80%, transparent);
-}
-
-.overview {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: var(--dw-space-6) var(--dw-space-8);
-  color: var(--dw-text-secondary);
-  font-size: var(--dw-text-md);
-}
-
-.overview-head {
-  margin: 0 0 var(--dw-space-5);
-  color: var(--dw-text);
-}
-
-.query-duration--slow {
-  color: var(--dw-danger);
-  font-weight: 600;
-}
-
-.overview-empty {
-  margin: 0;
-  color: var(--dw-text-muted);
-}
-
-.result-grid-pane {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-.explain-plan-pane {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-}
-
-.explain-plan-pane :deep(.explain-plan) {
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-}
-
-.explain-plan-pane :deep(.result-ai-summary) {
-  margin: var(--dw-space-4) var(--dw-space-6) 0;
-}
-
-.result-grid-pane :deep(.data-grid),
-.result-grid-pane :deep(.data-grid__dw-shell) {
-  flex: 1;
-  min-height: 0;
-}
-
-.overview-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.overview-item {
-  display: flex;
-  align-items: center;
-  gap: var(--dw-gap);
-  width: 100%;
-  padding: var(--dw-pad-control);
-  border: 1px solid var(--dw-border-light);
-  border-radius: var(--dw-control-radius-sm);
-  background: var(--dw-bg-panel);
-  text-align: left;
-  color: inherit;
-}
-
-.overview-list li + li {
-  margin-top: var(--dw-space-3);
-}
-
-.overview-item:hover {
-  border-color: var(--dw-border);
-  background: var(--dw-bg-hover);
-}
-
-.overview-item--static {
-  cursor: default;
-}
-
-.overview-item--static:hover {
-  border-color: var(--dw-border-light);
-  background: var(--dw-bg-panel);
-}
-
-.batch-entry-error {
-  margin: var(--dw-space-3) 0 0;
-  padding: var(--dw-pad-control);
-  border-radius: var(--dw-control-radius-sm);
-  background: color-mix(in srgb, var(--dw-danger) 8%, var(--dw-bg-panel));
-  border: 1px solid color-mix(in srgb, var(--dw-danger) 25%, transparent);
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: var(--dw-font-mono);
-  font-size: var(--dw-text-sm);
-  line-height: var(--dw-leading-relaxed);
-  color: var(--dw-text);
-}
-
-.batch-running {
-  display: flex;
-  align-items: center;
-  gap: var(--dw-gap);
-  margin: 0 0 var(--dw-space-5);
-  color: var(--dw-text);
-  font-weight: 500;
-}
-
-.batch-running__spinner,
-.dw-tab__status--running {
-  width: var(--dw-icon-size-xs);
-  height: var(--dw-icon-size-xs);
-  border: 2px solid color-mix(in srgb, var(--dw-link) 25%, transparent);
-  border-top-color: var(--dw-link);
-  border-radius: 50%;
-  animation: batch-spin 0.8s linear infinite;
-  flex-shrink: 0;
-}
-
-.dw-tab__status--running {
-  width: var(--dw-icon-size-xs);
-  height: var(--dw-icon-size-xs);
-}
-
-@keyframes batch-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.overview-ok {
-  flex-shrink: 0;
-  color: var(--dw-success);
-  font-weight: 700;
-}
-
-.overview-err {
-  color: var(--dw-danger);
-}
-
-.batch-summary .error-title {
-  margin: 0 0 var(--dw-space-4);
-  font-weight: 600;
-  color: var(--dw-danger);
-}
-
-.batch-summary .error-message {
-  margin: 0 0 var(--dw-space-6);
-  padding: var(--dw-pad-control-lg);
-  border-radius: var(--dw-control-radius-sm);
-  background: color-mix(in srgb, var(--dw-danger) 8%, var(--dw-bg-panel));
-  border: 1px solid color-mix(in srgb, var(--dw-danger) 25%, transparent);
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: var(--dw-font-mono);
-  font-size: var(--dw-text-sm);
-  line-height: var(--dw-leading-relaxed);
-}
-
-.batch-summary .error-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--dw-gap);
-  margin-bottom: var(--dw-space-6);
-}
-
-.error-pane {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: var(--dw-space-7) var(--dw-space-8) var(--dw-space-8);
-  color: var(--dw-text);
-  display: flex;
-  flex-direction: column;
-  gap: var(--dw-space-6);
-}
-
-.exec-result-pane {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: var(--dw-space-7) var(--dw-space-8) var(--dw-space-8);
-  color: var(--dw-text);
-  display: flex;
-  flex-direction: column;
-  gap: var(--dw-space-4);
-}
-
-.exec-result-pane__title {
-  margin: 0;
-  font-size: var(--dw-text-md);
-  font-weight: 700;
-}
-
-.exec-result-pane__rows {
-  margin: 0;
-  font-size: var(--dw-text-lg);
-  font-weight: 600;
-  color: var(--dw-primary);
-}
-
-.exec-result-pane__duration {
-  margin: 0;
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text-muted);
-}
-
-.exec-result-pane__sql {
-  margin-top: var(--dw-space-4);
-}
-
-.exec-result-pane__sql-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--dw-gap-sm);
-  cursor: pointer;
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text-secondary);
-  user-select: none;
-}
-
-.exec-result-pane__chevron {
-  flex-shrink: 0;
-  color: var(--dw-text-secondary);
-}
-
-.exec-result-pane__code {
-  margin: var(--dw-space-3) 0 0;
-  padding: var(--dw-pad-tight);
-  border-radius: var(--dw-control-radius-sm);
-  background: var(--dw-bg-subtle);
-  font-family: var(--dw-font-mono);
-  font-size: var(--dw-text-sm);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.error-callout {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--dw-space-6);
-  padding: var(--dw-space-7) var(--dw-space-7) var(--dw-space-6);
-  border-radius: var(--dw-panel-radius);
-  border: 1px solid color-mix(in srgb, var(--dw-danger) 28%, var(--dw-border-light));
-  border-left: 3px solid var(--dw-danger);
-  background: color-mix(in srgb, var(--dw-danger) 7%, var(--dw-bg-panel));
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--dw-danger) 10%, transparent);
-}
-
-.error-callout__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 28px;
-  height: var(--dw-btn-height);
-  border-radius: var(--dw-radius-pill);
-  background: color-mix(in srgb, var(--dw-danger) 14%, transparent);
-  color: var(--dw-danger);
-}
-
-.error-callout__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.error-callout__title {
-  margin: 0 0 var(--dw-space-3);
-  font-size: var(--dw-text-md);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: var(--dw-danger);
-}
-
-.error-callout__message {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: var(--dw-font-mono);
-  font-size: var(--dw-text-sm);
-  line-height: var(--dw-leading-loose);
-  color: var(--dw-text);
-}
-
-.error-callout__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--dw-gap);
-  margin-top: var(--dw-space-6);
-}
-
-.error-ai-fix {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--dw-gap-sm);
-  padding: var(--dw-space-3) var(--dw-space-6);
-  border: 1px solid color-mix(in srgb, var(--dw-primary) 24%, var(--dw-border));
-  border-radius: var(--dw-control-radius-sm);
-  background: var(--dw-primary-softer);
-  color: var(--dw-text);
-  cursor: pointer;
-  font-size: var(--dw-text-sm);
-  font-weight: 600;
-  transition: var(--dw-transition-colors);
-}
-
-.error-ai-fix:hover:not(:disabled) {
-  background: var(--dw-primary-soft);
-  border-color: var(--dw-primary-ring);
-  color: var(--dw-primary);
-}
-
-.error-ai-fix:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.error-jump {
-  padding: var(--dw-space-3) var(--dw-space-5);
-  border: 1px solid transparent;
-  border-radius: var(--dw-control-radius-sm);
-  background: transparent;
-  color: var(--dw-text-secondary);
-  cursor: pointer;
-  font-size: var(--dw-text-sm);
-  transition: background var(--dw-duration-fast) var(--dw-ease), color var(--dw-duration-fast) var(--dw-ease);
-}
-
-.error-jump:hover {
-  background: color-mix(in srgb, var(--dw-text) 6%, transparent);
-  color: var(--dw-text);
-}
-
-.error-sql {
-  border: 1px solid var(--dw-border-light);
-  border-radius: var(--dw-control-radius);
-  background: color-mix(in srgb, var(--dw-bg-panel) 90%, var(--dw-bg));
-  overflow: hidden;
-}
-
-.error-sql__summary {
-  display: flex;
-  align-items: center;
-  gap: var(--dw-gap-sm);
-  padding: var(--dw-space-4) var(--dw-space-6);
-  color: var(--dw-text-secondary);
-  font-size: var(--dw-text-xs);
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-}
-
-.error-sql__summary::-webkit-details-marker {
-  display: none;
-}
-
-.error-sql__chevron {
-  flex-shrink: 0;
-  color: var(--dw-text-secondary);
-  transition: transform var(--dw-duration) var(--dw-ease);
-}
-
-.error-sql[open] .error-sql__chevron {
-  transform: rotate(180deg);
-}
-
-.error-sql__code {
-  margin: 0;
-  padding: var(--dw-space-5) var(--dw-space-6) var(--dw-space-6);
-  border-top: 1px solid var(--dw-border-light);
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: var(--dw-font-mono);
-  font-size: var(--dw-text-sm);
-  line-height: var(--dw-leading-loose);
-  color: var(--dw-text-secondary);
-}
-
-.overview-meta {
-  flex-shrink: 0;
-  color: var(--dw-text);
-  font-size: var(--dw-text-sm);
-}
-
-.overview-sql {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--dw-font-mono);
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text-muted);
-}
-</style>
+<style scoped src="./styles/query-result-pane.css"></style>

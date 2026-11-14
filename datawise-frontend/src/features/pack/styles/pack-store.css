@@ -18,7 +18,7 @@
 .pack-store {
     display: flex;
     flex-direction: column;
-    gap: var(--dw-space-6);
+    gap: var(--mp-shell-gap, 4px);
     min-width: 0;
 }
 
@@ -119,7 +119,7 @@
 .pack-suite__grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--dw-space-3);
+    gap: var(--mp-card-gap, var(--dw-space-3));
 }
 
 @media (max-width: 900px) {
@@ -238,6 +238,10 @@
     flex: 1 1 auto;
 }
 
+.pack-store__layers {
+    margin-top: var(--dw-space-2);
+}
+
 .pack-store__search {
     width: min(260px, 100%);
 }
@@ -270,20 +274,20 @@
     gap: var(--dw-space-3);
     min-height: 220px;
     padding: var(--dw-space-4);
-    border-radius: var(--mp-shell-radius);
-    border: 1px solid var(--dw-border-subtle);
-    background: var(--mp-shell-surface);
+    border-radius: var(--dw-panel-radius, var(--mp-shell-radius));
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-subtle));
+    background: color-mix(in srgb, var(--mp-shell-surface) 70%, var(--dw-bg));
     overflow: hidden;
     transition:
         border-color var(--dw-transition-fast),
-        box-shadow var(--dw-transition-fast),
-        transform var(--dw-transition-fast);
+        background var(--dw-transition-fast);
 }
 
 .pack-card:hover {
-    border-color: color-mix(in srgb, var(--pack-accent) 40%, var(--dw-border));
-    box-shadow: var(--dw-shadow-sm);
-    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--pack-accent) 28%, var(--dw-panel-outline, var(--dw-border)));
+    background: color-mix(in srgb, var(--mp-shell-surface) 84%, var(--dw-bg));
+    box-shadow: none;
+    transform: none;
 }
 
 .pack-card--featured {
@@ -321,6 +325,15 @@
     border-radius: var(--dw-control-radius);
     color: var(--pack-accent);
     background: color-mix(in srgb, var(--pack-accent) 12%, transparent);
+}
+
+.pack-card__layer {
+    margin: 0;
+    font-size: var(--dw-text-2xs);
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--pack-accent);
 }
 
 .pack-card__title {

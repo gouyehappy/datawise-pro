@@ -15,7 +15,7 @@ export function settingsSectionDwIcon(section: SettingsSection): DwIconName {
         editor: 'settings-editor',
         querySafety: 'alert-triangle',
         sqlEditor: 'settings-sql-editor',
-        sqlSnippets: 'settings-sql-editor',
+        sqlSnippets: 'code',
         shortcuts: 'settings-shortcuts',
         plugins: 'settings-plugins',
         ai: 'settings-ai',
@@ -49,7 +49,10 @@ export function workspaceTabDwIcon(type: WorkspaceTabType): DwIconName {
         case 'create-database':
             return 'tab-table'
         case 'terminal':
+        case 'ssh-terminal':
             return 'tab-terminal'
+        case 'ssh-script-record':
+            return 'file'
         case 'schema-compare':
             return 'tab-schema-compare'
         case 'schema-er':

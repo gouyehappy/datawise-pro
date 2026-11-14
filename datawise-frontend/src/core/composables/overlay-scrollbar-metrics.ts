@@ -1,9 +1,9 @@
 /** Package copy: @datawise/chrome overlay-scrollbar-metrics. Host file kept until cutover. */
 /**
- * µþ¼Ó¹ö¶¯Ìõ´¿¶ÈÁ¿£¨×é¼þ¹ì / Ô­µØ¹ÒÔØ¹²ÓÃ£©¡£
+ * å åŠ æ»šåŠ¨æ¡çº¯åº¦é‡ï¼ˆç»„ä»¶è½¨ / åŽŸåœ°æŒ‚è½½å…±ç”¨ï¼‰ã€‚
  */
 
-/** Óë --dw-scrollbar-size£¨Ï¸¹ì£©¶ÔÆë */
+/** ä¸Ž --dw-scrollbar-sizeï¼ˆç»†è½¨ï¼‰å¯¹é½ */
 export const OVERLAY_SB_RAIL_PX = 4
 export const OVERLAY_SB_MIN_THUMB_PX = 16
 export const OVERLAY_SB_HIDE_MS = 900
@@ -25,7 +25,7 @@ export function overlayNeedH(m: OverlayScrollBox): boolean {
     return m.clientW > 0 && m.scrollW > m.clientW + 1
 }
 
-/** È·ÈÏ¿É¹ö¶¯ÇÒ³ß´çÓÐÐ§ºó²Å¿É²ØÔ­ÉúÌõ */
+/** ç¡®è®¤å¯æ»šåŠ¨ä¸”å°ºå¯¸æœ‰æ•ˆåŽæ‰å¯è—åŽŸç”Ÿæ¡ */
 export function overlayArmed(m: OverlayScrollBox): boolean {
     return (overlayNeedV(m) || overlayNeedH(m)) && m.clientH > 0 && m.clientW > 0
 }

@@ -283,7 +283,12 @@ function exportSvg() {
   try {
     const xml = buildSchemaErModelSvg(buildExportModel())
     downloadSchemaErSvgXml(xml, exportBaseName.value)
-    layoutStore.showSuccessToast(t('workspace.schemaEr.exportSvgDone'))
+    layoutStore.notifyQuiet({
+      category: 'export',
+      titleKey: 'exportDone',
+      bodyKey: 'exportDone',
+      params: {name: t('workspace.schemaEr.exportSvgDone')},
+    })
   } catch (error) {
     const message = resolveCaughtApiErrorMessage(error, t, 'workspace.schemaEr.exportFailed')
     layoutStore.showErrorToast(message)
@@ -294,7 +299,12 @@ async function exportPng() {
   try {
     const xml = buildSchemaErModelSvg(buildExportModel())
     await downloadSchemaErPngFromSvgXml(xml, exportBaseName.value)
-    layoutStore.showSuccessToast(t('workspace.schemaEr.exportPngDone'))
+    layoutStore.notifyQuiet({
+      category: 'export',
+      titleKey: 'exportDone',
+      bodyKey: 'exportDone',
+      params: {name: t('workspace.schemaEr.exportPngDone')},
+    })
   } catch (error) {
     const message = resolveCaughtApiErrorMessage(error, t, 'workspace.schemaEr.exportFailed')
     layoutStore.showErrorToast(message)
@@ -486,7 +496,6 @@ function openBatchDdlInConsole() {
     sql,
     title: t('workspace.schemaEr.batchAlterConsoleTitle'),
   })
-  layoutStore.showSuccessToast(t('workspace.schemaEr.batchAlterOpenedConsole'))
 }
 
 function toggleLinkMode() {
@@ -609,7 +618,6 @@ async function executeAlterColumn(sql: string) {
     }
     alterColumnOpen.value = false
     await reloadColumns()
-    layoutStore.showSuccessToast(t('workspace.tableDetail.alterColumn.success'))
   } catch (error) {
     const message = resolveCaughtApiErrorMessage(error, t, 'workspace.tableDetail.alterColumn.failed')
     alterActionFeedback.value = {
@@ -675,7 +683,6 @@ async function applyFkDialog() {
     sql,
     title: t('workspace.schemaEr.fkConsoleTitle'),
   })
-  layoutStore.showSuccessToast(t('workspace.schemaEr.fkOpenedConsole'))
 }
 
 function syncFlowGraph() {

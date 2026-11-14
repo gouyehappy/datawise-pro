@@ -1,0 +1,7 @@
+{
+  "dbType": "doris",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false
+  }
+}

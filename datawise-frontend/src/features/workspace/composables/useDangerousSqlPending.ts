@@ -8,6 +8,11 @@ import {
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
 import {t} from '@/i18n'
 
+/** 非生产环境下，命中 WHERE 且影响行数不超过此值时视为低风险：预演后直接放行 */
+export const DANGEROUS_SQL_LOW_RISK_MAX_ROWS = 200
+
+export type DangerousSqlRisk = 'low' | 'high'
+
 export type DangerousSqlPreviewRunner = (
     sql: string,
 ) => Promise<{rows: TableRow[]; columns: TableColumn[]}>
@@ -32,6 +37,9 @@ export function useDangerousSqlPending(
     const sampleColumns = ref<TableColumn[]>([])
     const errorMessage = ref<string | null>(null)
     const productionForced = ref(false)
+    const risk = ref<DangerousSqlRisk>('high')
+    /** 上一次被预演自动放行的语句（供调用方提示影响行数） */
+    const autoApprovedRows = ref<number | null>(null)
 
     function resetPreviewState() {
         preview.value = null
@@ -41,6 +49,8 @@ export function useDangerousSqlPending(
         sampleColumns.value = []
         errorMessage.value = null
         productionForced.value = false
+        risk.value = 'high'
+        autoApprovedRows.value = null
     }
 
     function requiresConfirmation(sql: string): boolean {
@@ -50,6 +60,21 @@ export function useDangerousSqlPending(
             return false
         }
         return true
+    }
+
+    /**
+     * 风险判定：生产/无 WHERE/行数未知一律按高风险（继续拦），
+     * 其余在有行数预览且低于阈值时判为低风险，执行前放行。
+     */
+    function resolveRisk(
+        analysis: DangerousSqlPreview,
+        rows: number | null,
+        forced: boolean,
+    ): DangerousSqlRisk {
+        if (forced) return 'high'
+        if (analysis.fullTableRisk) return 'high'
+        if (rows == null) return 'high'
+        return rows <= DANGEROUS_SQL_LOW_RISK_MAX_ROWS ? 'low' : 'high'
     }
 
     async function armPending(sql: string): Promise<boolean> {
@@ -87,6 +112,17 @@ export function useDangerousSqlPending(
             }
         }
 
+        risk.value = resolveRisk(analysis, affectedCount.value, productionForced.value)
+        if (risk.value === 'low') {
+            // 低风险：已经承担了预演查询的代价，就不再打断执行
+            autoApprovedRows.value = affectedCount.value
+            pending.value = false
+            pendingSql.value = null
+            preview.value = null
+            loading.value = false
+            return false
+        }
+
         return true
     }
 
@@ -106,6 +142,8 @@ export function useDangerousSqlPending(
         sampleColumns,
         errorMessage,
         productionForced,
+        risk,
+        autoApprovedRows,
         requiresConfirmation,
         armPending,
         disarm,

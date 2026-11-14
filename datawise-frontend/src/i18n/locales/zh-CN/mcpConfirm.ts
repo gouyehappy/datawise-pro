@@ -9,6 +9,7 @@ export default {
     openedConsole: '已根据 MCP 提议打开 SQL 控制台',
     submittedApproval: '已提交生产 SQL 审批，并打开控制台供审阅',
     approvalTeamMissing: '未找到共享该生产连接的团队，无法提交审批',
+    decideFailed: '确认操作失败，请稍后重试',
     rejected: '已拒绝 MCP 提议',
     prodApprovalHint: '共享生产连接上的写 SQL：确认后将创建团队审批单，不会直接执行。',
     riskSession: '会话',

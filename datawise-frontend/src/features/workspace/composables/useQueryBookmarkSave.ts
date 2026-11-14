@@ -53,7 +53,6 @@ export function useQueryBookmarkSave(resolveDefaults: () => BookmarkDefaults) {
                 })
             }
             bookmarkDialogOpen.value = false
-            layout.showSuccessToast(t('shortcut.bookmarks.saveSuccess'))
         } catch {
             layout.showErrorToast(t('shortcut.bookmarks.saveFailed'))
         } finally {

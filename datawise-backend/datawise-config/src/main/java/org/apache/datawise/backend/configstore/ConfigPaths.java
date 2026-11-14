@@ -89,6 +89,16 @@ public final class ConfigPaths {
         return tenantDir(tenantId) + "/connections.xml";
     }
 
+    /** Per-connection DDL history (JSON array, newest first). */
+    public static String tenantDdlHistory(String tenantId, String connectionId) {
+        return tenantDir(tenantId) + "/ddl-history/" + sanitizeScopeKey(connectionId) + ".json";
+    }
+
+    /** Tenant-scoped MCP access policy (read-only / dangerous tools). */
+    public static String tenantMcpAccessPolicy(String tenantId) {
+        return tenantDir(tenantId) + "/mcp-access-policy.json";
+    }
+
     /** 租户内项目目录（index + 每项目 docs/scripts）。 */
     public static String tenantProjectsDir(String tenantId) {
         return tenantDir(tenantId) + "/projects";

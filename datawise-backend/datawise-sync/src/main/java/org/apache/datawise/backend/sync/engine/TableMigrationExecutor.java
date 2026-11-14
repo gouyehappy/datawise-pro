@@ -33,9 +33,12 @@ import java.util.Optional;
 
 /**
  * 表迁移批处理执行：编排 DDL、分页复制与行数校验。
+ * <p>MetaForge B3：同时作为默认 {@link MigrationExecutorProvider}（id={@link #ID}）。
  */
 @Service
-public class TableMigrationExecutor {
+public class TableMigrationExecutor implements MigrationExecutorProvider {
+
+    public static final String ID = "builtin";
 
     private static final Logger log = LoggerFactory.getLogger(TableMigrationExecutor.class);
 
@@ -62,6 +65,12 @@ public class TableMigrationExecutor {
         this.migrationProperties = migrationProperties != null ? migrationProperties : new TableMigrationProperties();
     }
 
+    @Override
+    public String id() {
+        return ID;
+    }
+
+    @Override
     public TableMigrationResult migrate(
             ConnectionEntity source,
             ConnectionEntity target,
@@ -72,6 +81,7 @@ public class TableMigrationExecutor {
         return migrate(new MigrationEndpoints(source, target, sourceDatabase, targetDatabase), request);
     }
 
+    @Override
     public TableMigrationResult migrate(MigrationEndpoints endpoints, TableMigrationRequest request) {
         TableMigrationPolicy policy = TableMigrationPolicy.from(request, migrationProperties.getDefaultBatchSize());
         String logicalTableName = resolveLogicalTableName(request);
@@ -91,6 +101,7 @@ public class TableMigrationExecutor {
         return request.targetTableName().trim();
     }
 
+    @Override
     public List<TableMigrationResult> migrateBatch(
             MigrationEndpoints endpoints,
             TableMigrationBatchPlan plan,

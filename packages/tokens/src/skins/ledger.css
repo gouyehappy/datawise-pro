@@ -17,6 +17,9 @@ html[data-ui-skin='ledger'] {
     --dw-panel-gap: 0;
     --dw-shell-padding: 0;
     --dw-panel-radius: 0;
+    /* 工作台靠色差分区；模块页仍可用 outline */
+    --dw-panel-outline: color-mix(in srgb, var(--dw-panel-border) 70%, transparent);
+    --dw-panel-shadow: none;
     --dw-splitter-size: 3px;
 
     --dw-tool-stripe-width: 44px;
@@ -29,6 +32,10 @@ html[data-ui-skin='ledger'] {
 
     --dw-titlebar-height: 32px;
     --dw-titlebar-chip-radius: 0;
+    /* 蓝图款式：顶栏吃 chrome 底色（同族平涂），无项目色渐变 */
+    --dw-titlebar-bg: var(--dw-bg-chrome);
+    --dw-titlebar-tint: transparent;
+    --dw-titlebar-widget-h: calc(var(--dw-titlebar-height) - 6px);
 
     --dw-tab-height: var(--dw-density-md);
     --dw-tab-pill-height: var(--dw-density-md);
@@ -100,16 +107,95 @@ html[data-ui-skin='ledger'] .dw-workbench-page {
 
 /* —— Shell chrome —— */
 html[data-ui-skin='ledger'] .shell-main {
-    border-left: 1px solid var(--dw-panel-border);
+    border-left: 1px solid var(--dw-panel-outline);
     background: var(--dw-bg);
 }
 
-html[data-ui-skin='ledger'] .tool-stripe--right {
-    border-left: 1px solid var(--dw-panel-border);
+/* 贴边蓝图：外岛 outline 透明靠色差；岛内缝用 border-light（勿跟 outline 一起透明） */
+html[data-ui-skin='ledger'] .main-content {
+    --dw-panel-outline: transparent;
+    --dw-border-light: var(--dw-border);
+    --dw-console-chrome-inset: 0;
+    --dw-terminal-bg: var(--dw-bg-editor);
+    --dw-terminal-input-bg: var(--dw-bg-editor);
+    --terminal-bg: var(--dw-bg-editor);
+    --terminal-input-bg: var(--dw-bg-editor);
+    background: var(--dw-bg-editor);
 }
 
+html[data-ui-skin='ledger'] :is(
+    .explorer.dw-surface,
+    .workspace.dw-surface,
+    .tool-window,
+    .terminal-window,
+    .terminal-pane
+) {
+    border: none;
+    box-shadow: none;
+}
+
+html[data-ui-skin='ledger'] .explorer.dw-surface {
+    background: var(--dw-bg-panel);
+}
+
+/* 暗色：菜单边 / pill 与共享契约对齐；strip Tab 跟 editor flush token */
+html[data-ui-skin='ledger'][data-theme='dark'] {
+    --dw-menu-border: var(--dw-panel-outline);
+    --dw-border-light: var(--dw-panel-outline);
+    --dw-tool-pill-active: color-mix(in srgb, #fff 10%, var(--dw-bg-rail));
+    --dw-tab-bar-bg: var(--dw-bg-editor);
+    --dw-tab-active-bg: var(--dw-bg-editor);
+}
+
+html[data-ui-skin='ledger'][data-theme='dark'] .shell-body {
+    background: var(--dw-bg-chrome);
+}
+
+html[data-ui-skin='ledger'][data-theme='dark'] .explorer.dw-surface {
+    background: var(--dw-bg-panel);
+}
+
+html[data-ui-skin='ledger'][data-theme='dark'] .explorer .header,
+html[data-ui-skin='ledger'][data-theme='dark'] .explorer .toolbar {
+    border-bottom: 1px solid var(--dw-border-light);
+}
+
+html[data-ui-skin='ledger'] :is(
+    .workspace.dw-surface,
+    .tool-window,
+    .terminal-window,
+    .terminal-pane
+) {
+    background: var(--dw-bg-editor);
+}
+
+html[data-ui-skin='ledger'] .result-pane,
+html[data-ui-skin='ledger'] .result-collapsed-bar {
+    background: var(--dw-bg-muted);
+    border: 1px solid var(--dw-panel-border, rgba(255, 255, 255, 0.12));
+}
+
+html[data-ui-skin='ledger'] .terminal-window__body {
+    padding: 0;
+}
+
+html[data-ui-skin='ledger'] .tool-window__head {
+    border-bottom: 1px solid var(--dw-panel-border, rgba(255, 255, 255, 0.12));
+    background: var(--dw-bg-editor);
+}
+
+/* 左栏与资源树贴齐，靠色阶区分 */
 html[data-ui-skin='ledger'] .tool-stripe--left {
-    border-right: 1px solid var(--dw-panel-border);
+    border-right: none;
+}
+
+html[data-ui-skin='ledger'] .tool-stripe--right {
+    border-left: 1px solid var(--dw-panel-outline);
+}
+
+html[data-ui-skin='ledger'] .tool-stripe--left,
+html[data-ui-skin='ledger'] .tool-stripe--right {
+    background: var(--dw-bg-chrome);
 }
 
 html[data-ui-skin='ledger'] .tool-btn--stack.active::before {
@@ -133,7 +219,7 @@ html[data-ui-skin='ledger'] .tool-btn--brand.active::before {
 }
 
 html[data-ui-skin='ledger'] .desktop-titlebar {
-    border-bottom: 1px solid var(--dw-panel-border);
+    border-bottom: 1px solid var(--dw-panel-outline);
     box-shadow: none;
 }
 
@@ -149,9 +235,30 @@ html[data-ui-skin='ledger'] .desktop-titlebar__btn {
     border-radius: 0;
 }
 
+html[data-ui-skin='ledger'] .module-shell {
+    background: var(--dw-bg);
+}
+
+html[data-ui-skin='ledger'] .module-shell__nav {
+    background: var(--dw-bg-panel);
+    border-right: 1px solid var(--dw-panel-outline);
+    box-shadow: none;
+}
+
+html[data-ui-skin='ledger'] .module-shell__main {
+    background: var(--dw-bg);
+}
+
+html[data-ui-skin='ledger'] .module-shell__main .setting-block {
+    border-radius: 0;
+    box-shadow: none;
+    border-color: var(--dw-panel-outline);
+    background: color-mix(in srgb, var(--dw-bg-panel) 60%, var(--dw-bg));
+}
+
 html[data-ui-skin='ledger'] .status-bar {
     background: var(--dw-bg-chrome);
-    border-top: 1px solid var(--dw-panel-border);
+    border-top: 1px solid var(--dw-panel-outline);
     padding-left: var(--dw-space-3);
     padding-right: var(--dw-space-2);
 }
@@ -166,17 +273,18 @@ html[data-ui-skin='ledger'] .status-bar__tools {
 }
 
 html[data-ui-skin='ledger'] .terminal-pane {
-    border-top: 1px solid var(--dw-panel-border);
+    border: none;
     border-radius: 0;
     box-shadow: none;
+    background: var(--dw-bg-editor);
 }
 
-/* —— Tabs: strip / blueprint —— */
+/* —— Tabs: strip / blueprint；色跟 --dw-tab-*（与 ide strip 同契约） —— */
 html[data-ui-skin='ledger'] .dw-tab-bar {
     height: var(--dw-tab-height);
     padding: 0;
     border-bottom: 1px solid var(--dw-tab-bar-border, var(--dw-border));
-    background: var(--dw-bg-muted);
+    background: var(--dw-tab-bar-bg, var(--dw-bg-editor));
 }
 
 html[data-ui-skin='ledger'] .dw-tab-scroll {
@@ -206,17 +314,17 @@ html[data-ui-skin='ledger'] .dw-tab {
 }
 
 html[data-ui-skin='ledger'] .dw-tab:hover:not(.active) {
-    background: color-mix(in srgb, var(--dw-text) 6%, transparent);
+    background: var(--dw-tab-hover-bg);
     color: var(--dw-text);
 }
 
 html[data-ui-skin='ledger'] .dw-tab.active,
 html[data-ui-skin='ledger'] .dw-tab.active:hover {
-    background: var(--dw-bg-panel);
-    color: var(--dw-text);
+    background: var(--dw-tab-active-bg);
+    color: var(--dw-tab-active-text, var(--dw-text));
     box-shadow:
         inset 0 2px 0 var(--dw-primary),
-        inset 0 -1px 0 var(--dw-bg-panel);
+        inset 0 -1px 0 var(--dw-tab-active-bg);
     z-index: 1;
 }
 

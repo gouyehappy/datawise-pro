@@ -3,7 +3,7 @@ import {computed, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import type {ShareTeamSharedQueryPayload, TeamMember, TeamSharedQuerySummary} from '@/core/types'
 import StatusPill from '@/core/components/ui/StatusPill.vue'
-import {ConfirmDialog, DwButton} from '@/core/components'
+import {ConfirmDialog, DwButton, DwPanelState} from '@/core/components'
 import ShareTeamQueryDialog from '@/features/team/components/ShareTeamQueryDialog.vue'
 import TeamSharedQueryDetailDrawer from '@/features/team/components/TeamSharedQueryDetailDrawer.vue'
 import {useLayoutStore} from '@/features/layout/stores/layout'
@@ -128,10 +128,8 @@ async function onSave(payload: ShareTeamSharedQueryPayload) {
     try {
         if (editing.value) {
             await teamStore.updateSharedQuery(props.teamId, editing.value.id, payload)
-            layout.showSuccessToast(t('team.sharedQueries.updated'))
         } else {
             await teamStore.shareQuery(props.teamId, payload)
-            layout.showSuccessToast(t('team.sharedQueries.created'))
         }
         dialogOpen.value = false
         editing.value = null
@@ -154,7 +152,6 @@ async function confirmDelete() {
     deleting.value = true
     try {
         await teamStore.deleteSharedQuery(props.teamId, summary.id)
-        layout.showSuccessToast(t('team.sharedQueries.deleted'))
         deleteConfirmOpen.value = false
         pendingDeleteSummary.value = null
         await reloadQueries()
@@ -227,9 +224,21 @@ watch(
       </DwButton>
     </header>
 
-    <p v-if="loading" class="mp-empty">{{ t('team.loading') }}</p>
-    <p v-else-if="loadError" class="mp-empty">{{ t('team.sharedQueries.loadFailed') }}</p>
-    <p v-else-if="!filteredQueries.length" class="mp-empty">{{ t('team.sharedQueries.empty') }}</p>
+    <DwPanelState
+        v-if="loading"
+        status="loading"
+        :message="t('team.loading')"
+    />
+    <DwPanelState
+        v-else-if="loadError"
+        status="error"
+        :message="t('team.sharedQueries.loadFailed')"
+    />
+    <DwPanelState
+        v-else-if="!filteredQueries.length"
+        status="empty"
+        :message="t('team.sharedQueries.empty')"
+    />
 
     <div v-else class="shared-query-cards">
       <article

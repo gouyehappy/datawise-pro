@@ -1,15 +1,15 @@
-﻿<script setup lang="ts">
-import {computed, ref, watch} from 'vue'
+<script setup lang="ts">
+import {computed, ref, toRef, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {AppModal, DwButton, DwCheckbox, DwInput, EmptyState, FormField} from '@/core/components'
+import {AppModal, DwButton, DwCheckbox, DwInlineAlert, DwInput, EmptyState, FormField} from '@/core/components'
 import DwSelect from '@/core/components/DwSelect.vue'
 import type {SelectOption} from '@/core/components/select.types'
 import {DwIcon} from '@/core/icons'
+import {useModalFeedback} from '@/core/composables/useModalFeedback'
 import MigrationWizardSteps from '@/features/workspace/components/migration/MigrationWizardSteps.vue'
 import VisualQueryCanvas from '@/features/workspace/components/VisualQueryCanvas.vue'
 import VisualQueryFieldBoard from '@/features/workspace/components/VisualQueryFieldBoard.vue'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
-import {useLayoutStore} from '@/features/layout/stores/layout'
 import {
     ensureDatabaseTablesLoaded,
     ensureTableColumnsLoaded,
@@ -44,10 +44,12 @@ const emit = defineEmits<{
 
 const {t} = useI18n()
 const explorer = useExplorerStore()
-const layout = useLayoutStore()
+const {feedback, showError, clearFeedback} = useModalFeedback(toRef(props, 'open'))
 
 const wizardStep = ref<VqbStep>('table')
 const state = ref<VisualQueryBuilderState>(createEmptyVisualQueryState())
+const sqlCopied = ref(false)
+let sqlCopiedTimer: ReturnType<typeof setTimeout> | null = null
 const tableNames = ref<string[]>([])
 const tableIds = ref<Record<string, string>>({})
 const fromColumns = ref<string[]>([])
@@ -246,6 +248,11 @@ function resetState() {
   tableFilter.value = ''
   textToSqlPrompt.value = ''
   joinViewMode.value = 'canvas'
+  sqlCopied.value = false
+  if (sqlCopiedTimer) {
+    clearTimeout(sqlCopiedTimer)
+    sqlCopiedTimer = null
+  }
 }
 
 watch(
@@ -391,9 +398,16 @@ async function copyPreviewSql() {
   if (!sql) return
   try {
     await navigator.clipboard.writeText(sql)
-    layout.showSuccessToast(t('console.visualQuery.copySqlDone'))
+    clearFeedback()
+    sqlCopied.value = true
+    if (sqlCopiedTimer) clearTimeout(sqlCopiedTimer)
+    sqlCopiedTimer = setTimeout(() => {
+      sqlCopied.value = false
+      sqlCopiedTimer = null
+    }, 1600)
   } catch {
-    layout.showErrorToast(t('console.visualQuery.copySqlFailed'))
+    sqlCopied.value = false
+    showError(t('console.visualQuery.copySqlFailed'))
   }
 }
 
@@ -928,6 +942,13 @@ const scopeLabel = computed(() => {
           </div>
         </aside>
       </div>
+
+      <DwInlineAlert
+          v-if="feedback"
+          density="banner"
+          :variant="feedback.variant"
+          :message="feedback.message"
+      />
     </div>
 
     <template #footer>
@@ -961,7 +982,7 @@ const scopeLabel = computed(() => {
               :disabled="!canApply"
               @click="copyPreviewSql"
           >
-            {{ t('console.visualQuery.copySql') }}
+            {{ sqlCopied ? t('console.visualQuery.copySqlDone') : t('console.visualQuery.copySql') }}
           </DwButton>
           <DwButton
               variant="secondary"

@@ -3,6 +3,7 @@ import {computed, nextTick, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import type {SettingsSection} from '@/core/types'
 import {DwIcon, DwInput, DwSplitPane, EmptyState} from '@/core/components'
+import {useDebouncedRef} from '@/core/utils/debounced-ref'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import {useAuthStore} from '@/features/auth/stores/auth-store'
@@ -10,6 +11,7 @@ import {resolveSettingsPanel} from '@/features/settings/settings-section-registr
 import {
   buildSettingsNavGroups,
   isAiSettingsSection,
+  shouldCollapseSettingsGroup,
 } from '@/features/settings/constants/settings-nav.config'
 import SettingsNavIcon from '@/features/settings/components/SettingsNavIcon.vue'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
@@ -19,9 +21,16 @@ import {
   searchSettingsIndex,
   type SettingsSearchHit,
 } from '@/features/settings/services/settings-search-index'
+import {ensureDeferredDwIcons} from '@/core/icons'
 
-/** v3: quiet section headers; default all expanded. */
-const NAV_COLLAPSE_KEY = 'dw.settings.nav.collapsed.v3'
+defineOptions({name: 'SettingsView'})
+
+void ensureDeferredDwIcons()
+
+/** v5: B3-2 + workbench-focus preferred-open for AI / org-security. */
+const NAV_COLLAPSE_KEY = 'dw.settings.nav.collapsed.v5'
+/** PERF-07: align with explorer / global search (~200ms); clear flushes immediately. */
+const SETTINGS_SEARCH_DEBOUNCE_MS = 180
 
 const {t} = useI18n()
 const layout = useLayoutStore()
@@ -30,8 +39,13 @@ const auth = useAuthStore()
 const entitlement = useEntitlementStore()
 
 const searchQuery = ref('')
+const debouncedSearchQuery = useDebouncedRef(searchQuery, SETTINGS_SEARCH_DEBOUNCE_MS, {
+  flushImmediately: (q) => !q.trim(),
+})
 const searchHits = ref<SettingsSearchHit[]>([])
+const lastSearchedQuery = ref('')
 const collapseHydrated = ref(false)
+const searchSettled = computed(() => searchQuery.value === lastSearchedQuery.value)
 
 const navGroups = computed(() => buildSettingsNavGroups({
   isAdmin: auth.isAdmin,
@@ -91,10 +105,31 @@ function hydrateCollapseState() {
     const known = new Set(visibleNavGroups.value.map((g) => g.labelKey))
     collapsedGroups.value = new Set([...stored].filter((k) => known.has(k)))
   } else {
-    // First visit: keep all sections open — collapse is opt-in.
-    collapsedGroups.value = new Set()
+    // B3-2 / rem-3: collapse advanced unless current workbench focus prefers them open.
+    collapsedGroups.value = new Set(
+        visibleNavGroups.value
+            .filter((g) => shouldCollapseSettingsGroup(g, appConfig.workbenchMode))
+            .map((g) => g.labelKey),
+    )
   }
   collapseHydrated.value = true
+  persistCollapsed()
+}
+
+/** Soft-expand preferred groups when focus changes; never force-collapse user opens. */
+function applyWorkbenchFocusNavExpand(mode = appConfig.workbenchMode) {
+  if (!collapseHydrated.value) return
+  if (searchQuery.value.trim()) return
+  let changed = false
+  const next = new Set(collapsedGroups.value)
+  for (const group of visibleNavGroups.value) {
+    if (!group.preferredOpenInModes?.includes(mode)) continue
+    if (!next.has(group.labelKey)) continue
+    next.delete(group.labelKey)
+    changed = true
+  }
+  if (!changed) return
+  collapsedGroups.value = next
   persistCollapsed()
 }
 
@@ -132,6 +167,11 @@ watch(
 )
 
 watch(
+    () => appConfig.workbenchMode,
+    (mode) => applyWorkbenchFocusNavExpand(mode),
+)
+
+watch(
     activeSection,
     (section) => {
       if (!isStandardEdition() || !isAiSettingsSection(section)) {
@@ -144,7 +184,8 @@ watch(
     {immediate: true},
 )
 
-watch(searchQuery, (q) => {
+function runSettingsSearch(q: string) {
+  lastSearchedQuery.value = q
   searchHits.value = searchSettingsIndex(q, {
     translate: (key) => t(key),
     allowedSections: allowedSections.value,
@@ -153,7 +194,15 @@ watch(searchQuery, (q) => {
   if (q.trim() && collapseHydrated.value) {
     collapsedGroups.value = new Set()
   }
-})
+}
+
+watch(debouncedSearchQuery, (q) => runSettingsSearch(q))
+
+/** Enter: flush pending debounce so results match the typed query immediately. */
+function onSearchEnter() {
+  if (searchSettled.value) return
+  runSettingsSearch(searchQuery.value)
+}
 
 function selectSection(section: SettingsSection, anchor?: string) {
   if (!appConfig.canOpenSettingsSection(section)) return
@@ -207,6 +256,7 @@ function onGroupHeaderClick(labelKey: string) {
             v-model="searchQuery"
             type="search"
             :placeholder="t('settings.searchPlaceholder')"
+            @keydown.enter.prevent="onSearchEnter"
         />
         <ul v-if="searchHits.length" class="settings-search__hits" role="listbox">
           <li
@@ -220,7 +270,7 @@ function onGroupHeaderClick(labelKey: string) {
           </li>
         </ul>
         <EmptyState
-            v-else-if="searchQuery.trim()"
+            v-else-if="searchSettled && searchQuery.trim()"
             embedded
             compact
             class="settings-search__empty"

@@ -11,8 +11,12 @@ import org.apache.datawise.backend.domain.RegisterRequest;
 import org.apache.datawise.backend.domain.SaveOidcConfigRequest;
 import org.apache.datawise.backend.domain.SessionInfo;
 import org.apache.datawise.backend.domain.SwitchTenantRequest;
+import org.apache.datawise.backend.domain.UserFeaturePermission;
 import org.apache.datawise.backend.domain.VerifyPasswordRequest;
+import org.apache.datawise.backend.security.RequiresFeature;
+import org.apache.datawise.backend.security.UserContext;
 import org.apache.datawise.backend.service.AuthService;
+import org.apache.datawise.backend.service.WriteUnlockService;
 import org.apache.datawise.backend.service.auth.OidcAuthService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,10 +35,15 @@ public class AuthController {
 
     private final AuthService authService;
     private final OidcAuthService oidcAuthService;
+    private final WriteUnlockService writeUnlockService;
 
-    public AuthController(AuthService authService, OidcAuthService oidcAuthService) {
+    public AuthController(
+            AuthService authService,
+            OidcAuthService oidcAuthService,
+            WriteUnlockService writeUnlockService) {
         this.authService = authService;
         this.oidcAuthService = oidcAuthService;
+        this.writeUnlockService = writeUnlockService;
     }
 
     @PostMapping("/login")
@@ -94,6 +103,7 @@ public class AuthController {
     }
 
     @PutMapping("/api/auth/oidc/config")
+    @RequiresFeature(UserFeaturePermission.SETTINGS_BASIC)
     public ApiResponse<OidcConfigDto> updateOidcConfig(@RequestBody SaveOidcConfigRequest request) {
         return ApiResponse.ok(oidcAuthService.saveConfig(request));
     }
@@ -114,12 +124,17 @@ public class AuthController {
     }
 
     @PutMapping("/api/auth/session-policy")
+    @RequiresFeature(UserFeaturePermission.SETTINGS_BASIC)
     public ApiResponse<AuthSessionPolicyDto> updateSessionPolicy(@RequestBody AuthSessionPolicyDto policy) {
         return ApiResponse.ok(authService.updateSessionPolicy(policy));
     }
 
     @PostMapping("/signOut")
     public ApiResponse<Void> signOut() {
+        Long userId = UserContext.getUserId();
+        if (userId != null) {
+            writeUnlockService.clearAllForUser(userId);
+        }
         authService.signOut();
         return ApiResponse.ok(null);
     }

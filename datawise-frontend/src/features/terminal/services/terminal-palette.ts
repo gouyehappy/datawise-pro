@@ -9,12 +9,13 @@
  */
 
 export const TERMINAL_PALETTE = {
-  bg: '#1a1d24',
+  /** Align with dark `--dw-bg-editor` (near-black content well). */
+  bg: '#000000',
   fg: '#d1d5db',
   border: '#2d3340',
-  inputBg: '#151820',
+  inputBg: '#000000',
   cursor: '#16a34a',
-  cursorAccent: '#1a1d24',
+  cursorAccent: '#000000',
   selectionBg: '#264f78',
 } as const
 

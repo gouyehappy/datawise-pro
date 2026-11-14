@@ -1,0 +1,45 @@
+name: Plugin smoke
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'community-plugins/**'
+      - 'datawise-backend/datawise-common/**'
+      - 'datawise-backend/datawise-server/**'
+      - 'scripts/smoke-community-plugin.mjs'
+      - 'scripts/dw.mjs'
+      - '.github/workflows/plugin-smoke.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'community-plugins/**'
+      - 'datawise-backend/datawise-common/**'
+      - 'datawise-backend/datawise-server/**'
+      - 'scripts/smoke-community-plugin.mjs'
+      - 'scripts/dw.mjs'
+      - '.github/workflows/plugin-smoke.yml'
+
+concurrency:
+  group: plugin-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: datawise-backend/pom.xml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Community plugin smoke
+        run: npm run smoke:community-plugin

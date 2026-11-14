@@ -12,6 +12,10 @@ import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {openLocalWorkspaceFile, openAndRunLocalSqlFile} from '@/features/local-files/services/open-local-file.service'
 import {
+  isLocalDataPreviewFileName,
+  previewLocalDataFile,
+} from '@/features/local-files/services/local-data-preview.service'
+import {
   copyTextToClipboard,
   openLocalInTerminal,
   revealLocalInExplorer,
@@ -70,9 +74,6 @@ async function onTreeDropMove(payload: {sourcePath: string; targetDirPath: strin
     if (normalizeLocalPathKey(payload.sourcePath) !== normalizeLocalPathKey(next)) {
       remapWorkspaceTabsForLocalRename(payload.sourcePath, next)
     }
-    layout.showSuccessToast(
-        t('explorer.localFiles.moved', {name: localFileBaseName(next)}),
-    )
   } catch (err) {
     if (err instanceof Error && err.message === 'invalid_target') {
       layout.showErrorToast(t('explorer.localFiles.moveInvalid'))
@@ -87,7 +88,7 @@ async function onTreeDropMove(payload: {sourcePath: string; targetDirPath: strin
 const searchVisibility = computed(() =>
   collectLocalFilesSearchVisibility(
       localFiles.tree,
-      localFiles.searchQuery,
+      localFiles.debouncedSearchQuery,
       localFiles.extFilter,
       localFiles.searchInContent ? localFiles.contentHitIds : null,
   ),
@@ -285,6 +286,13 @@ function buildMenuItems(node: LocalFileTreeNode): ContextMenuItem[] {
           {id: 'open-run', label: t('explorer.localFiles.openAndRun'), icon: 'run'},
       )
     } else {
+      if (isLocalDataPreviewFileName(node.path)) {
+        items.push({
+          id: 'preview-table',
+          label: t('explorer.localDataPreview.menuPreview'),
+          icon: 'table',
+        })
+      }
       items.push({id: 'open', label: t('explorer.localFiles.open')})
     }
   } else {
@@ -359,16 +367,17 @@ async function onMenuSelect(id: string) {
     case 'open-console':
       await openLocalWorkspaceFile(node.path)
       break
+    case 'preview-table':
+      await previewLocalDataFile(node.path)
+      break
     case 'open-run':
       await openAndRunLocalSqlFile(node.path)
       break
     case 'favorite':
       localFiles.addFavorite(node.path)
-      layout.showSuccessToast(t('explorer.localFiles.favoriteAdded', {name: node.name}))
       break
     case 'unfavorite':
       localFiles.removeFavorite(node.path)
-      layout.showSuccessToast(t('explorer.localFiles.favoriteRemoved', {name: node.name}))
       break
     case 'rename':
       localFiles.beginRename(node)
@@ -382,7 +391,6 @@ async function onMenuSelect(id: string) {
       const targets = resolveBatchTargets(node)
       try {
         await copyTextToClipboard(targets.map((item) => item.path).join('\n'))
-        layout.showSuccessToast(t('explorer.localFiles.batchCopyDone', {count: targets.length}))
       } catch {
         layout.showErrorToast(t('explorer.localFiles.copyPathFailed'))
       }
@@ -396,7 +404,6 @@ async function onMenuSelect(id: string) {
     case 'copy-path':
       try {
         await copyTextToClipboard(node.path)
-        layout.showSuccessToast(t('explorer.localFiles.copyPathDone'))
       } catch {
         layout.showErrorToast(t('explorer.localFiles.copyPathFailed'))
       }
@@ -414,7 +421,6 @@ async function onMenuSelect(id: string) {
       }
       try {
         await copyTextToClipboard(relative)
-        layout.showSuccessToast(t('explorer.localFiles.copyRelativePathDone'))
       } catch {
         layout.showErrorToast(t('explorer.localFiles.copyPathFailed'))
       }
@@ -445,15 +451,12 @@ async function onInlineCommit() {
     const path = await localFiles.commitInlineEdit()
     if (!path || !mode) return
     if (mode === 'create-file') {
-      layout.showSuccessToast(t('explorer.localFiles.created', {name: localFileBaseName(path)}))
       await openLocalWorkspaceFile(path)
     } else if (mode === 'create-folder') {
-      layout.showSuccessToast(t('explorer.localFiles.folderCreated', {name: localFileBaseName(path)}))
     } else if (mode === 'rename') {
       if (renameFrom && normalizeLocalPathKey(renameFrom) !== normalizeLocalPathKey(path)) {
         remapWorkspaceTabsForLocalRename(renameFrom, path)
       }
-      layout.showSuccessToast(t('explorer.localFiles.renamed', {name: localFileBaseName(path)}))
     }
   } catch (err) {
     if (err instanceof Error && err.message === 'unsupported_file') {
@@ -509,7 +512,6 @@ async function confirmDelete() {
         deletedKeys.push(key)
         count += 1
       }
-      layout.showSuccessToast(t('explorer.localFiles.batchDeleted', {count}))
       localFiles.clearSelection()
       closeDeleteDialog()
     } catch {
@@ -525,7 +527,6 @@ async function confirmDelete() {
   try {
     await localFiles.remove(node.path, node.isDirectory)
     closeWorkspaceTabsForLocalPath(node.path, node.isDirectory)
-    layout.showSuccessToast(t('explorer.localFiles.deleted', {name: node.name}))
     closeDeleteDialog()
   } catch {
     layout.showErrorToast(t('explorer.localFiles.deleteFailed'))
@@ -672,7 +673,9 @@ onMounted(() => {
 .local-files-tree {
   min-height: 0;
   height: 100%;
-  padding: var(--dw-space-2) 0;
+  /* Match .datasource-tree vertical rhythm */
+  padding: var(--dw-space-2) 0 var(--dw-space-4);
+  box-sizing: border-box;
 }
 
 .local-files-virtual-track {

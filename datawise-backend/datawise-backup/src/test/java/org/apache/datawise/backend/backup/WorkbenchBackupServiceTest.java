@@ -63,7 +63,7 @@ class WorkbenchBackupServiceTest {
         BackupArtifactStore artifactStore = new BackupArtifactStore(configDirectory, backupProperties, objectMapper);
         StorageProperties storageProperties = new StorageProperties();
         backupService = new WorkbenchBackupService(
-                configDirectory, storageProperties, artifactStore, emptyProvider());
+                configDirectory, storageProperties, artifactStore, emptyProvider(), emptyProvider());
         importedXml = new AtomicReference<>();
         restoreService = new WorkbenchRestoreService(
                 configDirectory,
@@ -83,7 +83,7 @@ class WorkbenchBackupServiceTest {
         BackupArtifactStore artifactStore = new BackupArtifactStore(
                 configDirectory, new BackupProperties(), objectMapper);
         WorkbenchBackupService jdbcBackup = new WorkbenchBackupService(
-                configDirectory, jdbcMem, artifactStore, emptyProvider());
+                configDirectory, jdbcMem, artifactStore, emptyProvider(), emptyProvider());
 
         BackupRun run = new BackupRun();
         run.setId("run-mem");

@@ -12,7 +12,10 @@ import {createId} from '@/core/utils/id'
 import AiModelSelect from '@/features/ai/shared/components/AiModelSelect.vue'
 import {useAppToast} from '@/features/layout/composables/useAppToast'
 import {currentLocale} from '@/i18n'
-import type {AiDatabaseTarget} from '@/features/ai/shared/utils/database-targets'
+import {
+  targetPrimaryLabel,
+  type AiDatabaseTarget,
+} from '@/features/ai/shared/utils/database-targets'
 
 import {
   buildPromptWithAttachments,
@@ -37,6 +40,10 @@ const props = defineProps<{
   quotaExhausted?: boolean
   selectedTargets: AiDatabaseTarget[]
   formatTargetLabel: (target: AiDatabaseTarget) => string
+  /** 未选任何表且未进入通用问答模式：此时提问必然降质，需要先收敛范围 */
+  needsScope?: boolean
+  /** 用户显式选择的「通用问答」 */
+  generalMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -45,6 +52,9 @@ const emit = defineEmits<{
   stop: []
   removeTarget: [id: string]
   keydown: [event: KeyboardEvent]
+  openScope: []
+  toggleGeneral: []
+  scopeBlocked: []
 }>()
 
 const {t} = useI18n()
@@ -181,6 +191,11 @@ function handleSend() {
     return
   }
   if (props.quotaExhausted) return
+  // 无范围时不做静默降级：交给上层提示并给出选表入口，附件也不会被清空
+  if (props.needsScope) {
+    emit('scopeBlocked')
+    return
+  }
   void buildSendPayload(props.modelValue.trim()).then((prompt) => {
     if (!prompt || props.quotaExhausted || props.sending) return
     emit('send', prompt)
@@ -189,6 +204,11 @@ function handleSend() {
 
 function getAttachments(): ChatAttachment[] {
   return [...attachments.value]
+}
+
+/** 输入区只显示表名；完整路径放 title，避免与顶部数据源重复。 */
+function shortTargetLabel(target: AiDatabaseTarget): string {
+  return targetPrimaryLabel(target)
 }
 
 defineExpose({
@@ -203,21 +223,45 @@ defineExpose({
 <template>
   <footer class="composer-wrap">
     <div v-if="selectedTargets.length" class="composer-targets">
-      <TagChip
+      <span
           v-for="target in selectedTargets"
           :key="target.id"
-          removable
-          :remove-label="t('common.close')"
-          @remove="emit('removeTarget', target.id)"
+          class="composer-target"
+          :title="formatTargetLabel(target)"
       >
-        <template #icon>
-          <DbTypeIcon :db-type="target.dbType" :size="DB_TYPE_ICON_SIZE.compact"/>
-        </template>
-        {{ formatTargetLabel(target) }}
-      </TagChip>
+        <TagChip
+            removable
+            :remove-label="t('common.close')"
+            @remove="emit('removeTarget', target.id)"
+        >
+          <template #icon>
+            <DbTypeIcon :db-type="target.dbType" :size="DB_TYPE_ICON_SIZE.compact"/>
+          </template>
+          {{ shortTargetLabel(target) }}
+        </TagChip>
+      </span>
     </div>
 
-    <div class="composer-card" :class="{ 'is-sending': sending, 'is-listening': listening }">
+    <div v-else class="composer-scope-gate">
+      <button
+          type="button"
+          class="scope-chip"
+          :class="{ 'is-general': generalMode }"
+          :title="t('ai.scopeGate.pickTableTitle')"
+          @click="emit('openScope')"
+      >
+        <DwIcon :name="generalMode ? 'info' : 'database'" size="xs" :stroke-width="1.6"/>
+        {{ generalMode ? t('ai.scopeGate.generalChip') : t('ai.noDatabaseSelected') }}
+      </button>
+      <button type="button" class="scope-switch" @click="emit('toggleGeneral')">
+        {{ generalMode ? t('ai.scopeGate.disableGeneral') : t('ai.scopeGate.enableGeneral') }}
+      </button>
+    </div>
+
+    <div
+        class="composer-card"
+        :class="{ 'is-sending': sending, 'is-listening': listening, 'is-unscoped': needsScope }"
+    >
       <div v-if="attachments.length" class="composer-attachments">
         <TagChip
             v-for="item in attachments"
@@ -239,7 +283,7 @@ defineExpose({
           multiline
           :rows="1"
           :model-value="modelValue"
-          :placeholder="t('ai.composer.placeholder')"
+          :placeholder="needsScope ? t('ai.scopeGate.placeholder') : t('ai.composer.placeholder')"
           :disabled="sending"
           @update:model-value="onModelUpdate"
           @keydown="onKeydown"
@@ -303,6 +347,14 @@ defineExpose({
         </div>
       </div>
     </div>
+
+    <p
+        v-if="!selectedTargets.length"
+        class="composer-scope-note"
+        :class="{ 'is-general': generalMode }"
+    >
+      {{ generalMode ? t('ai.scopeGate.generalHint') : t('ai.scopeGate.oneStepHint') }}
+    </p>
   </footer>
 </template>
 
@@ -315,8 +367,72 @@ defineExpose({
 .composer-targets {
   display: flex;
   flex-wrap: wrap;
+  gap: var(--dw-gap-sm);
+  margin-bottom: var(--dw-space-4);
+}
+
+.composer-scope-gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--dw-gap);
-  margin-bottom: var(--dw-space-5);
+  margin-bottom: var(--dw-space-4);
+}
+
+.scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dw-space-2);
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px var(--dw-space-3);
+  border: 1px solid color-mix(in srgb, var(--dw-primary) 34%, var(--dw-border-light));
+  border-radius: var(--dw-radius-pill);
+  background: color-mix(in srgb, var(--dw-primary) 10%, transparent);
+  color: var(--dw-primary);
+  font-size: var(--dw-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dw-duration-fast) var(--dw-ease),
+  border-color var(--dw-duration-fast) var(--dw-ease);
+}
+
+.scope-chip:hover {
+  background: color-mix(in srgb, var(--dw-primary) 18%, transparent);
+}
+
+.scope-chip.is-general {
+  border-color: color-mix(in srgb, var(--dw-warning) 42%, var(--dw-border-light));
+  background: color-mix(in srgb, var(--dw-warning) 12%, transparent);
+  color: var(--dw-warning-fg);
+}
+
+.scope-switch {
+  padding: 0 var(--dw-space-2);
+  border: none;
+  border-radius: var(--dw-control-radius-sm);
+  background: transparent;
+  color: var(--dw-text-muted);
+  font-size: var(--dw-text-xs);
+  line-height: var(--dw-density-md);
+  cursor: pointer;
+}
+
+.scope-switch:hover {
+  color: var(--dw-primary);
+  background: color-mix(in srgb, var(--dw-primary) 8%, transparent);
+}
+
+.composer-scope-note {
+  margin: var(--dw-space-3) 0 0;
+  padding-left: var(--dw-space-1);
+  font-size: var(--dw-text-xs);
+  line-height: var(--dw-leading-snug);
+  color: var(--dw-text-muted);
+}
+
+.composer-scope-note.is-general {
+  color: var(--dw-warning-fg);
 }
 
 .composer-card {
@@ -335,6 +451,12 @@ defineExpose({
 
 .composer-card.is-listening {
   border-color: color-mix(in srgb, var(--dw-primary) 35%, var(--dw-border));
+}
+
+/* 无范围：视觉上明确「还缺一步」，而不是让用户以为可以直接发 */
+.composer-card.is-unscoped {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--dw-border) 90%, var(--dw-text-muted));
 }
 
 .composer-attachments {

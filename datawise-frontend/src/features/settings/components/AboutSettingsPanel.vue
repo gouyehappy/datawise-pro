@@ -67,13 +67,18 @@ async function handleCheckUpdate() {
     return
   }
   if (result.hasUpdate) {
-    layout.showToast(t('settings.about.updateAvailable', {version: result.latestVersion}))
+    layout.notifyQuiet({
+      category: 'system',
+      titleKey: 'updateAvailable',
+      bodyKey: 'updateAvailable',
+      params: {version: result.latestVersion || ''},
+    })
     if (updateSettings.preferences.autoDownload) {
       await handleDownload()
     }
     return
   }
-  layout.showSuccessToast(t('settings.about.upToDate'))
+  // 已是最新：页面状态已足够，不弹 toast。
 }
 
 async function handleDownload() {

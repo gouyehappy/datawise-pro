@@ -3,7 +3,7 @@ import {ref, watch} from 'vue'
 import type {TableDataChangeAuditEntry, TableDataChangeOperation} from '@/shared/api/types'
 import {tableDataApi} from '@/api'
 import {useI18n} from 'vue-i18n'
-import {DwInlineAlert} from '@/core/components'
+import {askAppConfirm, DwButton, DwPanelState} from '@/core/components'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {summarizeAuditEntryChanges} from '@/features/workspace/services/table-data-audit.service'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
@@ -68,6 +68,17 @@ function toggleExpanded() {
 
 async function restoreEntry(entry: TableDataChangeAuditEntry) {
     if (!props.tableName?.trim() || !props.connectionId || entry.reverted) return
+    if (restoringId.value) return
+    const confirmed = await askAppConfirm({
+        title: t('dataGrid.audit.restoreConfirmTitle'),
+        message: t('dataGrid.audit.restoreConfirmMessage', {
+            operation: operationLabel(entry.operation),
+            primaryKey: summarizePrimaryKey(entry),
+        }),
+        confirmLabel: t('dataGrid.audit.restore'),
+        confirmVariant: 'danger',
+    })
+    if (!confirmed) return
     restoringId.value = entry.id
     try {
         await tableDataApi.restoreAudit(props.tableName, entry.id, {
@@ -118,9 +129,30 @@ function canRestoreEntry(entry: TableDataChangeAuditEntry): boolean {
     </button>
 
     <div v-show="expanded" class="table-data-audit__body">
-      <p v-if="loading" class="table-data-audit__hint">{{ t('dataGrid.audit.loading') }}</p>
-      <DwInlineAlert v-else-if="loadError" :message="loadError"/>
-      <p v-else-if="entries.length === 0" class="table-data-audit__hint">{{ t('dataGrid.audit.empty') }}</p>
+      <DwPanelState
+          v-if="loading"
+          status="loading"
+          compact
+          :message="t('dataGrid.audit.loading')"
+      />
+      <DwPanelState
+          v-else-if="loadError"
+          status="error"
+          compact
+          :message="loadError"
+      >
+        <template #actions>
+          <DwButton variant="secondary" size="sm" type="button" @click="loadAudit()">
+            {{ t('common.retry') }}
+          </DwButton>
+        </template>
+      </DwPanelState>
+      <DwPanelState
+          v-else-if="entries.length === 0"
+          status="empty"
+          compact
+          :message="t('dataGrid.audit.empty')"
+      />
       <ul v-else class="table-data-audit__list">
         <li v-for="entry in entries" :key="entry.id" class="table-data-audit__item">
           <div class="table-data-audit__item-content">

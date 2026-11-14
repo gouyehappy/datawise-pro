@@ -75,6 +75,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Reproducible artifacts: pin every embedded timestamp (build manifest, jars, installer)
+      # to the commit time, so the same tag always produces the same bytes.
+      - name: Pin SOURCE_DATE_EPOCH to the commit timestamp
+        shell: bash
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -142,6 +148,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Reproducible artifacts: pin every embedded timestamp (build manifest, jars, installer)
+      # to the commit time, so the same tag always produces the same bytes.
+      - name: Pin SOURCE_DATE_EPOCH to the commit timestamp
+        shell: bash
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -205,6 +217,12 @@ jobs:
         working-directory: datawise-frontend
     steps:
       - uses: actions/checkout@v4
+
+      # Reproducible artifacts: pin every embedded timestamp (build manifest, jars, installer)
+      # to the commit time, so the same tag always produces the same bytes.
+      - name: Pin SOURCE_DATE_EPOCH to the commit timestamp
+        shell: bash
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:

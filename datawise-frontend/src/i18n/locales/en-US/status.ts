@@ -10,6 +10,8 @@ export default {
     timeLabel: 'Duration',
     rowsLabel: 'Rows',
     showAll: 'Export tasks',
+    menuLabel: 'More',
+    menuProject: 'Project · {name}',
     quickLaunch: 'Quick',
     projectHint: 'Current project: {name}',
     entitlementChipOk: 'Licensed',

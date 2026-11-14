@@ -137,6 +137,15 @@ export function resolveTargetIdFromNode(tree: TreeNode[], nodeId: string | null)
     return null
 }
 
+/** 表级 target id：`连接:库:表`，会话范围与打标目录共用同一拼法 */
+export function buildAiTableTargetId(
+    connectionId: string,
+    database: string,
+    tableName: string,
+): string {
+    return `${connectionId}:${database}:${tableName}`
+}
+
 export function formatTargetLabel(target: AiDatabaseTarget): string {
     if (target.level === 'table' && target.tableLabel) {
         return `${target.connectionLabel} / ${target.databaseLabel} / ${target.tableLabel}`

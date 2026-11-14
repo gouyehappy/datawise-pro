@@ -240,35 +240,40 @@ public class JdbcTableDataReader {
         long start = System.currentTimeMillis();
         String trimmed = sql != null ? sql.trim() : "";
         String pagedSql = paginationService.applyLimitOffset(trimmed, dbType, pageSize + 1, offset);
-        Statement statement = connection.createStatement();
-        if (executionKey != null && tracker != null) {
-            tracker.register(executionKey, statement, connection);
-        }
-        try {
-            poolProperties.applyPagedReadFetchSize(statement, pageSize);
-            applyQueryTimeout(statement);
-            try (ResultSet rs = statement.executeQuery(pagedSql)) {
-                TableDataResult tableData = JdbcResultSetMapper.mapPage(rs, pageSize, preserveForMigration);
-                long duration = System.currentTimeMillis() - start;
-                return new ExecuteSqlResult(
-                        trimmed,
-                        tableData.rows().size(),
-                        duration,
-                        tableData.columns(),
-                        tableData.rows(),
-                        null,
-                        null,
-                        null,
-                        tableData.hasMore(),
-                        offset,
-                        pageSize
-                );
+        boolean tracked = executionKey != null && tracker != null;
+        String queryId = null;
+        // Statement lives in try-with-resources so a failure while applying fetch size
+        // or query timeout cannot leak a pooled connection's statement.
+        try (Statement statement = connection.createStatement()) {
+            if (tracked) {
+                queryId = tracker.register(executionKey, statement, connection);
             }
-        } finally {
-            if (executionKey != null && tracker != null) {
-                tracker.unregister(executionKey, statement);
+            try {
+                poolProperties.applyPagedReadFetchSize(statement, pageSize);
+                applyQueryTimeout(statement);
+                try (ResultSet rs = statement.executeQuery(pagedSql)) {
+                    TableDataResult tableData = JdbcResultSetMapper.mapPage(rs, pageSize, preserveForMigration);
+                    long duration = System.currentTimeMillis() - start;
+                    ExecuteSqlResult result = new ExecuteSqlResult(
+                            trimmed,
+                            tableData.rows().size(),
+                            duration,
+                            tableData.columns(),
+                            tableData.rows(),
+                            null,
+                            null,
+                            null,
+                            tableData.hasMore(),
+                            offset,
+                            pageSize
+                    );
+                    return queryId != null ? result.withQueryId(queryId) : result;
+                }
+            } finally {
+                if (tracked) {
+                    tracker.unregister(executionKey, statement);
+                }
             }
-            statement.close();
         }
     }
 
@@ -299,12 +304,16 @@ public class JdbcTableDataReader {
     }
 
     private void applyQueryTimeout(Statement statement) throws SQLException {
-        if (queryTimeoutSeconds > 0) {
-            statement.setQueryTimeout(queryTimeoutSeconds);
+        int seconds = org.apache.datawise.backend.jdbc.support.QueryTimeoutOverride.resolve(queryTimeoutSeconds);
+        if (seconds > 0) {
+            statement.setQueryTimeout(seconds);
         }
     }
 
     private void requireOffsetWithinLimit(int offset) {
+        if (org.apache.datawise.backend.common.DeepOffsetGuard.isDataMovement()) {
+            return;
+        }
         if (maxCursorOffset > 0 && offset > maxCursorOffset) {
             throw new SqlDeepOffsetException(offset, maxCursorOffset);
         }

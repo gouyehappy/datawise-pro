@@ -63,19 +63,14 @@ describe('explorer-menu-intents.service', () => {
         assert.equal(resolveConnectionLifecycleMenuAction('connect', 'connection'), 'connect')
         assert.equal(resolveConnectionLifecycleMenuAction('disconnect', 'connection'), 'disconnect')
         assert.equal(resolveConnectionLifecycleMenuAction('reconnect', 'table'), null)
-        assert.deepEqual(resolveConnectionLifecycleToast('connect', true), {
-            key: 'explorer.connectionOpened',
-            tone: 'success',
-        })
+        assert.equal(resolveConnectionLifecycleToast('connect', true), null)
         assert.equal(resolveConnectionLifecycleToast('connect', false), null)
+        assert.equal(resolveConnectionLifecycleToast('disconnect', true), null)
         assert.deepEqual(resolveConnectionLifecycleToast('disconnect', false), {
             key: 'explorer.connectionDisconnectFailed',
             tone: 'error',
         })
-        assert.deepEqual(resolveConnectionLifecycleToast('reconnect', true), {
-            key: 'explorer.connectionReconnected',
-            tone: 'success',
-        })
+        assert.equal(resolveConnectionLifecycleToast('reconnect', true), null)
         assert.equal(isSqlExportClipboardMenuAction('export-structure'), true)
         assert.equal(isSqlExportClipboardMenuAction('copy-data'), true)
         assert.equal(isSqlExportClipboardMenuAction('export-wizard'), false)
@@ -107,6 +102,26 @@ describe('explorer-menu-intents.service', () => {
             kind: 'delete-sql-file',
             permissionAction: 'delete',
         })
+        assert.deepEqual(
+            resolveExplorerDeleteShortcutIntent({
+                type: 'sql_file',
+                id: 'project-file:proj_default:scripts:a.sql',
+            }),
+            {
+                kind: 'delete-project-file',
+                permissionAction: 'delete-project-file',
+            },
+        )
+        assert.deepEqual(
+            resolveExplorerDeleteShortcutIntent({
+                type: 'project-file',
+                id: 'project-file:proj_default:docs:notes.md',
+            }),
+            {
+                kind: 'delete-project-file',
+                permissionAction: 'delete-project-file',
+            },
+        )
         assert.deepEqual(resolveExplorerDeleteShortcutIntent('group'), {
             kind: 'delete-catalog',
             permissionAction: 'delete',

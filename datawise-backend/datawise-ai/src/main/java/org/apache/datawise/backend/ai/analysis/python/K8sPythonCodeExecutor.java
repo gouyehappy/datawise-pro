@@ -13,11 +13,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** 在 Kubernetes Job 中执行 Python（ConfigMap 挂载 + 可选 pip 安装）。 */
+/** 在 Kubernetes Job 中执行 Python（ConfigMap 挂载 + deny-all NetworkPolicy + 可选 pip 安装）。 */
 @Component
 public class K8sPythonCodeExecutor implements PythonCodeExecutor {
 
@@ -45,9 +44,11 @@ public class K8sPythonCodeExecutor implements PythonCodeExecutor {
 
         PythonExecutionSupport.PreparedRun prepared = null;
         Path jobManifest = null;
+        Path networkPolicyManifest = null;
         Path configMapManifest = null;
         String jobName = PythonK8sSupport.sanitizeResourceName("datawise-py-" + UUID.randomUUID());
         String configMapName = jobName + "-cm";
+        String networkPolicyName = PythonK8sSupport.networkPolicyName(jobName);
         String namespace = pythonProperties.getK8sNamespace();
         String kubectl = pythonProperties.getK8sBinary();
         try {
@@ -59,6 +60,7 @@ public class K8sPythonCodeExecutor implements PythonCodeExecutor {
                     "/tmp/deps"
             );
             jobManifest = Files.createTempFile("datawise-k8s-job-", ".json");
+            networkPolicyManifest = Files.createTempFile("datawise-k8s-netpol-", ".json");
             configMapManifest = Files.createTempFile("datawise-k8s-cm-", ".yaml");
             Files.writeString(
                     jobManifest,
@@ -68,11 +70,30 @@ public class K8sPythonCodeExecutor implements PythonCodeExecutor {
                             namespace,
                             pythonProperties.getK8sImage(),
                             pythonProperties.getK8sMemory(),
+                            pythonProperties.getK8sCpu(),
                             configMapName,
                             shell
                     ),
                     StandardCharsets.UTF_8
             );
+            Files.writeString(
+                    networkPolicyManifest,
+                    PythonK8sSupport.buildNetworkPolicyManifestJson(objectMapper, jobName, namespace),
+                    StandardCharsets.UTF_8
+            );
+
+            // Fail closed: without NetworkPolicy the Job would not match Docker --network none.
+            PythonExecutionResult applyNet = PythonProcessRunner.run(
+                    PythonK8sSupport.buildApplyCommand(kubectl, networkPolicyManifest.toAbsolutePath().toString()),
+                    pythonProperties.getTimeoutSeconds()
+            );
+            if (!applyNet.ok()) {
+                return PythonExecutionResult.failure(
+                        "Failed to apply NetworkPolicy (CNI must enforce networking.k8s.io): "
+                                + applyNet.errorMessage(),
+                        applyNet.stdout()
+                );
+            }
 
             PythonExecutionResult configMapYaml = PythonProcessRunner.run(
                     PythonK8sSupport.buildCreateConfigMapCommand(
@@ -145,8 +166,9 @@ public class K8sPythonCodeExecutor implements PythonCodeExecutor {
             log.warn("Kubernetes Python execution failed: {}", ex.getMessage());
             return PythonExecutionResult.failure(ex.getMessage(), "");
         } finally {
-            cleanupK8sResources(kubectl, namespace, jobName, configMapName);
+            cleanupK8sResources(kubectl, namespace, jobName, configMapName, networkPolicyName);
             deleteIfExists(jobManifest);
+            deleteIfExists(networkPolicyManifest);
             deleteIfExists(configMapManifest);
             if (prepared != null) {
                 prepared.workspace().cleanup();
@@ -154,13 +176,20 @@ public class K8sPythonCodeExecutor implements PythonCodeExecutor {
         }
     }
 
-    private void cleanupK8sResources(String kubectl, String namespace, String jobName, String configMapName) {
+    private void cleanupK8sResources(
+            String kubectl,
+            String namespace,
+            String jobName,
+            String configMapName,
+            String networkPolicyName
+    ) {
         PythonProcessRunner.run(
                 PythonK8sSupport.buildDeleteCommand(
                         kubectl,
                         namespace,
                         "job/" + jobName,
-                        "configmap/" + configMapName
+                        "configmap/" + configMapName,
+                        "networkpolicy/" + networkPolicyName
                 ),
                 pythonProperties.getTimeoutSeconds()
         );

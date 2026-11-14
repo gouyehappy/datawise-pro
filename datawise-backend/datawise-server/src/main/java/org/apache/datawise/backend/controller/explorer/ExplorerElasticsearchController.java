@@ -11,7 +11,10 @@ import org.apache.datawise.backend.domain.ElasticsearchIndicesResultDto;
 import org.apache.datawise.backend.domain.ElasticsearchRestExecuteRequest;
 import org.apache.datawise.backend.domain.ElasticsearchRestResultDto;
 import org.apache.datawise.backend.domain.TableDataResult;
-import org.apache.datawise.backend.service.FeaturePermissionAccess;
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.ExplorerFeatureGate;
+import org.apache.datawise.backend.security.RequiresExplorerGate;
+import org.apache.datawise.backend.security.RequiresFeature;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,14 +30,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class ExplorerElasticsearchController {
 
     private final ExplorerElasticsearchService elasticsearchService;
-    private final FeaturePermissionAccess featurePermissionAccess;
 
-    public ExplorerElasticsearchController(
-            ExplorerElasticsearchService elasticsearchService,
-            FeaturePermissionAccess featurePermissionAccess
-    ) {
+    public ExplorerElasticsearchController(ExplorerElasticsearchService elasticsearchService) {
         this.elasticsearchService = elasticsearchService;
-        this.featurePermissionAccess = featurePermissionAccess;
     }
 
     @GetMapping("/connections/{connectionId}/elasticsearch/indices")
@@ -54,21 +52,21 @@ public class ExplorerElasticsearchController {
         return ApiResponse.ok(elasticsearchService.getIndexMetadata(connectionId, index, kind));
     }
 
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_CONSOLE)
     @PostMapping("/connections/{connectionId}/elasticsearch/rest")
     public ApiResponse<ElasticsearchRestResultDto> executeRest(
             @PathVariable String connectionId,
             @RequestBody ElasticsearchRestExecuteRequest request
     ) {
-        featurePermissionAccess.requireExplorerContextConsole();
         return ApiResponse.ok(elasticsearchService.executeRest(connectionId, request));
     }
 
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
     @PostMapping("/connections/{connectionId}/elasticsearch/indices/{index}/clear")
     public ApiResponse<ElasticsearchClearIndexResultDto> clearIndex(
             @PathVariable String connectionId,
             @PathVariable String index
     ) {
-        featurePermissionAccess.requireExplorerContextExport();
         return ApiResponse.ok(elasticsearchService.clearIndex(connectionId, index));
     }
 
@@ -102,23 +100,23 @@ public class ExplorerElasticsearchController {
     }
 
     @PostMapping("/connections/{connectionId}/elasticsearch/indices/{index}/documents")
+    @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
     public ApiResponse<ElasticsearchDocumentMutationResultDto> createDocument(
             @PathVariable String connectionId,
             @PathVariable String index,
             @RequestBody ElasticsearchDocumentUpsertRequest request
     ) {
-        featurePermissionAccess.requireExplorerContextEdit();
         return ApiResponse.ok(elasticsearchService.upsertDocument(connectionId, index, request));
     }
 
     @PutMapping("/connections/{connectionId}/elasticsearch/indices/{index}/documents/{id}")
+    @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
     public ApiResponse<ElasticsearchDocumentMutationResultDto> updateDocument(
             @PathVariable String connectionId,
             @PathVariable String index,
             @PathVariable String id,
             @RequestBody ElasticsearchDocumentUpsertRequest request
     ) {
-        featurePermissionAccess.requireExplorerContextEdit();
         ElasticsearchDocumentUpsertRequest payload = request == null
                 ? new ElasticsearchDocumentUpsertRequest(id, null, null)
                 : new ElasticsearchDocumentUpsertRequest(id, request.sourceJson(), request.routing());
@@ -126,13 +124,13 @@ public class ExplorerElasticsearchController {
     }
 
     @DeleteMapping("/connections/{connectionId}/elasticsearch/indices/{index}/documents/{id}")
+    @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
     public ApiResponse<ElasticsearchDocumentMutationResultDto> deleteDocument(
             @PathVariable String connectionId,
             @PathVariable String index,
             @PathVariable String id,
             @RequestParam(required = false) String routing
     ) {
-        featurePermissionAccess.requireExplorerContextEdit();
         return ApiResponse.ok(elasticsearchService.deleteDocument(connectionId, index, id, routing));
     }
 }

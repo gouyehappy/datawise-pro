@@ -2,6 +2,8 @@ package org.apache.datawise.backend.server.web;
 
 import org.apache.datawise.backend.configstore.SessionStore;
 import org.apache.datawise.backend.model.SessionEntity;
+import org.apache.datawise.backend.security.UserContext;
+import org.apache.datawise.backend.service.FeaturePermissionAccess;
 import org.apache.datawise.backend.service.TeamService;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
@@ -19,15 +21,18 @@ public class TerminalSessionHandshakeInterceptor implements HandshakeInterceptor
     private final SessionStore sessionStore;
     private final TerminalWebSocketProperties properties;
     private final TeamService teamService;
+    private final FeaturePermissionAccess featurePermissionAccess;
 
     public TerminalSessionHandshakeInterceptor(
             SessionStore sessionStore,
             TerminalWebSocketProperties properties,
-            TeamService teamService
+            TeamService teamService,
+            FeaturePermissionAccess featurePermissionAccess
     ) {
         this.sessionStore = sessionStore;
         this.properties = properties;
         this.teamService = teamService;
+        this.featurePermissionAccess = featurePermissionAccess;
     }
 
     @Override
@@ -46,16 +51,30 @@ public class TerminalSessionHandshakeInterceptor implements HandshakeInterceptor
         if (session.isEmpty() || session.get().isGuest()) {
             return false;
         }
+        SessionEntity entity = session.get();
         String clientIp = TerminalClientIpSupport.resolveClientIp(request, properties.getTrustedProxyIps());
         if (!TerminalIpWhitelistSupport.isAllowed(clientIp, properties.getAllowedIps())) {
             teamService.recordTerminalAudit(
-                    session.get().getUserId(),
+                    entity.getUserId(),
                     "terminal.pty.denied",
                     "reason=ip-not-allowed; clientIp=" + (clientIp != null ? clientIp : "unknown")
             );
             return false;
         }
-        attributes.put(ATTR_USER_ID, session.get().getUserId());
+        UserContext.set(entity.getUserId(), false, sessionId);
+        try {
+            featurePermissionAccess.requireUtilTerminal();
+        } catch (RuntimeException ex) {
+            teamService.recordTerminalAudit(
+                    entity.getUserId(),
+                    "terminal.pty.denied",
+                    "reason=permission-denied; detail=" + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName())
+            );
+            return false;
+        } finally {
+            UserContext.clear();
+        }
+        attributes.put(ATTR_USER_ID, entity.getUserId());
         attributes.put(ATTR_GUEST, false);
         return true;
     }

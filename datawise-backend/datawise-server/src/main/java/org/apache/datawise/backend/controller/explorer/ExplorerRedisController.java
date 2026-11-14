@@ -92,8 +92,7 @@ import org.apache.datawise.backend.domain.YarnQueuesResultDto;
 import org.apache.datawise.backend.domain.TreeNode;
 import org.apache.datawise.backend.domain.TreePayload;
 import org.apache.datawise.backend.security.HeadlessSqlAuth;
-import org.apache.datawise.backend.server.pack.EntitlementService;
-import org.apache.datawise.backend.service.FeaturePermissionAccess;
+import org.apache.datawise.backend.security.RequiresRedisCommand;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -116,14 +115,9 @@ import java.util.Map;
 public class ExplorerRedisController {
 
     private final ExplorerRedisService redisService;
-    private final FeaturePermissionAccess featurePermissionAccess;
 
-    public ExplorerRedisController(
-            ExplorerRedisService redisService,
-            FeaturePermissionAccess featurePermissionAccess
-    ) {
+    public ExplorerRedisController(ExplorerRedisService redisService) {
         this.redisService = redisService;
-        this.featurePermissionAccess = featurePermissionAccess;
     }
 
         @GetMapping("/connections/{connectionId}/redis/key")
@@ -147,13 +141,13 @@ public class ExplorerRedisController {
         }
     
         @PostMapping("/connections/{connectionId}/redis/command")
+        @RequiresRedisCommand
         public ApiResponse<RedisCommandResultDto> executeRedisCommand(
                 @PathVariable String connectionId,
                 @RequestBody ExecuteRedisCommandRequest request,
                 @RequestParam(required = false) Integer database
         ) {
             HeadlessSqlAuth.requireSqlAccess();
-            featurePermissionAccess.requireRedisCommand(request.command());
             return ApiResponse.ok(redisService.executeRedisCommand(connectionId, request.command(), database));
         }
 }

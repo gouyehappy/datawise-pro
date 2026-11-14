@@ -10,6 +10,7 @@ import {
     normalizePtyInput,
 } from '@/features/terminal/services/terminal-ws-codec'
 import {openAuthedWebSocket} from '@/shared/api/http/open-authed-websocket'
+import {SSH_BRIDGE_ERROR_CODES} from '@/features/terminal/services/ssh-terminal-failure'
 
 type OutputHandler = (data: TerminalOutputChunk) => void
 type ExitHandler = (exitCode: number) => void
@@ -120,7 +121,10 @@ export function createWebSocketTerminalBridge(path = '/ws/terminal'): NativeTerm
                             break
                         case 'error':
                             if (message.code === 'FORBIDDEN') {
-                                settle({ok: false, error: message.message || 'Forbidden'})
+                                settle({
+                                    ok: false,
+                                    error: message.message || SSH_BRIDGE_ERROR_CODES.ACCESS_DENIED,
+                                })
                                 socket.close()
                                 emitExit(sessionId, 1)
                             }
@@ -129,11 +133,11 @@ export function createWebSocketTerminalBridge(path = '/ws/terminal'): NativeTerm
                 })
 
                 socket.addEventListener('error', () => {
-                    settle({ok: false, error: 'WebSocket connection failed'})
+                    settle({ok: false, error: SSH_BRIDGE_ERROR_CODES.WS_CONNECT_FAILED})
                 })
 
                 socket.addEventListener('close', () => {
-                    settle({ok: false, error: 'WebSocket closed before terminal started'})
+                    settle({ok: false, error: SSH_BRIDGE_ERROR_CODES.WS_CLOSED})
                     emitExit(sessionId, 0)
                 })
             })

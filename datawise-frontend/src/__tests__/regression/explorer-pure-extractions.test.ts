@@ -273,6 +273,30 @@ describe('resolveExplorerDeleteShortcutUiPlan', () => {
             permissionAction: 'delete',
             messageKey: 'explorer.deleteSqlFileMessage',
         })
+        assert.deepEqual(
+            resolveExplorerDeleteShortcutUiPlan({
+                type: 'project-file',
+                id: 'project-file:proj_default:docs:a.md',
+            }),
+            {
+                kind: 'delete-project-file',
+                permissionAction: 'delete-project-file',
+                messageKey: 'explorer.deleteProjectFileMessage',
+                isDirectory: false,
+            },
+        )
+        assert.deepEqual(
+            resolveExplorerDeleteShortcutUiPlan({
+                type: 'project-docs',
+                id: 'project-file:proj_default:docs:folder',
+            }),
+            {
+                kind: 'delete-project-file',
+                permissionAction: 'delete-project-file',
+                messageKey: 'explorer.deleteProjectFolderMessage',
+                isDirectory: true,
+            },
+        )
         assert.deepEqual(resolveExplorerDeleteShortcutUiPlan('connection'), {
             kind: 'delete-catalog',
             permissionAction: 'delete',

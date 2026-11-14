@@ -96,7 +96,7 @@ public final class ConnectionsCatalogMapper {
     }
 
     private static ConnectionEntryDto toEntryDto(ConnectionEntity entity) {
-        ConnectionConfig config = ConnectionMapper.toDto(entity);
+        ConnectionConfig config = ConnectionMapper.toPublicDto(entity);
         return new ConnectionEntryDto(
                 entity.getId(),
                 entity.getGroupId(),

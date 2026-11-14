@@ -37,6 +37,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -88,7 +89,9 @@ class SqlExecuteServiceTest {
                 sqlCursorService,
                 sqlExecutionHookRunner,
                 outboundEventSignals,
-                new SqlQueryAdmissionService(unlimited)
+                new SqlQueryAdmissionService(unlimited),
+                mock(org.springframework.context.ApplicationEventPublisher.class),
+                mock(org.apache.datawise.backend.database.ddlhistory.DdlHistoryService.class)
         );
     }
 
@@ -159,6 +162,7 @@ class SqlExecuteServiceTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.execute(request));
         assertEquals("Read-only access for connection: conn-1", ex.getMessage());
+        verify(connectionAccessService).requireEngineFeature(9L, "conn-1", "queryExecution");
         verify(connectionAccessService).requireSqlWriteAccess(9L, "conn-1", "delete from users");
     }
 
@@ -266,6 +270,43 @@ class SqlExecuteServiceTest {
 
         assertEquals(ok, service.execute(request));
         verify(outboundEventSignals).tableDeleted(
+                eq("conn-1"),
+                eq("demo"),
+                eq("shop"),
+                eq("orders"),
+                eq(9L)
+        );
+    }
+
+    @Test
+    void execute_alterTable_publishesTableAlteredSignal() throws Exception {
+        ConnectionEntity entity = connectionEntity();
+        entity.setName("demo");
+        when(connectionContext.requireAvailableConnectionForCurrentUser(
+                "conn-1",
+                "Connection not found: conn-1"
+        )).thenReturn(new ConnectionExecutionContext.ResolvedConnection(9L, entity));
+        stubSqlCapabilities(entity);
+        when(connectorFacade.jdbc()).thenReturn(jdbcAccess);
+        when(jdbcAccess.session()).thenReturn(jdbcSessionAccess);
+        when(jdbcSessionAccess.requireManualSession(9L, null)).thenReturn(null);
+        String sql = "ALTER TABLE orders ADD COLUMN note VARCHAR(32)";
+        ExecuteSqlResult ok = new ExecuteSqlResult(sql, 0, 0, null, null, null, null, null, false, 0, null);
+        when(jdbcAccess.execute(eq(entity), eq(sql), eq("shop"), anyInt())).thenReturn(ok);
+
+        ExecuteSqlRequest request = new ExecuteSqlRequest(
+                sql,
+                "conn-1",
+                "shop",
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        assertEquals(ok, service.execute(request));
+        verify(outboundEventSignals).tableAltered(
                 eq("conn-1"),
                 eq("demo"),
                 eq("shop"),

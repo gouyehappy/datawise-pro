@@ -1,6 +1,7 @@
 package org.apache.datawise.backend.configstore;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.datawise.backend.config.ExplorerSchemaProperties;
 import org.apache.datawise.backend.domain.TenantIds;
 import org.apache.datawise.backend.domain.TreeNode;
 import org.apache.datawise.backend.model.ConnectionEntity;
@@ -9,6 +10,7 @@ import org.apache.datawise.backend.service.discovery.DiscoverySearchIndexStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -17,6 +19,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -30,22 +33,38 @@ public class SchemaCacheStore {
 
     private static final Logger log = LoggerFactory.getLogger(SchemaCacheStore.class);
 
+    private static final int DEFAULT_SCHEMA_CACHE_MAX_ENTRIES = 64;
+
     private final ConcurrentHashMap<String, CacheEntry> cache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> versions = new ConcurrentHashMap<>();
     private final ConfigDirectoryService configDirectory;
     private final ObjectMapper objectMapper;
     private final ObjectProvider<DiscoverySearchIndexStore> discoveryIndexStore;
     private final ObjectProvider<ConnectionStore> connectionStore;
+    private final int maxCacheEntries;
 
     public SchemaCacheStore(
                             ConfigDirectoryService configDirectory,
                             ObjectMapper objectMapper,
                             ObjectProvider<DiscoverySearchIndexStore> discoveryIndexStore,
                             ObjectProvider<ConnectionStore> connectionStore) {
+        this(configDirectory, objectMapper, discoveryIndexStore, connectionStore, null);
+    }
+
+    @Autowired
+    public SchemaCacheStore(
+                            ConfigDirectoryService configDirectory,
+                            ObjectMapper objectMapper,
+                            ObjectProvider<DiscoverySearchIndexStore> discoveryIndexStore,
+                            ObjectProvider<ConnectionStore> connectionStore,
+                            @Autowired(required = false) ExplorerSchemaProperties schemaProperties) {
         this.configDirectory = configDirectory;
         this.objectMapper = objectMapper;
         this.discoveryIndexStore = discoveryIndexStore;
         this.connectionStore = connectionStore;
+        this.maxCacheEntries = schemaProperties != null
+                ? schemaProperties.getSchemaCacheMaxEntries()
+                : DEFAULT_SCHEMA_CACHE_MAX_ENTRIES;
     }
 
     public List<TreeNode> load(String connectionId) {
@@ -77,6 +96,7 @@ public class SchemaCacheStore {
         Instant now = Instant.now();
         cache.put(key, new CacheEntry(nodes, now));
         versions.merge(key, 1L, Long::sum);
+        enforceMaxEntries();
         if (!nodes.isEmpty()) {
             persistToDisk(connectionId, nodes, now);
         } else {
@@ -113,6 +133,26 @@ public class SchemaCacheStore {
         DiscoverySearchIndexStore indexStore = discoveryIndexStore.getIfAvailable();
         if (indexStore != null) {
             indexStore.clearSession(sessionId);
+        }
+    }
+
+    /** Evict oldest in-memory entries (by cachedAt). Disk snapshots are kept for cold start. */
+    private void enforceMaxEntries() {
+        while (cache.size() > maxCacheEntries) {
+            String oldestKey = null;
+            Instant oldestAt = null;
+            for (Map.Entry<String, CacheEntry> entry : cache.entrySet()) {
+                Instant cachedAt = entry.getValue().cachedAt();
+                if (oldestAt == null || cachedAt.isBefore(oldestAt)) {
+                    oldestAt = cachedAt;
+                    oldestKey = entry.getKey();
+                }
+            }
+            if (oldestKey == null) {
+                break;
+            }
+            cache.remove(oldestKey);
+            versions.remove(oldestKey);
         }
     }
 
@@ -168,6 +208,7 @@ public class SchemaCacheStore {
             if (payload.version() > 0) {
                 versions.put(cacheKey(connectionId), payload.version());
             }
+            enforceMaxEntries();
             refreshDiscoveryIndex(connectionId, entry.nodes());
             return entry;
         } catch (IOException ex) {

@@ -1,0 +1,4 @@
+{
+  "dbType": "phoenix",
+  "extends": "jdbc-query"
+}

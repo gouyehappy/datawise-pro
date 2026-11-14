@@ -1,0 +1,15 @@
+{
+  "id": "kudu",
+  "description": "Kudu masters address list.",
+  "fields": [
+    {
+      "key": "kudu.masters",
+      "label": "connection.kuduMasters",
+      "type": "text",
+      "binding": "kudu_masters",
+      "required": true,
+      "description": "connection.hints.kuduMasters",
+      "placeholder": "connection.kuduMastersPlaceholder"
+    }
+  ]
+}

@@ -5,7 +5,7 @@
  * Legacy dual-process host: pass --dual (DatawiseDesktopApp spawns backend).
  */
 import {spawn, spawnSync} from 'node:child_process'
-import {existsSync} from 'node:fs'
+import {existsSync, readdirSync, readFileSync, statSync} from 'node:fs'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {ensureJbrJcef} from './ensure-jbr-jcef.mjs'
@@ -18,6 +18,42 @@ const backendRoot = path.join(repoRoot, 'datawise-backend')
 const frontendRoot = path.join(repoRoot, 'datawise-frontend')
 const configDir = path.join(repoRoot, 'config')
 const isWin = process.platform === 'win32'
+
+/** Prefer target/datawise-desktop-<pom.version>.jar; fall back to newest matching jar. */
+function resolveDesktopJar(root = desktopRoot) {
+  const targetDir = path.join(root, 'target')
+  const version = readDesktopPomVersion(root)
+  if (version) {
+    const pinned = path.join(targetDir, `datawise-desktop-${version}.jar`)
+    if (existsSync(pinned)) return pinned
+  }
+  if (!existsSync(targetDir)) return null
+  const jars = readdirSync(targetDir)
+    .filter((name) => /^datawise-desktop-.+\.jar$/i.test(name) && !name.endsWith('-sources.jar'))
+    .map((name) => path.join(targetDir, name))
+    .filter((p) => {
+      try {
+        return statSync(p).isFile()
+      } catch {
+        return false
+      }
+    })
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+  return jars[0] ?? null
+}
+
+function readDesktopPomVersion(root = desktopRoot) {
+  const pom = path.join(root, 'pom.xml')
+  if (!existsSync(pom)) return null
+  try {
+    const text = readFileSync(pom, 'utf8')
+    const match = text.match(/<artifactId>\s*datawise-desktop\s*<\/artifactId>[\s\S]*?<version>\s*([^<]+)\s*<\/version>/)
+      || text.match(/<version>\s*([^<]+)\s*<\/version>/)
+    return match?.[1]?.trim() || null
+  } catch {
+    return null
+  }
+}
 
 function ensureSqlEditorDeps() {
   const script = path.join(frontendRoot, 'scripts', 'ensure-sql-editor-deps.mjs')
@@ -71,9 +107,9 @@ function runDualProcess(javaBin, env, extraArgs) {
   if (mvn.status !== 0) {
     process.exit(mvn.status ?? 1)
   }
-  const jar = path.join(desktopRoot, 'target', 'datawise-desktop-4.1.7.jar')
-  if (!existsSync(jar)) {
-    console.error(`[dev:jcef] missing ${jar}`)
+  const jar = resolveDesktopJar(desktopRoot)
+  if (!jar) {
+    console.error('[dev:jcef] missing datawise-desktop-*.jar under target/ (run mvn package)')
     process.exit(1)
   }
   const cp = isWin

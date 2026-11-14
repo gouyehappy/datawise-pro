@@ -27,10 +27,10 @@ class FederatedLineageParserTest {
 
     @BeforeEach
     void setUp() {
-        jsqlParser = new JsqlLineageParser(null);
+        jsqlParser = new JsqlLineageParser(() -> null);
         SqlLineageParserRegistry registry = mock(SqlLineageParserRegistry.class);
         when(registry.parseWithFallback(any())).thenAnswer(invocation -> jsqlParser.parse(invocation.getArgument(0)));
-        federatedParser = new FederatedLineageParser(registry);
+        federatedParser = new FederatedLineageParser(() -> registry);
     }
 
     @Test

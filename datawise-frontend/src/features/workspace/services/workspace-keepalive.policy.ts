@@ -8,12 +8,18 @@
  * - 会话型（SSH / K8s Pods / Jenkins / Nacos / Polaris / Pod Exec）
  * - 未保存草稿型（连接表单 / 新建库），切走再回来不能丢填写内容
  * - 本地文本（local-text）：切 Tab 保留 Monaco/预览滚动位置，避免重挂载回到文件头
+ * - SQL 控制台（console / SqlConsoleTab）：切 Tab 保留 Monaco 光标/undo/滚动（PERF-01）
  * 表详情等仍不缓存。
  * Community workbench 不用 KeepAlive：iframe 在 CEF 下被 display:none 会丢画面，
  * 改由 WorkspaceArea 常驻层用 visibility 切换（对齐 DBX「保留 iframe」）。
  *
+ * 主路径是 WorkspaceArea `WorkspaceTabPane` 常驻壳（visibility），不是 Vue KeepAlive。
+ * WORKSPACE_KEEPALIVE_INCLUDE 与 sticky types 对齐，供文档 / 回归与潜在 KeepAlive 宿主使用。
+ *
  * 小窗弹出：会话型 / 社区插件 / 当前主面 Tab 走同一 `WorkspaceTabPane` 壳，
  * 只改 mode（main|float|hidden），禁止换挂载点，避免 SSH/K8s 重连重载。
+ *
+ * SQL console 另有 LRU 上限：见 workspace-console-shell.policy.ts。
  */
 import type {WorkspaceTabType} from '@/core/types'
 
@@ -27,6 +33,7 @@ export const WORKSPACE_KEEPALIVE_INCLUDE = [
     'ConnectionFormTab',
     'CreateDatabaseTab',
     'LocalTextTab',
+    'SqlConsoleTab',
 ] as const
 
 /** 允许多个会话切 Tab 仍不断开；仅对这些 include 命中的 pane 生效。 */
@@ -50,6 +57,7 @@ export const WORKSPACE_SESSION_STICKY_TYPES: readonly WorkspaceTabType[] = [
     'connection',
     'create-database',
     'local-text',
+    'console',
 ] as const
 
 export function isWorkspaceSessionStickyType(type: WorkspaceTabType): boolean {

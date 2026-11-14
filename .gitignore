@@ -12,9 +12,12 @@ data/**
 .DS_Store
 .idea/**
 .vscode/**
+!.vscode/settings.json
 *.log
 test-out.txt
-.tmp-*/
+.tmp-*
+
+.workbuddy/
 
 # Backend build artifacts outside Maven target/
 datawise-backend/com/**
@@ -55,10 +58,18 @@ community-plugins/*/.dbx-clone*
 community-plugins/*/.dbx-ref*
 community-plugins/*/backend/target/
 community-plugins/*/frontend/node_modules/
+# Built plugin/pack jars — rebuild via package.mjs / pack build (C1)
+community-plugins/*/bin/*.jar
+community-plugins/examples/*/bin/*.jar
+packs/*/backend/*-module.jar
 docs/todolist/*
 
 # Local-only design / requirements / reviews (not for public upload)
 _private/
+
+# Machine-local privacy hooks (weekend push / weekday main guard); keep out of public history
+.githooks/pre-commit.local
+.githooks/pre-push
 
 # Filled GitHub identity (keep repo.meta.example.json tracked)
 repo.meta.json
@@ -69,8 +80,8 @@ dist/certs/*.priv.pem
 
 # Root docs kept locally; only docs/image is published
 /docs/*
-!/docs/image/
-!/docs/image/**
+!/docs/screenshot/
+!/docs/screenshot/**
 
 # Local screenshot source (published copy lives in docs/image)
 .image/

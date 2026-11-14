@@ -8,7 +8,11 @@
 .module-panel,
 .dw-panel,
 .workbench-edge__panel {
-    border: 1px solid var(--dw-panel-border);
+    /*
+     * 工作台分区优先无框色差（皮肤把 outline 置透明 / border:none）。
+     * classic：圆角+间隙；ide：贴合连续面。
+     */
+    border: 1px solid var(--dw-panel-outline);
     border-radius: var(--dw-panel-radius);
     background: var(--dw-bg-panel);
     box-shadow: var(--dw-panel-shadow);
@@ -19,6 +23,14 @@
 .module-panel,
 .dw-panel {
     background: var(--dw-bg-editor);
+}
+
+/*
+ * 三阶同族（IDEA）：
+ *   窗框 chrome → 资源树 panel（略抬）→ 工作台 editor（内容井）。
+ */
+.explorer.dw-surface {
+    background: var(--dw-bg-panel);
 }
 
 .dw-surface--flat {

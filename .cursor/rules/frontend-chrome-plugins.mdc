@@ -15,9 +15,9 @@ alwaysApply: false
 | 场景 | 用 | 不要 |
 |------|----|------|
 | 面板 / 卡片 / 图节点 / 内嵌壳 | `--dw-panel-radius` 或 `.dw-soft-card` | `--dw-radius-lg`、写死 px |
-| 按钮 / 芯片 / 导航 / 图标块 | `--dw-control-radius` / `-sm` | `--dw-panel-radius`（IDE 会变成直角按钮） |
+| 按钮 / 芯片 / 导航 / 图标块 | `--dw-control-radius` / `-sm` | `--dw-panel-radius`（勿把控件并进面板圆角） |
 
-IDE：`--dw-panel-radius: 0` → 所有 panel 指挥官自动直角。控件仍保留小圆角。
+IDE：chrome 底色 + **一整块**工作台岛（`--dw-shell-padding` gutter、`--dw-panel-radius`、岛阴影）；岛内 panel-gap=0。classic/atelier 有圆角；ledger 贴边。控件走 `--dw-control-radius`。
 
 ## Plugins
 
@@ -32,7 +32,7 @@ IDE：`--dw-panel-radius: 0` → 所有 panel 指挥官自动直角。控件仍�
 
 - `--dw-panel-radius` / `--dw-panel-shadow` — soft card
 - `--dw-inset-radius`（默认 = panel）— inset corners
-- IDE：`--dw-panel-radius: 0` → 插件自动直角，无需 `if (ide)`
+- IDE / ledger 差异只改 `--dw-panel-radius` 令牌，插件自动跟随，无需 `if (ide)`
 
 ## Do
 
@@ -43,7 +43,15 @@ IDE：`--dw-panel-radius: 0` → 所有 panel 指挥官自动直角。控件仍�
 ## Don't
 
 - 在 feature `<style>` 复制 workspace 上圆角 / inset 非对称角，或写死 `4/6/8/10/12px`
-- 用 `--dw-radius-lg` 当面板圆角（IDE 下仍 6px，跟直角壳打架）
+- 用 `--dw-radius-lg` 当面板圆角（应走 `--dw-panel-radius` / `.dw-soft-card`）
 - 用 press grip / overlay 盖住 soft-card 上沿却不给 overlay 同样的 `--top` 圆角
 - 把 connector/Java 插件和这套 **CSS 壳层插件**混为一谈
 - 控件圆角不要并进 `--dw-panel-radius`；控件走 `--dw-control-radius`，面板走 soft-card
+
+## Architecture boundary（有意搁置）
+
+左栏 `AppSideRail` 是 **模块页切换**（Database / AI / Settings…），不是 IDEA 式「每侧无限工具窗栈」。
+
+- **要做**：IDE 皮肤密度、TitleBar/StatusBar/ToolWindowShell/dock grip·pin·float 手感对齐 New UI
+- **不要做**（除非单独立项）：把侧栏模块改造成通用可停靠工具窗栈、或把 `module-registry` 页面语义并进四槽位 dock
+- 工作台内 explorer / terminal / shortcut / workspace 的 dock 浮动与钉回保持现状，与模块路由解耦

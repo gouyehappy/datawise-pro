@@ -22,7 +22,7 @@ class BackupTaskHandlerTest {
 
     @Test
     void acksOnSuccessForRun() {
-        BackupTaskHandler handler = new BackupTaskHandler(orchestrator);
+        BackupTaskHandler handler = new BackupTaskHandler(() -> orchestrator);
         when(context.getTaskId()).thenReturn("run-abc");
 
         handler.execute(context);
@@ -33,7 +33,7 @@ class BackupTaskHandlerTest {
 
     @Test
     void acksOnSuccessForRestore() {
-        BackupTaskHandler handler = new BackupTaskHandler(orchestrator);
+        BackupTaskHandler handler = new BackupTaskHandler(() -> orchestrator);
         when(context.getTaskId()).thenReturn("rst-xyz");
 
         handler.execute(context);
@@ -44,7 +44,7 @@ class BackupTaskHandlerTest {
 
     @Test
     void acksEvenOnFailure() {
-        BackupTaskHandler handler = new BackupTaskHandler(orchestrator);
+        BackupTaskHandler handler = new BackupTaskHandler(() -> orchestrator);
         when(context.getTaskId()).thenReturn("run-fail");
         doThrow(new RuntimeException("boom"))
                 .when(orchestrator).executeAdmittedRun(eq("run-fail"), any());

@@ -9,6 +9,8 @@ public final class DatawiseErrorCodes {
     public static final String FORBIDDEN = "FORBIDDEN";
     public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
     public static final String BAD_REQUEST = "BAD_REQUEST";
+    /** Login failure throttle lockout (stable client code). */
+    public static final String LOGIN_LOCKED = "LOGIN_LOCKED";
     public static final String SQL_EXECUTION_FAILED = "SQL_EXECUTION_FAILED";
     public static final String SQL_QUERY_TIMEOUT = "SQL_QUERY_TIMEOUT";
     /** Interactive SQL rejected: global or per-user in-flight limit. */
@@ -52,6 +54,8 @@ public final class DatawiseErrorCodes {
     public static final String MAKER_CHECKER_SELF_APPROVE = "MAKER_CHECKER_SELF_APPROVE";
     /** Team audit list/export restricted to owner/admin. */
     public static final String TEAM_AUDIT_FORBIDDEN = "TEAM_AUDIT_FORBIDDEN";
+    /** Shared SQL query optimistic-lock conflict — client should pull latest. */
+    public static final String SHARED_QUERY_CONFLICT = "SHARED_QUERY_CONFLICT";
 
     private DatawiseErrorCodes() {
     }

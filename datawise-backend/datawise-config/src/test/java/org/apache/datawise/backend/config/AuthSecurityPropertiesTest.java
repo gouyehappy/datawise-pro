@@ -18,13 +18,11 @@ class AuthSecurityPropertiesTest {
         assertTrue(props.isPublicPath("/api/auth/register"));
         assertTrue(props.isPublicPath("/api/auth/oidc/login"));
         assertTrue(props.isPublicPath("/api/auth/oidc/callback"));
-        assertTrue(props.isPublicPath("/actuator/prometheus"));
-        assertTrue(props.isPublicPath("/v3/api-docs"));
-        assertTrue(props.isPublicPath("/swagger-ui.html"));
-        assertTrue(props.isPublicPath("/swagger-ui/index.html"));
+        assertTrue(props.isPublicPath("/api/public/shares/abc"));
         assertTrue(props.isPublicPath("/ws/ssh-shell"));
         assertTrue(props.isPublicPath("/ws/k8s-exec"));
         assertTrue(props.isPublicPath("/ws/terminal"));
+        assertTrue(props.isPublicPath("/ws/community-plugin-stream"));
     }
 
     @Test
@@ -38,6 +36,12 @@ class AuthSecurityPropertiesTest {
         assertFalse(props.isPublicPath("/api/explorer/tree"));
         assertFalse(props.isPublicPath("/api/sql/execute"));
         assertFalse(props.isPublicPath("/api/system/metrics"));
+        // Docs / metrics are not public in Java defaults (local yml may re-add swagger)
+        assertFalse(
+                props.isPublicPath("/actuator/prometheus"),
+                () -> "unexpected public prefixes=" + props.getPublicPathPrefixes());
+        assertFalse(props.isPublicPath("/v3/api-docs"));
+        assertFalse(props.isPublicPath("/swagger-ui.html"));
         assertFalse(props.isPublicPath("/ws/other"));
         assertFalse(props.isPublicPath("/ws"));
     }

@@ -1,0 +1,7 @@
+{
+  "dbType": "sybase",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false
+  }
+}

@@ -111,8 +111,12 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/explorer")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_OPEN)
 public class ExplorerKubernetesController {
 
     private final ExplorerKubernetesService kubernetesService;
@@ -237,6 +241,7 @@ public class ExplorerKubernetesController {
         }
     
         @PostMapping("/connections/{connectionId}/k8s/apply")
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_DANGEROUS)
         public ApiResponse<K8sApplyResultDto> applyKubernetesYaml(
                 @PathVariable String connectionId,
                 @RequestBody Map<String, String> body
@@ -247,6 +252,7 @@ public class ExplorerKubernetesController {
         }
     
         @DeleteMapping("/connections/{connectionId}/k8s/namespaces/{namespace}/pods/{podName}")
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_DANGEROUS)
         public ApiResponse<K8sMutationResultDto> deleteKubernetesPod(
                 @PathVariable String connectionId,
                 @PathVariable String namespace,
@@ -256,6 +262,7 @@ public class ExplorerKubernetesController {
         }
     
         @PostMapping("/connections/{connectionId}/k8s/namespaces/{namespace}/deployments/{deploymentName}/restart")
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_DANGEROUS)
         public ApiResponse<K8sMutationResultDto> restartKubernetesDeployment(
                 @PathVariable String connectionId,
                 @PathVariable String namespace,

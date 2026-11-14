@@ -1,0 +1,19 @@
+{
+  "id": "ssh",
+  "description": "SSH connection + optional jump host (MetaForge S1).",
+  "fields": [
+    {"key": "host", "label": "connection.host", "type": "text", "binding": "host", "required": true, "description": "connection.hints.sshHost"},
+    {"key": "port", "label": "connection.port", "type": "number", "binding": "port"},
+    {"key": "user", "label": "connection.username", "type": "text", "binding": "user"},
+    {"key": "password", "label": "connection.password", "type": "password", "binding": "password", "description": "connection.hints.sshPassword"},
+    {"key": "sshPrivateKey", "label": "connection.sshPrivateKey", "type": "textarea", "binding": "sshPrivateKey"},
+    {"key": "sshPassphrase", "label": "connection.sshPassphrase", "type": "password", "binding": "sshPassphrase"},
+    {"key": "sshEnabled", "label": "connection.jumpEnable", "type": "boolean", "binding": "sshEnabled"},
+    {"key": "sshHost", "label": "connection.jumpHost", "type": "text", "binding": "sshHost", "visible_when": {"field": "sshEnabled", "one_of": ["true"]}},
+    {"key": "sshPort", "label": "connection.jumpPort", "type": "text", "binding": "sshPort", "visible_when": {"field": "sshEnabled", "one_of": ["true"]}},
+    {"key": "sshUser", "label": "connection.jumpUser", "type": "text", "binding": "sshUser", "visible_when": {"field": "sshEnabled", "one_of": ["true"]}},
+    {"key": "sshPassword", "label": "connection.jumpPassword", "type": "password", "binding": "sshPassword", "visible_when": {"field": "sshEnabled", "one_of": ["true"]}},
+    {"key": "jumpPrivateKey", "label": "connection.jumpPrivateKey", "type": "textarea", "binding": "jumpPrivateKey", "visible_when": {"field": "sshEnabled", "one_of": ["true"]}},
+    {"key": "jumpPassphrase", "label": "connection.jumpPassphrase", "type": "password", "binding": "jumpPassphrase", "visible_when": {"field": "sshEnabled", "one_of": ["true"]}}
+  ]
+}

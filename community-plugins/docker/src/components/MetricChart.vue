@@ -51,7 +51,7 @@ function buildOption(): echarts.EChartsCoreOption {
   const appearance = root.dataset.dwTheme || root.dataset.theme || root.dataset.dbxTheme || '';
   const dark = appearance ? appearance === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
   const textColor = readToken('--color-muted-foreground', readToken('--muted-foreground', dark ? '#c4c7cc' : '#71717a'));
-  const splitColor = readToken('--color-border', readToken('--border', dark ? '#2e3440' : '#e4e4e7'));
+  const splitColor = readToken('--color-border', readToken('--border', dark ? 'rgba(255, 255, 255, 0.08)' : '#e4e4e7'));
   const totalPoints = props.labels.length;
 
   return {
@@ -64,7 +64,7 @@ function buildOption(): echarts.EChartsCoreOption {
     tooltip: {
       trigger: 'axis',
       confine: true,
-      backgroundColor: readToken('--background', dark ? '#0c1015' : '#ffffff'),
+      backgroundColor: readToken('--background', dark ? '#1a1b1e' : '#ffffff'),
       borderColor: splitColor,
       textStyle: { color: readToken('--foreground', dark ? '#f0f0f3' : '#18181b'), fontSize: 11 },
       valueFormatter: (value: unknown) => format(Number(value)),

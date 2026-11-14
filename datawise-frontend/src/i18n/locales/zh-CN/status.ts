@@ -10,6 +10,8 @@ export default {
     timeLabel: '耗时',
     rowsLabel: '行数',
     showAll: '导出任务',
+    menuLabel: '更多',
+    menuProject: '项目 · {name}',
     quickLaunch: '快启',
     projectHint: '当前项目：{name}',
     entitlementChipOk: '已授权',

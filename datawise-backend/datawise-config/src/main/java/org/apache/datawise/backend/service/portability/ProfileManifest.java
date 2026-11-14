@@ -11,6 +11,8 @@ public class ProfileManifest {
     public static final String KIND = "datawise-profile";
     public static final int SCHEMA_VERSION = 1;
     public static final String SECRET_MODE_SEALED = "sealed";
+    /** Cloud-sync default: credentials stripped from payload and not packaged. */
+    public static final String SECRET_MODE_OMITTED = "omitted";
 
     private String kind = KIND;
     private int schemaVersion = SCHEMA_VERSION;

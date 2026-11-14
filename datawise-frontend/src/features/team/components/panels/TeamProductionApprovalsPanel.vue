@@ -85,7 +85,12 @@ async function approve(approvalId: string) {
         const result = await teamStore.approveProductionApproval(props.teamId, approvalId)
         closeDetail()
         if (result.status === 'executed') {
-            layout.showSuccessToast(t('team.productionApprovals.approveSuccess'))
+            layout.notifyQuiet({
+              category: 'workspace',
+              titleKey: 'approvalDone',
+              bodyKey: 'approvalDone',
+              params: {detail: t('team.productionApprovals.approveSuccess')},
+            })
         } else {
             layout.showErrorToast(
                 t('team.productionApprovals.approveFailed', {error: result.executionError ?? ''}),
@@ -121,7 +126,12 @@ async function confirmReject() {
         await teamStore.rejectProductionApproval(props.teamId, approvalId, rejectComment.value.trim() || undefined)
         closeReject()
         closeDetail()
-        layout.showSuccessToast(t('team.productionApprovals.rejectSuccess'))
+        layout.notifyQuiet({
+          category: 'workspace',
+          titleKey: 'approvalDone',
+          bodyKey: 'approvalDone',
+          params: {detail: t('team.productionApprovals.rejectSuccess')},
+        })
         await reload()
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'team.productionApprovals.rejectError')

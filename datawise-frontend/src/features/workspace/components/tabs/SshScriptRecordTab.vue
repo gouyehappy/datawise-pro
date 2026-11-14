@@ -29,7 +29,7 @@ import type {SshCommandItem} from '@/features/ssh/types/ssh-script-record.types'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {sshScriptRecordNodeId, sshScriptRecordsNodeId} from '@/features/explorer/services/ssh-feature-tree.service'
-import {resolveApiErrorMessage} from '@/shared/api/http/api-error-message'
+import {resolveCaughtApiErrorMessage} from '@/shared/api/http/api-error-message'
 import {sendToSshTerminal, listSshTerminalHandles} from '@/features/terminal/services/ssh-terminal-session.service'
 import {notifySshScriptRecordsChanged} from '@/features/ssh/services/ssh-script-records-events'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
@@ -196,7 +196,7 @@ async function reloadFromServer() {
       recordId: record.id,
     })
   } catch (error) {
-    loadError.value = resolveApiErrorMessage(error)
+    loadError.value = resolveCaughtApiErrorMessage(error, t, 'ssh.scriptRecord.loadFailed')
   }
 }
 
@@ -232,7 +232,6 @@ async function copyRecordText() {
   try {
     await navigator.clipboard.writeText(payload)
     loadError.value = ''
-    layout.showSuccessToast(t('ssh.scriptRecord.copied'))
   } catch {
     layout.showErrorToast(t('ssh.scriptRecord.copyFailed'))
   }
@@ -271,11 +270,7 @@ async function sendPayloadToTerminal(payload: string, options?: {appendNewline?:
     focus: true,
   })
   if (ok) {
-    layout.showSuccessToast(
-        options?.appendNewline === false
-            ? t('ssh.scriptRecord.sentToTerminal')
-            : t('ssh.scriptRecord.sentRunToTerminal'),
-    )
+    // 终端收到内容即可，不弹 toast。
     return
   }
   loadError.value = t('ssh.scriptRecord.sendFailed')
@@ -332,7 +327,6 @@ async function copyEntry(entry: MyCommandEntry, event: MouseEvent) {
   event.stopPropagation()
   try {
     await navigator.clipboard.writeText(entry.command)
-    layout.showSuccessToast(t('ssh.scriptRecord.copiedEntry'))
   } catch {
     layout.showErrorToast(t('ssh.scriptRecord.copyFailed'))
   }
@@ -379,11 +373,10 @@ async function saveRecord(options?: {notify?: boolean}): Promise<boolean> {
     })
     await refreshAfterSave(connectionId, recordId, saved.title)
     if (options?.notify !== false) {
-      layout.showSuccessToast(t('ssh.scriptRecord.saveSuccess'))
     }
     return true
   } catch (error) {
-    loadError.value = resolveApiErrorMessage(error) || t('ssh.scriptRecord.saveFailed')
+    loadError.value = resolveCaughtApiErrorMessage(error, t, 'ssh.scriptRecord.saveFailed')
     layout.showErrorToast(loadError.value)
     return false
   } finally {

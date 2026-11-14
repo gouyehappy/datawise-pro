@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/image/logo.png" width="72" alt="DataWise" />
+  <img src="docs/screenshot/logo.png" width="72" alt="DataWise" />
 </p>
 
 <h1 align="center">DataWise</h1>
@@ -49,7 +49,7 @@ DataWise is an open-source data workbench for teams: connect databases and ops s
 Unify databases and ops connections, browse by environment tags, reopen recent work, and jump into query or AI from the home screen.
 
 <p align="center">
-  <img src="docs/image/home.png" alt="Home" width="900" />
+  <img src="docs/screenshot/home.png" alt="Home" width="900" />
 </p>
 
 ### SQL console — write and run where your scripts live
@@ -57,7 +57,7 @@ Unify databases and ops connections, browse by environment tags, reopen recent w
 Monaco SQL editor with project scripts, docs, and multi-environment folders side by side.
 
 <p align="center">
-  <img src="docs/image/console.png" alt="SQL console" width="900" />
+  <img src="docs/screenshot/console.png" alt="SQL console" width="900" />
 </p>
 
 ### AI Agent — from question to insight
@@ -65,7 +65,7 @@ Monaco SQL editor with project scripts, docs, and multi-environment folders side
 Natural language to SQL, explain and optimize, then run an analysis pipeline — charts, reports, and result previews in the same workbench.
 
 <p align="center">
-  <img src="docs/image/agent.png" alt="AI Agent" width="900" />
+  <img src="docs/screenshot/agent.png" alt="AI Agent" width="900" />
 </p>
 
 ### Community plugins — ops workbenches in one host
@@ -73,7 +73,7 @@ Natural language to SQL, explain and optimize, then run an analysis pipeline —
 Install `.dwp` plugins (SSH, Git Ops, Docker / K8s, Redis / Kafka, logs, HTTP, and more). The host owns connections; each plugin opens its own workbench.
 
 <p align="center">
-  <img src="docs/image/plugin.png" alt="Community plugins" width="900" />
+  <img src="docs/screenshot/plugin.png" alt="Community plugins" width="900" />
 </p>
 
 ---
@@ -136,6 +136,12 @@ More scripts: [`scripts/README.md`](./scripts/README.md). Dev ports: frontend `2
 |------|-----|
 | Gitee | https://gitee.com/gouyehappy/datawise-pro.git |
 | GitHub | https://github.com/gouyehappy/datawise-pro.git |
+
+---
+
+## Release
+
+Desktop assets use the `desktop-v5.0.0-` prefix. Cut a release with `git tag v5.0.0`.
 
 ---
 

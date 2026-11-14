@@ -1,12 +1,24 @@
 import type {ExecuteSqlResult, MigrationBatchReport} from './types.js'
 
-export function formatMigrationReport(report: MigrationBatchReport, json: boolean): string {
+export function formatMigrationReport(
+    report: MigrationBatchReport & {
+        structureDeployAtomicity?: string
+        structureDeployHint?: string
+    },
+    json: boolean,
+): string {
     if (json) {
         return `${JSON.stringify(report, null, 2)}\n`
     }
     const lines = [
         `Migration ${report.overallStatus}: ${report.successCount}/${report.totalTables} tables, ${report.totalRowsMigrated} rows in ${report.durationMs}ms`,
     ]
+    if (report.structureDeployAtomicity) {
+        lines.push(`  atomicity: ${report.structureDeployAtomicity}`)
+    }
+    if (report.structureDeployHint) {
+        lines.push(`  hint: ${report.structureDeployHint}`)
+    }
     for (const table of report.tables) {
         const detail = table.message ? ` — ${table.message}` : ''
         lines.push(`  ${table.status.padEnd(7)} ${table.tableName}: ${table.rowsMigrated} rows (${table.durationMs}ms)${detail}`)

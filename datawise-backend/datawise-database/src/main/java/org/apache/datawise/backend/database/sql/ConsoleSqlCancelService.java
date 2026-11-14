@@ -29,12 +29,20 @@ public class ConsoleSqlCancelService {
         long userId = userAccountService.requireUserId();
         String mode = normalizeMode(request.mode());
         String executionKey = executionKey(userId, request.sessionKey());
+        String cancelKey = request.queryId() != null && !request.queryId().isBlank()
+                ? request.queryId().trim()
+                : executionKey;
 
         var outcome = "connection".equals(mode)
-                ? connectorFacade.jdbc().session().cancelConnection(executionKey)
-                : connectorFacade.jdbc().session().cancelQuery(executionKey);
+                ? connectorFacade.jdbc().session().cancelConnection(cancelKey)
+                : connectorFacade.jdbc().session().cancelQuery(cancelKey);
 
-        return new CancelSqlExecutionResult(outcome.cancelled(), mode, outcome.message());
+        return new CancelSqlExecutionResult(
+                outcome.cancelled(),
+                mode,
+                outcome.message(),
+                outcome.queryId()
+        );
     }
 
     static String executionKey(long userId, String sessionKey) {

@@ -169,6 +169,16 @@ watch(activeTab, () => {
     void reloadTeamDetails()
 })
 
+watch(
+    () => teamStore.requestedTab,
+    (tab) => {
+      if (!tab) return
+      activeTab.value = tab
+      teamStore.consumeRequestedTab()
+    },
+    {immediate: true},
+)
+
 async function reloadTeamDetails() {
     const team = activeTeam.value
     if (!team) {
@@ -256,7 +266,6 @@ async function submitCreate() {
     }
     try {
         const team = await teamStore.createTeam(name)
-        layout.showSuccessToast(t('team.created', {name: team.name}))
         createName.value = ''
     } catch (error) {
         createError.value = resolveCaughtApiErrorMessage(error, t, 'team.createFailed')
@@ -273,12 +282,10 @@ async function submitJoin() {
     try {
         const result = await teamStore.joinTeam(code)
         if (result.status === 'joined' && result.team) {
-            layout.showSuccessToast(t('team.joined', {name: result.team.name}))
         } else if (result.status === 'pending') {
             layout.showToast(result.message || t('team.joinPending'))
             await loadMyJoinRequests()
         } else if (result.status === 'already_member' && result.team) {
-            layout.showSuccessToast(result.message || t('team.alreadyMember', {name: result.team.name}))
             teamStore.activeTeamId = result.team.id
         } else {
             joinError.value = result.message || t('team.joinFailed')
@@ -315,7 +322,6 @@ async function saveSharedConnections() {
             toStoredConnectionAccess(connectionAccess),
         )
         await shortcutPanel.load()
-        layout.showSuccessToast(t('team.sharedConnectionsSaved'))
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'team.sharedConnectionsSaveFailed')
         layout.showErrorToast(message)
@@ -354,7 +360,6 @@ async function saveVisibleProjects() {
     try {
         const ids = restrictVisibleProjects.value ? [...visibleProjectIds.value] : []
         await teamStore.updateVisibleProjects(team.id, ids)
-        layout.showSuccessToast(t('team.visibleProjectsSaved'))
     } catch (error) {
         layout.showErrorToast(resolveCaughtApiErrorMessage(error, t, 'team.visibleProjectsSaveFailed'))
     } finally {
@@ -385,7 +390,6 @@ async function saveOnCallConnections() {
         const payload = pruneOnCallConnectionIds(onCallConnectionIds.value, sharedIds)
         onCallConnectionIds.value = payload
         await teamStore.updateOnCallConnections(team.id, payload)
-        layout.showSuccessToast(t('team.onCallConnectionsSaved'))
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'team.onCallConnectionsSaveFailed')
         layout.showErrorToast(message)
@@ -404,7 +408,6 @@ async function saveSharedConsoles() {
     try {
         await teamStore.updateSharedConsoles(team.id, parseDelimitedIds(sharedConsolesInput.value))
         await shortcutPanel.load()
-        layout.showSuccessToast(t('team.sharedConsolesSaved'))
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'team.sharedConsolesSaveFailed')
         layout.showErrorToast(message)
@@ -423,7 +426,6 @@ async function saveShareSqlHistory() {
     try {
         await teamStore.updateShareSqlHistory(team.id, shareSqlHistory.value)
         await shortcutPanel.load()
-        layout.showSuccessToast(t('team.shareSqlHistorySaved'))
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'team.shareSqlHistorySaveFailed')
         layout.showErrorToast(message)
@@ -441,7 +443,6 @@ async function saveTeamSettings() {
     savingSettings.value = true
     try {
         await teamStore.updateSettings(team.id, requireInviteApproval.value)
-        layout.showSuccessToast(t('team.settingsSaved'))
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'team.settingsSaveFailed')
         layout.showErrorToast(message)
@@ -457,7 +458,6 @@ async function updateMemberRole(member: TeamMember, role: TeamRole) {
     try {
         await teamStore.updateMemberRole(team.id, member.userId, role)
         await loadMembers(team.id)
-        layout.showSuccessToast(t('team.roleUpdated'))
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'team.roleUpdateFailed')
         layout.showErrorToast(message)
@@ -473,7 +473,6 @@ async function approveInvite(invite: TeamInvite) {
     try {
         await teamStore.approveInvite(team.id, invite.id)
         await Promise.all([loadInvites(team.id), loadMembers(team.id)])
-        layout.showSuccessToast(t('team.inviteApproved'))
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'team.inviteActionFailed')
         layout.showErrorToast(message)
@@ -489,7 +488,6 @@ async function rejectInvite(invite: TeamInvite) {
     try {
         await teamStore.rejectInvite(team.id, invite.id)
         await Promise.all([loadInvites(team.id), teamStore.load()])
-        layout.showSuccessToast(t('team.inviteRejected'))
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'team.inviteActionFailed')
         layout.showErrorToast(message)
@@ -502,7 +500,6 @@ function copyInviteCode() {
     const code = activeTeam.value?.inviteCode
     if (!code) return
     void navigator.clipboard.writeText(code).then(() => {
-        layout.showSuccessToast(t('team.inviteCodeCopied'))
     })
 }
 

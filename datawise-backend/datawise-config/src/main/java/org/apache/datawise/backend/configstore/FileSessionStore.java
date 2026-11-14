@@ -57,8 +57,12 @@ public class FileSessionStore implements SessionStore {
             deleteById(id);
             return Optional.empty();
         }
-        if (sessionPolicy.slidingRenewal()) {
-            return Optional.of(renew(session));
+        if (sessionPolicy.shouldRenewNow(session.getExpiresAt())) {
+            try {
+                return Optional.of(renew(session));
+            } catch (IllegalStateException ex) {
+                return Optional.empty();
+            }
         }
         return Optional.of(session);
     }
@@ -80,6 +84,10 @@ public class FileSessionStore implements SessionStore {
 
     @Override
     public SessionEntity renew(SessionEntity session) {
+        // Do not resurrect a session that was deleted (logout) between authenticate() and renew().
+        if (session.getId() == null || findById(session.getId()).isEmpty()) {
+            throw new IllegalStateException("Session no longer exists");
+        }
         session.setExpiresAt(Instant.now().plus(sessionPolicy.ttlMinutes(), ChronoUnit.MINUTES));
         return save(session);
     }

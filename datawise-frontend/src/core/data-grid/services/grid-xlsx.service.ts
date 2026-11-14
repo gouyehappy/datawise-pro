@@ -1,3 +1,6 @@
+/**
+ * Spreadsheet I/O for the data grid (exceljs for both export and parse).
+ */
 import type {TableColumn, TableRow} from '@/core/types'
 import {formatCellFullValue, unwrapCellValue} from '@/core/utils/cell-value-format'
 import {columnRowKey, readRowCell} from '@/core/utils/query-result-column'
@@ -18,10 +21,34 @@ const MAX_COL_WIDTH = 48
 const COL_PADDING = 2
 const NUMERIC_SAMPLE_ROWS = 50
 const NUMERIC_RATIO_THRESHOLD = 0.8
+/** Excel loses precision above 15 significant digits; keep those cells as text. */
+const MAX_NUMERIC_SCALE_FORMAT = 15
+const EXCEL_SIGNIFICANT_DIGIT_LIMIT = 15
 
 function normalizeSpreadsheetCell(value: unknown): string {
     if (value == null) return ''
     return String(value).trim()
+}
+
+/** Leading-zero / oversize / scientific strings must stay text to avoid fidelity loss. */
+export function shouldKeepNumericStringAsText(raw: string): boolean {
+    const trimmed = raw.trim()
+    if (!trimmed) return false
+    if (/[eE]/.test(trimmed)) return true
+    if (!/^[+-]?\d+(\.\d+)?$/.test(trimmed)) return false
+    // 007 / 01.5 — Number() would drop leading zeros
+    if (/^[+-]?0\d/.test(trimmed)) return true
+    const digits = trimmed.replace(/^[+-]/, '').replace(/\./, '')
+    const significant = digits.replace(/^0+/, '')
+    return significant.length > EXCEL_SIGNIFICANT_DIGIT_LIMIT
+}
+
+export function decimalFractionDigits(value: string): number {
+    const trimmed = value.trim()
+    if (/[eE]/.test(trimmed)) return 0
+    const dot = trimmed.indexOf('.')
+    if (dot < 0) return 0
+    return [...trimmed.slice(dot + 1)].filter((ch) => ch >= '0' && ch <= '9').length
 }
 
 function coerceNumericValue(value: unknown): number | null {
@@ -30,6 +57,7 @@ function coerceNumericValue(value: unknown): number | null {
     if (typeof unwrapped === 'string') {
         const trimmed = unwrapped.trim()
         if (!trimmed) return null
+        if (shouldKeepNumericStringAsText(trimmed)) return null
         if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed)
     }
     return null
@@ -58,16 +86,22 @@ function columnLooksNumeric(rows: TableRow[], col: TableColumn): boolean {
 }
 
 function columnNumericFormat(rows: TableRow[], col: TableColumn): string {
-    let hasFraction = false
+    let maxScale = 0
     for (const row of rows.slice(0, NUMERIC_SAMPLE_ROWS)) {
-        const numericValue = coerceNumericValue(readRowCell(row, col))
-        if (numericValue == null) continue
-        if (!Number.isInteger(numericValue)) {
-            hasFraction = true
-            break
+        const raw = unwrapCellValue(readRowCell(row, col))
+        if (typeof raw === 'string') {
+            maxScale = Math.max(maxScale, decimalFractionDigits(raw))
+            continue
         }
+        const numericValue = coerceNumericValue(raw)
+        if (numericValue == null || Number.isInteger(numericValue)) continue
+        const asText = String(numericValue)
+        maxScale = Math.max(maxScale, decimalFractionDigits(asText))
     }
-    return hasFraction ? '#,##0.##' : '#,##0'
+    if (maxScale <= 0) return '#,##0'
+    const scale = Math.min(maxScale, MAX_NUMERIC_SCALE_FORMAT)
+    // Fixed decimals preserve trailing zeros (e.g. 1.230 → 0.000)
+    return `0.${'0'.repeat(scale)}`
 }
 
 function sanitizeSheetName(name: string): string {
@@ -154,17 +188,28 @@ export async function serializeGridToXlsxBuffer(
     return buffer as ArrayBuffer
 }
 
-export async function parseXlsxBuffer(buffer: ArrayBuffer): Promise<SpreadsheetParseResult> {
-    const XLSX = await import('xlsx')
-    const workbook = XLSX.read(buffer, {type: 'array'})
-    const sheetName = workbook.SheetNames[0]
-    if (!sheetName) return {headers: [], rows: []}
+function cellDisplayText(cell: {text?: string; value?: unknown}): string {
+    if (typeof cell.text === 'string' && cell.text.length > 0) {
+        return normalizeSpreadsheetCell(cell.text)
+    }
+    return normalizeSpreadsheetCell(cell.value)
+}
 
-    const sheet = workbook.Sheets[sheetName]
-    const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-        header: 1,
-        defval: '',
-        raw: false,
+export async function parseXlsxBuffer(buffer: ArrayBuffer): Promise<SpreadsheetParseResult> {
+    const ExcelJS = (await import('exceljs')).default
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load(buffer)
+    const sheet = workbook.worksheets[0]
+    if (!sheet) return {headers: [], rows: []}
+
+    const matrix: string[][] = []
+    sheet.eachRow({includeEmpty: false}, (row) => {
+        const cells: string[] = []
+        row.eachCell({includeEmpty: true}, (cell, colNumber) => {
+            while (cells.length < colNumber - 1) cells.push('')
+            cells[colNumber - 1] = cellDisplayText(cell)
+        })
+        matrix.push(cells)
     })
     if (!matrix.length) return {headers: [], rows: []}
 
@@ -172,7 +217,7 @@ export async function parseXlsxBuffer(buffer: ArrayBuffer): Promise<SpreadsheetP
     const rows = matrix
         .slice(1)
         .map((line) => {
-            const cells = (line ?? []).map(normalizeSpreadsheetCell)
+            const cells = [...line]
             while (cells.length < headers.length) cells.push('')
             return cells.slice(0, headers.length)
         })

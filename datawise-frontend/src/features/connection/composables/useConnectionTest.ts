@@ -5,7 +5,8 @@ import {connectionApi} from '@/api'
 import {registerConnectionHealthCheck} from '@/features/explorer/services/register-connection-health.service'
 import {
     resolveApiErrorMessage,
-    resolveDisplayApiErrorMessage,
+    resolveCaughtApiErrorMessage,
+    resolveCaughtMessage,
 } from '@/shared/api/http/api-error-message'
 import {ApiError} from '@/shared/api/http/request'
 import {parseDatasourceNotAvailableType} from '@/shared/api/http/api-error-codes'
@@ -32,6 +33,8 @@ export function useConnectionTest(
     const missingConnectorLabel = ref<string | null>(null)
     const installing = ref(false)
     const installProgress = ref<string | null>(null)
+    /** A2-2: JDBC 安装失败后提供市场兜底 */
+    const driverInstallFailed = ref(false)
 
     function clearInstallState() {
         missingConnectorId.value = null
@@ -44,6 +47,7 @@ export function useConnectionTest(
         testing.value = true
         testMessage.value = null
         clearInstallState()
+        driverInstallFailed.value = false
         const payload = getPayload()
 
         if (!payload.host?.trim() && payload.dbType !== 'plugin') {
@@ -101,9 +105,12 @@ export function useConnectionTest(
                 )
                 if (outcome === 'cancelled' || outcome === 'failed') {
                     testOk.value = false
+                    driverInstallFailed.value = outcome === 'failed'
                     testMessage.value = outcome === 'cancelled'
                         ? t('connection.driverInstallCancelled')
-                        : (driverInstall.error || t('connection.driverInstallFailed'))
+                        : t('connection.driverInstallFailedHint', {
+                            detail: driverInstall.error || t('connection.driverInstallFailed'),
+                        })
                     testing.value = false
                     return
                 }
@@ -123,7 +130,7 @@ export function useConnectionTest(
                         message: result.message || 'OK',
                         latency: result.latencyMs ?? 0,
                     })
-                    : (result.message || t('connection.testFailed'))
+                    : resolveCaughtMessage(result.message, t, 'connection.testFailed')
                 if (success) {
                     const connectionId = getConnectionId?.()
                     if (connectionId) {
@@ -136,7 +143,7 @@ export function useConnectionTest(
             testOk.value = result.ok
             testMessage.value = result.ok
                 ? t('connection.testSuccess', {message: result.message, latency: result.latencyMs})
-                : result.message
+                : resolveCaughtMessage(result.message, t, 'connection.testFailed')
             if (result.ok) {
                 const connectionId = getConnectionId?.()
                 if (connectionId) {
@@ -161,8 +168,7 @@ export function useConnectionTest(
                 testMessage.value = t('connection.testConnectorMissing', {type: label})
                 return
             }
-            const display = resolveDisplayApiErrorMessage(error, t)
-            testMessage.value = display !== raw ? display : (raw || t('connection.testFailed'))
+            testMessage.value = resolveCaughtApiErrorMessage(error, t, 'connection.testFailed')
         } finally {
             testing.value = false
         }
@@ -201,7 +207,7 @@ export function useConnectionTest(
             testMessage.value = t('connection.installConnectorDone')
         } catch (error) {
             testOk.value = false
-            testMessage.value = resolveDisplayApiErrorMessage(error, t) || t('connection.installConnectorFailed')
+            testMessage.value = resolveCaughtApiErrorMessage(error, t, 'connection.installConnectorFailed')
             return
         } finally {
             installing.value = false
@@ -218,6 +224,7 @@ export function useConnectionTest(
         missingConnectorLabel,
         installing,
         installProgress,
+        driverInstallFailed,
         testConnection,
         installMissingConnectorAndRetry,
     }

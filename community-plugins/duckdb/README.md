@@ -27,6 +27,15 @@ node community-plugins/duckdb/package.mjs
 1. 打开 **社区插件** → 设置 → **允许未签名开发包**。
 2. 安装该 `.dwp`。
 
+## 一键预览（T-FILE-1）
+
+安装本插件后，宿主会读取 manifest 里的 `localDataPreview.extensions`（不硬编码插件 id）：
+
+- Welcome → **本地数据文件**
+- Explorer 本地文件树 → 右键 **表格预览…**（`.parquet` 双击也会走预览）
+
+宿主打开工作台时带上中性 intent `preview-local-file`；本 UI 会 `register` 该文件并执行 `SELECT * … LIMIT 100`。
+
 ## 操作
 
 1. **新建连接** → **Plugins** → **DuckDB / 文件**。

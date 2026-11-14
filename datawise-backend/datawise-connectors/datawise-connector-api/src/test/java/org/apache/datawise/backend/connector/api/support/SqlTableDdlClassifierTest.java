@@ -27,6 +27,15 @@ class SqlTableDdlClassifierTest {
     }
 
     @Test
+    void matchesAlterTable() {
+        SqlTableDdlClassifier.Match match = SqlTableDdlClassifier.match(
+                "ALTER TABLE `shop`.`orders` ADD COLUMN n INT");
+        assertNotNull(match);
+        assertEquals(SqlTableDdlClassifier.Kind.ALTER, match.kind());
+        assertEquals("orders", match.tableName());
+    }
+
+    @Test
     void ignoresNonTableDdl() {
         assertNull(SqlTableDdlClassifier.match("CREATE VIEW v AS SELECT 1"));
         assertNull(SqlTableDdlClassifier.match("TRUNCATE TABLE orders"));

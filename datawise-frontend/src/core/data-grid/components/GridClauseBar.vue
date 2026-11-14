@@ -476,7 +476,7 @@ onUnmounted(() => {
   align-items: stretch;
   width: 100%;
   height: var(--dw-tab-height);
-  border-bottom: 1px solid color-mix(in srgb, var(--dw-border-light) 55%, transparent);
+  border-bottom: none;
   background: color-mix(in srgb, var(--dw-bg-panel) 94%, var(--dw-bg-editor));
 }
 
@@ -522,7 +522,7 @@ onUnmounted(() => {
 .grid-clause-bar__pane--order {
   flex: 1 1 0;
   min-width: 0;
-  border-left: 1px solid color-mix(in srgb, var(--dw-border-light) 55%, transparent);
+  border-left: none;
 }
 
 .grid-clause-bar__chip {
@@ -532,7 +532,7 @@ onUnmounted(() => {
   flex: 0 0 auto;
   height: 100%;
   padding: 0 var(--dw-space-3) 0 var(--dw-space-2);
-  border-right: 1px solid color-mix(in srgb, var(--dw-border-light) 55%, transparent);
+  border-right: none;
   background: color-mix(in srgb, var(--dw-bg-muted) 22%, transparent);
   color: var(--dw-primary);
 }
@@ -665,7 +665,7 @@ onUnmounted(() => {
 
   .grid-clause-bar__pane--order {
     border-left: none;
-    border-top: 1px solid color-mix(in srgb, var(--dw-border-light) 55%, transparent);
+    border-top: none;
   }
 }
 </style>

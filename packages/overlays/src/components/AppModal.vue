@@ -103,8 +103,10 @@ function onOpenAutoFocus(event: Event) {
 </script>
 
 <template>
+  <!-- reka-ui DialogRoot `modal` enables FocusScope trap while open (a11y baseline).
+       Portal only when open so a closed modal never leaves an inert overlay / trap. -->
   <DialogRoot :open="open" modal @update:open="onOpenChange">
-    <DialogPortal>
+    <DialogPortal v-if="open">
       <DialogOverlay class="app-modal-overlay"/>
       <DialogContent
         class="app-modal"

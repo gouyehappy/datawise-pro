@@ -10,7 +10,25 @@ public final class SqlTextSupport {
 
     private static final Pattern TRAILING_SEMICOLON = Pattern.compile(";\\s*$");
 
+    /**
+     * MySQL versioned/conditional comments (a block comment whose opening is immediately
+     * followed by {@code !}) are executed by the server, so their body is real SQL disguised
+     * as a comment.
+     */
+    private static final Pattern MYSQL_EXECUTABLE_COMMENT = Pattern.compile("/\\*!\\d*([\\s\\S]*?)\\*/");
+
     private SqlTextSupport() {
+    }
+
+    /**
+     * Inline the body of MySQL executable comments so downstream statement splitting and
+     * classification see the SQL the server will actually run.
+     */
+    public static String expandMysqlExecutableComments(String sql) {
+        if (sql == null || !sql.contains("/*!")) {
+            return sql == null ? "" : sql;
+        }
+        return MYSQL_EXECUTABLE_COMMENT.matcher(sql).replaceAll(" $1 ");
     }
 
     public static String stripTrailingSemicolon(String sql) {

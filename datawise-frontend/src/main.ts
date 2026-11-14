@@ -11,11 +11,20 @@ installPluginHookHost()
 registerBuiltinFeatures()
 
 import './theme-init'
-/** UI Latin: Geist (OFL). CJK: Noto Sans SC. Mono: JetBrains Mono. */
-import '@fontsource-variable/geist/wght.css'
-import '@fontsource-variable/noto-sans-sc/wght.css'
-import '@fontsource-variable/jetbrains-mono/wght.css'
+/** UI Latin: Geist + JetBrains Mono (latin subset). CJK Noto SC loaded for zh-CN. */
+import './styles/fonts-ui-latin.css'
 import './styles/global.css'
+import {ensureNotoSansScFont} from './styles/ensure-noto-sans-sc'
+
+// Match i18n LOCALE_STORAGE_KEY without importing i18n before mount graph.
+try {
+    const storedLocale = localStorage.getItem('dw-cli-locale')
+    if (storedLocale !== 'en-US') {
+        void ensureNotoSansScFont()
+    }
+} catch {
+    void ensureNotoSansScFont()
+}
 
 import {createApp} from 'vue'
 import {createPinia, setActivePinia} from 'pinia'
@@ -38,6 +47,7 @@ import {markBackendOffline} from '@/features/layout/services/backend-health.serv
 import {installUnauthorizedSessionRecovery} from '@/features/auth/services/auth-session-recovery.service'
 import {useAuthStore} from '@/features/auth/stores/auth-store'
 import {installClipboardFallback} from '@/shared/browser/clipboard-fallback'
+import {writeClipboardText} from '@/shared/browser/app-clipboard'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import {notifyDesktopAppMountedAfterPaint} from '@/features/layout/services/desktop-app-mounted.service'
 import {installOverlayScrollbarHosts} from '@/core/composables/installOverlayScrollbarHosts'
@@ -100,7 +110,21 @@ registerSqlEditorApp(app)
 app.config.errorHandler = (err, _instance, info) => {
     console.error('[datawise] vue error', info, err)
     try {
-        useToastStore().showError(String(i18n.global.t('common.vueRenderError')))
+        const toast = useToastStore()
+        const detail = err instanceof Error
+            ? `${err.name}: ${err.message}\n${err.stack ?? ''}`.trim()
+            : String(err ?? '')
+        const diagnostics = `[datawise] vue render error\ninfo=${info ?? ''}\n${detail}`
+        toast.show(String(i18n.global.t('common.vueRenderError')), {
+            variant: 'error',
+            durationMs: 12_000,
+            action: {
+                label: String(i18n.global.t('common.copyDiagnostics')),
+                onClick: () => {
+                    void writeClipboardText(diagnostics)
+                },
+            },
+        })
     } catch {
         // Toast store may be unavailable during early boot
     }

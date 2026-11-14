@@ -75,6 +75,39 @@ class SchemaNodeIdScopeTest {
         assertTrue(scope.get().needsCatalogSchemaList());
     }
 
+    @Test
+    void resolvesAiFolderUnderFlatCatalogNamedDefault() {
+        String connectionId = "conn-1";
+        List<TreeNode> roots = List.of(catalog(connectionId, "default"));
+
+        var scope = SchemaNodeIdScope.resolve(
+                connectionId,
+                "folder-ai-" + connectionId + "-default",
+                roots
+        );
+
+        assertTrue(scope.isPresent());
+        assertEquals("default", scope.get().catalog());
+        assertEquals(null, scope.get().schema());
+        assertEquals(SchemaNodeIdScope.HydrationDepth.SCHEMA_BRANCH, scope.get().depth());
+    }
+
+    @Test
+    void resolvesAiFolderUnderSchema() {
+        List<TreeNode> roots = List.of(catalog(CONNECTION_ID, "hive"));
+
+        var scope = SchemaNodeIdScope.resolve(
+                CONNECTION_ID,
+                "folder-ai-" + CONNECTION_ID + "-hive-a003",
+                roots
+        );
+
+        assertTrue(scope.isPresent());
+        assertEquals("hive", scope.get().catalog());
+        assertEquals("a003", scope.get().schema());
+        assertEquals(SchemaNodeIdScope.HydrationDepth.SCHEMA_BRANCH, scope.get().depth());
+    }
+
     private static TreeNode catalog(String connectionId, String label) {
         TreeNode node = new TreeNode();
         node.setId(SchemaNodeIds.nodeId("db", connectionId, label));

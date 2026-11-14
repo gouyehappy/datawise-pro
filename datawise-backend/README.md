@@ -2,7 +2,7 @@
 
 Spring Boot 3 多模块 API — 连接、SQL 执行、AI、平台任务与团队治理的服务端。
 
-版本 **4.1.4** · Java **17** · Spring Boot **3.3.x** · 入口模块 **`datawise-server`**
+版本 **5.0.0** · Java **17** · Spring Boot **3.3.x** · 入口模块 **`datawise-server`**
 
 ---
 

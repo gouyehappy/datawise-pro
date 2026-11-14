@@ -1,0 +1,4 @@
+{
+  "dbType": "trino",
+  "extends": "jdbc-query"
+}

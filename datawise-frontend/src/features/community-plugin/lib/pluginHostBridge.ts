@@ -46,7 +46,7 @@ export type PluginHostAppearance = {
   }
 }
 
-/** Stable host → plugin environment snapshot (hostApi HostInfo). */
+/** Stable host — plugin environment snapshot (hostApi HostInfo). */
 export type PluginHostInfo = {
   protocolVersion: 1
   locale: string
@@ -74,25 +74,31 @@ const PLUGIN_WORKBENCH_PALETTE: Record<'light' | 'dark', Record<string, string>>
     '--color-primary': '#2563eb',
     '--color-primary-foreground': '#fff',
     '--color-popover': '#f4f7fb',
+    '--color-chrome': '#cfd8e6',
     '--color-success': '#16a34a',
     '--color-warning': '#d97706',
     '--radius-md': '6px',
+    '--dw-panel-gap': '6px',
+    '--dw-panel-radius': '8px',
   },
   dark: {
-    '--color-background': '#0c1015',
+    '--color-background': '#1a1b1e',
     '--color-foreground': '#f0f0f3',
-    '--color-muted': '#121820',
+    '--color-muted': '#222326',
     '--color-muted-foreground': '#c4c7cc',
-    '--color-accent': '#1f2936',
+    '--color-accent': '#323438',
     '--color-accent-foreground': '#f4f4f7',
-    '--color-border': 'rgba(255, 255, 255, 0.12)',
+    '--color-border': 'rgba(255, 255, 255, 0.08)',
     '--color-destructive': '#f87171',
     '--color-primary': '#3b82f6',
     '--color-primary-foreground': '#fff',
-    '--color-popover': '#171e27',
+    '--color-popover': '#222326',
+    '--color-chrome': '#2b2d30',
     '--color-success': '#4ade80',
     '--color-warning': '#fbbf24',
     '--radius-md': '6px',
+    '--dw-panel-gap': '6px',
+    '--dw-panel-radius': '8px',
   },
 }
 
@@ -109,15 +115,21 @@ export function collectPluginHostTheme(): PluginHostTheme {
   const appearance = root.getAttribute('data-theme') === 'light' ? 'light' : 'dark'
   const styles = getComputedStyle(root)
   const tokens: Record<string, string> = {...PLUGIN_WORKBENCH_PALETTE[appearance]}
+  const uiSkin = root.getAttribute('data-ui-skin') || 'classic'
+  tokens['--dw-ui-skin'] = uiSkin
   const map: Array<[string, string]> = [
     ['--color-background', '--dw-bg'],
     ['--color-muted', '--dw-bg-muted'],
-    ['--color-popover', '--dw-bg-panel'],
+    ['--color-popover', '--dw-bg-muted'],
     ['--color-accent', '--dw-bg-hover'],
     ['--color-foreground', '--dw-text'],
     ['--color-muted-foreground', '--dw-text-muted'],
     ['--color-border', '--dw-panel-border'],
     ['--color-primary', '--dw-primary'],
+    ['--color-chrome', '--dw-bg-chrome'],
+    ['--dw-bg-chrome', '--dw-bg-chrome'],
+    ['--dw-panel-gap', '--dw-panel-gap'],
+    ['--dw-panel-radius', '--dw-panel-radius'],
   ]
   for (const [pluginKey, hostKey] of map) {
     const value = readCssVar(styles, hostKey)
@@ -126,6 +138,33 @@ export function collectPluginHostTheme(): PluginHostTheme {
   if (!tokens['--color-border']) {
     const border = readCssVar(styles, '--dw-border')
     if (border) tokens['--color-border'] = border
+  }
+  // IDE—ľ— + Ⱦ?——?ά—?———?—ʬ?———?
+  if (uiSkin === 'ide') {
+    tokens['--dw-panel-gap'] = readCssVar(styles, '--dw-panel-gap') || '3px'
+    tokens['--dw-panel-radius'] = '0'
+    tokens['--radius-md'] = '0'
+    tokens['--radius-sm'] = '0'
+    tokens['--radius-lg'] = '0'
+    if (appearance === 'dark') {
+      const border = tokens['--color-border'] || ''
+      if (!border || border === 'transparent' || /0\.0[0-5]\b/.test(border)) {
+        tokens['--color-border'] = 'rgba(255, 255, 255, 0.08)'
+      }
+      if (!tokens['--color-chrome']) tokens['--color-chrome'] = '#2b2d30'
+      if (!tokens['--color-popover'] || tokens['--color-popover'] === '#000000') {
+        tokens['--color-popover'] = '#222326'
+      }
+      if (!tokens['--color-background'] || tokens['--color-background'] === '#000000') {
+        tokens['--color-background'] = '#1a1b1e'
+      }
+    }
+  } else {
+    const radius = readCssVar(styles, '--dw-panel-radius')
+    if (radius) {
+      tokens['--radius-md'] = radius
+      tokens['--dw-panel-radius'] = radius
+    }
   }
   // Typography contract: host config wins; iframe-safe defaults only when absent.
   // (Host @font-face like Noto Variable is not visible in sandboxed iframes —
@@ -162,7 +201,7 @@ export function collectPluginHostTheme(): PluginHostTheme {
     tokens['--dw-font-mono'] = PLUGIN_FONT_MONO
   }
   // Text scale + body size for plugins. Bootstrap rem root =
-  // calc(var(--dw-font-size) / 0.875) so Tailwind text-sm ≈ shell body.
+  // calc(var(--dw-font-size) / 0.875) so Tailwind text-sm — shell body.
   const textScale = readCssVar(styles, '--dw-ui-text-scale') || '1'
   tokens['--dw-ui-text-scale'] = textScale
   // Prefer --dw-font-size; --font-size kept one release as compat alias for older plugins.
@@ -362,6 +401,9 @@ export function createPluginHostBridge(options: {
   let iframeWindow: Window | null = null
   let listening = false
   let paused = false
+  /** One-time hello nonce; cleared after a successful bind (anti iframe-nav preempt). */
+  let expectedHelloNonce: string | null = null
+  let helloBound = false
   let currentContext: Record<string, unknown> = {
     pluginId: options.pluginId,
     ...(options.context || {}),
@@ -372,6 +414,24 @@ export function createPluginHostBridge(options: {
   const savePaths = new Map<string, string>()
   /** Active host.ai chat streams keyed by requestId (for cancel). */
   const aiChatAborts = new Map<string, AbortController>()
+
+  function mintHelloNonce(): string {
+    expectedHelloNonce =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `dw-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    helloBound = false
+    return expectedHelloNonce
+  }
+
+  function challengeHello(win: Window) {
+    const nonce = mintHelloNonce()
+    try {
+      win.postMessage({type: 'datawise-plugin-bridge-challenge', nonce}, pluginMessageTargetOrigin())
+    } catch {
+      // ignore
+    }
+  }
 
   function resolveLocale(): string {
     if (typeof options.locale === 'function') {
@@ -403,7 +463,7 @@ export function createPluginHostBridge(options: {
         id,
         ...(error ? {error} : {result}),
       } satisfies PluginBridgeResponse,
-      '*',
+      pluginMessageTargetOrigin(),
     )
   }
 
@@ -422,10 +482,28 @@ export function createPluginHostBridge(options: {
     return typeof flag === 'function' ? flag() : Boolean(flag)
   }
 
+  function pluginMessageTargetOrigin(): string {
+    // Opaque sandbox origins require '*'; same-origin iframes use the page origin.
+    try {
+      const frameOrigin = boundWindow()?.location?.origin
+      if (frameOrigin && frameOrigin !== 'null') return frameOrigin
+    } catch {
+      // cross-origin / opaque — fall through
+    }
+    return '*'
+  }
+
+  function isTrustedPluginMessage(event: MessageEvent): boolean {
+    const expected = boundWindow()
+    if (!expected || event.source !== expected) return false
+    // Sandboxed without allow-same-origin reports origin "null".
+    return event.origin === 'null' || event.origin === window.location.origin
+  }
+
   function emitPluginEvent(method: string, params: Record<string, unknown>) {
     const target = boundWindow()
     if (!target) return
-    target.postMessage({type: 'datawise-plugin-event', method, params}, '*')
+    target.postMessage({type: 'datawise-plugin-event', method, params}, pluginMessageTargetOrigin())
   }
 
   function ensureStream(): WebSocket | null {
@@ -449,7 +527,7 @@ export function createPluginHostBridge(options: {
           if (msg.type === 'event' && msg.method) {
             target.postMessage(
               {type: 'datawise-plugin-event', method: msg.method, params: msg.params ?? {}},
-              '*',
+              pluginMessageTargetOrigin(),
             )
           }
         } catch {
@@ -516,7 +594,7 @@ export function createPluginHostBridge(options: {
         theme: info.theme,
         appearance: info.appearance,
       },
-      '*',
+      pluginMessageTargetOrigin(),
     )
   }
 
@@ -525,22 +603,21 @@ export function createPluginHostBridge(options: {
     const win = boundWindow()
     if (!win) return
     try {
-      win.postMessage({type: 'datawise-plugin-active', active}, '*')
+      win.postMessage({type: 'datawise-plugin-active', active}, pluginMessageTargetOrigin())
     } catch {
       // ignore
     }
   }
 
   function onMessage(event: MessageEvent) {
-    // KeepAlive caches multiple hosts; each must only accept its own iframe.
-    const expected = boundWindow()
-    if (!expected || event.source !== expected) return
+    // KeepAlive caches multiple hosts; each must only accept its own iframe + origin.
+    if (!isTrustedPluginMessage(event)) return
 
     const data = event.data as
       | PluginBridgeRequest
       | {type: 'datawise-plugin-binary-out'; channel: string; dataBase64: string}
       | {type: 'datawise-plugin-notify'; method: string; params?: unknown}
-      | {type: 'datawise-plugin-bridge-hello'}
+      | {type: 'datawise-plugin-bridge-hello'; nonce?: string}
       | undefined
     if (!data || typeof data !== 'object') return
 
@@ -549,12 +626,26 @@ export function createPluginHostBridge(options: {
     // unanswered invokes. Only RPC traffic is deferred until resume().
     if (data.type === 'datawise-plugin-bridge-hello') {
       const frame = event.source as Window | null
-      if (frame) {
-        iframeWindow = frame
-        ensureStream()
-        postEnv(frame)
-        options.onReady?.()
+      if (!frame) return
+      const nonce = typeof data.nonce === 'string' ? data.nonce : ''
+      // After challenge: require matching one-time nonce (blocks opaque-origin nav hijack).
+      if (expectedHelloNonce) {
+        if (!nonce || nonce !== expectedHelloNonce) return
+        expectedHelloNonce = null
+        helloBound = true
+      } else if (helloBound) {
+        // Already bound without a fresh challenge — ignore preempt hellos.
+        return
+      } else {
+        // Provisional first-paint hello before injectEnv challenge.
+        const expected = options.getIframeWindow?.()
+        if (expected && frame !== expected) return
+        helloBound = true
       }
+      iframeWindow = frame
+      ensureStream()
+      postEnv(frame)
+      options.onReady?.()
       return
     }
 
@@ -817,14 +908,14 @@ export function createPluginHostBridge(options: {
       const contentBase64 = typeof params.contentBase64 === 'string' ? params.contentBase64 : ''
       const writeBinaryFile = window.datawise?.fs?.writeBinaryFile
       if (!path || !contentBase64 || !writeBinaryFile) {
-        reply(frame, data.id, undefined, '保存已失效，请重新下载')
+        reply(frame, data.id, undefined, '———ʧЧ??—————')
         return
       }
       savePaths.delete(id)
       void writeBinaryFile(path, contentBase64)
         .then((result) => {
           if (!result?.ok) {
-            reply(frame, data.id, undefined, result?.error || '写入失败')
+            reply(frame, data.id, undefined, result?.error || 'д—ʧ—')
             return
           }
           const saved = result.path || path
@@ -1138,6 +1229,7 @@ export function createPluginHostBridge(options: {
         currentTheme = collectPluginHostTheme()
       }
       ensureStream()
+      challengeHello(win)
       postEnv(win)
 
       // Same-origin fallback: refresh live API if bootstrap is missing (older packages).
@@ -1165,7 +1257,10 @@ export function createPluginHostBridge(options: {
               api.theme = info.theme
               api.appearance = info.appearance
               api.locale = info.locale
-              win.postMessage({type: 'datawise-plugin-context', context: currentContext}, '*')
+              win.postMessage(
+                  {type: 'datawise-plugin-context', context: currentContext},
+                  pluginMessageTargetOrigin(),
+              )
             }
           } catch {
             // ignore
@@ -1231,7 +1326,7 @@ export function createPluginHostBridge(options: {
       const win = boundWindow()
       if (!win) return
       try {
-        win.postMessage({type: 'datawise-plugin-focus'}, '*')
+        win.postMessage({type: 'datawise-plugin-focus'}, pluginMessageTargetOrigin())
       } catch {
         // ignore
       }

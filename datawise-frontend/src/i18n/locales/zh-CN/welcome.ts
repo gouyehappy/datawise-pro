@@ -1,16 +1,16 @@
 export default {
     brand: 'DataWise',
     gettingStarted: '把数据工作台变成你的主场',
-    lead: '连接数据源、写可治理 SQL、用 AI 加速洞察——从一条主路径开始。',
-    leadReturning: '从最近的连接接着查，或带着工作台上下文打开 Agent。',
-    continueWork: '继续工作',
+    lead: '先加一个数据源，就能打开查询台看到结果。',
+    leadReturning: '从最近的连接接着查，或打开查询台继续写 SQL。',
+    continueWork: '继续',
     recentUsed: '最近使用',
     newestAdded: '最新添加',
     secondaryActions: '更多',
-    capabilities: '能力入口',
+    capabilities: '需要时再开',
     shortcutsHint: '常用快捷键',
     paths: {
-        title: '主路径',
+        title: '其他路径',
         exploreTitle: '探索',
         exploreDesc: '接入数据源，在左侧树里展开库表与环境标签。',
         exploreAction: '新建连接',
@@ -23,6 +23,8 @@ export default {
         aiDesc: '带着工作台上下文提问、生成与解释 SQL。',
         aiAction: '打开 Agent',
     },
+    aiNeedsConnection: '先新建一个连接，再打开 AI。',
+    primaryCtaHint: '选好数据库类型后填写连接信息，测通即可开查。',
     intro:
         '数据库工作台：通过<strong>后端 API</strong>连接数据源、执行查询与导出。',
     docsHint:
@@ -59,7 +61,7 @@ export default {
     openQuery: '打开查询 →',
     previewLabel: 'Query preview',
     emptyTitle: '还没有连接',
-    emptyHint: '先加一个数据源，左侧树和查询台就会活起来',
+    emptyHint: '加一个数据源后，左侧树和查询台就会活起来',
     openOnConnection: '在当前连接打开',
     start: '开始',
     quickStart: '快速开始',
@@ -75,6 +77,8 @@ export default {
     },
     common: {
         history: '历史',
+        localData: '本地数据文件',
+        localDataNeedsDesktop: '请在桌面版中选择本地 Parquet / CSV / JSON 文件预览',
     },
     quickLinks: '更多',
     workflow: {
@@ -88,8 +92,8 @@ export default {
         analyzeDesc: '用 AI Agent 解释 SQL，或把结果落到仪表盘图表。',
     },
     explore: {
-        title: '其他',
-        subtitle: '需要时再打开',
+        title: '需要时再开',
+        subtitle: '连接器、看板、团队与设置',
         connectorsTitle: '连接器',
         connectorsDesc: '按需安装与更新驱动',
         aiTitle: 'AI',

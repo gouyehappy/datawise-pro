@@ -508,10 +508,10 @@ watch(internalCurrentPage, () => {
 <style scoped>
 .dw-data-grid {
   --ddg-shell-bg: var(--dw-bg-panel);
-  --ddg-shell-border: color-mix(in srgb, var(--dw-border-light) 88%, transparent);
+  --ddg-shell-border: var(--dw-panel-outline, var(--dw-panel-border));
   --ddg-head-bg: color-mix(in srgb, var(--dw-bg-muted) 18%, var(--dw-bg-panel));
   --ddg-table-head-bg: color-mix(in srgb, var(--dw-bg-muted) 22%, var(--dw-bg-panel));
-  --ddg-row-hover: color-mix(in srgb, var(--dw-bg-muted) 32%, transparent);
+  --ddg-row-hover: color-mix(in srgb, var(--dw-text) 5%, var(--dw-bg-panel));
   --ddg-row-selected: color-mix(in srgb, var(--dw-primary) 7%, var(--dw-bg-panel));
   --ddg-pad-x: 8px;
   --ddg-pad-y: 6px;
@@ -549,7 +549,7 @@ watch(internalCurrentPage, () => {
   justify-content: space-between;
   gap: var(--dw-gap-sm) var(--dw-gap);
   padding: var(--dw-space-2) var(--dw-space-4);
-  border-bottom: 1px solid color-mix(in srgb, var(--dw-border-light) 55%, transparent);
+  border-bottom: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
   container-type: inline-size;
   container-name: dw-data-grid-toolbar;
 }
@@ -585,7 +585,7 @@ watch(internalCurrentPage, () => {
   width: 1px;
   height: var(--dw-icon-size-lg);
   margin: 0 var(--dw-space-1);
-  background: color-mix(in srgb, var(--dw-border-light) 70%, transparent);
+  background: color-mix(in srgb, var(--dw-border-light) 28%, transparent);
 }
 
 .dw-data-grid__page-size {
@@ -621,8 +621,8 @@ watch(internalCurrentPage, () => {
   max-width: 220px;
   height: var(--dw-btn-height);
   padding: 0 var(--dw-space-4);
-  border: 1px solid color-mix(in srgb, var(--dw-border) 75%, transparent);
-  background: color-mix(in srgb, var(--dw-bg-panel) 90%, var(--dw-bg-muted));
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--dw-bg-muted) 40%, transparent);
   color: var(--dw-text-secondary);
   font-size: var(--dw-text-sm);
 }
@@ -648,7 +648,7 @@ watch(internalCurrentPage, () => {
   align-items: stretch;
   width: 100%;
   height: var(--dw-tab-height);
-  border-top: 1px solid color-mix(in srgb, var(--dw-border-light) 55%, transparent);
+  border-top: none;
   background: color-mix(in srgb, var(--dw-bg-panel) 94%, var(--dw-bg-editor));
 }
 
@@ -671,7 +671,7 @@ watch(internalCurrentPage, () => {
   flex: 0 1 auto;
   max-width: min(220px, 34vw);
   padding: 0 var(--dw-space-4) 0 var(--dw-space-5);
-  border-right: 1px solid color-mix(in srgb, var(--dw-border-light) 55%, transparent);
+  border-right: none;
   background: color-mix(in srgb, var(--dw-bg-muted) 22%, transparent);
 }
 
@@ -753,7 +753,7 @@ watch(internalCurrentPage, () => {
   height: var(--dw-tab-height);
   padding: 0 var(--dw-space-4) 0 var(--dw-space-11);
   border: none;
-  border-top: 1px solid color-mix(in srgb, var(--dw-border-light) 55%, transparent);
+  border-top: none;
   background: color-mix(in srgb, var(--dw-bg-panel) 94%, var(--dw-bg-editor));
   color: var(--dw-text-primary);
   font-size: var(--dw-text-sm);
@@ -804,12 +804,12 @@ watch(internalCurrentPage, () => {
 }
 
 .dw-data-grid__page-size :deep(.dw-select__trigger) {
-  border-radius: 0;
+  border-radius: var(--dw-control-radius-sm);
   box-shadow: none;
   min-height: var(--dw-control-h-xs);
   height: var(--dw-control-h-xs);
-  border-color: color-mix(in srgb, var(--dw-border-light) 55%, transparent);
-  background: transparent;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--dw-bg-muted) 40%, transparent);
   padding: 0 var(--dw-space-4);
 }
 

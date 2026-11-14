@@ -45,6 +45,9 @@ function runFeaturePaletteAction(action: FeaturePaletteAction, params: BuildPale
             params.setModule('database')
             params.openDataCatalog()
             return
+        case 'askAi':
+            params.askAi()
+            return
         case 'openSettings':
             params.openSettingsModule(action.section, action.anchor)
             return
@@ -86,6 +89,8 @@ export interface BuildPaletteNavigationParams {
     openPluginDevTools: () => void
     openConnectorMarket: () => void
     openDataCatalog: () => void
+    /** 全局 AI 入口：切到 AI 模块并把焦点放进输入框 */
+    askAi: () => void
     openSettingsModule: (section: SettingsSection, anchor?: string) => void
     isPluginDevToolsVisible: () => boolean
     bookmarksEnabled: boolean

@@ -1,8 +1,13 @@
+import {truncateTextWithMeta, type TruncationMeta} from '@/shared/truncation/truncation-meta'
+
 export type ChatAttachment = {
     id: string
     name: string
     file: File
 }
+
+/** Text attachment inline body cap (T-TRUNC-1). */
+export const CHAT_ATTACHMENT_MAX_CHARS = 32_000
 
 export const TEXT_ATTACHMENT_EXTENSIONS = [
     '.txt',
@@ -39,16 +44,26 @@ export function isTextAttachment(file: File): boolean {
     return false
 }
 
-async function readTextAttachments(items: ChatAttachment[]): Promise<Array<{ name: string; text: string }>> {
-    const results: Array<{ name: string; text: string }> = []
+export type ChatAttachmentTextBlock = {
+    name: string
+    text: string
+    truncation: TruncationMeta
+}
+
+async function readTextAttachments(items: ChatAttachment[]): Promise<ChatAttachmentTextBlock[]> {
+    const results: ChatAttachmentTextBlock[] = []
     for (const item of items) {
         const text = await item.file.text()
         const trimmed = text.trim()
         if (!trimmed) continue
-        const maxLen = 32_000
+        const {text: sliced, truncation} = truncateTextWithMeta(trimmed, CHAT_ATTACHMENT_MAX_CHARS, {
+            unit: 'chars',
+            reason: 'token_budget',
+        })
         results.push({
             name: item.name,
-            text: trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}\n…(truncated)` : trimmed,
+            text: truncation.truncated ? `${sliced}\n…(truncated)` : sliced,
+            truncation,
         })
     }
     return results
@@ -57,9 +72,9 @@ async function readTextAttachments(items: ChatAttachment[]): Promise<Array<{ nam
 export async function buildPromptWithAttachments(
     prompt: string,
     attachments: ChatAttachment[],
-): Promise<{ prompt: string; skipped: string[] }> {
+): Promise<{prompt: string; skipped: string[]; truncations: TruncationMeta[]}> {
     if (!attachments.length) {
-        return {prompt, skipped: []}
+        return {prompt, skipped: [], truncations: []}
     }
 
     const textFiles = attachments.filter((item) => isTextAttachment(item.file))
@@ -68,7 +83,7 @@ export async function buildPromptWithAttachments(
         .map((item) => item.name)
 
     if (!textFiles.length) {
-        return {prompt, skipped: attachments.map((item) => item.name)}
+        return {prompt, skipped: attachments.map((item) => item.name), truncations: []}
     }
 
     const blocks = await readTextAttachments(textFiles)
@@ -77,5 +92,9 @@ export async function buildPromptWithAttachments(
         .join('\n\n')
 
     const combined = `${prompt.trim()}\n\n[Attachments]\n${attachmentSection}`.trim()
-    return {prompt: combined, skipped}
+    return {
+        prompt: combined,
+        skipped,
+        truncations: blocks.map((b) => b.truncation).filter((t) => t.truncated),
+    }
 }

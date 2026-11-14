@@ -42,6 +42,8 @@ function createAiChatStore(
         const sessions = ref<AiChatSession[]>(persisted?.sessions ?? [])
         const activeSessionId = ref<string | null>(persisted?.activeSessionId ?? null)
         const sendingSessionIds = ref<string[]>([])
+        /** Sessions with an active token stream — skip persist until quiet ends (PERF-02). */
+        const streamPersistQuietIds = new Set<string>()
         let persistTimer: ReturnType<typeof setTimeout> | null = null
 
         const activeSession = computed(() =>
@@ -91,12 +93,33 @@ function createAiChatStore(
             }, PERSIST_DEBOUNCE_MS)
         }
 
+        /** PERF-20: explicit persist requests — no deep watch over the session graph. */
+        function requestPersist() {
+            if (!persist) return
+            if (streamPersistQuietIds.size > 0) return
+            schedulePersist()
+        }
+
         if (persist) {
-            watch([sessions, activeSessionId], () => schedulePersist(), {deep: true})
+            watch(activeSessionId, () => requestPersist())
         }
 
         function touchSession(session: AiChatSession) {
             session.updatedAt = Date.now()
+            requestPersist()
+        }
+
+        /** Pause localStorage writes for a live stream; call end when the turn settles. */
+        function beginStreamPersistQuiet(sessionId: string) {
+            if (!sessionId) return
+            streamPersistQuietIds.add(sessionId)
+        }
+
+        function endStreamPersistQuiet(sessionId: string) {
+            if (!sessionId || !streamPersistQuietIds.delete(sessionId)) return
+            const session = sessions.value.find((item) => item.id === sessionId)
+            if (session) touchSession(session)
+            schedulePersist()
         }
 
         function createSession(selectedTargetIds: string[] = []): AiChatSession {
@@ -108,11 +131,39 @@ function createAiChatStore(
                 updatedAt: now,
                 messages: createWelcomeMessages(t('ai.welcome')),
                 selectedTargetIds: [...new Set(selectedTargetIds)],
+                mode: 'agent',
             }
             sessions.value.unshift(session)
             activeSessionId.value = session.id
             enforceSessionCap()
+            requestPersist()
             return session
+        }
+
+        function setSessionMode(sessionId: string, mode: AiChatSession['mode']) {
+            const session = sessions.value.find((item) => item.id === sessionId)
+            if (!session) return
+            session.mode = mode
+            touchSession(session)
+            schedulePersist()
+        }
+
+        function setSessionBinding(sessionId: string, binding: AiChatSession['binding'] | undefined) {
+            const session = sessions.value.find((item) => item.id === sessionId)
+            if (!session) return
+            // Binding is sticky: only set when empty, or when explicitly replaced by caller.
+            session.binding = binding
+            touchSession(session)
+            schedulePersist()
+        }
+
+        /** Seed binding only if the session has none yet (focus must not rewrite). */
+        function seedSessionBindingIfEmpty(sessionId: string, binding: NonNullable<AiChatSession['binding']>) {
+            const session = sessions.value.find((item) => item.id === sessionId)
+            if (!session || session.binding?.connectionId) return
+            session.binding = binding
+            touchSession(session)
+            schedulePersist()
         }
 
         function ensureInitialized(selectedTargetIds: string[] = []) {
@@ -131,6 +182,7 @@ function createAiChatStore(
                 clearTimeout(persistTimer)
                 persistTimer = null
             }
+            streamPersistQuietIds.clear()
             sessions.value = []
             activeSessionId.value = null
             sendingSessionIds.value = []
@@ -153,6 +205,7 @@ function createAiChatStore(
 
             sessions.value.splice(index, 1)
             sendingSessionIds.value = sendingSessionIds.value.filter((sessionId) => sessionId !== id)
+            streamPersistQuietIds.delete(id)
 
             if (!sessions.value.length) {
                 createSession()
@@ -162,6 +215,7 @@ function createAiChatStore(
             if (activeSessionId.value === id) {
                 activeSessionId.value = sessions.value[0].id
             }
+            requestPersist()
         }
 
         function setSelectedTargetIds(ids: string[]) {
@@ -187,12 +241,15 @@ function createAiChatStore(
             messageId: string,
             patch: Partial<AiChatMessage>,
             sessionId = activeSessionId.value,
+            opts?: {touch?: boolean},
         ) {
             const session = sessions.value.find((item) => item.id === sessionId)
             if (!session) return
             const target = session.messages.find((item) => item.id === messageId)
             if (!target) return
             Object.assign(target, patch)
+            const quiet = sessionId ? streamPersistQuietIds.has(sessionId) : false
+            if (opts?.touch === false || quiet) return
             touchSession(session)
         }
 
@@ -223,6 +280,7 @@ function createAiChatStore(
                 return
             }
             const next = readAiChatState(localStorage, storageKey)
+            streamPersistQuietIds.clear()
             sessions.value = next?.sessions ?? []
             activeSessionId.value = next?.activeSessionId ?? null
             sendingSessionIds.value = []
@@ -241,11 +299,16 @@ function createAiChatStore(
             clearEphemeralSessions,
             beginEphemeralSession,
             createSession,
+            setSessionMode,
+            setSessionBinding,
+            seedSessionBindingIfEmpty,
             selectSession,
             deleteSession,
             setSelectedTargetIds,
             appendMessage,
             patchMessage,
+            beginStreamPersistQuiet,
+            endStreamPersistQuiet,
             isSending,
             setSending,
             reloadForCurrentScope,

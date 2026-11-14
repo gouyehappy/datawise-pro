@@ -47,13 +47,9 @@ public final class ConfigFileSupport {
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        Path directory = parent != null ? parent : path.toAbsolutePath().getParent();
-        Path temp = Files.createTempFile(directory, path.getFileName().toString() + "-", ".tmp");
-        try {
-            mapper.writerWithDefaultPrettyPrinter().writeValue(temp.toFile(), payload);
-            AtomicFileWrites.moveReplace(temp, path);
-        } finally {
-            Files.deleteIfExists(temp);
-        }
+        // Serialize first, then write through the temp→fsync→replace path so a crash
+        // cannot leave a half-written JSON document behind.
+        byte[] bytes = mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(payload);
+        AtomicFileWrites.writeBytes(path, bytes);
     }
 }

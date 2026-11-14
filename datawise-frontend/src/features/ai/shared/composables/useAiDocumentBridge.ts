@@ -85,7 +85,6 @@ export function useAiDocumentBridge() {
         const ok = await writeLocalTab(tab.id, snap.content)
         if (ok) {
             undoSnapshot.value = null
-            toast.success(t('ai.undidApplyToDocument'))
             return
         }
         toast.error(t('ai.applyToDocumentFailed'))
@@ -106,7 +105,6 @@ export function useAiDocumentBridge() {
         }
         const previous = tab.sql ?? ''
         if (previous === doc) {
-            toast.success(t('ai.appliedToDocumentUnchanged'))
             return
         }
         // Snapshot before overwrite so the user can restore the prior file.

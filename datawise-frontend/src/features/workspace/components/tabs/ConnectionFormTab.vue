@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 defineOptions({name: 'ConnectionFormTab'})
 
 import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
@@ -15,10 +15,13 @@ import {useConnectionTest} from '@/features/connection/composables/useConnection
 import {isUnsavedConnectionId} from '@/features/connection/utils/connection-defaults'
 import {isJdbcSshTunnelEnabled} from '@/features/ssh/services/ssh-jdbc-tunnel.service'
 import IconButton from '@/core/components/IconButton.vue'
-import {DwIcon} from '@/core/icons'
+import {DwIcon, ensureDeferredDwIcons} from '@/core/icons'
+
+void ensureDeferredDwIcons()
 import type {WorkspaceTab} from '@/core/types'
 import {fetchConnectionFromCatalog} from '@/shared/config/connections-catalog.service'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
+import {usePluginStore} from '@/features/plugin/stores/plugin-store'
 import CommunityChallengeDialog from '@/features/community-plugin/components/CommunityChallengeDialog.vue'
 import {
     setCommunityChallengeHandler,
@@ -46,13 +49,23 @@ const {
   missingConnectorId,
   missingConnectorLabel,
   installing,
+  driverInstallFailed,
   testConnection,
   installMissingConnectorAndRetry,
 } = useConnectionTest(
     getPayload,
     () => props.tab.connectionId,
 )
-const {saveConnection, cancel, saving, canSave, actionMessage, actionOk} = useConnectionTabActions({
+const fieldsRef = ref<{validate: () => boolean} | null>(null)
+
+const {
+  saveConnection: saveConnectionAction,
+  cancel,
+  saving,
+  canSave,
+  actionMessage,
+  actionOk,
+} = useConnectionTabActions({
   tabId: props.tab.id,
   form,
   getPayload,
@@ -60,6 +73,25 @@ const {saveConnection, cancel, saving, canSave, actionMessage, actionOk} = useCo
   editingConnectionId: () => props.tab.connectionId,
   targetGroupId: () => props.tab.targetGroupId,
 })
+
+async function saveConnection() {
+  if (fieldsRef.value && !fieldsRef.value.validate()) return
+  await saveConnectionAction()
+}
+
+async function onTestConnection() {
+  if (fieldsRef.value && !fieldsRef.value.validate()) return
+  // A2-1: 已探测到缺连接器时，再次点「测试」直接走安装并重试，避免断流
+  if (missingConnectorId.value) {
+    await installMissingConnectorAndRetry()
+    return
+  }
+  await testConnection()
+}
+
+function openConnectorMarketFromForm() {
+  usePluginStore().openConnectorMarket()
+}
 
 const busy = computed(() => saving.value || testing.value || installing.value)
 const readOnly = computed(() => !canSave.value)
@@ -72,6 +104,9 @@ const busyHint = computed(() => {
   return t('connection.testingHint')
 })
 const canInstallConnector = computed(() => Boolean(missingConnectorId.value) && !installing.value)
+const canOpenConnectorMarket = computed(
+    () => driverInstallFailed.value && !canInstallConnector.value && !installing.value,
+)
 
 // Community-plugin connection challenges (host key / MFA prompts) resolve here
 // instead of window.confirm; "remember" auto-accepts later identical fingerprints.
@@ -191,6 +226,7 @@ function openJdbcTunnelSshTerminal() {
         </div>
         <div class="conn-body" :class="{'conn-body--busy': busy, 'conn-body--readonly': readOnly}">
           <ConnectionFormFields
+              ref="fieldsRef"
               v-model:form="form"
               :db-type="dbType"
               :read-only="readOnly"
@@ -213,8 +249,10 @@ function openJdbcTunnelSshTerminal() {
           :can-install-connector="canInstallConnector"
           :installing-connector="installing"
           :missing-connector-label="missingConnectorLabel"
-          @test="testConnection"
+          :can-open-connector-market="canOpenConnectorMarket"
+          @test="onTestConnection"
           @install-connector="installMissingConnectorAndRetry"
+          @open-connector-market="openConnectorMarketFromForm"
           @cancel="cancel"
           @save="saveConnection"
       />

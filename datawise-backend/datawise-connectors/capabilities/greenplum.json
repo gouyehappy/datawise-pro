@@ -1,0 +1,7 @@
+{
+  "dbType": "greenplum",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": true
+  }
+}

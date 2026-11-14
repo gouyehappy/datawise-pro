@@ -1,0 +1,944 @@
+/**
+ * Functional icon tones for chrome toolbars / rails / docks.
+ * Scoped to tool surfaces so menus / trees stay neutral.
+ * Loaded after skins so tones win inheritance fights.
+ *
+ * Gated by Settings → 基本 → 外观 →「工具栏彩色图标」
+ * (ThemePreferences.coloredToolbarIcons → html[data-icon-tones=on|off]).
+ */
+
+/* When off (or attribute missing before boot), restore monochrome chrome icons. */
+html:not([data-icon-tones='on']) :is(
+    .dw-tab__icon--sql,
+    .dw-tab__icon--sql .dw-icon-root,
+    .dw-tab__icon--terminal,
+    .dw-tab__icon--terminal .dw-icon-root,
+    .dw-tab__icon--toned,
+    .dw-tab__icon--toned .dw-icon-root,
+    .dw-tab__icon--messages,
+    .dw-tab__icon--messages .dw-icon-root,
+    .dw-tab__icon .dw-icon--table,
+    .dw-console-glyph[data-console-icon],
+    .dw-console-glyph[data-console-icon] .dw-icon-root,
+    .dw-console-glyph.dw-icon-root[class*='dw-icon--'],
+    .toolbar-glyph .dw-icon-root[class*='dw-icon--'],
+    .dw-tree-toolbar__actions .dw-icon-root[class*='dw-icon--'],
+    .local-files-toolbar__actions .dw-icon-root[class*='dw-icon--'],
+    .local-files-toolbar__search-icon,
+    .data-grid .dw-icon-root[class*='dw-icon--'],
+    .explain-plan__actions .dw-icon-root[class*='dw-icon--'],
+    .schema-er-graph__dock .dw-icon-root[class*='dw-icon--'],
+    .ssh-terminal-tab__actions .dw-icon-root[class*='dw-icon--'],
+    .connector-workbench__actions .dw-icon-root[class*='dw-icon--'],
+    .floating-tab-toolbar .dw-icon-root[class*='dw-icon--'],
+    .dock-float-actions .dw-icon-root[class*='dw-icon--'],
+    .dw-log-viewer__actions .dw-icon-root[class*='dw-icon--'],
+    .dw-code-viewer__actions .dw-icon-root[class*='dw-icon--'],
+    .titlebar-quick__btn .dw-icon-root[class*='dw-icon--'],
+    .status-bar__icon.dw-icon-root,
+    .status-bar__tools .dw-icon-root[class*='dw-icon--'],
+    .tool-btn__graphic .dw-icon-root[class*='dw-icon--'],
+    .result-chart__ico.dw-icon-root,
+    .result-chart__head-actions .dw-icon-root[class*='dw-icon--'],
+    .query-result-view-toggle .dw-icon-root[class*='dw-icon--'],
+    .scope-toolbar__actions .dw-icon-root[class*='dw-icon--'],
+    .er-lineage__zoom .dw-icon-root[class*='dw-icon--'],
+    .result-compare-btn .dw-icon-root[class*='dw-icon--'],
+    .result-pane-settings__trigger .dw-icon-root[class*='dw-icon--'],
+    .dw-console-actions .dw-icon-btn .dw-icon-root[class*='dw-icon--'],
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root[class*='dw-icon--'],
+    .titlebar-main-menu .dw-icon-root[class*='dw-icon--'],
+    .module-shell__nav-item-icon .dw-icon-root[class*='dw-icon--'],
+    .settings-nav-icon.dw-icon-root
+) {
+    color: inherit !important;
+    filter: none !important;
+}
+
+:root {
+    --dw-tone-run: #22c55e;
+    --dw-tone-stop: #ef4444;
+    --dw-tone-sql: #38bdf8;
+    --dw-tone-save: #38bdf8;
+    --dw-tone-save-as: #60a5fa;
+    --dw-tone-open: #60a5fa;
+    --dw-tone-export: #60a5fa;
+    --dw-tone-copy: #38bdf8;
+    --dw-tone-submit: #34d399;
+    --dw-tone-refresh: #2dd4bf;
+    --dw-tone-table: #34d399;
+    --dw-tone-rollback: #fbbf24;
+    --dw-tone-bookmark: #f59e0b;
+    --dw-tone-history: #fbbf24;
+    --dw-tone-star: #fbbf24;
+    --dw-tone-warning: #fbbf24;
+    --dw-tone-delete: #fb7185;
+    --dw-tone-disconnect: #fb7185;
+    --dw-tone-minus: #fb7185;
+    --dw-tone-terminal: #22d3ee;
+    --dw-tone-link: #67e8f9;
+    --dw-tone-fullscreen: #7dd3fc;
+    --dw-tone-ai: #e879f9;
+    --dw-tone-format: #c084fc;
+    --dw-tone-plan: #a78bfa;
+    --dw-tone-help: #a78bfa;
+    --dw-tone-layout: #818cf8;
+    --dw-tone-layers: #818cf8;
+    --dw-tone-plugins: #a78bfa;
+    --dw-tone-settings: #93c5fd;
+    --dw-tone-locate: #2dd4bf;
+    --dw-tone-plus: #4ade80;
+    --dw-tone-folder: #f59e0b;
+    --dw-tone-file: #94a3b8;
+    --dw-tone-database: #60a5fa;
+    --dw-tone-dashboard: #34d399;
+    --dw-tone-connectors: #38bdf8;
+    --dw-tone-dev: #f97316;
+    --dw-tone-notify: #fbbf24;
+    --dw-tone-feedback: #c084fc;
+    --dw-tone-migration: #f472b6;
+    --dw-tone-monitor: #34d399;
+    --dw-tone-pin: #fbbf24;
+    --dw-tone-lock: #f59e0b;
+    --dw-tone-unlock: #34d399;
+    --dw-tone-filter: #a78bfa;
+    --dw-tone-sort: #818cf8;
+    --dw-tone-ddl: #818cf8;
+    --dw-tone-chart: #38bdf8;
+    --dw-tone-muted: #94a3b8;
+    --dw-tone-theme: #fbbf24;
+    --dw-tone-github: #e2e8f0;
+    --dw-tone-user: #67e8f9;
+}
+
+/* ---- Workspace tab leading icons ---- */
+.dw-tab__icon--sql,
+.dw-tab__icon--sql .dw-icon-root,
+.dw-tab.active .dw-tab__icon--sql,
+.dw-tab.active .dw-tab__icon--sql .dw-icon-root {
+    color: var(--dw-tone-sql);
+}
+
+.dw-tab:hover:not(.active) .dw-tab__icon--sql,
+.dw-tab:hover:not(.active) .dw-tab__icon--sql .dw-icon-root {
+    color: #7dd3fc;
+}
+
+.dw-tab__icon--terminal,
+.dw-tab__icon--terminal .dw-icon-root,
+.dw-tab.active .dw-tab__icon--terminal,
+.dw-tab.active .dw-tab__icon--terminal .dw-icon-root {
+    color: var(--dw-tone-terminal);
+}
+
+.dw-tab__icon--toned .dw-icon-root {
+    color: inherit;
+}
+
+.dw-tab__icon--messages,
+.dw-tab__icon--messages .dw-icon-root,
+.dw-tab.active .dw-tab__icon--messages,
+.dw-tab.active .dw-tab__icon--messages .dw-icon-root {
+    color: var(--dw-tone-history);
+}
+
+.dw-tab__icon .dw-icon--table {
+    color: var(--dw-tone-table);
+}
+
+/*
+ * Chrome hosts — toolbars, rails, docks, viewers.
+ * DwIcon roots carry .dw-icon--{name}; console glyphs also use data-console-icon.
+ */
+:is(
+    .dw-console-actions,
+    .dw-tree-toolbar__actions,
+    .local-files-toolbar__actions,
+    .toolbar-glyph,
+    .data-grid,
+    .explain-plan__actions,
+    .schema-er-graph__dock,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions,
+    .floating-tab-toolbar,
+    .dock-float-actions,
+    .dw-log-viewer__actions,
+    .dw-code-viewer__actions,
+    .titlebar-quick__btn,
+    .status-bar__tools,
+    .status-bar__icon,
+    .tool-btn__graphic,
+    .result-chart__head-actions,
+    .result-chart__ico,
+    .query-result-view-toggle,
+    .scope-toolbar__actions,
+    .er-lineage__zoom,
+    .result-compare-btn,
+    .result-pane-settings__trigger,
+    .dw-console-glyph
+) :is(
+    .dw-icon--run
+),
+.dw-console-glyph[data-console-icon='run'],
+.dw-console-glyph[data-console-icon='run'] .dw-icon-root {
+    color: var(--dw-tone-run);
+}
+
+:is(
+    .dw-console-actions,
+    .data-grid,
+    .dw-console-glyph
+) :is(
+    .dw-icon--stop
+),
+.dw-console-glyph[data-console-icon='stop'],
+.dw-console-glyph[data-console-icon='stop'] .dw-icon-root {
+    color: var(--dw-tone-stop);
+}
+
+:is(
+    .dw-console-actions,
+    .explain-plan__actions,
+    .dw-console-glyph
+) :is(
+    .dw-icon--explain-plan,
+    .dw-icon--list-ordered
+),
+.dw-console-glyph[data-console-icon='explainPlan'],
+.dw-console-glyph[data-console-icon='explainPlan'] .dw-icon-root {
+    color: var(--dw-tone-plan);
+}
+
+:is(
+    .dw-console-actions,
+    .data-grid,
+    .scope-toolbar__actions,
+    .dw-console-glyph
+) .dw-icon--submit,
+.dw-console-glyph[data-console-icon='submit'],
+.dw-console-glyph[data-console-icon='submit'] .dw-icon-root {
+    color: var(--dw-tone-submit);
+}
+
+:is(
+    .dw-console-actions,
+    .data-grid,
+    .dw-console-glyph
+) .dw-icon--rollback,
+.dw-console-glyph[data-console-icon='rollback'],
+.dw-console-glyph[data-console-icon='rollback'] .dw-icon-root {
+    color: var(--dw-tone-rollback);
+}
+
+:is(
+    .dw-console-actions,
+    .dw-console-glyph
+) .dw-icon--disconnect,
+.dw-console-glyph[data-console-icon='disconnect'],
+.dw-console-glyph[data-console-icon='disconnect'] .dw-icon-root {
+    color: var(--dw-tone-disconnect);
+}
+
+:is(
+    .dw-console-actions,
+    .tool-btn__graphic,
+    .titlebar-quick__btn,
+    .dw-console-glyph
+) .dw-icon--terminal,
+.dw-console-glyph[data-console-icon='terminal'],
+.dw-console-glyph[data-console-icon='terminal'] .dw-icon-root {
+    color: var(--dw-tone-terminal);
+}
+
+:is(
+    .dw-console-actions,
+    .dw-code-viewer__actions,
+    .schema-er-graph__dock,
+    .dw-console-glyph
+) .dw-icon--save,
+.dw-console-glyph[data-console-icon='save'],
+.dw-console-glyph[data-console-icon='save'] .dw-icon-root,
+.dw-console-glyph.dw-icon--save {
+    color: var(--dw-tone-save);
+}
+
+:is(
+    .dw-console-actions,
+    .schema-er-graph__dock,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions,
+    .dw-console-glyph
+) .dw-icon--save-as,
+.dw-console-glyph[data-console-icon='saveAs'],
+.dw-console-glyph[data-console-icon='saveAs'] .dw-icon-root {
+    color: var(--dw-tone-save-as);
+}
+
+:is(
+    .dw-console-actions,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions,
+    .dw-console-glyph
+) .dw-icon--bookmark,
+.dw-console-glyph[data-console-icon='bookmark'],
+.dw-console-glyph[data-console-icon='bookmark'] .dw-icon-root {
+    color: var(--dw-tone-bookmark);
+}
+
+:is(
+    .dw-console-actions,
+    .dw-console-glyph
+) .dw-icon--view-model,
+.dw-console-glyph[data-console-icon='viewModel'],
+.dw-console-glyph[data-console-icon='viewModel'] .dw-icon-root {
+    color: var(--dw-tone-layout);
+}
+
+:is(
+    .dw-console-actions,
+    .data-grid,
+    .dw-console-glyph
+) .dw-icon--format,
+.dw-console-glyph[data-console-icon='format'],
+.dw-console-glyph[data-console-icon='format'] .dw-icon-root,
+.dw-console-glyph.dw-icon--format {
+    color: var(--dw-tone-format);
+}
+
+:is(
+    .dw-console-actions,
+    .dw-console-glyph
+) .dw-icon--fold-all,
+.dw-console-glyph[data-console-icon='foldAll'],
+.dw-console-glyph[data-console-icon='foldAll'] .dw-icon-root {
+    color: var(--dw-tone-muted);
+}
+
+:is(
+    .dw-console-actions,
+    .dw-console-glyph
+) .dw-icon--unfold-all,
+.dw-console-glyph[data-console-icon='unfoldAll'],
+.dw-console-glyph[data-console-icon='unfoldAll'] .dw-icon-root {
+    color: var(--dw-tone-locate);
+}
+
+:is(
+    .dw-console-actions,
+    .dw-tree-toolbar__actions,
+    .toolbar-glyph,
+    .titlebar-quick__btn,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions,
+    .result-pane-settings__trigger,
+    .dw-console-glyph
+) :is(
+    .dw-icon--settings-sql-editor,
+    .dw-icon--settings,
+    .dw-icon--settings-profile,
+    .dw-icon--settings-knowledge,
+    .dw-icon--tools
+),
+.dw-console-glyph[data-console-icon='sqlEditorSettings'],
+.dw-console-glyph[data-console-icon='sqlEditorSettings'] .dw-icon-root {
+    color: var(--dw-tone-settings);
+}
+
+:is(
+    .dw-console-actions,
+    .dw-console-glyph
+) .dw-icon--tab-schema-er,
+.dw-console-glyph[data-console-icon='visualQuery'],
+.dw-console-glyph[data-console-icon='visualQuery'] .dw-icon-root {
+    color: var(--dw-tone-plus);
+}
+
+:is(
+    .dw-console-actions,
+    .dw-log-viewer__actions,
+    .dw-code-viewer__actions,
+    .dock-float-actions,
+    .er-lineage__zoom,
+    .dw-console-glyph
+) .dw-icon--fullscreen,
+.dw-console-glyph[data-console-icon='fullscreen'],
+.dw-console-glyph[data-console-icon='fullscreen'] .dw-icon-root {
+    color: var(--dw-tone-fullscreen);
+}
+
+:is(
+    .dw-console-actions,
+    .data-grid,
+    .explain-plan__actions,
+    .tool-btn__graphic,
+    .titlebar-quick__btn,
+    .dw-console-glyph
+) :is(
+    .dw-icon--ai,
+    .dw-icon--bot
+),
+.dw-console-glyph[data-console-icon='ai'],
+.dw-console-glyph[data-console-icon='ai'] .dw-icon-root {
+    color: var(--dw-tone-ai);
+}
+
+:is(
+    .dw-console-actions,
+    .local-files-toolbar__actions,
+    .toolbar-glyph,
+    .dw-code-viewer__actions,
+    .dw-console-glyph
+) .dw-icon--open,
+.dw-console-glyph.dw-icon--open {
+    color: var(--dw-tone-open);
+}
+
+:is(
+    .dw-console-actions,
+    .local-files-toolbar__actions,
+    .toolbar-glyph,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions,
+    .dw-code-viewer__actions,
+    .dock-float-actions,
+    .dw-console-glyph
+) :is(
+    .dw-icon--delete,
+    .dw-icon--x
+),
+.dw-console-glyph.dw-icon--delete {
+    color: var(--dw-tone-delete);
+}
+
+:is(
+    .dw-console-actions,
+    .local-files-toolbar__actions,
+    .toolbar-glyph,
+    .dw-code-viewer__actions,
+    .floating-tab-toolbar,
+    .dw-console-glyph
+) :is(
+    .dw-icon--editor,
+    .dw-icon--edit
+),
+.dw-console-glyph.dw-icon--editor {
+    color: var(--dw-tone-plan);
+}
+
+:is(
+    .dw-console-actions,
+    .floating-tab-toolbar,
+    .dw-console-glyph
+) .dw-icon--layout,
+.dw-console-glyph.dw-icon--layout {
+    color: var(--dw-tone-layout);
+}
+
+:is(
+    .dw-console-actions,
+    .floating-tab-toolbar,
+    .tool-btn__graphic,
+    .result-chart__head-actions,
+    .dw-console-glyph
+) .dw-icon--layers,
+.result-chart__ico.dw-icon--layers {
+    color: var(--dw-tone-layers);
+}
+
+:is(
+    .dw-console-actions,
+    .dw-tree-toolbar__actions,
+    .local-files-toolbar__actions,
+    .toolbar-glyph,
+    .schema-er-graph__dock,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions,
+    .dw-log-viewer__actions,
+    .scope-toolbar__actions,
+    .dw-console-glyph
+) .dw-icon--locate,
+.dw-console-glyph.dw-icon--locate {
+    color: var(--dw-tone-locate);
+}
+
+:is(
+    .dw-console-actions,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions,
+    .dw-log-viewer__actions,
+    .dw-code-viewer__actions,
+    .dw-console-glyph
+) .dw-icon--copy,
+.dw-console-glyph.dw-icon--copy {
+    color: var(--dw-tone-copy);
+}
+
+:is(
+    .dw-console-actions,
+    .schema-er-graph__dock,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions,
+    .dw-console-glyph
+) .dw-icon--link,
+.dw-console-glyph.dw-icon--link {
+    color: var(--dw-tone-link);
+}
+
+:is(
+    .dw-console-actions,
+    .tool-btn__graphic,
+    .dw-console-glyph
+) :is(
+    .dw-icon--console,
+    .dw-icon--tab-console
+),
+.dw-console-glyph.dw-icon--console {
+    color: var(--dw-tone-sql);
+}
+
+:is(
+    .dw-console-actions,
+    .data-grid,
+    .dw-console-glyph
+) .dw-icon--help,
+.dw-console-glyph.dw-icon--help {
+    color: var(--dw-tone-help);
+}
+
+:is(
+    .dw-console-actions,
+    .dw-tree-toolbar__actions,
+    .local-files-toolbar__actions,
+    .toolbar-glyph,
+    .data-grid,
+    .schema-er-graph__dock,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions,
+    .dw-log-viewer__actions,
+    .titlebar-quick__btn,
+    .tool-btn__graphic,
+    .scope-toolbar__actions,
+    .dw-console-glyph
+) .dw-icon--refresh,
+.dw-console-glyph.dw-icon--refresh {
+    color: var(--dw-tone-refresh);
+}
+
+:is(
+    .dw-tree-toolbar__actions,
+    .local-files-toolbar__actions,
+    .toolbar-glyph,
+    .data-grid,
+    .schema-er-graph__dock,
+    .er-lineage__zoom,
+    .scope-toolbar__actions
+) .dw-icon--plus {
+    color: var(--dw-tone-plus);
+}
+
+:is(
+    .data-grid,
+    .schema-er-graph__dock,
+    .er-lineage__zoom,
+    .scope-toolbar__actions
+) .dw-icon--minus {
+    color: var(--dw-tone-minus);
+}
+
+:is(
+    .local-files-toolbar__actions,
+    .toolbar-glyph,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions,
+    .status-bar__tools,
+    .dw-code-viewer__actions
+) .dw-icon--file,
+.status-bar__icon.dw-icon--file {
+    color: var(--dw-tone-file);
+}
+
+:is(
+    .local-files-toolbar__actions,
+    .toolbar-glyph
+) .dw-icon--folder {
+    color: var(--dw-tone-folder);
+}
+
+:is(
+    .local-files-toolbar__actions,
+    .toolbar-glyph,
+    .data-grid
+) :is(
+    .dw-icon--chevrons-up,
+    .dw-icon--chevrons-down
+) {
+    color: var(--dw-tone-muted);
+}
+
+:is(
+    .data-grid,
+    .schema-er-graph__dock,
+    .status-bar__tools,
+    .tool-btn__graphic,
+    .dw-code-viewer__actions,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions
+) :is(
+    .dw-icon--export,
+    .dw-icon--menu-import
+),
+.status-bar__icon.dw-icon--export {
+    color: var(--dw-tone-export);
+}
+
+.data-grid .dw-icon--ddl {
+    color: var(--dw-tone-ddl);
+}
+
+:is(
+    .data-grid,
+    .result-compare-btn
+) .dw-icon--arrow-up-down {
+    color: var(--dw-tone-sort);
+}
+
+.data-grid .dw-icon--filter {
+    color: var(--dw-tone-filter);
+}
+
+:is(
+    .data-grid,
+    .query-result-view-toggle,
+    .result-chart__head-actions,
+    .dw-tab__icon
+) .dw-icon--table,
+.result-chart__ico.dw-icon--table {
+    color: var(--dw-tone-table);
+}
+
+:is(
+    .data-grid,
+    .query-result-view-toggle,
+    .result-chart__head-actions
+) :is(
+    .dw-icon--chart,
+    .dw-icon--chart-bar,
+    .dw-icon--chart-line,
+    .dw-icon--chart-pie
+),
+.result-chart__ico.dw-icon--chart,
+.result-chart__ico.dw-icon--chart-bar,
+.result-chart__ico.dw-icon--chart-line,
+.result-chart__ico.dw-icon--chart-pie {
+    color: var(--dw-tone-chart);
+}
+
+.data-grid .dw-icon--dices {
+    color: var(--dw-tone-warning);
+}
+
+:is(
+    .result-pane-settings__trigger,
+    .result-compare-btn
+) .dw-icon--star {
+    color: var(--dw-tone-star);
+}
+
+/* Side / shortcut rail */
+.tool-btn__graphic .dw-icon--database { color: var(--dw-tone-database); }
+.tool-btn__graphic .dw-icon--dashboard { color: var(--dw-tone-dashboard); }
+.tool-btn__graphic .dw-icon--plugins { color: var(--dw-tone-plugins); }
+.tool-btn__graphic .dw-icon--connectors { color: var(--dw-tone-connectors); }
+.tool-btn__graphic .dw-icon--dev-tools { color: var(--dw-tone-dev); }
+.tool-btn__graphic .dw-icon--notify { color: var(--dw-tone-notify); }
+.tool-btn__graphic .dw-icon--feedback { color: var(--dw-tone-feedback); }
+.tool-btn__graphic .dw-icon--about { color: var(--dw-tone-muted); }
+.tool-btn__graphic .dw-icon--history { color: var(--dw-tone-history); }
+.tool-btn__graphic .dw-icon--monitor { color: var(--dw-tone-monitor); }
+.tool-btn__graphic .dw-icon--migration { color: var(--dw-tone-migration); }
+.tool-btn__graphic .dw-icon--user,
+.tool-btn__graphic .dw-icon--users { color: var(--dw-tone-user); }
+
+/* Titlebar / ER dock / float / log */
+.titlebar-quick__btn .dw-icon--sun,
+.titlebar-quick__btn .dw-icon--moon { color: var(--dw-tone-theme); }
+.titlebar-quick__btn .dw-icon--lock { color: var(--dw-tone-lock); }
+.titlebar-quick__btn .dw-icon--github { color: var(--dw-tone-github); }
+
+.schema-er-graph__dock .dw-icon--lock { color: var(--dw-tone-lock); }
+.schema-er-graph__dock .dw-icon--unlock { color: var(--dw-tone-unlock); }
+
+:is(
+    .floating-tab-toolbar,
+    .dock-float-actions,
+    .dw-log-viewer__actions
+) .dw-icon--pin {
+    color: var(--dw-tone-pin);
+}
+
+.dock-float-actions .dw-icon--open-external {
+    color: var(--dw-tone-open);
+}
+
+.dw-log-viewer__actions .dw-icon--arrow-up,
+.dw-log-viewer__actions .dw-icon--arrow-down {
+    color: var(--dw-tone-sort);
+}
+
+:is(
+    .dw-log-viewer__actions,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions,
+    .local-files-toolbar__actions,
+    .dw-tree-toolbar__actions,
+    .toolbar-glyph
+) .dw-icon--search,
+.local-files-toolbar__search-icon.dw-icon--search {
+    color: var(--dw-tone-locate);
+}
+
+.dw-code-viewer__actions .dw-icon--close {
+    color: var(--dw-tone-muted);
+}
+
+/*
+ * Title bar menus, app menu, settings nav — functional hues.
+ * DwIcon roots carry .dw-icon--{name}; TitleBarMenuIcon also has .titlebar-menu-icon.
+ */
+:is(
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--database { color: var(--dw-tone-database); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--console { color: var(--dw-tone-sql); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--connectors { color: var(--dw-tone-connectors); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--plugins { color: var(--dw-tone-plugins); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+):is(
+    .dw-icon--settings-basic,
+    .dw-icon--settings,
+    .dw-icon--settings-layout,
+    .dw-icon--settings-profile,
+    .dw-icon--settings-editor,
+    .dw-icon--settings-sql-editor,
+    .dw-icon--settings-shortcuts,
+    .dw-icon--settings-plugins,
+    .dw-icon--settings-ai,
+    .dw-icon--settings-data-agent,
+    .dw-icon--settings-knowledge,
+    .dw-icon--settings-about,
+    .dw-icon--settings-connection-health,
+    .dw-icon--settings-system-metrics
+) { color: var(--dw-tone-settings); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+):is(
+    .dw-icon--feedback,
+    .dw-icon--help
+) { color: var(--dw-tone-help); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--tour { color: #67e8f9; }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--about { color: var(--dw-tone-muted); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--layout { color: var(--dw-tone-layout); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--tree { color: var(--dw-tone-plus); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-menu__dropdown-leading .dw-icon-root,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--shortcuts { color: #a78bfa; }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--plus { color: var(--dw-tone-plus); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--open { color: var(--dw-tone-open); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--history { color: var(--dw-tone-history); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--folder { color: var(--dw-tone-folder); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--delete { color: var(--dw-tone-delete); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--submit { color: var(--dw-tone-submit); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--user { color: var(--dw-tone-user); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--users { color: var(--dw-tone-user); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--refresh { color: var(--dw-tone-refresh); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--lock { color: var(--dw-tone-lock); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--log-out { color: var(--dw-tone-delete); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--ddl { color: var(--dw-tone-sql); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+):is(
+    .dw-icon--zoom-in,
+    .dw-icon--zoom-out,
+    .dw-icon--zoom-reset
+) { color: var(--dw-tone-locate); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root
+).dw-icon--dev-tools { color: var(--dw-tone-dev); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--editor { color: var(--dw-tone-plan); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--alert-triangle { color: var(--dw-tone-warning); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--export { color: var(--dw-tone-export); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--link { color: var(--dw-tone-link); }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--key { color: #f472b6; }
+
+:is(
+    .titlebar-menu-icon,
+    .titlebar-main-menu .dw-icon-root,
+    .module-shell__nav-item-icon .dw-icon-root,
+    .settings-nav-icon
+).dw-icon--code { color: var(--dw-tone-sql); }
+
+/* Config dropdown: keep terminal/focus distinct from SQL console in title bar */
+.titlebar-menu__dropdown-leading .dw-icon--console {
+    color: var(--dw-tone-terminal);
+}
+
+/* Hover: brighten without washing to white */
+:is(
+    .dw-console-actions,
+    .dw-tree-toolbar__actions,
+    .local-files-toolbar__actions,
+    .data-grid,
+    .schema-er-graph__dock,
+    .ssh-terminal-tab__actions,
+    .connector-workbench__actions
+) .dw-icon-btn:hover:not(:disabled) .dw-icon-root[class*='dw-icon--'],
+.dw-console-actions .dw-icon-btn:hover:not(:disabled) .dw-console-glyph[data-console-icon],
+.titlebar-quick__btn:hover:not(:disabled) .dw-icon-root[class*='dw-icon--'],
+.tool-btn:hover:not(:disabled) .tool-btn__graphic .dw-icon-root[class*='dw-icon--'] {
+    filter: brightness(1.12);
+}

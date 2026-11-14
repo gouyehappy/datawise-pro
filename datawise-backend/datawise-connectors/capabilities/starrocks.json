@@ -1,0 +1,7 @@
+{
+  "dbType": "starrocks",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false
+  }
+}

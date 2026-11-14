@@ -37,6 +37,36 @@ export class DatawiseClient {
         return this.getJson('/api/sql/connections')
     }
 
+    async listSchemaTables(
+        connectionId: string,
+        database?: string,
+    ): Promise<{database?: string; tables: Array<{tableName?: string; name?: string}>}> {
+        const qs = new URLSearchParams({connectionId})
+        if (database) qs.set('database', database)
+        return this.getJson(`/api/schema/tables?${qs.toString()}`)
+    }
+
+    async fetchTableProperties(
+        connectionId: string,
+        database: string | undefined,
+        tableName: string,
+    ): Promise<{
+        tableName?: string
+        columns?: Array<{
+            name?: string
+            type?: string
+            dataType?: string
+            nullable?: boolean
+            keyType?: string
+            primaryKey?: boolean
+            comment?: string
+        }>
+    }> {
+        const qs = new URLSearchParams({connectionId})
+        if (database) qs.set('database', database)
+        return this.getJson(`/api/tables/${encodeURIComponent(tableName)}/properties?${qs.toString()}`)
+    }
+
     async getConfigMigrationStatus(): Promise<import('./types.js').LegacyConfigMigrationStatus> {
         return this.getJson('/api/system/config-migration')
     }
@@ -122,6 +152,7 @@ export class DatawiseClient {
             method,
             headers,
             body: method === 'POST' || method === 'PUT' ? JSON.stringify(body ?? {}) : undefined,
+            signal: AbortSignal.timeout(30_000),
         })
 
         let payload: ApiResponse<T> | null = null

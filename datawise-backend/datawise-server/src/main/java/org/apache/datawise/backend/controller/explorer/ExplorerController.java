@@ -3,6 +3,7 @@ package org.apache.datawise.backend.controller.explorer;
 import org.apache.datawise.backend.common.ApiResponse;
 import org.apache.datawise.backend.common.support.PerfLogger;
 import org.apache.datawise.backend.database.explorer.CreateNamespaceService;
+import org.apache.datawise.backend.database.explorer.DialectOptionsService;
 import org.apache.datawise.backend.database.explorer.ExplorerChildLoadOutcome;
 import org.apache.datawise.backend.database.explorer.ExplorerConnectionAdminService;
 import org.apache.datawise.backend.database.explorer.ExplorerConnectionLifecycleService;
@@ -17,15 +18,19 @@ import org.apache.datawise.backend.domain.CreateConnectionRequest;
 import org.apache.datawise.backend.domain.CreateDatabaseRequest;
 import org.apache.datawise.backend.domain.CreateNamespaceResult;
 import org.apache.datawise.backend.domain.CreateSchemaRequest;
+import org.apache.datawise.backend.domain.DataTypeOptionsResult;
+import org.apache.datawise.backend.domain.EngineOptionsResult;
 import org.apache.datawise.backend.domain.GroupResult;
 import org.apache.datawise.backend.domain.ImportConnectionsRequest;
 import org.apache.datawise.backend.domain.ImportConnectionsResult;
 import org.apache.datawise.backend.domain.MysqlCharsetOptionsResult;
 import org.apache.datawise.backend.domain.TreeNode;
 import org.apache.datawise.backend.domain.TreePayload;
+import org.apache.datawise.backend.security.ExplorerFeatureGate;
 import org.apache.datawise.backend.security.HeadlessSqlAuth;
+import org.apache.datawise.backend.security.RequiresExplorerGate;
+import org.apache.datawise.backend.security.RequiresExplorerNodeDelete;
 import org.apache.datawise.backend.server.pack.EntitlementService;
-import org.apache.datawise.backend.service.FeaturePermissionAccess;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,7 +62,7 @@ public class ExplorerController
     private final ExplorerConnectionAdminService connectionAdminService;
     private final ExplorerConnectionLifecycleService connectionLifecycleService;
     private final CreateNamespaceService createNamespaceService;
-    private final FeaturePermissionAccess featurePermissionAccess;
+    private final DialectOptionsService dialectOptionsService;
     private final EntitlementService entitlementService;
 
     public ExplorerController(
@@ -66,7 +71,7 @@ public class ExplorerController
             ExplorerConnectionAdminService connectionAdminService,
             ExplorerConnectionLifecycleService connectionLifecycleService,
             CreateNamespaceService createNamespaceService,
-            FeaturePermissionAccess featurePermissionAccess,
+            DialectOptionsService dialectOptionsService,
             EntitlementService entitlementService
     )
     {
@@ -75,7 +80,7 @@ public class ExplorerController
         this.connectionAdminService = connectionAdminService;
         this.connectionLifecycleService = connectionLifecycleService;
         this.createNamespaceService = createNamespaceService;
-        this.featurePermissionAccess = featurePermissionAccess;
+        this.dialectOptionsService = dialectOptionsService;
         this.entitlementService = entitlementService;
     }
 
@@ -87,15 +92,16 @@ public class ExplorerController
     }
 
     @GetMapping("/connections/{connectionId}")
+    @RequiresExplorerGate(ExplorerFeatureGate.CONNECTION)
     public ApiResponse<ConnectionConfig> fetchConnection(@PathVariable String connectionId)
     {
         return ApiResponse.ok(schemaService.getConnection(connectionId));
     }
 
     @PostMapping("/connections/{connectionId}/connect")
+    @RequiresExplorerGate(ExplorerFeatureGate.CONNECTION)
     public ApiResponse<ConnectionTestResult> connectConnection(@PathVariable String connectionId)
     {
-        featurePermissionAccess.requireExplorerContextConnection();
         requireConnectorForStoredConnection(connectionId);
         return ApiResponse.ok(connectionLifecycleService.connect(connectionId));
     }
@@ -114,9 +120,9 @@ public class ExplorerController
     }
 
     @PostMapping("/connections/{connectionId}/disconnect")
+    @RequiresExplorerGate(ExplorerFeatureGate.CONNECTION)
     public ApiResponse<Void> disconnectConnection(@PathVariable String connectionId)
     {
-        featurePermissionAccess.requireExplorerContextConnection();
         connectionLifecycleService.disconnect(connectionId);
         return ApiResponse.ok(null);
     }
@@ -128,9 +134,9 @@ public class ExplorerController
     }
 
     @PostMapping("/connections/{connectionId}/reconnect")
+    @RequiresExplorerGate(ExplorerFeatureGate.CONNECTION)
     public ApiResponse<ConnectionTestResult> reconnectConnection(@PathVariable String connectionId)
     {
-        featurePermissionAccess.requireExplorerContextConnection();
         requireConnectorForStoredConnection(connectionId);
         return ApiResponse.ok(connectionLifecycleService.reconnect(connectionId));
     }
@@ -178,55 +184,55 @@ public class ExplorerController
 
 
     @PostMapping("/groups")
+    @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
     public ApiResponse<GroupResult> createGroup(@RequestBody Map<String, String> body)
     {
-        featurePermissionAccess.requireExplorerCatalogMutation();
         String label = body.getOrDefault("label", "New group");
         String parentId = body.get("parentId");
         return ApiResponse.ok(connectionAdminService.createGroup(label, parentId));
     }
 
     @PutMapping("/groups/{groupId}")
+    @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
     public ApiResponse<TreePayload> updateGroup(
             @PathVariable String groupId,
             @RequestBody Map<String, String> body
     )
     {
-        featurePermissionAccess.requireExplorerCatalogMutation();
         String label = body.getOrDefault("label", "");
         return ApiResponse.ok(new TreePayload(connectionAdminService.updateGroup(groupId, label)));
     }
 
     @PostMapping("/connections/{connectionId}/databases")
+    @RequiresExplorerGate(ExplorerFeatureGate.DANGEROUS)
     public ApiResponse<CreateNamespaceResult> createDatabase(
             @PathVariable String connectionId,
             @RequestBody CreateDatabaseRequest request
     )
     {
         HeadlessSqlAuth.requireSqlAccess();
-        featurePermissionAccess.requireExplorerContextDangerous();
         return ApiResponse.ok(createNamespaceService.createDatabase(connectionId, request));
     }
 
     @DeleteMapping("/connections/{connectionId}/databases/{name}")
+    @RequiresExplorerGate(ExplorerFeatureGate.DANGEROUS)
     public ApiResponse<CreateNamespaceResult> deleteDatabase(
             @PathVariable String connectionId,
             @PathVariable String name
     )
     {
         HeadlessSqlAuth.requireSqlAccess();
-        featurePermissionAccess.requireExplorerContextDangerous();
         return ApiResponse.ok(createNamespaceService.deleteDatabase(connectionId, name));
     }
 
     @PostMapping("/connections/{connectionId}/schemas")
+    @RequiresExplorerGate(ExplorerFeatureGate.DANGEROUS)
     public ApiResponse<CreateNamespaceResult> createSchema(
             @PathVariable String connectionId,
             @RequestBody CreateSchemaRequest request
     )
     {
         HeadlessSqlAuth.requireSqlAccess();
-        featurePermissionAccess.requireExplorerContextDangerous();
         return ApiResponse.ok(createNamespaceService.createSchema(connectionId, request));
     }
 
@@ -237,32 +243,46 @@ public class ExplorerController
         return ApiResponse.ok(createNamespaceService.listMysqlCharsetOptions(connectionId));
     }
 
+    @GetMapping("/connections/{connectionId}/engines")
+    public ApiResponse<EngineOptionsResult> listEngines(@PathVariable String connectionId)
+    {
+        HeadlessSqlAuth.requireSqlAccess();
+        return ApiResponse.ok(dialectOptionsService.listEngines(connectionId));
+    }
+
+    @GetMapping("/connections/{connectionId}/data-types")
+    public ApiResponse<DataTypeOptionsResult> listDataTypes(@PathVariable String connectionId)
+    {
+        HeadlessSqlAuth.requireSqlAccess();
+        return ApiResponse.ok(dialectOptionsService.listDataTypes(connectionId));
+    }
+
     @PostMapping("/connections")
+    @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
     public ApiResponse<ConnectionResult> createConnection(@RequestBody CreateConnectionRequest request)
     {
-        featurePermissionAccess.requireExplorerCatalogMutation();
         requireConnectorForConfig(request != null ? request.config() : null);
         return ApiResponse.ok(connectionAdminService.createConnection(request.config(), request.groupId()));
     }
 
     @PutMapping("/connections/{connectionId}")
+    @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
     public ApiResponse<TreePayload> updateConnection(
             @PathVariable String connectionId,
             @RequestBody ConnectionConfig config
     )
     {
-        featurePermissionAccess.requireExplorerCatalogMutation();
         requireConnectorForConfig(config);
         return ApiResponse.ok(new TreePayload(connectionAdminService.updateConnection(connectionId, config)));
     }
 
     @PutMapping("/connections/{connectionId}/group")
+    @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
     public ApiResponse<TreePayload> moveConnection(
             @PathVariable String connectionId,
             @RequestBody Map<String, String> body
     )
     {
-        featurePermissionAccess.requireExplorerCatalogMutation();
         String groupId = body.get("groupId");
         if (groupId == null || groupId.isBlank()) {
             throw new IllegalArgumentException("groupId is required");
@@ -271,9 +291,9 @@ public class ExplorerController
     }
 
     @PutMapping("/reorder")
+    @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
     public ApiResponse<TreePayload> reorder(@RequestBody Map<String, String> body)
     {
-        featurePermissionAccess.requireExplorerCatalogMutation();
         String nodeId = body.get("nodeId");
         String targetId = body.get("targetId");
         String position = body.get("position");
@@ -287,16 +307,16 @@ public class ExplorerController
     }
 
     @DeleteMapping("/nodes/{nodeId}")
+    @RequiresExplorerNodeDelete
     public ApiResponse<TreePayload> deleteNode(@PathVariable String nodeId)
     {
-        featurePermissionAccess.requireExplorerNodeDelete(connectionAdminService.isCatalogStructureNode(nodeId));
         return ApiResponse.ok(new TreePayload(connectionAdminService.deleteNode(nodeId)));
     }
 
     @PostMapping("/connections/import")
+    @RequiresExplorerGate(ExplorerFeatureGate.EXPORT)
     public ApiResponse<ImportConnectionsResult> importConnections(@RequestBody ImportConnectionsRequest request)
     {
-        featurePermissionAccess.requireExplorerContextExport();
         if (request != null && request.configs() != null) {
             for (ConnectionConfig config : request.configs()) {
                 requireConnectorForConfig(config);

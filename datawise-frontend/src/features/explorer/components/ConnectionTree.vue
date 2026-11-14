@@ -39,9 +39,11 @@ const {
   menuPos,
   menuItems,
   showDeleteSqlDialog,
+  deleteSqlMessage,
+  showDeleteProjectFileDialog,
+  deleteProjectFileMessage,
   showRecentSqlDialog,
   recentSqlContext,
-  deleteSqlMessage,
   treeInline,
   onSelect,
   onOpen,
@@ -53,6 +55,7 @@ const {
   cancelTreeInlineEdit,
   beginCreateRootGroup,
   confirmDeleteSqlFile,
+  confirmDeleteProjectFile,
   confirmTableAction,
   showTableActionDialog,
   pendingTableAction,
@@ -180,6 +183,7 @@ onUnmounted(() => {
       :show-column-comment="explorer.showColumnComment"
       :show-table-comment="explorer.showTableComment"
       :connection-drag-enabled="connectionDragEnabled"
+      :explorer-tree="explorer.tree"
       :can-move-connection-to-group="(connectionId, groupId) => canMoveConnectionToGroup(explorer.tree, connectionId, groupId)"
       :inline-edit-node-id="treeInline?.nodeId ?? null"
       :inline-edit-value="treeInline?.value ?? ''"
@@ -244,6 +248,15 @@ onUnmounted(() => {
       :confirm-label="t('explorer.context.deleteSqlFile')"
       confirm-variant="danger"
       @confirm="showDeleteSqlDialog = false; confirmDeleteSqlFile()"
+  />
+
+  <ConfirmDialog
+      v-model:open="showDeleteProjectFileDialog"
+      :title="t('explorer.deleteProjectFileTitle')"
+      :message="deleteProjectFileMessage"
+      :confirm-label="t('explorer.context.deleteProjectFile')"
+      confirm-variant="danger"
+      @confirm="showDeleteProjectFileDialog = false; confirmDeleteProjectFile()"
   />
 
   <ConfirmDialog

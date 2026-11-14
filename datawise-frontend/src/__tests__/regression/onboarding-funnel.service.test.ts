@@ -57,7 +57,7 @@ describe('onboarding-funnel.service', () => {
         }
     })
 
-    it('falls through to ui-tour when runtime already done', async () => {
+    it('lands on Welcome after runtime — no auto ui-tour (A0)', async () => {
         const storage = memoryStorage()
         clearOnboardingCompleted(storage)
         markRuntimeSetupCompleted(storage)
@@ -66,11 +66,10 @@ describe('onboarding-funnel.service', () => {
         ;(globalThis as {window: unknown}).window = {}
 
         try {
-            assert.equal(await resolveFirstRunFunnelStep(storage), 'ui-tour')
-            assert.equal(shouldContinueToUiTourAfterRuntime(storage), true)
-            markOnboardingCompleted(storage)
             assert.equal(await resolveFirstRunFunnelStep(storage), 'none')
             assert.equal(shouldContinueToUiTourAfterRuntime(storage), false)
+            markOnboardingCompleted(storage)
+            assert.equal(await resolveFirstRunFunnelStep(storage), 'none')
         } finally {
             if (prev === undefined) {
                 delete (globalThis as {window?: unknown}).window

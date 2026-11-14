@@ -86,6 +86,80 @@ export function buildDeepLinkExample(): string {
     })
 }
 
+/** Browser shareable query example (FE-P2-3); leading {@code ?}. */
+export function buildWebDeepLinkExampleQuery(): string {
+    const params = new URLSearchParams([
+        ['dwAction', 'open'],
+        ['connectionId', 'your-connection-id'],
+        ['database', 'mydb'],
+        ['sql', 'SELECT 1'],
+    ])
+    return `?${params.toString()}`
+}
+
 export function extractDeepLinkFromArgv(argv: string[]): string | null {
     return argv.find((arg) => arg.startsWith(`${DEEP_LINK_SCHEME}://`)) ?? null
+}
+
+/** HTTP query keys used by web deep links (FE-P2-3). */
+export const DEEP_LINK_QUERY_KEYS = [
+    'dwAction',
+    'dw',
+    'connectionId',
+    'database',
+    'sql',
+    'dbType',
+    'pluginId',
+    'id',
+] as const
+
+const WEB_DEEP_LINK_ACTIONS = new Set<DeepLinkAction>([
+    'open',
+    'connection-new',
+    'ai',
+    'plugin-install',
+    'analysis-canvas',
+])
+
+/**
+ * Parse browser query params into a deep-link payload (no vue-router).
+ * Prefer {@code dwAction=…} keys; optional {@code dw=} may hold a full {@code datawise://} URL.
+ */
+export function parseDeepLinkQuery(params: URLSearchParams): DeepLinkOpenPayload | null {
+    const embedded = params.get('dw')?.trim()
+    if (embedded) {
+        return parseDeepLinkUrl(embedded)
+    }
+
+    const actionRaw = params.get('dwAction')?.trim()
+    if (!actionRaw || !WEB_DEEP_LINK_ACTIONS.has(actionRaw as DeepLinkAction)) {
+        return null
+    }
+    const action = actionRaw as DeepLinkAction
+    const connectionId = params.get('connectionId')?.trim() || undefined
+    const database = params.get('database')?.trim() || undefined
+    const sql = params.get('sql')?.trim() || undefined
+    const dbType = params.get('dbType')?.trim() || undefined
+    const pluginId = params.get('id')?.trim()
+        || params.get('pluginId')?.trim()
+        || undefined
+
+    if (action === 'open' && !connectionId && !database && !sql) return null
+    if (action === 'connection-new') {
+        return {action, dbType}
+    }
+    if (action === 'plugin-install') {
+        if (!pluginId) return null
+        return {action, pluginId}
+    }
+    if (action === 'ai' || action === 'analysis-canvas') {
+        return {action, connectionId, database}
+    }
+    return {action, connectionId, database, sql}
+}
+
+export function stripDeepLinkQueryParams(params: URLSearchParams): void {
+    for (const key of DEEP_LINK_QUERY_KEYS) {
+        params.delete(key)
+    }
 }

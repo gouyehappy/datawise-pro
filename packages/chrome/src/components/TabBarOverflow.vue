@@ -97,7 +97,7 @@ function itemIconComponent(item: TabOverflowItem): Component | null {
         @click="toggle"
     >
       <component :is="menuIconComponent" v-if="menuIconComponent"/>
-      <DwIcon v-else :name="resolvedMenuIcon" size="xs"/>
+      <DwIcon v-else :name="resolvedMenuIcon" size="sm" :stroke-width="2.15"/>
     </button>
     <div v-if="open" class="dw-tab-overflow__menu">
       <input

@@ -22,39 +22,40 @@
         slate: {bg: '#f4f6f8', muted: '#eceff3', panel: '#f0f2f5', hover: '#e2e6eb', rail: '#e8ebef'},
     }
 
+    /* Keep in sync with @datawise/theme — 中间略淡、四周加重 */
     var BG_DARK = {
-        default: {bg: '#0c0c0e', muted: '#141416', panel: '#18181b', hover: '#222226', rail: '#080809'},
-        warm: {bg: '#100e0c', muted: '#171512', panel: '#1c1a16', hover: '#27241f', rail: '#0c0a08'},
-        cool: {bg: '#0c1015', muted: '#121820', panel: '#171e27', hover: '#1f2936', rail: '#090c10'},
-        slate: {bg: '#0e1013', muted: '#15191e', panel: '#1a1f25', hover: '#242a32', rail: '#0a0c0f'},
+        default: {bg: '#1a1b1e', muted: '#222326', panel: '#1e1f22', hover: '#323438', rail: '#2b2d30'},
+        warm: {bg: '#1a1816', muted: '#221f1c', panel: '#1e1c19', hover: '#34302c', rail: '#2a2724'},
+        cool: {bg: '#1a1b1e', muted: '#222326', panel: '#1e1f22', hover: '#323438', rail: '#2b2d30'},
+        slate: {bg: '#181a1f', muted: '#21242a', panel: '#1c1e24', hover: '#32363e', rail: '#2a2d33'},
     }
 
     var DARK_UI = {
-        border: '#2e3440',
-        borderLight: '#252b33',
-        panelBorder: 'rgba(255, 255, 255, 0.12)',
-        panelShadow: '0 1px 3px rgba(0, 0, 0, 0.28)',
+        border: 'rgba(255, 255, 255, 0.08)',
+        borderLight: 'rgba(255, 255, 255, 0.08)',
+        panelBorder: 'rgba(255, 255, 255, 0.08)',
+        panelShadow: '0 1px 2px rgba(0, 0, 0, 0.14)',
         text: '#f0f0f3',
         textSecondary: '#d4d4d8',
         textMuted: '#c4c7cc',
         textDim: '#a8adb6',
-        tabBarBg: '#161a20',
-        tabBarBorder: '#1e242c',
-        tabActiveBg: '#222831',
-        tabActiveBorder: '#3574f0',
+        tabBarBg: '#1a1b1e',
+        tabBarBorder: 'rgba(255, 255, 255, 0.08)',
+        tabActiveBg: '#2b2d30',
+        tabActiveBorder: 'transparent',
         tabActiveText: '#f4f4f7',
         tabInactiveText: '#c8c8d0',
-        tabHoverBg: 'rgba(255, 255, 255, 0.1)',
+        tabHoverBg: 'rgba(255, 255, 255, 0.08)',
         tabCloseHover: 'rgba(255, 255, 255, 0.12)',
-        toolPillActive: '#2a3038',
-        shadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+        toolPillActive: 'color-mix(in srgb, #fff 10%, var(--dw-bg-rail))',
+        shadow: '0 8px 24px rgba(0, 0, 0, 0.32)',
         menuShadow:
             '0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.24), 0 16px 40px rgba(0, 0, 0, 0.32)',
     }
 
     var LIGHT_UI = {
         border: '#e2e8f0',
-        borderLight: '#eef2f7',
+        borderLight: 'rgba(15, 23, 42, 0.08)',
         panelBorder: 'rgba(15, 23, 42, 0.08)',
         panelShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
         text: '#111827',
@@ -126,7 +127,9 @@
     }
 
     function readUiSkin(value) {
-        return value === 'ide' || value === 'classic' ? value : 'classic'
+        return value === 'ide' || value === 'classic' || value === 'atelier' || value === 'ledger'
+            ? value
+            : 'classic'
     }
 
     function readUiFont(value) {
@@ -186,6 +189,7 @@
                     uiTextScale: readUiTextScale(parsed.uiTextScale),
                     uiFontSizePx: clampBodyPx(parsed.uiFontSizePx),
                     uiDensity: readUiDensity(parsed.uiDensity),
+                    coloredToolbarIcons: parsed.iconToneV2 === true && parsed.coloredToolbarIcons === true,
                 }
             }
             var configRaw = localStorage.getItem(CONFIG_KEY)
@@ -202,6 +206,7 @@
                         uiTextScale: readUiTextScale(config.theme.uiTextScale),
                         uiFontSizePx: clampBodyPx(config.theme.uiFontSizePx),
                         uiDensity: readUiDensity(config.theme.uiDensity),
+                        coloredToolbarIcons: config.theme.iconToneV2 === true && config.theme.coloredToolbarIcons === true,
                     }
                 }
             }
@@ -218,6 +223,7 @@
             uiTextScale: 'md',
             uiFontSizePx: BODY_PX_MD,
             uiDensity: 'md',
+            coloredToolbarIcons: false,
         }
     }
 
@@ -245,6 +251,7 @@
         var uiFont = readUiFont(prefs.uiFont)
         var uiTextScale = readUiTextScale(prefs.uiTextScale)
         var uiDensity = readUiDensity(prefs.uiDensity)
+        var iconTones = prefs.coloredToolbarIcons === true ? 'on' : 'off'
         var bodyPx = resolveBodyPx({
             uiTextScale: uiTextScale,
             uiFontSizePx: prefs.uiFontSizePx,
@@ -256,6 +263,7 @@
         root.setAttribute('data-ui-font', uiFont)
         root.setAttribute('data-ui-text-scale', uiTextScale)
         root.setAttribute('data-ui-density', uiDensity)
+        root.setAttribute('data-icon-tones', iconTones)
         if (uiTextScale === 'custom') {
             root.setAttribute('data-ui-font-size-px', String(bodyPx))
         } else {
@@ -266,16 +274,13 @@
         root.style.setProperty('--dw-font-size', bodyPx + 'px')
         root.style.setProperty('--dw-ui-text-scale', String(scaleFactor))
 
-        // Keep host chrome on first paint; only recompute when forced (user changed theme).
-        var chrome = mode === 'dark' ? surfaces.rail : LIGHT_UI.chrome
-        if (
-            !force
-            && typeof window.__DW_HOST_CHROME__ === 'string'
-            && window.__DW_HOST_CHROME__
-        ) {
-            chrome = window.__DW_HOST_CHROME__
-        }
-        var isIde = skin === 'ide'
+        // Always use palette chrome so migrations are not stuck on stale host seed.
+        var chrome =
+            mode === 'dark' ? surfaces.rail : skin === 'ide' ? '#cfd8e6' : LIGHT_UI.chrome
+        /* Keep in sync with @datawise/theme UI_SKIN_DEFINITIONS capabilities */
+        var isStrip = skin === 'ide' || skin === 'ledger'
+        var noPanelShadow = skin === 'ide' || skin === 'ledger'
+        var pillTabBarBg = skin === 'atelier' ? surfaces.panel : ui.tabBarBg
 
         var vars = {
             '--dw-primary': primary.primary,
@@ -297,9 +302,8 @@
             '--dw-bg-editor': surfaces.bg,
             '--dw-bg-chrome': chrome,
             '--dw-border': ui.border,
-            '--dw-border-light': ui.borderLight,
             '--dw-panel-border': ui.panelBorder,
-            '--dw-panel-shadow': isIde ? 'none' : ui.panelShadow,
+            '--dw-panel-shadow': noPanelShadow ? 'none' : ui.panelShadow,
             '--dw-text': ui.text,
             '--dw-text-secondary': ui.textSecondary,
             '--dw-text-muted': ui.textMuted,
@@ -313,24 +317,35 @@
                 mode === 'dark'
                     ? DARK_UI.toolPillActive
                     : 'color-mix(in srgb, var(--dw-text) 9%, var(--dw-bg-hover))',
-            '--dw-tab-bar-bg': isIde ? chrome : ui.tabBarBg,
-            '--dw-tab-bar-border': isIde ? ui.panelBorder : ui.tabBarBorder,
-            '--dw-tab-active-bg': isIde ? surfaces.bg : ui.tabActiveBg,
-            '--dw-tab-active-border': isIde ? 'transparent' : ui.tabActiveBorder,
-            '--dw-tab-active-text': isIde ? ui.text : ui.tabActiveText,
+            '--dw-tab-bar-bg': isStrip ? surfaces.bg : pillTabBarBg,
+            '--dw-tab-bar-border': isStrip ? ui.panelBorder : ui.tabBarBorder,
+            '--dw-tab-active-bg': isStrip ? surfaces.bg : ui.tabActiveBg,
+            '--dw-tab-active-border': isStrip ? 'transparent' : ui.tabActiveBorder,
+            '--dw-tab-active-text': isStrip ? ui.text : ui.tabActiveText,
             '--dw-tab-inactive-text': ui.tabInactiveText,
-            '--dw-tab-hover-bg': isIde
+            '--dw-tab-hover-bg': isStrip
                 ? (mode === 'dark'
                     ? 'color-mix(in srgb, #fff 5%, transparent)'
                     : 'color-mix(in srgb, var(--dw-text) 6%, transparent)')
                 : ui.tabHoverBg,
-            '--dw-tab-close-hover': isIde
+            '--dw-tab-close-hover': isStrip
                 ? (mode === 'dark'
                     ? 'color-mix(in srgb, #fff 10%, transparent)'
                     : 'color-mix(in srgb, var(--dw-text) 10%, transparent)')
                 : ui.tabCloseHover,
             '--dw-shadow': ui.shadow,
             '--dw-menu-shadow': ui.menuShadow,
+        }
+
+        /* Dark: force outline ladder. Light: leave outline/seam/border-light to skins. */
+        if (mode === 'dark') {
+            vars['--dw-border-light'] = ui.borderLight
+            vars['--dw-panel-outline'] = 'rgba(255, 255, 255, 0.08)'
+            vars['--dw-seam-divider'] = 'rgba(255, 255, 255, 0.08)'
+        } else {
+            root.style.removeProperty('--dw-border-light')
+            root.style.removeProperty('--dw-panel-outline')
+            root.style.removeProperty('--dw-seam-divider')
         }
 
         for (var name in vars) {
@@ -349,6 +364,7 @@
             cover.style.background = chrome
         }
         window.__DW_BOOT_CHROME__ = chrome
+        window.__DW_HOST_CHROME__ = chrome
         root.setAttribute('data-dw-theme-boot', '1')
     }
 

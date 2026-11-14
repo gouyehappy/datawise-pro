@@ -107,6 +107,15 @@ public class ConnectorJdbcSessionAccess {
         return outcome;
     }
 
+    public boolean hasRunningQuery(String queryIdOrExecutionKey) {
+        return executionTracker.hasRunningQuery(queryIdOrExecutionKey)
+                || executionTracker.hasRunningExecution(queryIdOrExecutionKey);
+    }
+
+    public SqlExecutionTracker.RunningExecution peekRunning(String queryIdOrExecutionKey) {
+        return executionTracker.peek(queryIdOrExecutionKey);
+    }
+
     SqlExecutionTracker executionTracker() {
         return executionTracker;
     }

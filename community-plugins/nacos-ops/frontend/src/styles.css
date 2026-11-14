@@ -1,9 +1,9 @@
 :root {
   color-scheme: dark;
-  --bg: var(--color-background, #0c1015);
-  --panel: var(--color-popover, #171e27);
-  --surface: var(--color-muted, #121820);
-  --line: var(--color-border, #2e3440);
+  --bg: var(--color-background, #1a1b1e);
+  --panel: var(--color-popover, #222326);
+  --surface: var(--color-muted, #222326);
+  --line: var(--color-border, rgba(255, 255, 255, 0.08));
   --fg: var(--color-foreground, #f0f0f3);
   --muted: var(--color-muted-foreground, #c4c7cc);
   --accent: var(--color-primary, #3b82f6);
@@ -48,10 +48,11 @@ button:disabled { opacity: .42; cursor: not-allowed; }
   display: flex;
   height: 100%;
   min-height: 0;
-  background: var(--bg);
+  gap: var(--dw-panel-gap, 0px);
+  background: var(--color-chrome, var(--bg));
 }
 
-/* 鈥斺€?Left rail (icon-only) 鈥斺€?*/
+/* —Left rail (icon-only) —*/
 .rail {
   --rail-accent: var(--wb-accent, #00c1de);
   width: 48px;
@@ -177,7 +178,7 @@ button:disabled { opacity: .42; cursor: not-allowed; }
   background: color-mix(in srgb, var(--panel) 88%, transparent);
 }
 
-/* 鈥斺€?Flat buttons 鈥斺€?*/
+/* —Flat buttons —*/
 .btn {
   appearance: none;
   border: 0;
@@ -293,7 +294,7 @@ button:disabled { opacity: .42; cursor: not-allowed; }
   color: var(--ok);
 }
 
-/* 鈥斺€?Fields 鈥斺€?*/
+/* —Fields —*/
 .field {
   background: transparent;
   border: 0;
@@ -312,7 +313,7 @@ select.field {
   cursor: pointer;
 }
 
-/* 鈥斺€?Namespace select: field trigger + themed popup 鈥斺€?*/
+/* —Namespace select: field trigger + themed popup —*/
 .ns-select {
   position: relative;
   flex: 0 0 auto;
@@ -402,7 +403,7 @@ select.field {
   background: color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
-/* 鈥斺€?Unified editor toolbar 鈥斺€?*/
+/* —Unified editor toolbar —*/
 .ed-bar {
   display: inline-flex;
   align-items: stretch;
@@ -643,7 +644,7 @@ select.field {
   color: var(--fg);
 }
 
-/* 鈥斺€?Confirm modal 鈥斺€?*/
+/* —Confirm modal —*/
 .dw-modal {
   position: fixed;
   inset: 0;
@@ -847,7 +848,7 @@ body.ops-split-dragging {
   border-radius: 999px;
 }
 
-/* 鈥斺€?Namespace tree 鈥斺€?*/
+/* —Namespace tree —*/
 .ns-tree {
   padding: 0 0 14px;
   user-select: none;
@@ -1128,7 +1129,7 @@ body.ops-split-dragging {
   color: var(--muted);
 }
 
-/* 鈥斺€?Multi-config tabs 鈥斺€?*/
+/* —Multi-config tabs —*/
 .cfg-tabs {
   display: flex;
   align-items: stretch;
@@ -1267,7 +1268,7 @@ body.ops-split-dragging {
   opacity: 0.65;
 }
 
-/* 鈥斺€?Right editor shell 鈥斺€?*/
+/* —Right editor shell —*/
 .editor-chrome {
   flex: 0 0 auto;
   border-bottom: 1px solid var(--line);
@@ -1531,7 +1532,7 @@ body.ops-split-dragging {
   font-size: var(--fs-sm);
 }
 
-/* 鈥斺€?Context menu 鈥斺€?*/
+/* —Context menu —*/
 .ctx-menu {
   position: fixed;
   z-index: 1000;
@@ -1627,7 +1628,7 @@ body.ops-split-dragging {
   background: color-mix(in srgb, var(--fg) 9%, var(--line));
 }
 
-/* 鈥斺€?Monaco / fallback editor 鈥斺€?*/
+/* —Monaco / fallback editor —*/
 .code-editor {
   flex: 1;
   min-height: 0;
@@ -1684,7 +1685,7 @@ body.ops-split-dragging {
   overflow: auto;
 }
 
-/* 鈥斺€?Tables / overview 鈥斺€?*/
+/* —Tables / overview —*/
 .list-table {
   width: 100%;
   border-collapse: collapse;

@@ -1,6 +1,7 @@
 package org.apache.datawise.backend.controller.platform;
 
 import org.apache.datawise.backend.common.ApiResponse;
+import org.apache.datawise.backend.domain.ProjectDeleteRequest;
 import org.apache.datawise.backend.domain.ProjectFileContentDto;
 import org.apache.datawise.backend.domain.ProjectFileEntryDto;
 import org.apache.datawise.backend.domain.ProjectMkdirRequest;
@@ -17,8 +18,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/projects/{projectId}/files")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_OPEN)
 public class ProjectFilesController {
 
     private final ProjectFilesService projectFilesService;
@@ -46,6 +51,7 @@ public class ProjectFilesController {
     }
 
     @PutMapping("/content")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EDIT)
     public ApiResponse<ProjectFileContentDto> write(
             @PathVariable String projectId,
             @RequestBody ProjectFileContentDto request
@@ -54,6 +60,7 @@ public class ProjectFilesController {
     }
 
     @PostMapping("/mkdir")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EDIT)
     public ApiResponse<ProjectFileEntryDto> mkdir(
             @PathVariable String projectId,
             @RequestBody ProjectMkdirRequest request
@@ -62,10 +69,21 @@ public class ProjectFilesController {
     }
 
     @PostMapping("/rename")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EDIT)
     public ApiResponse<ProjectFileEntryDto> rename(
             @PathVariable String projectId,
             @RequestBody ProjectRenameRequest request
     ) {
         return ApiResponse.ok(projectFilesService.rename(projectId, request));
+    }
+
+    @PostMapping("/delete")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EDIT)
+    public ApiResponse<Void> delete(
+            @PathVariable String projectId,
+            @RequestBody ProjectDeleteRequest request
+    ) {
+        projectFilesService.delete(projectId, request);
+        return ApiResponse.ok(null);
     }
 }

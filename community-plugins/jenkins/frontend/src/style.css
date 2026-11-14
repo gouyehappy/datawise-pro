@@ -1,9 +1,9 @@
 :root {
   color-scheme: dark;
-  --bg: var(--color-background, #121316);
-  --panel: var(--color-popover, #1a1b1f);
-  --surface: var(--color-muted, #24252a);
-  --line: var(--color-border, rgb(120 120 128 / 0.22));
+  --bg: var(--color-background, #1a1b1e);
+  --panel: var(--color-popover, #222326);
+  --surface: var(--color-muted, #1e1f22);
+  --line: var(--color-border, rgba(255, 255, 255, 0.08));
   --fg: var(--color-foreground, #e6e6ea);
   --muted: var(--color-muted-foreground, #8e8e98);
   --accent: var(--color-primary, #e24b45);
@@ -70,8 +70,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .shell {
   height: 100%; min-height: 0;
   display: flex; align-items: stretch;
+  gap: var(--dw-panel-gap, 0px);
+  background: var(--color-chrome, transparent);
 }
-.jk-split { display: flex; align-items: stretch; min-width: 0; min-height: 0; height: 100%; width: 100%; }
+.jk-split {
+  display: flex; align-items: stretch; min-width: 0; min-height: 0; height: 100%; width: 100%;
+  gap: var(--dw-panel-gap, 0px);
+}
 .jk-split--row { flex-direction: row; }
 .jk-split--col { flex-direction: column; }
 .jk-split__start { flex: 0 0 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

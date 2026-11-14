@@ -61,6 +61,7 @@ export const DEFAULT_LAYOUT_PREFERENCES: LayoutPreferences = {
     terminalHeight: DEFAULT_TERMINAL_HEIGHT,
     lastModule: 'database',
     lastShortcutPanel: null,
+    workbenchMode: 'query',
     openHttpLinksIn: 'builtin',
     dockPlacement: null,
     dockTerminalFloat: null,

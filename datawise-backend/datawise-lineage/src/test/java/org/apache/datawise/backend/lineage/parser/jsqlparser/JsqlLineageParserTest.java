@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JsqlLineageParserTest {
 
-    private final JsqlLineageParser parser = new JsqlLineageParser(null);
+    private final JsqlLineageParser parser = new JsqlLineageParser(() -> null);
 
     @Test
     void directColumn() {

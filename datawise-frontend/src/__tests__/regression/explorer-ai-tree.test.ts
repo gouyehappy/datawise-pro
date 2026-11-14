@@ -90,4 +90,17 @@ describe('explorer-ai-tree', () => {
         assert.equal(database.children?.some((child) => isAiFolder(child)), false)
         assert.deepEqual(database.children?.map((child) => child.label), ['dbo'])
     })
+
+    test('AI folder fallback id slugs catalog label (Default → default)', () => {
+        const database: TreeNode = {
+            id: 'db-conn-1-default',
+            label: 'Default',
+            type: 'database',
+            children: [],
+        }
+        ensureAiFolderInScopeChildren(database, 'conn-1')
+        const ai = database.children?.find((child) => isAiFolder(child))
+        assert.ok(ai)
+        assert.equal(ai?.id, 'folder-ai-conn-1-default')
+    })
 })

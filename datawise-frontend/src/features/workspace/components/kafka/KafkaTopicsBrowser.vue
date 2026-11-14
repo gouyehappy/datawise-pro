@@ -1,16 +1,20 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, onMounted, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {ConfirmDialog, DwButton, DwInput, EmptyState, SearchInput} from '@/core/components'
 import {explorerApi} from '@/api'
 import {useConfirmDialog} from '@/core/composables/useConfirmDialog'
+import {useDebouncedRef} from '@/core/utils/debounced-ref'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {
     deriveTopicPrefixPatterns,
     filterKafkaTopics,
     groupKafkaTopicsByPrefix,
+    kafkaTopicGroupHasMore,
     KAFKA_TOPICS_PAGE_SIZE,
+    KAFKA_TOPICS_VIRTUAL_PAGE,
     normalizeKafkaTopicPattern,
+    sliceKafkaTopicsVirtualPage,
     type KafkaTopicPrefixGroup,
 } from '@/features/explorer/services/kafka-topic-prefix.service'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
@@ -45,6 +49,7 @@ const KAFKA_PREFIX_NAV_LIMIT = 6
 
 const patternInput = ref('')
 const localFilter = ref('')
+const debouncedLocalFilter = useDebouncedRef(localFilter, 200)
 const topics = ref<string[]>([])
 const totalCount = ref(0)
 const fetchLimit = ref(KAFKA_TOPICS_PAGE_SIZE)
@@ -54,13 +59,15 @@ const creating = ref(false)
 const error = ref<string | null>(null)
 const activePrefix = ref<string | null>(null)
 const collapsedPrefixes = ref<Set<string>>(new Set())
+/** Groups that have expanded past the first virtual page of topics. */
+const expandedTopicGroups = ref<Set<string>>(new Set())
 const prefixNavExpanded = ref(false)
 const showCreate = ref(false)
 const createName = ref('')
 const createPartitions = ref('1')
 const createReplication = ref('1')
 
-const filteredTopics = computed(() => filterKafkaTopics(topics.value, localFilter.value))
+const filteredTopics = computed(() => filterKafkaTopics(topics.value, debouncedLocalFilter.value))
 
 const prefixGroups = computed((): KafkaTopicPrefixGroup[] => {
   const groups = groupKafkaTopicsByPrefix(filteredTopics.value)
@@ -109,6 +116,7 @@ async function loadTopics(reset: boolean) {
     error.value = null
     activePrefix.value = null
     collapsedPrefixes.value = new Set()
+    expandedTopicGroups.value = new Set()
     prefixNavExpanded.value = false
   } else {
     loadingMore.value = true
@@ -169,6 +177,23 @@ function isGroupCollapsed(prefix: string) {
   return collapsedPrefixes.value.has(prefix)
 }
 
+function visibleTopicsForGroup(group: KafkaTopicPrefixGroup): string[] {
+  return sliceKafkaTopicsVirtualPage(
+      group.topics,
+      expandedTopicGroups.value.has(group.prefix),
+  )
+}
+
+function groupHasMoreTopics(group: KafkaTopicPrefixGroup): boolean {
+  return kafkaTopicGroupHasMore(group.topics, expandedTopicGroups.value.has(group.prefix))
+}
+
+function expandGroupTopics(prefix: string) {
+  const next = new Set(expandedTopicGroups.value)
+  next.add(prefix)
+  expandedTopicGroups.value = next
+}
+
 function prefixLabel(group: KafkaTopicPrefixGroup) {
   return group.prefix === '__no_prefix__' ? t('explorer.kafkaBrowser.noPrefix') : group.label
 }
@@ -194,12 +219,11 @@ async function createTopic() {
   creating.value = true
   error.value = null
   try {
-    const result = await explorerApi.createKafkaTopic(props.connectionId, {
+    await explorerApi.createKafkaTopic(props.connectionId, {
       name,
       partitions: Number.isFinite(partitions) ? partitions : 1,
       replicationFactor: Number.isFinite(replicationFactor) ? replicationFactor : 1,
     })
-    layout.showSuccessToast(result.message || t('explorer.kafkaTopicAdmin.created'))
     showCreate.value = false
     createName.value = ''
     await loadTopics(true)
@@ -223,8 +247,7 @@ async function deleteSelectedTopic() {
   deleteConfirmLoading.value = true
   error.value = null
   try {
-    const result = await explorerApi.deleteKafkaTopic(props.connectionId, topic)
-    layout.showSuccessToast(result.message || t('explorer.kafkaTopicAdmin.deleted'))
+    await explorerApi.deleteKafkaTopic(props.connectionId, topic)
     await loadTopics(true)
   } catch (err) {
     error.value = resolveCaughtApiErrorMessage(err, t, 'explorer.kafkaTopicAdmin.deleteFailed')
@@ -238,8 +261,13 @@ watch(() => props.connectionId, () => {
   localFilter.value = ''
   topics.value = []
   totalCount.value = 0
+  expandedTopicGroups.value = new Set()
   showCreate.value = false
   void loadTopics(true)
+})
+
+watch(debouncedLocalFilter, () => {
+  expandedTopicGroups.value = new Set()
 })
 
 onMounted(() => {
@@ -436,7 +464,7 @@ defineExpose({refresh: () => loadTopics(true)})
 
         <ul v-show="activePrefix || !isGroupCollapsed(group.prefix)" class="kafka-topics-browser__items">
           <li
-              v-for="topic in group.topics"
+              v-for="topic in visibleTopicsForGroup(group)"
               :key="topic"
               class="kafka-topics-browser__item"
               :class="{ 'is-selected': selectedTopic === topic }"
@@ -452,6 +480,15 @@ defineExpose({refresh: () => loadTopics(true)})
                 @click="copyTopicName(topic, $event)"
             >
               ⧉
+            </button>
+          </li>
+          <li v-if="groupHasMoreTopics(group)" class="kafka-topics-browser__more-row">
+            <button
+                type="button"
+                class="dw-text-btn kafka-topics-browser__show-more"
+                @click="expandGroupTopics(group.prefix)"
+            >
+              {{ t('explorer.kafkaBrowser.showMoreTopics', {count: group.topics.length - KAFKA_TOPICS_VIRTUAL_PAGE}) }}
             </button>
           </li>
         </ul>
@@ -579,6 +616,14 @@ defineExpose({refresh: () => loadTopics(true)})
   margin: var(--dw-space-1) 0 0;
   padding: 0;
   list-style: none;
+}
+
+.kafka-topics-browser__more-row {
+  padding: var(--dw-space-1) var(--dw-space-3);
+}
+
+.kafka-topics-browser__show-more {
+  font-size: var(--dw-text-xs);
 }
 
 .kafka-topics-browser__item {

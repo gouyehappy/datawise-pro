@@ -17,6 +17,12 @@ public class ExplorerSchemaProperties {
     /** Default page size when listing tables under a schema folder. */
     private int tableListPageSize = 500;
 
+    /**
+     * Max in-memory schema tree cache entries ({@code session:connection} keys) in
+     * {@code SchemaCacheStore}. Evicts oldest by {@code cachedAt} when exceeded.
+     */
+    private int schemaCacheMaxEntries = 64;
+
     public long getIdleTimeoutMs() {
         return idleTimeoutMs;
     }
@@ -47,5 +53,13 @@ public class ExplorerSchemaProperties {
 
     public void setTableListPageSize(int tableListPageSize) {
         this.tableListPageSize = Math.max(50, tableListPageSize);
+    }
+
+    public int getSchemaCacheMaxEntries() {
+        return schemaCacheMaxEntries;
+    }
+
+    public void setSchemaCacheMaxEntries(int schemaCacheMaxEntries) {
+        this.schemaCacheMaxEntries = Math.max(1, schemaCacheMaxEntries);
     }
 }

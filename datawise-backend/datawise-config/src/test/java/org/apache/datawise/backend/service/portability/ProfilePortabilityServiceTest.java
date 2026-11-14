@@ -65,7 +65,13 @@ class ProfilePortabilityServiceTest {
                 resourcePolicy,
                 projectStore,
                 null,
-                workspaceStore);
+                workspaceStore,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         UserContext.set(1L, false, "session-test", "default");
     }
 
@@ -130,7 +136,13 @@ class ProfilePortabilityServiceTest {
                 resourcePolicy,
                 null,
                 null,
-                new WorkspaceStore(new FileSqlHistoryStore(configB, mapper), configB, mapper));
+                new WorkspaceStore(new FileSqlHistoryStore(configB, mapper), configB, mapper),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         UserContext.set(1L, false, "session-b", "default");
 
         ProfilePreflightResult preflight = serviceB.preflight(pkg, "migrate-me-now");
@@ -405,6 +417,55 @@ class ProfilePortabilityServiceTest {
         ConnectionEntity stillAdmin = connectionStore.findConnectionById("c-admin").orElseThrow();
         assertEquals(1L, stillAdmin.getUserId());
         assertEquals("admin-secret", stillAdmin.getPassword());
+    }
+
+    @Test
+    void omittedSecretsExportPreservesLocalPasswordsOnImport() throws Exception {
+        ConnectionGroupEntity group = new ConnectionGroupEntity();
+        group.setId("g1");
+        group.setLabel("Default");
+        group.setUserId(1L);
+        connectionStore.saveGroup(group);
+
+        ConnectionEntity connection = new ConnectionEntity();
+        connection.setId("c1");
+        connection.setGroupId("g1");
+        connection.setUserId(1L);
+        connection.setName("Local MySQL");
+        connection.setDbType("mysql");
+        connection.setHost("127.0.0.1");
+        connection.setPort("3306");
+        connection.setPassword("keep-me");
+        connectionStore.saveConnection(connection);
+
+        ProfileExportRequest exportRequest = new ProfileExportRequest();
+        exportRequest.setIncludeSecrets(false);
+        ProfileDomainOptions domains = ProfileDomainOptions.defaults();
+        domains.setConnections(true);
+        domains.setApp(false);
+        domains.setSnippets(false);
+        domains.setAiWorkspace(false);
+        domains.setProjects(false);
+        domains.setSavedConsoles(false);
+        domains.setSqlHistory(false);
+        exportRequest.setDomains(domains);
+
+        byte[] pkg = service.exportProfile(exportRequest);
+        ProfilePreflightResult preflight = service.preflight(pkg, null);
+        assertTrue(preflight.isPassphraseOk());
+        assertTrue(preflight.isSchemaCompatible());
+        assertEquals(ProfileManifest.SECRET_MODE_OMITTED, preflight.getManifest().getSecretMode());
+
+        ConnectionEntity updated = connectionStore.findConnectionById("c1").orElseThrow();
+        updated.setHost("10.0.0.9");
+        updated.setPassword("keep-me");
+        connectionStore.saveConnection(updated);
+
+        ProfileImportResult imported = service.importProfile(pkg, null, new ProfileImportOptions());
+        assertTrue(imported.isSuccess());
+        ConnectionEntity after = connectionStore.findConnectionById("c1").orElseThrow();
+        assertEquals("127.0.0.1", after.getHost());
+        assertEquals("keep-me", after.getPassword());
     }
 
     @SuppressWarnings("unchecked")

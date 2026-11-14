@@ -1,30 +1,28 @@
 import {onMounted, onUnmounted} from 'vue'
 import {useLocalFilesStore} from '@/features/local-files/stores/local-files-store'
+import {bindForegroundSettleRefresh} from '@/shared/browser/foreground-settle'
 
 /**
- * Refresh lightweight git status when the window regains focus,
- * so external commits/edits show up without a manual tree refresh.
+ * 窗口回到前台后再轻量刷新 git 状态。
+ * 调度走全局 foreground-settle，不与 Alt+Tab 首帧合成抢同一拍。
  */
 export function useLocalFilesGitStatusWatch() {
     const localFiles = useLocalFilesStore()
-
-    function onFocus() {
-        if (!localFiles.rootPath) return
-        localFiles.scheduleGitStatusRefresh()
-    }
-
-    function onVisibility() {
-        if (document.visibilityState !== 'visible') return
-        onFocus()
-    }
+    let unbind: (() => void) | null = null
 
     onMounted(() => {
-        window.addEventListener('focus', onFocus)
-        document.addEventListener('visibilitychange', onVisibility)
+        unbind = bindForegroundSettleRefresh(
+            () => {
+                if (!localFiles.rootPath) return
+                localFiles.scheduleGitStatusRefresh()
+            },
+            // 略晚于布局稳态，给虚拟树首帧留空
+            {afterMs: 120},
+        )
     })
 
     onUnmounted(() => {
-        window.removeEventListener('focus', onFocus)
-        document.removeEventListener('visibilitychange', onVisibility)
+        unbind?.()
+        unbind = null
     })
 }

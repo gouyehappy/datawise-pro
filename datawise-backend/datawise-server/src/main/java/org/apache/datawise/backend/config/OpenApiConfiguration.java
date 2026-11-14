@@ -23,7 +23,7 @@ public class OpenApiConfiguration {
                         .title("DataWise API")
                         .description("REST contract for DataWise frontend, MCP, and headless CLI. "
                                 + "Export: GET /v3/api-docs (JSON). UI: /swagger-ui.html")
-                        .version("4.1.7"))
+                        .version("5.0.0"))
                 .components(new Components()
                         .addSecuritySchemes(SESSION_SCHEME, new SecurityScheme()
                                 .name("X-DW-Session-Id")

@@ -46,10 +46,21 @@ const statusText = computed(() => {
     </div>
     <template #footer>
       <DwButton variant="secondary" size="sm" @click="install.dismiss">
-        {{ t('connection.driverInstallCancel') }}
+        {{ install.installing || !install.error
+          ? t('connection.driverInstallCancel')
+          : t('common.close') }}
       </DwButton>
-      <DwButton size="sm" :disabled="true" :loading="install.installing">
-        {{ install.installing ? t('connection.driverInstallBusy') : t('connection.driverInstallDone') }}
+      <DwButton
+          size="sm"
+          :disabled="install.installing || !install.error"
+          :loading="install.installing"
+          @click="install.dismiss"
+      >
+        {{ install.installing
+          ? t('connection.driverInstallBusy')
+          : install.error
+            ? t('connection.driverInstallRetryHint')
+            : t('connection.driverInstallDone') }}
       </DwButton>
     </template>
   </AppModal>

@@ -9,5 +9,13 @@ export default {
         sshTunnel: 'SSH tunnel is not supported for this datasource',
         tableMutation: 'Table data mutations are not supported for this datasource',
         csvImport: 'CSV import is not supported for this datasource',
+        diagram: 'ER diagrams are not supported for this datasource',
+        visualQueryBuilder: 'Visual Query Builder is not supported for this datasource',
+        schemaCompare: 'Schema compare is not supported for this datasource',
+        transactionalDdl: 'Transactional DDL is not supported for this datasource',
+    },
+    probe: {
+        checking: 'Probing connection capabilities…',
+        unavailable: 'Specialized capability unavailable: {detail}',
     },
 }

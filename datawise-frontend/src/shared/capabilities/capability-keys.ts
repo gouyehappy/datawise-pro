@@ -36,6 +36,10 @@ export type CapabilityHintKey =
     | 'sqlExecute'
     | 'tableMutation'
     | 'csvImport'
+    | 'diagram'
+    | 'visualQueryBuilder'
+    | 'schemaCompare'
+    | 'transactionalDdl'
 
 export const CAPABILITY_HINT_I18N: Record<CapabilityHintKey, string> = {
     sqlExplain: 'capabilities.unsupported.sqlExplain',
@@ -47,4 +51,8 @@ export const CAPABILITY_HINT_I18N: Record<CapabilityHintKey, string> = {
     sqlExecute: 'capabilities.unsupported.sqlExecute',
     tableMutation: 'capabilities.unsupported.tableMutation',
     csvImport: 'capabilities.unsupported.csvImport',
+    diagram: 'capabilities.unsupported.diagram',
+    visualQueryBuilder: 'capabilities.unsupported.visualQueryBuilder',
+    schemaCompare: 'capabilities.unsupported.schemaCompare',
+    transactionalDdl: 'capabilities.unsupported.transactionalDdl',
 }

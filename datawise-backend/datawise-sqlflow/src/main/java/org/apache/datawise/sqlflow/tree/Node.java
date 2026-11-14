@@ -42,11 +42,13 @@ public abstract class Node
     public abstract boolean equals(Object obj);
 
     /**
-     * Compare with another node by considering internal state excluding any Node returned by getChildren()
+     * Compare with another node by considering internal state excluding any Node returned by getChildren().
+     * Default: same runtime class (safe for leaf nodes with no non-child state).
+     * Subclasses with extra fields must override.
      */
     public boolean shallowEquals(Node other)
     {
-        throw new UnsupportedOperationException("not yet implemented: " + getClass().getName());
+        return sameClass(this, other);
     }
 
     public static boolean sameClass(Node left, Node right)

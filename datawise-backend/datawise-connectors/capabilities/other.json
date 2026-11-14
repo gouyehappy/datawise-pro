@@ -1,0 +1,5 @@
+{
+  "dbType": "other",
+  "extends": "specialized-browse",
+  "supportLevel": "connect"
+}

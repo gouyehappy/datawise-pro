@@ -4,7 +4,9 @@ import org.apache.datawise.backend.ai.config.AiAnalysisProperties;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AiLlmCallPolicyTest {
 
@@ -40,5 +42,27 @@ class AiLlmCallPolicyTest {
                     throw new IllegalArgumentException("bad input");
                 })
         );
+    }
+
+    @Test
+    void opensCircuitAfterConsecutiveFailures() {
+        AiAnalysisProperties properties = new AiAnalysisProperties();
+        properties.getLlm().setMaxAttempts(1);
+        properties.getLlm().setRetryDelayMs(0);
+        properties.getLlm().setCircuitFailureThreshold(2);
+        properties.getLlm().setCircuitOpenMs(60_000L);
+        AiLlmCallPolicy policy = new AiLlmCallPolicy(properties);
+
+        assertThrows(IllegalStateException.class, () -> policy.execute("a", () -> {
+            throw new IllegalStateException("down");
+        }));
+        assertFalse(policy.isCircuitOpen());
+
+        assertThrows(IllegalStateException.class, () -> policy.execute("b", () -> {
+            throw new IllegalStateException("down");
+        }));
+        assertTrue(policy.isCircuitOpen());
+
+        assertThrows(IllegalStateException.class, () -> policy.execute("c", () -> "should-not-run"));
     }
 }

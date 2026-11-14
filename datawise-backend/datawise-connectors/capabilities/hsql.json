@@ -1,0 +1,7 @@
+{
+  "dbType": "hsql",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": true
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "supportLevels": ["connect", "browse", "query", "operate"],
+  "formKinds": ["standard", "jdbc", "mq", "redis", "mongo", "document", "ssh", "ops", "other"],
+  "features": [
+    "queryExecution",
+    "metadataBrowse",
+    "objectBrowser",
+    "objectSource",
+    "schemaSearch",
+    "diagram",
+    "tableDataEdit",
+    "tableStructureEdit",
+    "tableImport",
+    "dataTransfer",
+    "sqlFileExecution",
+    "databaseCreate",
+    "fieldLineage",
+    "sqlExplain",
+    "visualQueryBuilder",
+    "schemaCompare",
+    "transactionalDdl"
+  ]
+}

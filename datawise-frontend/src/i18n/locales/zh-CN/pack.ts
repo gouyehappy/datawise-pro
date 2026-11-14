@@ -2,7 +2,7 @@ export default {
     title: '扩展商店',
     subtitle: '按需开通专业能力。标准版已够日常使用；需要 AI、迁移、备份或企业库时再升级。',
     eyebrow: '产品扩展',
-    hint: '商店展示的是扩展包，不是零散开关。开通后可在「功能开关」里微调。',
+    hint: '按 Core / Team / Insight / Extend 四层选能力。商店卖的是扩展包，不是零散开关；开通后可在「功能开关」里微调。',
     tabs: {
         store: '扩展商店',
         switches: '功能开关',
@@ -14,6 +14,27 @@ export default {
         connector: '连接器',
         locked: '可升级',
         active: '已开通',
+        layerLabel: '能力层',
+        layerAll: '各层',
+    },
+    /** B3-1: 对外能力层（弱化内部 pack id） */
+    layers: {
+        core: {
+            name: 'Core',
+            blurb: '连接、查询、结果与基础安全——标准版即可。',
+        },
+        team: {
+            name: 'Team',
+            blurb: '共享、审批、审计与协作治理。',
+        },
+        insight: {
+            name: 'Insight',
+            blurb: 'AI 生成 / 解释、工作台分析与图表洞察。',
+        },
+        extend: {
+            name: 'Extend',
+            blurb: '迁移、备份、血缘、运维与更多库连接。',
+        },
     },
     searchPlaceholder: '搜索扩展包…',
     catalogTitle: '扩展包目录',
@@ -195,8 +216,10 @@ export default {
     paywall: {
         title: '开通「{name}」',
         lockedTitle: '解锁「{name}」',
+        lockedLayerTitle: '解锁 {layer} · 「{name}」',
         trialTitle: '试用「{name}」',
         subtitle: '开通后立即在工作台生效，可随时在扩展商店管理。',
+        layerEyebrow: '{layer} 能力层',
         benefitsTitle: '你将获得',
         ctaUpgrade: '开通扩展包',
         ctaTrial: '免费试用 7 天',
@@ -224,7 +247,11 @@ export default {
             'SELECT customer_id, SUM(amount) AS total\nFROM orders\nWHERE created_at >= CURRENT_DATE - INTERVAL \'7\' DAY\nGROUP BY customer_id\nORDER BY total DESC;',
         sampleCaption: '正式解锁无限次生成、工作台分析，以及 Pro 开发者工具。',
         context: {
-            'nav/ai': 'AI Agent 需要 AI 智能包。今日仍可体验有限次数。',
+            'nav/ai': 'AI Agent 属于 Insight 能力层（AI 智能包）。今日仍可体验有限次数。',
+            'console/ai': '控制台 AI（解释 / 生成 SQL）属于 Insight 能力层。开通 AI 智能包后可在查询时随时唤起。',
+            'console/ai/fix': '读报错并生成修复 SQL 属于 Insight。未开通时仍可先看本地提示；开通后可一键改写。',
+            'console/ai/explain': '解释选中 SQL / 执行计划属于 Insight。步骤与表格计划仍可免费查看。',
+            'console/ai/lite': '控制台轻量 AI（解释选中 / 读报错）属于 Insight。开通后可在查询时随时唤起。',
             'ai/quota': '今日免费 AI 次数已用完。开通 AI 智能包后可继续使用。',
             'ai/sqlSuccess': 'SQL 已生成。开通 AI 智能包可无限次生成，并解锁工作台分析。',
             'settings/ai': '模型、Data Agent 与知识库设置随 AI 智能包提供。',

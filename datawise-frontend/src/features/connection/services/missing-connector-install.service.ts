@@ -85,7 +85,12 @@ export async function installMissingConnectorIfNeeded(
             })
             catalog.loaded = false
             await catalog.ensureLoaded().catch(() => undefined)
-            layout.showSuccessToast(t('explorer.missingConnector.installed', {type: label}))
+            layout.notifyQuiet({
+              category: 'system',
+              titleKey: 'installDone',
+              bodyKey: 'installDone',
+              params: {detail: t('explorer.missingConnector.installed', {type: label})},
+            })
             return true
         } catch (installError) {
             const message =

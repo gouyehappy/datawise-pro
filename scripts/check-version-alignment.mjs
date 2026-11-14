@@ -81,9 +81,6 @@ const textChecks = [
   ['datawise-backend/datawise-server/src/main/java/org/apache/datawise/backend/config/OpenApiConfiguration.java', `.version("${version}")`],
   ['datawise-desktop/src/main/java/org/apache/datawise/desktop/updater/DesktopUpdaterService.java', `CURRENT_VERSION = "${version}"`],
   ['datawise-desktop/src/main/java/org/apache/datawise/desktop/cef/CefRuntimeConfig.java', `DataWiseCLI/${version}`],
-  ['datawise-desktop/scripts/ensure-and-run.mjs', `datawise-desktop-${version}.jar`],
-  ['datawise-desktop/scripts/run-desktop.sh', `target/datawise-desktop-${version}.jar`],
-  ['datawise-desktop/scripts/run-desktop.cmd', `target\\datawise-desktop-${version}.jar`],
   ['datawise-frontend/src/features/layout/services/release-highlights.service.ts', `RELEASE_HIGHLIGHTS_VERSION = 'v${version}'`],
   ['README.md', `desktop-v${version}-`],
   ['README.zh-CN.md', `desktop-v${version}-`],
@@ -95,6 +92,40 @@ const textChecks = [
 ]
 for (const [rel, needle] of textChecks) {
   if (!read(rel).includes(needle)) failures.push(`${rel}: missing "${needle}"`)
+}
+
+// Desktop launch scripts resolve jar from pom version / glob — assert dynamic resolver, not a hardcoded jar name.
+const desktopScriptChecks = [
+  [
+    'datawise-desktop/scripts/ensure-and-run.mjs',
+    [
+      'function resolveDesktopJar',
+      'datawise-desktop-${version}.jar',
+      '/^datawise-desktop-.+\\.jar$/i',
+    ],
+  ],
+  [
+    'datawise-desktop/scripts/run-desktop.sh',
+    [
+      'datawise-desktop-${VERSION}.jar',
+      'target/datawise-desktop-*.jar',
+    ],
+  ],
+  [
+    'datawise-desktop/scripts/run-desktop.cmd',
+    [
+      'datawise-desktop-%%V.jar',
+      'datawise-desktop-*.jar',
+    ],
+  ],
+]
+for (const [rel, needles] of desktopScriptChecks) {
+  const body = read(rel)
+  for (const needle of needles) {
+    if (!body.includes(needle)) {
+      failures.push(`${rel}: missing dynamic jar resolver marker "${needle}"`)
+    }
+  }
 }
 
 if (failures.length > 0) {

@@ -8,20 +8,22 @@ import org.apache.datawise.taskconcurrency.api.TaskExecutionContext;
 import org.apache.datawise.taskconcurrency.api.TaskHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.stereotype.Component;
 
 /**
  * Task-concurrency consumer: runs dispatched migration jobs and releases slots on completion.
+ * {@link ObjectFactory} breaks the constructor cycle with {@link TableMigrationService}
+ * / task-concurrency runtime (BE-P2-1).
  */
 @Component
 public class MigrationTaskHandler implements TaskHandler {
 
     private static final Logger log = LoggerFactory.getLogger(MigrationTaskHandler.class);
 
-    private final TableMigrationService migrationService;
+    private final ObjectFactory<TableMigrationService> migrationService;
 
-    public MigrationTaskHandler(@Lazy TableMigrationService migrationService) {
+    public MigrationTaskHandler(ObjectFactory<TableMigrationService> migrationService) {
         this.migrationService = migrationService;
     }
 
@@ -31,7 +33,7 @@ public class MigrationTaskHandler implements TaskHandler {
         log.info("migration.task.handler.start jobId={}", jobId);
         context.heartbeat();
         try {
-            migrationService.executeRunningJob(jobId, context::heartbeat);
+            migrationService.getObject().executeRunningJob(jobId, context::heartbeat);
             context.ack();
             log.info("migration.task.handler.ack jobId={}", jobId);
         } catch (MigrationPausedException ex) {

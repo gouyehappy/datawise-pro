@@ -1,5 +1,5 @@
 <!--
-  欢迎 Tab — DataWise 工作台首页：品牌英雄区 + 三条主路径 + 继续工作
+  欢迎 Tab — A1: 零连接单主 CTA；有连接时「继续」优先，主路径次级；Explore 默认收起
 -->
 <script setup lang="ts">
 import {computed, onMounted, ref, shallowRef, watch} from 'vue'
@@ -7,6 +7,7 @@ import {useI18n} from 'vue-i18n'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useLayoutStore} from '@/features/layout/stores/layout'
+import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import {useFeaturePermission} from '@/features/auth/composables/useFeaturePermission'
 import {FeaturePermission} from '@/features/auth/types/feature-permission.types'
@@ -25,17 +26,22 @@ import {DwIcon} from '@/core/icons'
 import DbTypeContextPanel from '@/features/explorer/components/DbTypeContextPanel.vue'
 import ConnectionEnvBadge from '@/features/explorer/components/ConnectionEnvBadge.vue'
 import ImportConnectionDialog from '@/features/explorer/components/ImportConnectionDialog.vue'
+import ThirdPartyConnectionImportDialog from '@/features/explorer/components/ThirdPartyConnectionImportDialog.vue'
 import type {DbType, SavedConsole, SqlLogEntry} from '@/core/types'
 import {
     pickRecentSavedConsoles,
     pickRecentSqlLogs,
 } from '@/features/dashboard/services/dashboard-summary.service'
 import {
-    isConnectionProfilePackage,
     profileImportConnectionCount,
 } from '@/features/explorer/services/import-connection-file.service'
+import {planConnectionImportFile} from '@/features/explorer/services/plan-connection-import-file'
+import {
+    draftsToConnectionConfigs,
+    THIRD_PARTY_IMPORT_ACCEPT,
+    type ThirdPartyImportParseResult,
+} from '@/features/explorer/services/third-party-connection-import'
 import {resolveConnectionCatalogErrorMessage} from '@/features/connection/services/connection-catalog.service'
-import {parseConfigSnapshotPayload} from '@/features/settings/services/config-snapshot.service'
 import {
     importProfilePackage,
     preflightProfilePackage,
@@ -73,6 +79,7 @@ const {t} = useI18n()
 const workspace = useWorkspaceStore()
 const explorer = useExplorerStore()
 const layout = useLayoutStore()
+const appConfig = useAppConfigStore()
 const entitlement = useEntitlementStore()
 const catalog = useDatasourceCatalogStore()
 const auth = useAuthStore()
@@ -108,7 +115,10 @@ const connectionRows = computed(() =>
     ].filter((row) => row.items.length > 0),
 )
 const hasRecents = computed(() => connectionRows.value.length > 0)
-const leadKey = computed(() => leadCopyKey(hasRecents.value))
+const hasConnections = computed(() => explorer.connectionCount > 0)
+const leadKey = computed(() => leadCopyKey(hasConnections.value || hasRecents.value))
+/** A1-4: Explore / 次级能力默认收起 */
+const moreOpen = ref(false)
 
 /** connectionId → 可读地址副标题（host:port / URL），异步填充 */
 const subtitleByConnectionId = shallowRef<Record<string, string>>({})
@@ -169,11 +179,17 @@ const mainPaths = computed(() =>
       canCreateConnection: canCreateConnection.value,
       canNewConsole: can(FeaturePermission.WorkbenchTabNew),
       canAi: can(FeaturePermission.NavAi),
+      workbenchMode: appConfig.workbenchMode,
     }),
 )
 
 const preferredPath = computed(() =>
-    preferredWelcomePath(mainPaths.value, hasRecents.value || explorer.connectionCount > 0),
+    preferredWelcomePath(mainPaths.value, hasConnections.value || hasRecents.value),
+)
+
+/** 有连接时展示的次级路径（零连接首屏不抢主 CTA） */
+const secondaryPaths = computed(() =>
+    hasConnections.value ? mainPaths.value : [],
 )
 
 const secondaryActions = computed(() =>
@@ -183,6 +199,7 @@ const secondaryActions = computed(() =>
       canHistory: can(FeaturePermission.ShortcutHistory),
       canImport: canImport.value,
       canAi: false,
+      workbenchMode: appConfig.workbenchMode,
     }),
 )
 
@@ -193,6 +210,7 @@ const exploreLinks = computed(() =>
       canTeam: layout.canAccessNavModule('team'),
       canSettings: can(FeaturePermission.NavSettings),
       canAi: can(FeaturePermission.NavAi),
+      workbenchMode: appConfig.workbenchMode,
     }),
 )
 
@@ -252,6 +270,10 @@ const showTypePicker = ref(false)
 const showImportDialog = ref(false)
 const importFile = ref<File | null>(null)
 const importBusy = ref(false)
+const showThirdPartyImportDialog = ref(false)
+const thirdPartyParse = shallowRef<ThirdPartyImportParseResult | null>(null)
+const thirdPartyFileName = ref('')
+const thirdPartyBusy = ref(false)
 
 function openNewConnection() {
   showTypePicker.value = true
@@ -295,7 +317,7 @@ function openHistoryItem(item: WelcomeHistoryItem) {
 function openImportConnections() {
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = '.dwprofile,.json,application/json,application/octet-stream'
+  input.accept = THIRD_PARTY_IMPORT_ACCEPT
   input.onchange = () => {
     const file = input.files?.[0]
     if (!file) return
@@ -305,16 +327,27 @@ function openImportConnections() {
 }
 
 async function handleImportFile(file: File) {
-  if (isConnectionProfilePackage(file)) {
-    importFile.value = file
-    showImportDialog.value = true
-    return
-  }
   try {
-    const parsed = parseConfigSnapshotPayload(await file.text())
-    const count = await explorer.importConnections(parsed.connections)
+    const plan = await planConnectionImportFile(file)
+    if (plan.kind === 'dwprofile') {
+      importFile.value = plan.file
+      showImportDialog.value = true
+      return
+    }
+    if (plan.kind === 'third-party') {
+      thirdPartyParse.value = plan.parse
+      thirdPartyFileName.value = plan.fileName
+      showThirdPartyImportDialog.value = true
+      return
+    }
+    const count = await explorer.importConnections(plan.connections)
     await explorer.refreshTree()
-    layout.showSuccessToast(t('explorer.importSuccess', {count}))
+    layout.notifyQuiet({
+      category: 'workspace',
+      titleKey: 'importDone',
+      bodyKey: 'importDone',
+      params: {detail: t('explorer.importSuccess', {count})},
+    })
   } catch (error) {
     layout.showErrorToast(
         resolveConnectionCatalogErrorMessage(error, t, 'save')
@@ -327,6 +360,44 @@ function onImportDialogOpenChange(open: boolean) {
   showImportDialog.value = open
   if (!open && !importBusy.value) {
     importFile.value = null
+  }
+}
+
+function onThirdPartyImportOpenChange(open: boolean) {
+  showThirdPartyImportDialog.value = open
+  if (!open && !thirdPartyBusy.value) {
+    thirdPartyParse.value = null
+    thirdPartyFileName.value = ''
+  }
+}
+
+async function confirmThirdPartyImport() {
+  const parse = thirdPartyParse.value
+  if (!parse?.drafts.length) {
+    layout.showErrorToast(t('explorer.thirdPartyImport.empty'))
+    return
+  }
+  thirdPartyBusy.value = true
+  try {
+    const configs = draftsToConnectionConfigs(parse.drafts)
+    const count = await explorer.importConnections(configs)
+    await explorer.refreshTree()
+    showThirdPartyImportDialog.value = false
+    thirdPartyParse.value = null
+    thirdPartyFileName.value = ''
+    layout.notifyQuiet({
+      category: 'workspace',
+      titleKey: 'importDone',
+      bodyKey: 'importDone',
+      params: {detail: t('explorer.importSuccess', {count})},
+    })
+  } catch (error) {
+    layout.showErrorToast(
+        resolveConnectionCatalogErrorMessage(error, t, 'save')
+        || t('explorer.importFailed'),
+    )
+  } finally {
+    thirdPartyBusy.value = false
   }
 }
 
@@ -365,7 +436,12 @@ async function confirmImportProfilePackage(payload: {passphrase: string}) {
       layout.showWarningToast(t('explorer.importConnectionEmpty'))
       return
     }
-    layout.showSuccessToast(t('explorer.importSuccess', {count}))
+    layout.notifyQuiet({
+      category: 'workspace',
+      titleKey: 'importDone',
+      bodyKey: 'importDone',
+      params: {detail: t('explorer.importSuccess', {count})},
+    })
   } catch (error) {
     layout.showErrorToast(
         resolveCaughtApiErrorMessage(error, t, 'explorer.importFailed'),
@@ -373,6 +449,17 @@ async function confirmImportProfilePackage(payload: {passphrase: string}) {
   } finally {
     importBusy.value = false
   }
+}
+
+/** A1-3: 无连接先引导建连，避免直接撞上 AI paywall */
+function openAiPath() {
+  if (!hasConnections.value) {
+    layout.showWarningToast(t('welcome.aiNeedsConnection'))
+    if (canCreateConnection.value) openNewConnection()
+    return
+  }
+  if (!entitlement.guardAiNav()) return
+  layout.setModule('ai')
 }
 
 function runPath(id: WelcomeMainPathId) {
@@ -384,8 +471,7 @@ function runPath(id: WelcomeMainPathId) {
     void workspace.openConsole()
     return
   }
-  if (!entitlement.guardAiNav()) return
-  layout.setModule('ai')
+  openAiPath()
 }
 
 function runWorkflowStep(id: WelcomeWorkflowStepId) {
@@ -398,8 +484,7 @@ function runWorkflowStep(id: WelcomeWorkflowStepId) {
     return
   }
   if (id === 'analyze') {
-    if (!entitlement.guardAiNav()) return
-    layout.setModule('ai')
+    openAiPath()
   }
 }
 
@@ -421,9 +506,22 @@ function runExploreLink(id: WelcomeExploreLinkId) {
     return
   }
   if (id === 'ai') {
-    if (!entitlement.guardAiNav()) return
-    layout.setModule('ai')
+    openAiPath()
   }
+}
+
+async function openLocalDataPreviewPicker() {
+  const {readDatawiseHost} = await import('@/features/layout/services/desktop-bridge')
+  const host = readDatawiseHost()
+  if (!host?.fs?.selectFile) {
+    layout.showWarningToast(t('welcome.common.localDataNeedsDesktop'))
+    return
+  }
+  // Ext hint for native dialog; unknown tokens still open an all-files picker.
+  const path = await host.fs.selectFile('parquet')
+  if (!path) return
+  const {previewLocalDataFile} = await import('@/features/local-files/services/local-data-preview.service')
+  await previewLocalDataFile(path)
 }
 
 function runCommonAction(id: WelcomeCommonActionId) {
@@ -433,6 +531,10 @@ function runCommonAction(id: WelcomeCommonActionId) {
   }
   if (id === 'import') {
     openImportConnections()
+    return
+  }
+  if (id === 'localData') {
+    void openLocalDataPreviewPicker()
   }
 }
 
@@ -460,17 +562,19 @@ function runCommonAction(id: WelcomeCommonActionId) {
       </div>
     </div>
 
-    <div v-else class="welcome-stage">
+    <div v-else class="welcome-stage" :class="{'welcome-stage--empty': !hasConnections}">
       <header class="welcome-hero">
         <div class="welcome-hero__top">
           <div class="welcome-hero__brand">
             <AppBrandLogo size="lg" class="welcome-hero__logo"/>
             <div class="welcome-hero__titles">
               <h1 class="welcome-hero__title">{{ t('welcome.brand') }}</h1>
-              <p class="welcome-hero__kicker">{{ t('welcome.gettingStarted') }}</p>
+              <p class="welcome-hero__kicker">
+                {{ hasConnections ? t('welcome.continueWork') : t('welcome.gettingStarted') }}
+              </p>
             </div>
           </div>
-          <ul class="welcome-stats" aria-label="workspace stats">
+          <ul v-if="hasConnections" class="welcome-stats" aria-label="workspace stats">
             <li v-for="item in stats" :key="item.key">
               <b>{{ item.value }}</b>
               <span>{{ item.label }}</span>
@@ -479,9 +583,74 @@ function runCommonAction(id: WelcomeCommonActionId) {
         </div>
         <p class="welcome-hero__lead">{{ t(leadKey) }}</p>
 
-        <div class="welcome-paths" role="list">
+        <!-- A1-1: 零连接 — 单一主 CTA -->
+        <div v-if="!hasConnections && canCreateConnection" class="welcome-primary">
+          <DwButton variant="primary" class="welcome-primary__btn" @click="openNewConnection">
+            {{ t('welcome.newConnection') }}
+          </DwButton>
+          <p class="welcome-primary__hint">{{ t('welcome.primaryCtaHint') }}</p>
+        </div>
+        <div v-else-if="!hasConnections" class="welcome-primary">
+          <p class="welcome-primary__hint">{{ t('welcome.emptyHint') }}</p>
+        </div>
+
+        <!-- A1-2: 有连接 — 「继续」主角：最近连接 -->
+        <div v-else-if="hasRecents" class="welcome-continue" :aria-label="t('welcome.continueWork')">
+          <div class="welcome-conn-rows">
+            <section
+                v-for="row in connectionRows"
+                :key="row.key"
+                class="welcome-conn-row"
+                :aria-label="t(row.titleKey)"
+            >
+              <div class="welcome-pulse__head">
+                <h2>{{ t(row.titleKey) }}</h2>
+              </div>
+              <ul class="welcome-tiles">
+                <li v-for="item in row.items" :key="`${row.key}-${item.id}`">
+                  <button
+                      type="button"
+                      class="welcome-tile"
+                      :class="{'is-connected': isConnectionConnected(item.id)}"
+                      @click="openRecent(item)"
+                  >
+                    <span class="welcome-tile__icon" aria-hidden="true">
+                      <TreeNodeIcon
+                          type="connection"
+                          :db-type="item.dbType"
+                          :plugin-id="item.pluginId"
+                      />
+                      <i
+                          v-if="isConnectionConnected(item.id)"
+                          class="welcome-tile__dot"
+                          :title="t('welcome.stats.connected')"
+                      />
+                    </span>
+                    <span class="welcome-tile__copy">
+                      <strong>
+                        <span class="welcome-tile__name">{{ item.label }}</span>
+                        <ConnectionEnvBadge v-if="item.env" :env="item.env"/>
+                      </strong>
+                      <em v-if="connectionSubtitle(item)" class="welcome-tile__meta">
+                        {{ connectionSubtitle(item) }}
+                      </em>
+                    </span>
+                  </button>
+                </li>
+              </ul>
+            </section>
+          </div>
+        </div>
+
+        <!-- A1-2: 主路径降为次级（仅有连接时） -->
+        <div
+            v-if="secondaryPaths.length"
+            class="welcome-paths welcome-paths--secondary"
+            role="list"
+            :aria-label="t('welcome.paths.title')"
+        >
           <button
-              v-for="(path, index) in mainPaths"
+              v-for="(path, index) in secondaryPaths"
               :key="path.id"
               type="button"
               class="welcome-path"
@@ -505,63 +674,12 @@ function runCommonAction(id: WelcomeCommonActionId) {
       </header>
 
       <div class="welcome-body">
-        <section class="welcome-pulse" aria-label="workspace pulse">
-          <div class="welcome-pulse__main">
-            <div class="welcome-pulse__rail welcome-pulse__rail--connections">
-              <div v-if="hasRecents" class="welcome-conn-rows">
-                <section
-                    v-for="row in connectionRows"
-                    :key="row.key"
-                    class="welcome-conn-row"
-                    :aria-label="t(row.titleKey)"
-                >
-                  <div class="welcome-pulse__head">
-                    <h2>{{ t(row.titleKey) }}</h2>
-                  </div>
-                  <ul class="welcome-tiles">
-                    <li v-for="item in row.items" :key="`${row.key}-${item.id}`">
-                      <button
-                          type="button"
-                          class="welcome-tile"
-                          :class="{'is-connected': isConnectionConnected(item.id)}"
-                          @click="openRecent(item)"
-                      >
-                        <span class="welcome-tile__icon" aria-hidden="true">
-                          <TreeNodeIcon
-                              type="connection"
-                              :db-type="item.dbType"
-                              :plugin-id="item.pluginId"
-                          />
-                          <i
-                              v-if="isConnectionConnected(item.id)"
-                              class="welcome-tile__dot"
-                              :title="t('welcome.stats.connected')"
-                          />
-                        </span>
-                        <span class="welcome-tile__copy">
-                          <strong>
-                            <span class="welcome-tile__name">{{ item.label }}</span>
-                            <ConnectionEnvBadge v-if="item.env" :env="item.env"/>
-                          </strong>
-                          <em v-if="connectionSubtitle(item)" class="welcome-tile__meta">
-                            {{ connectionSubtitle(item) }}
-                          </em>
-                        </span>
-                      </button>
-                    </li>
-                  </ul>
-                </section>
-              </div>
-              <div v-else-if="canCreateConnection" class="welcome-band--empty">
-                <p class="welcome-empty-line">{{ t('welcome.emptyHint') }}</p>
-                <DwButton variant="primary" size="sm" @click="openNewConnection">
-                  {{ t('welcome.newConnection') }}
-                </DwButton>
-              </div>
-            </div>
-
-            <div class="welcome-pulse__divider" aria-hidden="true"/>
-
+        <section
+            v-if="hasConnections"
+            class="welcome-pulse"
+            aria-label="workspace pulse"
+        >
+          <div class="welcome-pulse__main welcome-pulse__main--history-only">
             <div class="welcome-pulse__rail welcome-pulse__rail--history">
               <div class="welcome-pulse__head">
                 <h2>{{ t('welcome.historyQueries') }}</h2>
@@ -577,8 +695,12 @@ function runCommonAction(id: WelcomeCommonActionId) {
               <p v-else class="welcome-empty-line">{{ t('welcome.historyEmpty') }}</p>
             </div>
           </div>
+        </section>
 
-          <ol class="welcome-steps" :aria-label="t('welcome.workflow.title')">
+        <!-- 零连接：上手步骤默认折叠 -->
+        <details v-if="!hasConnections" class="welcome-fold">
+          <summary>{{ t('welcome.workflow.title') }}</summary>
+          <ol class="welcome-steps welcome-steps--fold" :aria-label="t('welcome.workflow.title')">
             <li v-for="(step, index) in WELCOME_WORKFLOW_STEPS" :key="step.id">
               <button type="button" @click="runWorkflowStep(step.id)">
                 <b aria-hidden="true">{{ index + 1 }}</b>
@@ -592,27 +714,33 @@ function runCommonAction(id: WelcomeCommonActionId) {
               </button>
             </li>
           </ol>
-        </section>
+        </details>
 
-        <div
+        <!-- A1-4: Explore / 快捷键默认收起 -->
+        <details
             v-if="shortcutHints.length || exploreLinks.length"
-            class="welcome-strip"
+            class="welcome-fold"
+            :open="moreOpen"
+            @toggle="moreOpen = ($event.target as HTMLDetailsElement).open"
         >
-          <ul v-if="shortcutHints.length" class="welcome-kbd" :aria-label="t('welcome.shortcutsHint')">
-            <li v-for="item in shortcutHints" :key="item.id">
-              <kbd>{{ item.keys }}</kbd>
-              <span>{{ item.label }}</span>
-            </li>
-          </ul>
-          <ul v-if="exploreLinks.length" class="welcome-chips" :aria-label="t('welcome.capabilities')">
-            <li v-for="link in exploreLinks" :key="link.id">
-              <button type="button" @click="runExploreLink(link.id)">
-                <DwIcon :name="link.icon" size="sm" :stroke-width="1.6"/>
-                {{ t(link.titleKey) }}
-              </button>
-            </li>
-          </ul>
-        </div>
+          <summary>{{ t('welcome.explore.title') }}</summary>
+          <div class="welcome-strip welcome-strip--fold">
+            <ul v-if="shortcutHints.length" class="welcome-kbd" :aria-label="t('welcome.shortcutsHint')">
+              <li v-for="item in shortcutHints" :key="item.id">
+                <kbd>{{ item.keys }}</kbd>
+                <span>{{ item.label }}</span>
+              </li>
+            </ul>
+            <ul v-if="exploreLinks.length" class="welcome-chips" :aria-label="t('welcome.capabilities')">
+              <li v-for="link in exploreLinks" :key="link.id">
+                <button type="button" @click="runExploreLink(link.id)">
+                  <DwIcon :name="link.icon" size="sm" :stroke-width="1.6"/>
+                  {{ t(link.titleKey) }}
+                </button>
+              </li>
+            </ul>
+          </div>
+        </details>
       </div>
 
       <footer class="welcome-foot">
@@ -643,6 +771,14 @@ function runCommonAction(id: WelcomeCommonActionId) {
         :busy="importBusy"
         @update:open="onImportDialogOpenChange"
         @confirm="confirmImportProfilePackage"
+    />
+    <ThirdPartyConnectionImportDialog
+        :open="showThirdPartyImportDialog"
+        :file-name="thirdPartyFileName"
+        :parse="thirdPartyParse"
+        :busy="thirdPartyBusy"
+        @update:open="onThirdPartyImportOpenChange"
+        @confirm="confirmThirdPartyImport"
     />
   </div>
 </template>
@@ -836,12 +972,95 @@ function runCommonAction(id: WelcomeCommonActionId) {
   font-variant-numeric: tabular-nums;
 }
 
+.welcome-primary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 0.15rem 0 0.35rem;
+}
+
+.welcome-primary__btn {
+  min-height: var(--dw-density-lg, var(--dw-control-h-lg, 2.25rem));
+  padding-inline: 1.15rem;
+  font-weight: 650;
+}
+
+.welcome-primary__hint {
+  margin: 0;
+  font-size: var(--dw-text-xs);
+  color: var(--dw-text-muted);
+  max-width: 28rem;
+  line-height: 1.4;
+}
+
+.welcome-continue {
+  width: 100%;
+  min-width: 0;
+}
+
+.welcome-fold {
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--dw-border) 55%, transparent);
+  border-radius: calc(var(--dw-menu-radius, 8px) + 2px);
+  background: color-mix(in srgb, var(--dw-bg-panel) 78%, transparent);
+  overflow: hidden;
+}
+
+.welcome-fold > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.55rem 0.85rem;
+  font-size: var(--dw-text-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dw-text-muted);
+  user-select: none;
+}
+
+.welcome-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.welcome-fold > summary::after {
+  content: '+';
+  float: right;
+  font-weight: 600;
+  color: var(--dw-text-secondary);
+}
+
+.welcome-fold[open] > summary::after {
+  content: '−';
+}
+
+.welcome-steps--fold {
+  border-top: 1px solid color-mix(in srgb, var(--dw-border) 48%, transparent);
+}
+
+.welcome-strip--fold {
+  padding: 0.45rem 0.85rem 0.7rem;
+}
+
 .welcome-paths {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: clamp(0.35rem, 0.8cqh, 0.6rem);
   width: 100%;
   min-width: 0;
+}
+
+.welcome-paths--secondary .welcome-path {
+  padding: clamp(0.4rem, 0.9cqh, 0.65rem) clamp(0.5rem, 0.9cqi, 0.75rem);
+  opacity: 0.96;
+}
+
+.welcome-pulse__main--history-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.welcome-pulse__main--history-only .welcome-pulse__rail--history {
+  padding-left: 0;
 }
 
 .welcome-path {
@@ -1509,9 +1728,10 @@ function runCommonAction(id: WelcomeCommonActionId) {
   }
 }
 
-/* 矮视口：收起次要文案，优先保住品牌与主路径 */
+/* 矮视口：收起次要文案，优先保住品牌与主 CTA / 继续 */
 @container welcome (max-height: 720px) {
   .welcome-hero__lead,
+  .welcome-primary__hint,
   .welcome-pulse__head p,
   .welcome-path__copy em,
   .welcome-steps em,
@@ -1522,8 +1742,8 @@ function runCommonAction(id: WelcomeCommonActionId) {
 }
 
 @container welcome (max-height: 580px) {
-  .welcome-steps,
-  .welcome-strip {
+  .welcome-fold,
+  .welcome-paths--secondary {
     display: none;
   }
 
@@ -1595,6 +1815,7 @@ function runCommonAction(id: WelcomeCommonActionId) {
 
 @media (max-height: 700px) {
   .welcome-hero__lead,
+  .welcome-primary__hint,
   .welcome-pulse__head p,
   .welcome-path__copy em,
   .welcome-steps em,
@@ -1604,8 +1825,8 @@ function runCommonAction(id: WelcomeCommonActionId) {
 }
 
 @media (max-height: 560px) {
-  .welcome-steps,
-  .welcome-strip {
+  .welcome-fold,
+  .welcome-paths--secondary {
     display: none;
   }
 

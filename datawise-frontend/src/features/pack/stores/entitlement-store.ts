@@ -248,6 +248,34 @@ export const useEntitlementStore = defineStore('entitlement', () => {
         return false
     }
 
+    /**
+     * B2-2 console lite (explain / fix): same free-quota gate as nav,
+     * with lite paywall context when unpaid. Standard edition always false
+     * (host stub shows local degrade tip + paywall).
+     */
+    function guardConsoleAiLite(
+        context: 'console.ai.fix' | 'console.ai.explain' | 'console.ai.lite' = 'console.ai.lite',
+    ): boolean {
+        if (import.meta.env.VITE_DATAWISE_EDITION === 'standard') {
+            openPaywall('pack.ai', context)
+            return false
+        }
+        if (isAiUsable()) return true
+        if (
+            mode.value === 'enforced' &&
+            freeAiCallsRemaining.value != null &&
+            freeAiCallsRemaining.value > 0
+        ) {
+            return true
+        }
+        const ctx =
+            mode.value === 'enforced' && freeAiCallsRemaining.value === 0
+                ? 'ai.quota'
+                : context
+        openPaywall('pack.ai', ctx)
+        return false
+    }
+
     function noteAiCallConsumed(): void {
         if (mode.value !== 'enforced' || isAiUsable()) return
         if (freeAiCallsRemaining.value == null) return
@@ -379,6 +407,7 @@ export const useEntitlementStore = defineStore('entitlement', () => {
         closePaywall,
         wasPaywallDismissed,
         guardAiNav,
+        guardConsoleAiLite,
         noteAiCallConsumed,
         noteAiSqlGenerateSuccess,
         handleAiEntitlementError,

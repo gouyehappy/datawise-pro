@@ -264,7 +264,13 @@ public class JdbcDriverLoader {
         if (!Files.isRegularFile(target)) {
             return false;
         }
-        cache.entrySet().removeIf(entry -> entry.getValue().jarPath().equals(target));
+        cache.entrySet().removeIf(entry -> {
+            if (!entry.getValue().jarPath().equals(target)) {
+                return false;
+            }
+            entry.getValue().closeQuietly();
+            return true;
+        });
         return Files.deleteIfExists(target);
     }
 
@@ -471,6 +477,15 @@ public class JdbcDriverLoader {
             boolean cached,
             ClassLoader classLoader
     ) {
+        void closeQuietly() {
+            if (classLoader instanceof URLClassLoader urlClassLoader) {
+                try {
+                    urlClassLoader.close();
+                } catch (IOException ignored) {
+                    // Metaspace hygiene best-effort
+                }
+            }
+        }
     }
 
     public record DownloadProgress(

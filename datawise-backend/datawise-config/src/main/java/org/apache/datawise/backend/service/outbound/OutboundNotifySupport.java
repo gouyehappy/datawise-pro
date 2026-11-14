@@ -7,6 +7,8 @@ import org.apache.datawise.backend.domain.OutboundEventType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -14,7 +16,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Publishes outbound events using registry-backed defaults and templates. */
+/**
+ * Publishes outbound events using registry-backed defaults and templates.
+ * <p>MetaForge B2：若当前线程有 Spring 事务同步，则延后到 {@code afterCommit} 再投递，
+ * 避免事务回滚后仍发出 webhook / 站内通知。
+ */
 @Component
 public class OutboundNotifySupport {
 
@@ -55,6 +61,16 @@ public class OutboundNotifySupport {
         if (recipients == null || recipients.isEmpty()) {
             return;
         }
+        runAfterCommitOrNow(() -> deliver(type, data, titleOverride, bodyOverride, recipients));
+    }
+
+    private void deliver(
+            String type,
+            Map<String, Object> data,
+            String titleOverride,
+            String bodyOverride,
+            Collection<Long> recipients
+    ) {
         try {
             OutboundEvent event = eventRegistry.createEvent(
                     IdGenerator.shortId("evt-"),
@@ -67,6 +83,23 @@ public class OutboundNotifySupport {
         } catch (RuntimeException ex) {
             ExceptionLogging.recoverable(log, "outbound.notify skipped type=" + type, ex);
         }
+    }
+
+    /** Visible for tests: schedule {@code action} after commit when a TX is active. */
+    static void runAfterCommitOrNow(Runnable action) {
+        if (action == null) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+            return;
+        }
+        action.run();
     }
 
     /**

@@ -5,7 +5,7 @@ export default {
     clearRead: 'Clear read',
     clearAll: 'Clear all',
     empty: 'No notifications',
-    emptyHint: 'Export results, updates, and other important messages appear here',
+    emptyHint: 'Exports, imports, installs, migrations, and approvals appear here',
     delete: 'Delete',
     markRead: 'Mark read',
     collapse: 'Collapse',
@@ -37,6 +37,50 @@ export default {
         exportDone: {
             title: 'Export complete',
             body: '{name} was exported successfully.',
+        },
+        migrationDone: {
+            title: 'Migration complete',
+            body: '{summary}',
+        },
+        projectSwitched: {
+            title: 'Project switched',
+            body: 'Active project is "{name}".',
+        },
+        projectCreated: {
+            title: 'Project created',
+            body: 'Project "{name}" was created and opened.',
+        },
+        projectDeleted: {
+            title: 'Project deleted',
+            body: 'Project "{name}" was deleted.',
+        },
+        configSnapshotExported: {
+            title: 'Configuration exported',
+            body: '{detail}',
+        },
+        configSnapshotImported: {
+            title: 'Configuration imported',
+            body: '{detail}',
+        },
+        updateAvailable: {
+            title: 'Update available',
+            body: 'Version {version} is available. Open About for details.',
+        },
+        importDone: {
+            title: 'Import complete',
+            body: '{detail}',
+        },
+        installDone: {
+            title: 'Install / driver change',
+            body: '{detail}',
+        },
+        approvalDone: {
+            title: 'Approval',
+            body: '{detail}',
+        },
+        operationDone: {
+            title: 'Done',
+            body: '{detail}',
         },
         aiReady: {
             title: 'AI Agent ready',

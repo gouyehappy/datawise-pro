@@ -14,6 +14,8 @@ export function sqlEditorShortcutsLayerHasOverrides(
         || normalized.showColumnCommentInSuggest !== undefined
         || normalized.folding !== undefined
         || normalized.showRunGutterButton !== undefined
+        || normalized.columnDiagnosticsMode !== undefined
+        || normalized.vimModeEnabled !== undefined
         || normalized.locale !== undefined
         || normalized.fontSize !== undefined
         || normalized.theme !== undefined

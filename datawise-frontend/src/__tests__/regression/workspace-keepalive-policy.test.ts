@@ -19,6 +19,7 @@ describe('workspace KeepAlive policy', () => {
             'ConnectionFormTab',
             'CreateDatabaseTab',
             'LocalTextTab',
+            'SqlConsoleTab',
         ])
         assert.ok(WORKSPACE_KEEPALIVE_MAX >= WORKSPACE_KEEPALIVE_INCLUDE.length)
         assert.equal(
@@ -34,12 +35,12 @@ describe('workspace KeepAlive policy', () => {
         assert.equal((component as {name?: string}).name, 'SshTerminalTab')
     })
 
-    it('marks session / community types sticky for float shells (no remount)', () => {
+    it('marks session / community / console types sticky for float shells (no remount)', () => {
         assert.equal(isWorkspaceSessionStickyType('ssh-terminal'), true)
         assert.equal(isWorkspaceSessionStickyType('community-workbench'), true)
         assert.equal(isWorkspaceSessionStickyType('k8s-pods'), true)
         assert.equal(isWorkspaceSessionStickyType('local-text'), true)
+        assert.equal(isWorkspaceSessionStickyType('console'), true)
         assert.equal(isWorkspaceSessionStickyType('table'), false)
-        assert.equal(isWorkspaceSessionStickyType('console'), false)
     })
 })

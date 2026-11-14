@@ -8,10 +8,22 @@ import {
 const DRAG_THRESHOLD_PX = 6
 const AUTOSCROLL_EDGE_PX = 48
 const AUTOSCROLL_SPEED_PX = 14
+/**
+ * IDEA-like strip ↔ float hysteresis:
+ * - Enter float only after leaving the strip by a clear margin (esp. below).
+ * - Stay in float until the pointer is clearly back inside the strip (no flicker).
+ */
+const ENTER_FLOAT_BELOW_PX = 12
+const ENTER_FLOAT_SIDE_PX = 10
+const REENTER_STRIP_INSET_PX = 2
 
 /**
- * Pointer-based tab drag (keeps the default arrow cursor — no grab/hand).
- * Dragging onto the workspace body (outside the tab bar) floats the tab.
+ * Pointer-based tab drag (default arrow cursor).
+ *
+ * IDEA mapping:
+ * - Inside tab strip → reorder / group (caret on bar, quiet chip ghost)
+ * - Leave strip into editor/workspace → undock as floating window
+ * - Chip follows the pointer; drop commits float at the pointer
  */
 export function useWorkspaceTabDrag(options: {
     tabs: () => WorkspaceTab[]
@@ -36,9 +48,30 @@ export function useWorkspaceTabDrag(options: {
     let pendingTitle = ''
     let started = false
     let lastClientX = 0
+    let lastClientY = 0
     let scrollRaf = 0
+    let ghostRaf = 0
+    let captureEl: HTMLElement | null = null
+
+    function releaseCapture() {
+        if (captureEl == null || pointerId == null) {
+            captureEl = null
+            return
+        }
+        try {
+            if (captureEl.hasPointerCapture(pointerId)) {
+                captureEl.releasePointerCapture(pointerId)
+            }
+        } catch {
+            /* ignore */
+        }
+        captureEl = null
+    }
 
     function reset() {
+        releaseCapture()
+        document.body.classList.remove('is-workspace-tab-dragging')
+        document.body.classList.remove('is-workspace-tab-float-away')
         draggingId.value = null
         overId.value = null
         overZone.value = null
@@ -53,6 +86,10 @@ export function useWorkspaceTabDrag(options: {
         if (scrollRaf) {
             cancelAnimationFrame(scrollRaf)
             scrollRaf = 0
+        }
+        if (ghostRaf) {
+            cancelAnimationFrame(ghostRaf)
+            ghostRaf = 0
         }
     }
 
@@ -90,9 +127,68 @@ export function useWorkspaceTabDrag(options: {
         return {targetId: nodes[nodes.length - 1].dataset.tabId ?? null, zone: 'after'}
     }
 
+    function readTabStripRect(): DOMRect | null {
+        const scroller = options.scrollContainer?.() ?? null
+        const bar =
+            (scroller?.closest('.dw-tab-bar') as HTMLElement | null)
+            ?? (document.querySelector('.dw-tab-bar') as HTMLElement | null)
+        return bar?.getBoundingClientRect() ?? null
+    }
+
+    function isClearlyInsideStrip(clientX: number, clientY: number): boolean {
+        const rect = readTabStripRect()
+        if (!rect) return false
+        const inset = REENTER_STRIP_INSET_PX
+        return (
+            clientX >= rect.left + inset
+            && clientX <= rect.right - inset
+            && clientY >= rect.top + inset
+            && clientY <= rect.bottom - inset
+        )
+    }
+
+    /** Hysteresis: harder to enter float than to leave it (IDEA-stable mode). */
+    function shouldArmFloatAway(clientX: number, clientY: number, currently: boolean): boolean {
+        if (!options.onFloatAway) return false
+        const rect = readTabStripRect()
+        if (!rect) return currently
+
+        if (currently) {
+            return !isClearlyInsideStrip(clientX, clientY)
+        }
+
+        const below = clientY > rect.bottom + ENTER_FLOAT_BELOW_PX
+        const above = clientY < rect.top - ENTER_FLOAT_SIDE_PX
+        const left = clientX < rect.left - ENTER_FLOAT_SIDE_PX
+        const right = clientX > rect.right + ENTER_FLOAT_SIDE_PX
+        return below || above || left || right
+    }
+
+    function setFloatAway(next: boolean) {
+        if (floatAway.value === next) return
+        floatAway.value = next
+        document.body.classList.toggle('is-workspace-tab-float-away', next)
+        if (next) {
+            overId.value = null
+            overZone.value = null
+            overGroupId.value = null
+        }
+    }
+
+    function scheduleGhost(clientX: number, clientY: number) {
+        lastClientX = clientX
+        lastClientY = clientY
+        if (ghostRaf) return
+        ghostRaf = requestAnimationFrame(() => {
+            ghostRaf = 0
+            ghostX.value = lastClientX
+            ghostY.value = lastClientY
+        })
+    }
+
     function updateAutoscroll(clientX: number) {
         const scroller = options.scrollContainer?.() ?? null
-        if (!scroller || !started) {
+        if (!scroller || !started || floatAway.value) {
             if (scrollRaf) {
                 cancelAnimationFrame(scrollRaf)
                 scrollRaf = 0
@@ -117,7 +213,7 @@ export function useWorkspaceTabDrag(options: {
         const tick = () => {
             scrollRaf = 0
             const el = options.scrollContainer?.()
-            if (!el || !started) return
+            if (!el || !started || floatAway.value) return
             const box = el.getBoundingClientRect()
             let step = 0
             if (lastClientX < box.left + AUTOSCROLL_EDGE_PX) step = -AUTOSCROLL_SPEED_PX
@@ -129,28 +225,12 @@ export function useWorkspaceTabDrag(options: {
         scrollRaf = requestAnimationFrame(tick)
     }
 
-    function onPointerMove(event: PointerEvent) {
-        if (pointerId == null || event.pointerId !== pointerId || !pendingId) return
-        const dx = event.clientX - originX
-        const dy = event.clientY - originY
-        if (!started) {
-            if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
-            started = true
-            active.value = true
-            draggingId.value = pendingId
-            ghostTitle.value = pendingTitle
-        }
-        lastClientX = event.clientX
-        ghostX.value = event.clientX
-        ghostY.value = event.clientY
-        updateAutoscroll(event.clientX)
-
+    function updateReorderTargets(event: PointerEvent) {
         const el = document.elementFromPoint(event.clientX, event.clientY)
         const tabEl = el?.closest?.('[data-tab-id]') as HTMLElement | null
         const groupEl = el?.closest?.('[data-tab-group-id]') as HTMLElement | null
         const barEnd = el?.closest?.('[data-tab-bar-end]') as HTMLElement | null
         const tabBar = el?.closest?.('.dw-tab-bar') as HTMLElement | null
-        const floatSurface = el?.closest?.('[data-workspace-float-surface]') as HTMLElement | null
         const scroller = el?.closest?.('.dw-tab-scroll') as HTMLElement | null
             ?? options.scrollContainer?.()
             ?? null
@@ -158,7 +238,6 @@ export function useWorkspaceTabDrag(options: {
         const draggedGroupId = options.tabs().find((tab) => tab.id === pendingId)?.tabGroupId
 
         if (targetId && targetId !== pendingId && tabEl) {
-            floatAway.value = false
             const prev = overId.value === targetId ? overZone.value : null
             overId.value = targetId
             overZone.value = resolveTabDropZoneSticky(
@@ -173,11 +252,8 @@ export function useWorkspaceTabDrag(options: {
             return
         }
 
-        // Other group's chrome: stack in. Own group chrome: leave members as-is
-        // so the empty-bar path can eject them onto the main strip.
         const groupId = groupEl?.dataset.tabGroupId ?? null
-        if (groupId && groupId !== draggedGroupId) {
-            floatAway.value = false
+        if (groupId && groupId !== draggedGroupId && pendingId) {
             const joinTarget = resolveGroupJoinTarget(groupId, pendingId)
             if (joinTarget) {
                 overId.value = joinTarget
@@ -188,9 +264,8 @@ export function useWorkspaceTabDrag(options: {
         }
 
         if (barEnd || scroller || tabBar) {
-            floatAway.value = false
             const host = scroller ?? barEnd ?? options.scrollContainer?.() ?? null
-            if (!host) {
+            if (!host || !pendingId) {
                 overId.value = null
                 overZone.value = null
                 overGroupId.value = null
@@ -203,19 +278,41 @@ export function useWorkspaceTabDrag(options: {
             return
         }
 
-        // Drop onto workspace body → float window.
-        if (floatSurface && options.onFloatAway) {
-            floatAway.value = true
-            overId.value = null
-            overZone.value = null
-            overGroupId.value = null
-            return
-        }
-
-        floatAway.value = false
         overId.value = null
         overZone.value = null
         overGroupId.value = null
+    }
+
+    function onPointerMove(event: PointerEvent) {
+        if (pointerId == null || event.pointerId !== pointerId || !pendingId) return
+        const dx = event.clientX - originX
+        const dy = event.clientY - originY
+        if (!started) {
+            if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
+            started = true
+            active.value = true
+            draggingId.value = pendingId
+            ghostTitle.value = pendingTitle
+            document.body.classList.add('is-workspace-tab-dragging')
+            event.preventDefault()
+        }
+        scheduleGhost(event.clientX, event.clientY)
+        updateAutoscroll(event.clientX)
+
+        const wantFloat = shouldArmFloatAway(event.clientX, event.clientY, floatAway.value)
+        if (wantFloat) {
+            setFloatAway(true)
+            return
+        }
+
+        setFloatAway(false)
+        updateReorderTargets(event)
+    }
+
+    function cleanupListeners() {
+        window.removeEventListener('pointermove', onPointerMove, true)
+        window.removeEventListener('pointerup', onPointerUp, true)
+        window.removeEventListener('pointercancel', onPointerUp, true)
     }
 
     function onPointerUp(event: PointerEvent) {
@@ -223,13 +320,18 @@ export function useWorkspaceTabDrag(options: {
         const dragged = pendingId
         const target = overId.value
         const zone = overZone.value
-        const shouldFloat = floatAway.value
+        const outsideForFloat = shouldArmFloatAway(
+            event.clientX,
+            event.clientY,
+            floatAway.value || false,
+        )
+        const shouldFloat = Boolean(
+            options.onFloatAway && (floatAway.value || (started && outsideForFloat)),
+        )
         const didDrag = started
         const dropX = event.clientX
         const dropY = event.clientY
-        window.removeEventListener('pointermove', onPointerMove)
-        window.removeEventListener('pointerup', onPointerUp)
-        window.removeEventListener('pointercancel', onPointerUp)
+        cleanupListeners()
         reset()
         if (didDrag) {
             suppressClickAfterDrag()
@@ -245,26 +347,37 @@ export function useWorkspaceTabDrag(options: {
         if (event.button !== 0) return
         const target = event.target as HTMLElement | null
         if (target?.closest('.dw-tab__close, .dw-tab__rename-input, a, button.dw-tab__close')) return
-        // Don't start drag while renaming.
         if (target?.closest('.is-renaming')) return
 
         pointerId = event.pointerId
         originX = event.clientX
         originY = event.clientY
         lastClientX = event.clientX
+        lastClientY = event.clientY
         pendingId = tabId
         pendingTitle = title
         started = false
-        window.addEventListener('pointermove', onPointerMove)
-        window.addEventListener('pointerup', onPointerUp)
-        window.addEventListener('pointercancel', onPointerUp)
+
+        captureEl =
+            (target?.closest('.dw-tab') as HTMLElement | null)
+            ?? (event.currentTarget as HTMLElement | null)
+            ?? target
+        try {
+            captureEl?.setPointerCapture(event.pointerId)
+        } catch {
+            captureEl = null
+        }
+
+        window.addEventListener('pointermove', onPointerMove, true)
+        window.addEventListener('pointerup', onPointerUp, true)
+        window.addEventListener('pointercancel', onPointerUp, true)
     }
 
     onBeforeUnmount(() => {
-        window.removeEventListener('pointermove', onPointerMove)
-        window.removeEventListener('pointerup', onPointerUp)
-        window.removeEventListener('pointercancel', onPointerUp)
+        cleanupListeners()
+        releaseCapture()
         if (scrollRaf) cancelAnimationFrame(scrollRaf)
+        if (ghostRaf) cancelAnimationFrame(ghostRaf)
     })
 
     return {

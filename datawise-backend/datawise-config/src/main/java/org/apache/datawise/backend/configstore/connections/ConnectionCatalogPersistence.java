@@ -6,6 +6,7 @@ import org.apache.datawise.backend.common.support.XmlConfigSupport;
 import org.apache.datawise.backend.configstore.ConfigDirectoryService;
 import org.apache.datawise.backend.configstore.ConfigPaths;
 import org.apache.datawise.backend.configstore.TenantScopedConfigSupport;
+import org.apache.datawise.backend.configstore.io.ConfigFileLock;
 import org.apache.datawise.backend.domain.ProjectIds;
 import org.apache.datawise.backend.domain.TenantIds;
 import org.apache.datawise.backend.model.ConnectionEntity;
@@ -115,10 +116,11 @@ public final class ConnectionCatalogPersistence {
 
     public String readConnectionsXml() throws IOException {
         if (splitConnections) {
-            ConnectionsXmlCodec.ParsedCatalog catalog = loadDecryptedCatalog();
-            List<ConnectionEntity> encrypted = new ArrayList<>(catalog.connections());
-            ConnectionSecrets.encryptAll(encrypted, secretValueCodec);
-            return ConnectionsXmlCodec.writeToString(catalog.groups(), encrypted, objectMapper);
+            ConnectionsXmlCodec.ParsedCatalog catalog = loadCachedCatalog();
+            return ConnectionsXmlCodec.writeToString(
+                    catalog.groups(),
+                    new ArrayList<>(catalog.connections()),
+                    objectMapper);
         }
         Path path = connectionsFilePath();
         if (!ConnectionsXmlCodec.isRegularFile(path)) {
@@ -127,15 +129,28 @@ public final class ConnectionCatalogPersistence {
         return ConnectionsXmlCodec.readUtf8(path);
     }
 
-    public ConnectionsXmlCodec.ParsedCatalog loadDecryptedCatalog() {
+    /** At-rest catalog (secrets still encrypted); safe for group listing / id lookup metadata. */
+    public ConnectionsXmlCodec.ParsedCatalog loadCachedCatalog() {
         return requireEntry().catalog();
+    }
+
+    /** Decrypted copies of every connection; does not mutate the ciphertext cache. */
+    public ConnectionsXmlCodec.ParsedCatalog loadDecryptedCatalog() {
+        ConnectionsXmlCodec.ParsedCatalog cached = loadCachedCatalog();
+        return new ConnectionsXmlCodec.ParsedCatalog(
+                new ArrayList<>(cached.groups()),
+                ConnectionSecrets.copyAndDecryptAll(cached.connections(), secretValueCodec));
     }
 
     public Optional<ConnectionEntity> findConnectionById(String connectionId) {
         if (connectionId == null || connectionId.isBlank()) {
             return Optional.empty();
         }
-        return Optional.ofNullable(requireEntry().connectionsById().get(connectionId));
+        ConnectionEntity cached = requireEntry().connectionsById().get(connectionId);
+        if (cached == null) {
+            return Optional.empty();
+        }
+        return Optional.of(ConnectionSecrets.copyAndDecrypt(cached, secretValueCodec));
     }
 
     public Optional<ConnectionGroupEntity> findGroupById(String groupId) {
@@ -149,7 +164,8 @@ public final class ConnectionCatalogPersistence {
         if (groupId == null || groupId.isBlank()) {
             return List.of();
         }
-        return requireEntry().connectionsByGroupId().getOrDefault(groupId, List.of());
+        List<ConnectionEntity> cached = requireEntry().connectionsByGroupId().getOrDefault(groupId, List.of());
+        return ConnectionSecrets.copyAndDecryptAll(cached, secretValueCodec);
     }
 
     private ConnectionCatalogCache.Entry requireEntry() {
@@ -169,11 +185,9 @@ public final class ConnectionCatalogPersistence {
                     return again;
                 }
                 ConnectionsXmlCodec.ParsedCatalog raw = loadMergedRawCatalog();
-                List<ConnectionEntity> connections = new ArrayList<>(raw.connections());
-                ConnectionSecrets.decryptAll(connections, secretValueCodec);
                 ConnectionsXmlCodec.ParsedCatalog catalog = new ConnectionsXmlCodec.ParsedCatalog(
                         new ArrayList<>(raw.groups()),
-                        connections);
+                        new ArrayList<>(raw.connections()));
                 return cache.putAndGet(version, catalog);
             }
         } catch (IOException ex) {
@@ -228,10 +242,14 @@ public final class ConnectionCatalogPersistence {
     }
 
     synchronized void mutate(Consumer<MutableConnectionCatalog> mutation) {
-        cacheForCurrent().invalidate();
-        MutableConnectionCatalog catalog = MutableConnectionCatalog.from(loadDecryptedCatalog());
-        mutation.accept(catalog);
-        writeCatalog(catalog.groups(), catalog.connections());
+        // Desktop and the headless CLI share this config directory; the in-JVM lock above only
+        // serialises threads, so the read-modify-write also takes the cross-process file lock.
+        ConfigFileLock.runWithExclusiveLock(connectionsFilePath(), () -> {
+            cacheForCurrent().invalidate();
+            MutableConnectionCatalog catalog = MutableConnectionCatalog.from(loadDecryptedCatalog());
+            mutation.accept(catalog);
+            writeCatalog(catalog.groups(), catalog.connections());
+        });
     }
 
     public synchronized ConnectionGroupEntity upsertGroup(ConnectionGroupEntity group) {
@@ -360,28 +378,52 @@ public final class ConnectionCatalogPersistence {
     }
 
     private long catalogVersionStamp() throws IOException {
-        long stamp = 0L;
+        List<Long> perFile = new ArrayList<>();
         Path legacy = connectionsFilePath();
         if (ConnectionsXmlCodec.isRegularFile(legacy)) {
-            stamp ^= Files.getLastModifiedTime(legacy).toMillis();
+            perFile.add(fileStamp(legacy));
         }
-        if (!splitConnections) {
-            return stamp;
-        }
-        Path projectsRoot = configDirectory.resolve(ConfigPaths.tenantProjectsDir(currentTenantId()));
-        if (!Files.isDirectory(projectsRoot)) {
-            return stamp;
-        }
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(projectsRoot)) {
-            for (Path projectDir : stream) {
-                Path file = projectDir.resolve(ConfigPaths.CONNECTIONS);
-                if (ConnectionsXmlCodec.isRegularFile(file)) {
-                    stamp ^= Files.getLastModifiedTime(file).toMillis();
-                    stamp = Long.rotateLeft(stamp, 7);
+        if (splitConnections) {
+            Path projectsRoot = configDirectory.resolve(ConfigPaths.tenantProjectsDir(currentTenantId()));
+            if (Files.isDirectory(projectsRoot)) {
+                try (DirectoryStream<Path> stream = Files.newDirectoryStream(projectsRoot)) {
+                    for (Path projectDir : stream) {
+                        Path file = projectDir.resolve(ConfigPaths.CONNECTIONS);
+                        if (ConnectionsXmlCodec.isRegularFile(file)) {
+                            perFile.add(fileStamp(file));
+                        }
+                    }
                 }
             }
         }
+        // Fold in a canonical order: DirectoryStream iteration order is not guaranteed, and a
+        // non-commutative fold over an unstable order would invalidate the cache spuriously.
+        perFile.sort(Long::compare);
+        long stamp = 0L;
+        for (long value : perFile) {
+            stamp = stamp * 31 + value;
+        }
         return stamp;
+    }
+
+    /**
+     * Identity of one catalog file, sensitive to sub-millisecond writes.
+     *
+     * <p>The previous stamp XORed {@code toMillis()} values, so two writes landing in the same
+     * millisecond cancelled each other out and the cache kept serving the stale snapshot. The
+     * nanosecond mtime plus the file size makes that collision implausible.
+     */
+    private static long fileStamp(Path file) throws IOException {
+        java.nio.file.attribute.BasicFileAttributes attrs =
+                Files.readAttributes(file, java.nio.file.attribute.BasicFileAttributes.class);
+        long hash = 0x9E3779B97F4A7C15L;
+        hash = hash * 31 + String.valueOf(file.getParent().getFileName()).hashCode();
+        hash = hash * 31 + attrs.size();
+        hash = hash * 31 + attrs.lastModifiedTime().to(java.util.concurrent.TimeUnit.NANOSECONDS);
+        hash ^= (hash >>> 33);
+        hash *= 0xFF51AFD7ED558CCDL;
+        hash ^= (hash >>> 33);
+        return hash;
     }
 
     /**

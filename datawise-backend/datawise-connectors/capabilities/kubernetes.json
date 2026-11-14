@@ -1,0 +1,5 @@
+{
+  "dbType": "kubernetes",
+  "extends": "specialized-browse",
+  "formKind": "ops"
+}

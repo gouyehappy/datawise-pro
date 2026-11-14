@@ -19,8 +19,10 @@ public class AuthSecurityProperties {
     private boolean requireAuthentication = true;
 
     /**
-     * Only bootstrap / probe paths. Do <strong>not</strong> use a blanket {@code /api/auth/}
-     * prefix — session, password, and OIDC admin APIs must stay authenticated.
+     * Bootstrap defaults only — no Swagger / Prometheus (add those in local {@code application.yml}
+     * if needed; cloud profile must not expose them anonymously).
+     * Do <strong>not</strong> use a blanket {@code /api/auth/} prefix — session, password, and OIDC
+     * admin APIs must stay authenticated.
      */
     private List<String> publicPathPrefixes = new ArrayList<>(List.of(
             "/login",
@@ -31,13 +33,12 @@ public class AuthSecurityProperties {
             "/api/auth/oidc/callback",
             "/api/health",
             "/actuator/health",
-            "/actuator/prometheus",
-            "/v3/api-docs",
-            "/swagger-ui",
+            "/api/public/shares",
             // Browser WS: Sec-WebSocket-Protocol (preferred) or legacy ?dwSession=
             "/ws/ssh-shell",
             "/ws/k8s-exec",
-            "/ws/terminal"));
+            "/ws/terminal",
+            "/ws/community-plugin-stream"));
 
     /**
      * When non-empty, the HTTP {@code Host} header (hostname only, port stripped) must match
@@ -159,13 +160,17 @@ public class AuthSecurityProperties {
     }
 
     /**
-     * API / WebSocket / Actuator namespaces that require authentication unless listed
-     * in {@link #publicPathPrefixes}.
+     * API / WebSocket / Actuator / OpenAPI namespaces that require authentication unless listed
+     * in {@link #publicPathPrefixes}. Springdoc paths are not under {@code /api}, so they must be
+     * gated here or they would be treated as anonymous SPA routes.
      */
     static boolean isBackendSurfacePath(String path) {
         return pathEqualsOrUnder(path, "/api")
                 || pathEqualsOrUnder(path, "/ws")
-                || pathEqualsOrUnder(path, "/actuator");
+                || pathEqualsOrUnder(path, "/actuator")
+                || pathEqualsOrUnder(path, "/v3/api-docs")
+                || pathEqualsOrUnder(path, "/swagger-ui")
+                || path.equals("/swagger-ui.html");
     }
 
     private static boolean pathEqualsOrUnder(String path, String root) {

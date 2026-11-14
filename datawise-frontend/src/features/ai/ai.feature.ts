@@ -17,6 +17,16 @@ export const aiFeature = defineFeature({
                 when: 'nonStandardEdition',
                 action: {kind: 'setModule', module: 'ai'},
             },
+            {
+                // P2-2：AI 是入口不是模块 —— 命令面板里直接打开提问框
+                id: 'ai:ask',
+                labelKey: 'commandPalette.actions.askAi',
+                hintKey: 'commandPalette.actions.askAiHint',
+                groupKey: 'commandPalette.groups.actions',
+                order: 20,
+                when: 'nonStandardEdition',
+                action: {kind: 'askAi'},
+            },
         ],
         settings: [
             {

@@ -108,6 +108,7 @@ export const LOCAL_BINARY_EXTENSIONS = new Set([
     '.db',
     '.sqlite',
     '.sqlite3',
+    '.parquet',
     '.bin',
     '.dat',
     '.wasm',

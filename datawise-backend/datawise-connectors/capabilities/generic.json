@@ -1,0 +1,10 @@
+{
+  "dbType": "generic",
+  "extends": "jdbc-query",
+  "formKind": "other",
+  "supportLevel": "browse",
+  "features": {
+    "sqlExplain": false,
+    "sqlFileExecution": false
+  }
+}

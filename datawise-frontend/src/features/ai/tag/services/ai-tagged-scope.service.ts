@@ -2,6 +2,7 @@ import type {DbType, TreeNode} from '@/core/types'
 import {collectSearchTreeVisibility, findNodeById, flattenVisibleTree, walkTree} from '@/core/utils/tree'
 import type {AiTaggedScopeGroup, AiTableTagCatalogItem} from '@/features/ai/tag/types/ai-table-tag.types'
 import type {AiDatabaseTarget} from '@/features/ai/shared/utils/database-targets'
+import {buildAiTableTargetId} from '@/features/ai/shared/utils/database-targets'
 
 function resolveConnectionMeta(
     tree: TreeNode[],
@@ -63,7 +64,7 @@ export function buildAiTaggedScopeGroups(
 
 export function buildAiTargetFromTaggedTable(group: AiTaggedScopeGroup, tableName: string): AiDatabaseTarget {
     return {
-        id: `${group.connectionId}:${group.database}:${tableName}`,
+        id: buildAiTableTargetId(group.connectionId, group.database, tableName),
         connectionId: group.connectionId,
         connectionLabel: group.connectionLabel,
         databaseId: group.database,

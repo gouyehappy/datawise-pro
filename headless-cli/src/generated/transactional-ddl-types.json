@@ -1,0 +1,14 @@
+{
+  "generatedAt": "2026-11-13",
+  "types": [
+    "gaussdb",
+    "greenplum",
+    "h2",
+    "highgo",
+    "hsql",
+    "kingbase",
+    "opengauss",
+    "postgresql",
+    "sqlite3"
+  ]
+}

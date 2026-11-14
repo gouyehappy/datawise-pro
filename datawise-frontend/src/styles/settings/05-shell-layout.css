@@ -168,7 +168,7 @@
 
 .module-shell__main .editor-card__head {
     padding: var(--dw-space-6) var(--dw-space-8);
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     background: var(--dw-bg-muted);
 }
 
@@ -241,7 +241,7 @@
     gap: var(--dw-gap-md);
     min-height: var(--mp-btn-h);
     padding: 0 var(--dw-space-6);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     border-radius: var(--dw-control-radius);
     background: color-mix(in srgb, var(--dw-surface-raised) 45%, transparent);
     color: inherit;
@@ -262,7 +262,7 @@
     gap: var(--dw-gap-md);
     margin-top: clamp(12px, 1.4vmin, 14px);
     padding-top: clamp(12px, 1.4vmin, 14px);
-    border-top: 1px solid var(--dw-border-light);
+    border-top: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .module-shell__main .sql-snippets-sources__counts {
@@ -318,7 +318,7 @@
     justify-content: space-between;
     gap: var(--dw-space-6);
     padding: var(--dw-space-6) var(--dw-space-8);
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     background: var(--dw-bg-muted);
 }
 
@@ -346,7 +346,7 @@
 
 .module-shell__main .snippets-list-card__search {
     padding: var(--dw-pad-control-lg);
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .module-shell__main .snippets-list-card__body {
@@ -428,7 +428,7 @@
     align-items: center;
     gap: var(--dw-gap-md);
     padding: var(--dw-space-5) clamp(14px, 1.6vmin, 16px);
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     background: var(--dw-bg-panel);
 }
 
@@ -551,7 +551,7 @@
 .module-shell__main .basic-settings .layout-toggle + .config-snapshot__actions {
     margin-top: var(--dw-space-6);
     padding-top: var(--dw-space-6);
-    border-top: 1px solid var(--dw-border-light);
+    border-top: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .module-shell__main .basic-settings__group-head {
@@ -584,7 +584,7 @@
 .module-shell__main .basic-settings__endpoint {
     display: block;
     padding: var(--dw-space-4) var(--dw-space-5);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     border-radius: var(--dw-control-radius-sm);
     background: color-mix(in srgb, var(--dw-text) 3%, var(--dw-bg-panel));
     font-family: var(--dw-mono);
@@ -708,7 +708,7 @@
     padding: var(--dw-space-3) var(--dw-space-4);
     text-align: left;
     vertical-align: top;
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .module-shell__main .basic-settings__param-table th {

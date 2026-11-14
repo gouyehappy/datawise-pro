@@ -2,7 +2,7 @@
  * Inset-split plugin — page under tab bar: left sheet + right cards.
  *
  * Classic: left keeps bottom-left only; each right card keeps bottom-right only.
- * IDE: --dw-panel-radius is 0 → every corner stays square.
+ * IDE / ledger: --dw-panel-radius = 0 (square); classic / atelier keep radius.
  *
  * Opt in: `.dw-inset-pane` / `.dw-inset-card`
  * Built-in roots already mapped: `.conn-layout`, `.dw-workbench-split`

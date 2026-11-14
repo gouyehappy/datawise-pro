@@ -32,18 +32,29 @@ const props = withDefaults(
 
 const iconComponent = computed(() => resolveDwIcon(props.name, {active: props.active}))
 
-const rootClass = computed(() => ({
-    'dw-icon-root': true,
-    'dw-icon': true,
-    'dw-icon--fit': props.fit,
-    'dw-icon--muted': props.muted,
-    'dw-icon--danger': props.danger,
-    'dw-icon--filled': props.filled || props.name === 'stop',
-    'dw-icon--run': props.name === 'run',
-    'dw-icon--stop': props.name === 'stop',
-    'dw-icon--explain-plan': props.name === 'explain-plan',
-    [`dw-icon--size-${resolvedSizeToken.value}`]: !props.fit && resolvedSizeToken.value !== null,
-}))
+/** CSS-safe name token for functional tones (e.g. dw-icon--tab-console). */
+const nameToneClass = computed(() => {
+    const raw = String(props.name || '').trim()
+    if (!raw) return undefined
+    const safe = raw.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '')
+    return safe ? `dw-icon--${safe}` : undefined
+})
+
+const rootClass = computed(() => [
+    'dw-icon-root',
+    'dw-icon',
+    nameToneClass.value,
+    {
+        'dw-icon--fit': props.fit,
+        'dw-icon--muted': props.muted,
+        'dw-icon--danger': props.danger,
+        'dw-icon--filled': props.filled || props.name === 'stop',
+        'dw-icon--run': props.name === 'run',
+        'dw-icon--stop': props.name === 'stop',
+        'dw-icon--explain-plan': props.name === 'explain-plan',
+        [`dw-icon--size-${resolvedSizeToken.value}`]: !props.fit && resolvedSizeToken.value !== null,
+    },
+])
 
 const resolvedSizeToken = computed(() => {
     if (props.size === undefined) return DW_ICON_SIZE_DEFAULT

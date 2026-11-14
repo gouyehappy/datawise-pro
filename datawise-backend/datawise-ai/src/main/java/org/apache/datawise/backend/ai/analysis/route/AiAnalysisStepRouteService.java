@@ -138,7 +138,10 @@ public class AiAnalysisStepRouteService {
         Set<String> disabled = new LinkedHashSet<>();
         for (String step : route.disabledSteps()) {
             String normalized = AiAnalysisSteps.normalize(step);
-            if (normalized.isBlank() || !CONFIGURABLE_IDS.contains(normalized)) {
+            // Hard-drop required security steps even if a client/LLM asks to disable them.
+            if (normalized.isBlank()
+                    || AiAnalysisSteps.REQUIRED.contains(normalized)
+                    || !CONFIGURABLE_IDS.contains(normalized)) {
                 continue;
             }
             disabled.add(normalized);
@@ -148,6 +151,7 @@ public class AiAnalysisStepRouteService {
                 disabled.add(AiAnalysisSteps.PYTHON_ANALYZE);
             }
         }
+        disabled.remove(AiAnalysisSteps.SQL_VALIDATE);
         if (disabled.contains(AiAnalysisSteps.SUMMARY) && disabled.contains(AiAnalysisSteps.REPORT)) {
             disabled.remove(AiAnalysisSteps.SUMMARY);
         }

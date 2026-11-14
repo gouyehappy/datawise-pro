@@ -30,8 +30,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/workspace/view-models")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_VIEW_MODEL)
 public class ViewModelController {
 
     private static final Logger log = LoggerFactory.getLogger(ViewModelController.class);

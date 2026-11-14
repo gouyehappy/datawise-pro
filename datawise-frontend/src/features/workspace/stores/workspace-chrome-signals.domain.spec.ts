@@ -20,16 +20,20 @@ describe('createWorkspaceChromeSignalsDomain', () => {
         const tableDataRefreshSeq = ref<Record<string, number>>({})
         const tabActivateRefreshSeq = ref<Record<string, number>>({})
         const fakeDataDialogRequest = ref<{tabId: string; nonce: number} | null>(null)
+        const contentDirtyByTabId = ref<Record<string, boolean>>({})
         const consoleAutoRunRequest = ref<{tabId: string; nonce: number} | null>(null)
+        const consoleAiPromptRequest = ref<{tabId: string; nonce: number} | null>(null)
 
         const signals = createWorkspaceChromeSignalsDomain({
             tabs,
             status,
             sshScriptDirtyByTabId,
+            contentDirtyByTabId,
             tableDataRefreshSeq,
             tabActivateRefreshSeq,
             fakeDataDialogRequest,
             consoleAutoRunRequest,
+            consoleAiPromptRequest,
         })
 
         signals.setStatus('ok')
@@ -50,5 +54,10 @@ describe('createWorkspaceChromeSignalsDomain', () => {
         expect(consoleAutoRunRequest.value?.tabId).toBe('t1')
         signals.clearConsoleAutoRun()
         expect(consoleAutoRunRequest.value).toBeNull()
+
+        signals.requestConsoleAiPrompt('t1')
+        expect(consoleAiPromptRequest.value?.tabId).toBe('t1')
+        signals.clearConsoleAiPrompt()
+        expect(consoleAiPromptRequest.value).toBeNull()
     })
 })

@@ -1,0 +1,67 @@
+{
+  "id": "elasticsearch",
+  "description": "Elasticsearch advanced flags + shared database/url/auth.",
+  "fields": [
+    {"key": "useHttps", "label": "connection.esHttps", "type": "boolean", "binding": "config"},
+    {"key": "es_kibana", "label": "connection.esKibana", "type": "boolean", "binding": "es_kibana"},
+    {
+      "key": "kibanaBasePath",
+      "label": "connection.esKibanaBasePath",
+      "type": "text",
+      "binding": "config",
+      "placeholder": "/kibana",
+      "visible_when": {"field": "es_kibana", "one_of": ["true"]}
+    },
+    {
+      "key": "connectivityCheckPath",
+      "label": "connection.esConnectivityPath",
+      "type": "text",
+      "binding": "config",
+      "placeholder": "/_cluster/health"
+    },
+    {
+      "key": "connectivityCheckDisabled",
+      "label": "connection.esSkipConnectivity",
+      "type": "boolean",
+      "binding": "config"
+    },
+    {
+      "key": "insecureSkipTlsVerify",
+      "label": "connection.esSkipTls",
+      "type": "boolean",
+      "binding": "config"
+    },
+    {
+      "key": "database",
+      "label": "connection.database",
+      "type": "text",
+      "binding": "database",
+      "description": "connection.hints.database"
+    },
+    {"key": "url", "label": "connection.url", "type": "text", "binding": "url", "readonly": true},
+    {
+      "key": "auth",
+      "label": "connection.auth",
+      "type": "select",
+      "binding": "auth",
+      "options": [
+        {"value": "User&Password", "label": "User&Password"},
+        {"value": "NONE", "label": "NONE"}
+      ]
+    },
+    {
+      "key": "user",
+      "label": "connection.username",
+      "type": "text",
+      "binding": "user",
+      "visible_when": {"field": "auth", "one_of": ["User&Password"]}
+    },
+    {
+      "key": "password",
+      "label": "connection.password",
+      "type": "password",
+      "binding": "password",
+      "visible_when": {"field": "auth", "one_of": ["User&Password"]}
+    }
+  ]
+}

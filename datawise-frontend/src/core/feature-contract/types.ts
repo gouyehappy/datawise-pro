@@ -15,6 +15,8 @@ export interface FeatureTabContribution {
     loader: LazyViewLoader
     /** Matches KeepAlive include / SFC defineOptions.name on the async wrapper. */
     asyncName?: string
+    /** Async load timeout (ms); defaults to createLazyView's 60s. */
+    timeout?: number
 }
 
 /** Host-resolved palette action — no feature→store closure in the manifest. */
@@ -23,6 +25,8 @@ export type FeaturePaletteAction =
     | {kind: 'openConnectorMarket'}
     | {kind: 'openPluginDevTools'}
     | {kind: 'openDataCatalog'}
+    /** Global AI entry (P2-2): focus the AI prompt from anywhere. */
+    | {kind: 'askAi'}
     | {kind: 'openSettings'; section: SettingsSection; anchor?: string}
 
 /** Optional host gate before a palette contribution is listed. */

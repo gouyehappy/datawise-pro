@@ -7,6 +7,8 @@ public final class DatawiseMetricsCatalog {
     public static final String EXPLORER_SCHEMA_SESSIONS_ACTIVE = "datawise.explorer.schema-sessions.active";
     public static final String EXPLORER_LOAD_CHILDREN_NOT_MODIFIED = "datawise.explorer.loadChildren.notModified";
     public static final String EXPLORER_LOAD_CHILDREN_MODIFIED = "datawise.explorer.loadChildren.modified";
+    /** Deprecated WebSocket auth via {@code ?dwSession=} query (prefer Sec-WebSocket-Protocol). */
+    public static final String WS_QUERY_SESSION_AUTH = "datawise.ws.auth.query_session";
 
     private DatawiseMetricsCatalog() {
     }

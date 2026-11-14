@@ -1,0 +1,12 @@
+{
+  "description": "Non-canonical ids that resolve to DbType enum constants (keep in sync with DbTypeAliases.java).",
+  "aliases": {
+    "mssql": "sqlserver",
+    "postgres": "postgresql",
+    "sqlite": "sqlite3",
+    "hsqldb": "hsql",
+    "dameng": "dm",
+    "spark": "hive",
+    "impala": "hive"
+  }
+}

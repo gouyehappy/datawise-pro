@@ -1,0 +1,9 @@
+{
+  "dbType": "clickhouse",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false,
+    "visualQueryBuilder": false,
+    "schemaCompare": false
+  }
+}

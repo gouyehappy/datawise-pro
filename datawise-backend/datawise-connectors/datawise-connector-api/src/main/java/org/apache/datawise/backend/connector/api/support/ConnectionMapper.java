@@ -10,7 +10,23 @@ public final class ConnectionMapper {
     private ConnectionMapper() {
     }
 
+    /**
+     * Full DTO including secret material for connect / driver / plugin host paths.
+     * Prefer {@link #toPublicDto(ConnectionEntity)} for HTTP fetch/list responses.
+     */
     public static ConnectionConfig toDto(ConnectionEntity entity) {
+        return toDto(entity, true);
+    }
+
+    /**
+     * HTTP-safe DTO: secret fields stay null; {@code has*} flags remain so editors know
+     * credentials are configured without copying plaintext into the response object graph (R2).
+     */
+    public static ConnectionConfig toPublicDto(ConnectionEntity entity) {
+        return toDto(entity, false);
+    }
+
+    private static ConnectionConfig toDto(ConnectionEntity entity, boolean includeSecrets) {
         ConnectionEnvironmentSupport.applyToEntity(entity);
         ConnectionConfig config = new ConnectionConfig();
         config.setId(entity.getId());
@@ -23,7 +39,10 @@ public final class ConnectionMapper {
         config.setPort(entity.getPort());
         config.setAuth(entity.getAuthType());
         config.setUser(entity.getUsername());
-        config.setPassword(entity.getPassword());
+        config.setHasPassword(entity.getPassword() != null && !entity.getPassword().isBlank());
+        if (includeSecrets) {
+            config.setPassword(entity.getPassword());
+        }
         config.setUrl(entity.getJdbcUrl());
         config.setDatabase(entity.getDatabaseName());
         config.setSid(entity.getSid());
@@ -31,16 +50,25 @@ public final class ConnectionMapper {
         config.setDriver(entity.getDriver());
         config.setDriverClass(entity.getDriverClass());
         config.setSshEnabled(entity.isSshEnabled());
+        config.setWriteGuard(entity.isWriteGuard());
         config.setSshHost(entity.getSshHost());
         config.setSshPort(entity.getSshPort());
         config.setSshUser(entity.getSshUser());
-        config.setSshPassword(entity.getSshPassword());
-        config.setSshPrivateKey(entity.getSshPrivateKey());
-        config.setSshPassphrase(entity.getSshPassphrase());
-        config.setJumpPrivateKey(entity.getJumpPrivateKey());
-        config.setJumpPassphrase(entity.getJumpPassphrase());
+        config.setHasSshPassword(entity.getSshPassword() != null && !entity.getSshPassword().isBlank());
+        config.setHasSshPrivateKey(entity.getSshPrivateKey() != null && !entity.getSshPrivateKey().isBlank());
+        config.setHasSshPassphrase(entity.getSshPassphrase() != null && !entity.getSshPassphrase().isBlank());
+        config.setHasJumpPrivateKey(entity.getJumpPrivateKey() != null && !entity.getJumpPrivateKey().isBlank());
+        config.setHasJumpPassphrase(entity.getJumpPassphrase() != null && !entity.getJumpPassphrase().isBlank());
+        if (includeSecrets) {
+            config.setSshPassword(entity.getSshPassword());
+            config.setSshPrivateKey(entity.getSshPrivateKey());
+            config.setSshPassphrase(entity.getSshPassphrase());
+            config.setJumpPrivateKey(entity.getJumpPrivateKey());
+            config.setJumpPassphrase(entity.getJumpPassphrase());
+            config.setSecrets(entity.getPluginSecrets());
+        }
+        config.setHasSecrets(entity.getPluginSecrets() != null && !entity.getPluginSecrets().isBlank());
         config.setAdvancedConfig(entity.getAdvancedConfig());
-        config.setSecrets(entity.getPluginSecrets());
         config.setPluginId(entity.getPluginId());
         config.setPluginConnectionProvider(entity.getPluginConnectionProvider());
         config.setPluginConnectionType(entity.getPluginConnectionType());
@@ -85,6 +113,9 @@ public final class ConnectionMapper {
         }
         if (config.getSshEnabled() != null) {
             entity.setSshEnabled(config.getSshEnabled());
+        }
+        if (config.getWriteGuard() != null) {
+            entity.setWriteGuard(config.getWriteGuard());
         }
         if (config.getSshHost() != null) {
             entity.setSshHost(config.getSshHost());

@@ -283,10 +283,15 @@ async function reloadPlugins() {
     reloading.value = true
     try {
         const result = await datasourcesApi.reloadPlugins()
-        layout.showSuccessToast(t('plugin.connectorMarket.reloadSuccess', {
+        layout.notifyQuiet({
+          category: 'system',
+          titleKey: 'installDone',
+          bodyKey: 'installDone',
+          params: {detail: t('plugin.connectorMarket.reloadSuccess', {
             jars: result.loadedJarCount,
             connectors: result.loadedConnectorIds?.length ?? 0,
-        }))
+        })},
+        })
         if (result.failures?.length) {
             layout.showWarningToast(t('plugin.connectorMarket.reloadPartial', {
                 count: result.failures.length,
@@ -305,7 +310,12 @@ async function clearQuarantine() {
     clearingQuarantine.value = true
     try {
         await datasourcesApi.clearQuarantinedPlugins()
-        layout.showSuccessToast(t('plugin.connectorMarket.clearQuarantineSuccess'))
+        layout.notifyQuiet({
+          category: 'system',
+          titleKey: 'installDone',
+          bodyKey: 'installDone',
+          params: {detail: t('plugin.connectorMarket.clearQuarantineSuccess')},
+        })
         await loadMarket()
     } catch (err) {
         layout.showErrorToast(
@@ -344,7 +354,12 @@ async function installCoreConnectors() {
         )
         const result = await installConnectorsWithDrivers(pendingCore, {withDrivers: true})
         const ok = countSuccessfulConnectorInstalls(result.connectors.results)
-        layout.showSuccessToast(t('plugin.connectorMarket.installCoreSuccess', {count: ok}))
+        layout.notifyQuiet({
+          category: 'system',
+          titleKey: 'installDone',
+          bodyKey: 'installDone',
+          params: {detail: t('plugin.connectorMarket.installCoreSuccess', {count: ok})},
+        })
         await loadMarket()
     } catch (err) {
         layout.showErrorToast(
@@ -360,9 +375,14 @@ async function cleanupRedundantPlugins() {
     cleaningRedundant.value = true
     try {
         const result = await datasourcesApi.cleanupRedundantPlugins()
-        layout.showSuccessToast(t('plugin.connectorMarket.cleanupRedundantSuccess', {
+        layout.notifyQuiet({
+          category: 'system',
+          titleKey: 'installDone',
+          bodyKey: 'installDone',
+          params: {detail: t('plugin.connectorMarket.cleanupRedundantSuccess', {
             count: result.deletedCount,
-        }))
+        })},
+        })
         await loadMarket()
     } catch (err) {
         layout.showErrorToast(

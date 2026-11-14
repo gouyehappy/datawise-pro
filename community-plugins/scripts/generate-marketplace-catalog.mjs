@@ -9,6 +9,7 @@
  * Hello stays on classpath fixture; other plugins use GitHub Release HTTPS packageUrl
  * (signed .dwp). Does not embed .dwp binaries into the server jar.
  */
+import {createHash} from 'node:crypto'
 import {readdirSync, readFileSync, writeFileSync, existsSync, statSync} from 'node:fs'
 import {dirname, join, basename} from 'node:path'
 import {fileURLToPath} from 'node:url'
@@ -74,13 +75,35 @@ function signedArtifactName(unsignedName) {
   return unsignedName.replace(/\.dwp$/, '-signed.dwp')
 }
 
+function fileIntegrity(filePath) {
+  const buf = readFileSync(filePath)
+  return {
+    packageSha256: createHash('sha256').update(buf).digest('hex'),
+    packageSizeBytes: buf.length,
+  }
+}
+
+/**
+ * Prefer hashing the signed release asset when present under dist/;
+ * otherwise omit integrity fields (unsigned local build ≠ signed download).
+ */
+function packageIntegrityFromDist(pluginDir, unsignedArtifact) {
+  if (!unsignedArtifact) return {}
+  const signedName = signedArtifactName(unsignedArtifact)
+  const signedPath = join(pluginDir, 'dist', signedName)
+  if (existsSync(signedPath) && statSync(signedPath).isFile()) {
+    return fileIntegrity(signedPath)
+  }
+  return {}
+}
+
 function releasePackageUrl(pluginDirName, version, unsignedArtifact) {
   const tag = `community-plugin-${pluginDirName}-v${version}`
   const asset = signedArtifactName(unsignedArtifact)
   return `https://github.com/${RELEASE_REPO}/releases/download/${tag}/${asset}`
 }
 
-function communityEntry(pluginDirName, manifest, unsignedArtifact) {
+function communityEntry(pluginDirName, manifest, unsignedArtifact, previousByKey) {
   const {id, name, version, publisher, description, permissions} = manifest
   if (!id || !name || !version || !publisher || !permissions) {
     throw new Error(`Incomplete manifest in ${pluginDirName}`)
@@ -90,36 +113,73 @@ function communityEntry(pluginDirName, manifest, unsignedArtifact) {
       `No dist/*.dwp for ${pluginDirName} (id=${id}). Build the plugin before generating the catalog.`,
     )
   }
-  return {
+  const packageUrl = releasePackageUrl(pluginDirName, version, unsignedArtifact)
+  const entry = {
     id,
     name,
     version,
     publisher,
     description: description || name,
-    packageUrl: releasePackageUrl(pluginDirName, version, unsignedArtifact),
+    packageUrl,
     signingKeyId: COMMUNITY_SIGNING_KEY_ID,
     permissions: [...permissions],
   }
+  const integrity = packageIntegrityFromDist(join(pluginsRoot, pluginDirName), unsignedArtifact)
+  Object.assign(entry, integrity)
+  return preserveIntegrity(entry, previousByKey)
 }
 
-function helloEntry() {
+function previousIndex(prevCatalog) {
+  const map = new Map()
+  if (!prevCatalog?.catalogs) return map
+  for (const catalog of prevCatalog.catalogs) {
+    for (const entry of catalog.entries || []) {
+      if (!entry?.id || !entry?.version || !entry?.packageUrl) continue
+      map.set(`${entry.id}@${entry.version}|${entry.packageUrl}`, entry)
+    }
+  }
+  return map
+}
+
+/** Keep prior packageSha256/size when local signed artifact is absent but URL unchanged. */
+function preserveIntegrity(entry, previousByKey) {
+  if (entry.packageSha256) return entry
+  const prev = previousByKey.get(`${entry.id}@${entry.version}|${entry.packageUrl}`)
+  if (prev?.packageSha256) {
+    entry.packageSha256 = prev.packageSha256
+    if (prev.packageSizeBytes != null) entry.packageSizeBytes = prev.packageSizeBytes
+  }
+  return entry
+}
+
+function helloEntry(previousByKey) {
   const helloDir = join(pluginsRoot, 'examples', 'hello-workbench')
   const mf = loadManifest(helloDir)
   if (!mf) throw new Error('hello-workbench manifest missing')
   const m = mf.data
-  return {
+  const packageUrl = `classpath:community-plugin-fixtures/${m.id}-${m.version}.dwp`
+  const fixturePath = join(
+    repoRoot,
+    'datawise-backend/datawise-server/src/main/resources/community-plugin-fixtures',
+    `${m.id}-${m.version}.dwp`,
+  )
+  const entry = {
     id: m.id,
     name: m.name,
     version: m.version,
     publisher: m.publisher,
     description: m.description || m.name,
-    packageUrl: `classpath:community-plugin-fixtures/${m.id}-${m.version}.dwp`,
+    packageUrl,
     signingKeyId: 'datawise-examples',
     permissions: [...(m.permissions || [])],
   }
+  if (existsSync(fixturePath)) {
+    Object.assign(entry, fileIntegrity(fixturePath))
+  }
+  return preserveIntegrity(entry, previousByKey)
 }
 
-function collectCommunityEntries() {
+function collectCommunityEntries(previousByKey) {
   const dirs = readdirSync(pluginsRoot, {withFileTypes: true})
     .filter((d) => d.isDirectory() && !SKIP_DIRS.has(d.name) && !d.name.startsWith('.'))
     .map((d) => d.name)
@@ -134,23 +194,23 @@ function collectCommunityEntries() {
       continue
     }
     const artifact = pickArtifact(listDwpArtifacts(dir), mf.data.version)
-    entries.push(communityEntry(name, mf.data, artifact))
+    entries.push(communityEntry(name, mf.data, artifact, previousByKey))
   }
   return entries
 }
 
-function buildCatalog() {
+function buildCatalog(previousByKey) {
   return {
     catalogs: [
       {
         id: 'datawise-examples',
         name: 'DataWise Examples',
-        entries: [helloEntry()],
+        entries: [helloEntry(previousByKey)],
       },
       {
         id: 'datawise-community',
         name: 'DataWise Community',
-        entries: collectCommunityEntries(),
+        entries: collectCommunityEntries(previousByKey),
       },
     ],
   }
@@ -160,12 +220,21 @@ function stableStringify(obj) {
   return `${JSON.stringify(obj, null, 2)}\n`
 }
 
-const catalog = buildCatalog()
+const prevText = existsSync(catalogPath) ? readFileSync(catalogPath, 'utf8') : ''
+let previousByKey = new Map()
+if (prevText) {
+  try {
+    previousByKey = previousIndex(JSON.parse(prevText))
+  } catch {
+    previousByKey = new Map()
+  }
+}
+
+const catalog = buildCatalog(previousByKey)
 const next = stableStringify(catalog)
-const prev = existsSync(catalogPath) ? readFileSync(catalogPath, 'utf8') : ''
 
 if (checkOnly) {
-  if (prev !== next) {
+  if (prevText !== next) {
     console.error(`✗ ${catalogPath} is out of date. Run:`)
     console.error('  node community-plugins/scripts/generate-marketplace-catalog.mjs')
     process.exit(1)
@@ -178,6 +247,12 @@ writeFileSync(catalogPath, next)
 console.log(`✓ Wrote ${catalogPath}`)
 console.log(`  examples: ${catalog.catalogs[0].entries.length}`)
 console.log(`  community: ${catalog.catalogs[1].entries.length}`)
+let withIntegrity = 0
+for (const e of catalog.catalogs.flatMap((c) => c.entries)) {
+  if (e.packageSha256) withIntegrity++
+}
+console.log(`  integrity receipts: ${withIntegrity}`)
 for (const e of catalog.catalogs[1].entries) {
-  console.log(`  - ${e.id}@${e.version}`)
+  const mark = e.packageSha256 ? ` sha256=${e.packageSha256.slice(0, 8)}…` : ''
+  console.log(`  - ${e.id}@${e.version}${mark}`)
 }

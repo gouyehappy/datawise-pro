@@ -3,6 +3,8 @@ import {useAuthStore} from '@/features/auth/stores/auth-store'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {useTeamStore} from '@/features/team/stores/team-store'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
+import {canAccessFeature} from '@/features/auth/services/feature-permission.service'
+import {FeaturePermission} from '@/features/auth/types/feature-permission.types'
 import {
     decideMcpConfirmation,
     listPendingMcpConfirmations,
@@ -15,6 +17,7 @@ import {
 import type {McpConfirmTicket} from '@/features/ai/mcp-confirm/types'
 import {useAppToast} from '@/features/layout/composables/useAppToast'
 import {useI18n} from 'vue-i18n'
+import {resolveCaughtApiErrorMessage} from '@/shared/api/http/api-error-message'
 
 const POLL_MS = 4_000
 
@@ -40,13 +43,20 @@ export function useMcpConfirmPoller() {
     let timer: ReturnType<typeof setInterval> | null = null
     let disposed = false
 
+    /** Backend `@RequiresFeature(NAV_AI)`; guests / unsigned users must not poll. */
+    function canPollConfirmations(): boolean {
+        return Boolean(auth.sessionId) && !auth.isGuest && canAccessFeature(FeaturePermission.NavAi)
+    }
+
     async function refresh() {
-        if (disposed || !auth.sessionId) {
+        if (disposed || !canPollConfirmations()) {
             pending.value = []
+            drawerOpen.value = false
             return
         }
         try {
-            pending.value = await listPendingMcpConfirmations()
+            // Polling must stay silent: 403 after logout must not toast PERMISSION_DENIED.
+            pending.value = await listPendingMcpConfirmations({silent: true})
             if (pending.value.length > 0 && !drawerOpen.value) {
                 // Soft nudge: open drawer once when first pending arrives
                 drawerOpen.value = true
@@ -86,39 +96,64 @@ export function useMcpConfirmPoller() {
                         sql,
                     })
                     await workspace.openConsole({connectionId, database, sql, title})
-                    toast.success(t('mcpConfirm.submittedApproval'))
+                    toast.notify({
+                      category: 'workspace',
+                      titleKey: 'approvalDone',
+                      bodyKey: 'approvalDone',
+                      params: {detail: t('mcpConfirm.submittedApproval')},
+                    })
                 } else {
                     await workspace.openConsole({connectionId, database, sql, title})
-                    toast.success(t('mcpConfirm.openedConsole'))
                 }
             } else if (decision === 'reject') {
                 toast.show(t('mcpConfirm.rejected'), {variant: 'info'})
             }
             await refresh()
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : String(error))
+            toast.error(resolveCaughtApiErrorMessage(error, t, 'mcpConfirm.decideFailed'))
         } finally {
             decidingId.value = null
         }
     }
 
-    onMounted(() => {
-        void refresh()
+    function startTimer() {
+        if (timer || disposed) return
         timer = setInterval(() => {
             void refresh()
         }, POLL_MS)
+    }
+
+    function stopTimer() {
+        if (!timer) return
+        clearInterval(timer)
+        timer = null
+    }
+
+    function syncPolling() {
+        if (disposed) return
+        if (canPollConfirmations()) {
+            startTimer()
+            void refresh()
+        } else {
+            stopTimer()
+            pending.value = []
+            drawerOpen.value = false
+        }
+    }
+
+    onMounted(() => {
+        syncPolling()
     })
 
     onUnmounted(() => {
         disposed = true
-        if (timer) clearInterval(timer)
+        stopTimer()
     })
 
     watch(
-        () => auth.sessionId,
-        (id) => {
-            if (id) void refresh()
-            else pending.value = []
+        () => [auth.sessionId, auth.isGuest, canAccessFeature(FeaturePermission.NavAi)] as const,
+        () => {
+            syncPolling()
         },
     )
 

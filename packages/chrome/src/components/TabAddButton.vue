@@ -12,6 +12,6 @@ const emit = defineEmits<{
 
 <template>
   <button class="dw-tab-add" :title="title" type="button" @click="emit('click')">
-    <DwIcon name="plus" :size="13"/>
+    <DwIcon name="plus" :size="16" :stroke-width="2.25"/>
   </button>
 </template>

@@ -212,6 +212,10 @@ public final class ConnectionsXmlCodec {
         sshEnabled.setTextContent(String.valueOf(connection.isSshEnabled()));
         connectionElement.appendChild(sshEnabled);
 
+        Element writeGuard = document.createElement("write-guard");
+        writeGuard.setTextContent(String.valueOf(connection.isWriteGuard()));
+        connectionElement.appendChild(writeGuard);
+
         if (connection.getAdvancedConfig() != null && !connection.getAdvancedConfig().isBlank()) {
             XmlConfigSupport.appendCdataElement(document, connectionElement, "advanced-config", connection.getAdvancedConfig());
         }
@@ -293,6 +297,7 @@ public final class ConnectionsXmlCodec {
         connection.setJumpPrivateKey(childText(element, "jump-private-key"));
         connection.setJumpPassphrase(childText(element, "jump-passphrase"));
         connection.setSshEnabled(parseBoolean(childText(element, "ssh-enabled"), false));
+        connection.setWriteGuard(parseBoolean(childText(element, "write-guard"), false));
         connection.setAdvancedConfig(childText(element, "advanced-config"));
         connection.setPluginSecrets(childText(element, "plugin-secrets"));
         connection.setPluginId(childText(element, "plugin-id"));

@@ -1,12 +1,14 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {DwButton, DwCheckbox, EmptyState} from '@/core/components'
 import DwSelect from '@/core/components/DwSelect.vue'
 import type {SelectOption} from '@/core/components/select.types'
 import type {TableColumn, TableRow} from '@/core/types'
-import {DwIcon} from '@/core/icons'
+import {DwIcon, ensureDeferredDwIcons} from '@/core/icons'
 import type {DwIconName} from '@/core/icons'
+
+void ensureDeferredDwIcons()
 import AiAnalysisChart from '@/shared/charts/EchartsPanel.vue'
 import {buildChartOption as buildAiChartOption} from '@/shared/charts/build-chart-option'
 import SaveChartToDashboardDialog from '@/features/dashboard/components/SaveChartToDashboardDialog.vue'
@@ -108,7 +110,6 @@ function resetConfig() {
 }
 
 function onChartSaved(title: string) {
-  layout.showSuccessToast(t('queryResult.chart.savedToDashboard', {title}))
 }
 
 watch(

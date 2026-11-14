@@ -30,7 +30,6 @@ watch(
     (isOpen) => {
         if (!isOpen) return
         if (entitlement.isAiUsable()) {
-            layout.showSuccessToast(t('pack.paywall.standardBuildEntitledHint'))
         } else {
             entitlement.openPaywall('pack.ai', props.context)
         }

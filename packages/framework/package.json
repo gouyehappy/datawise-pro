@@ -3,7 +3,7 @@
   "version": "5.0.0",
   "private": false,
   "type": "module",
-  "description": "DataWise UI Framework aggregator �� tokens + theme + icons + ui + overlays + chrome",
+  "description": "DataWise UI Framework aggregator — tokens + theme + icons + ui + overlays + chrome",
   "license": "MIT",
   "files": [
     "src",
@@ -25,26 +25,27 @@
     "**/*.css"
   ],
   "dependencies": {
-    "@datawise/tokens": "file:../tokens",
-    "@datawise/theme": "file:../theme",
-    "@datawise/icons": "file:../icons",
-    "@datawise/ui": "file:../ui",
-    "@datawise/overlays": "file:../overlays",
     "@datawise/chrome": "file:../chrome",
+    "@datawise/code": "file:../code",
     "@datawise/data-grid": "file:../data-grid",
     "@datawise/graph-canvas": "file:../graph-canvas",
-    "@datawise/code": "file:../code",
-    "@datawise/shortcuts": "file:../shortcuts"
+    "@datawise/icons": "file:../icons",
+    "@datawise/overlays": "file:../overlays",
+    "@datawise/shortcuts": "file:../shortcuts",
+    "@datawise/theme": "file:../theme",
+    "@datawise/tokens": "file:../tokens",
+    "@datawise/ui": "file:../ui",
+    "monaco-editor": "^0.55.1"
   },
   "peerDependencies": {
-    "vue": "^3.5.0",
-    "lucide-vue-next": "^0.400.0",
     "@phosphor-icons/vue": "^2.0.0",
-    "reka-ui": "^2.0.0"
+    "lucide-vue-next": "^0.577.0",
+    "reka-ui": "^2.0.0",
+    "vue": "^3.5.0"
   },
   "devDependencies": {
     "typescript": "~5.7.2",
-    "vue": "^3.5.13"
+    "vue": "^3.5.45"
   },
   "scripts": {
     "typecheck": "node -e \"process.exit(0)\""

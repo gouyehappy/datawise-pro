@@ -79,6 +79,7 @@ export const ONBOARDING_TOUR_STEPS: OnboardingTourStep[] = [
     },
 ]
 
+/** A0-3: short opt-in tip — connect → run a query (AI deferred until after first success). */
 export const ONBOARDING_FIRST_INSIGHT_STEPS: OnboardingTourStep[] = [
     {
         id: 'insightWelcome',
@@ -89,25 +90,13 @@ export const ONBOARDING_FIRST_INSIGHT_STEPS: OnboardingTourStep[] = [
         },
     },
     {
-        id: 'insightExplorer',
-        target: 'explorer-panel',
-        placement: 'right',
+        id: 'insightDone',
+        target: 'workspace-main',
+        placement: 'top',
         prepare({layout, appConfig}) {
             appConfig.setShowExplorerPanel(true)
             layout.setModule('database')
         },
-    },
-    {
-        id: 'insightAi',
-        target: 'nav-ai',
-        placement: 'right',
-        prepare({layout}) {
-            layout.setModule('ai')
-        },
-    },
-    {
-        id: 'insightDone',
-        placement: 'center',
     },
 ]
 

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, onMounted, onUnmounted, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {usePopoverEscape} from '@/core/composables/usePopoverEscape'
@@ -61,15 +61,18 @@ const triggerTitle = computed(
 const triggerAccent = computed(() => projectAccent(activeProject.value))
 const triggerInitials = computed(() => projectInitials(activeProject.value))
 
-/** IDEA: Open Projects = 当前；Recent = 最近使用优先。 */
+/** IDEA: Open Projects = 当前；Recent = 其余。 */
 const openProjects = computed(() => {
   const active = activeProject.value
   if (!active) return [] as ProjectDto[]
   return projects.value.filter((p) => p.id === active.id)
 })
 
-/** 副行始终有内容，形成 IDEA 双行节奏。 */
+/** 副行：当前打开优先；否则描述 / 默认标签 / 应用内。 */
 function projectHint(project: ProjectDto): string {
+  if (activeProject.value?.id === project.id) {
+    return t('app.titleBar.projectSwitcher.currentOpen')
+  }
   const desc = project.description?.trim()
   if (desc) return desc
   if (project.isDefault) return t('app.titleBar.projectSwitcher.defaultTag')
@@ -109,9 +112,10 @@ async function toggle() {
 }
 
 async function onSelectProject(project: ProjectDto) {
-  if (project.id === activeProject.value?.id) return
+  const projectId = project.id
+  if (!projectId || projectId === activeProject.value?.id) return
   close()
-  await switchToProject(project.id, {confirmDirty: confirmDiscardDirtyTabs})
+  await switchToProject(projectId, {confirmDirty: confirmDiscardDirtyTabs})
 }
 
 function onCreateProject() {
@@ -202,7 +206,6 @@ onUnmounted(() => {
             :style="panelStyle"
             role="menu"
         >
-          <!-- IDEA: 顶部动作，图标落在固定 gutter -->
           <div class="ws-switcher__actions">
             <button
                 type="button"
@@ -212,7 +215,7 @@ onUnmounted(() => {
                 @click="onCreateProject"
             >
               <span class="ws-switcher__gutter" aria-hidden="true">
-                <DwIcon name="plus" size="md" :stroke-width="1.6"/>
+                <DwIcon name="plus" size="menu" :stroke-width="1.7"/>
               </span>
               <span class="ws-switcher__action-label">{{ t('app.titleBar.projectSwitcher.newProject') }}</span>
             </button>
@@ -225,13 +228,14 @@ onUnmounted(() => {
                 <div
                     v-for="project in openProjects"
                     :key="project.id"
-                    class="ws-switcher__row-wrap"
+                    class="ws-switcher__row-wrap is-current"
                 >
                   <button
                       type="button"
-                      class="ws-switcher__row is-current"
+                      class="ws-switcher__row"
                       :disabled="switching"
                       role="menuitem"
+                      aria-current="true"
                       @click="onSelectProject(project)"
                   >
                     <span class="ws-switcher__gutter" aria-hidden="true">
@@ -244,6 +248,7 @@ onUnmounted(() => {
                       <span class="ws-switcher__row-name">{{ project.name }}</span>
                       <span class="ws-switcher__row-hint">{{ projectHint(project) }}</span>
                     </span>
+                    <DwIcon class="ws-switcher__check" name="check" size="sm" :stroke-width="2"/>
                   </button>
                 </div>
               </div>
@@ -284,7 +289,7 @@ onUnmounted(() => {
                       :disabled="switching"
                       @click="onDeleteProject(project, $event)"
                   >
-                    <DwIcon name="delete" size="sm" :stroke-width="1.5"/>
+                    <DwIcon name="delete" size="xs" :stroke-width="1.6"/>
                   </button>
                 </div>
               </div>
@@ -338,22 +343,18 @@ onUnmounted(() => {
   -webkit-app-region: no-drag;
 }
 
-/*
- * IDEA New UI 工具条控件：色块徽标贴左 + 名称 + 细 chevron；
- * 默认透明，悬停才出现浅底，像 breadcrumb widget 而非独立按钮。
- */
+/* 顶栏触发：色块 + 名称 + chevron，悬停才出底 */
 .ws-switcher__trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: var(--dw-density-sm);
+  height: var(--dw-titlebar-widget-h);
   max-width: min(240px, 32vw);
-  margin-left: 0;
-  padding: 0 6px 0 3px;
+  padding: 0 7px 0 4px;
   border: none;
   border-radius: var(--dw-titlebar-chip-radius);
   background: transparent;
-  color: var(--dw-text);
+  color: var(--dw-titlebar-fg-strong);
   cursor: pointer;
   transition: background 100ms ease;
 }
@@ -375,10 +376,10 @@ onUnmounted(() => {
   flex-shrink: 0;
   width: 18px;
   height: 18px;
-  border-radius: var(--dw-control-radius-sm);
-  font-size: var(--dw-font-size-badge);
+  border-radius: 4px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   line-height: 1;
   user-select: none;
 }
@@ -388,24 +389,29 @@ onUnmounted(() => {
   font-size: var(--dw-font-size-titlebar);
   font-weight: 500;
   line-height: 1;
-  color: var(--dw-text);
+  color: var(--dw-titlebar-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.ws-switcher__trigger:hover:not(.is-disabled) .ws-switcher__name,
+.ws-switcher__trigger.is-open .ws-switcher__name {
+  color: var(--dw-titlebar-fg-strong);
+}
+
 .ws-switcher__caret {
   flex-shrink: 0;
-  width: 12px;
-  height: 12px;
-  opacity: 0.45;
-  color: var(--dw-text-muted);
+  width: 11px;
+  height: 11px;
+  opacity: 0.4;
+  color: var(--dw-titlebar-fg-muted);
   transition: transform 140ms ease, opacity 120ms ease;
 }
 
 .ws-switcher__trigger:hover:not(.is-disabled) .ws-switcher__caret,
 .ws-switcher__trigger.is-open .ws-switcher__caret {
-  opacity: 0.75;
+  opacity: 0.8;
 }
 
 .ws-switcher__trigger.is-open .ws-switcher__caret {
@@ -415,8 +421,8 @@ onUnmounted(() => {
 .ws-switcher__panel {
   position: fixed;
   z-index: var(--dw-z-max);
-  width: min(380px, calc(100vw - 20px));
-  max-height: min(520px, calc(100vh - 40px));
+  width: min(300px, calc(100vw - 20px));
+  max-height: min(480px, calc(100vh - 40px));
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -429,20 +435,21 @@ onUnmounted(() => {
 
 .ws-switcher__actions {
   flex-shrink: 0;
-  padding: var(--dw-menu-pad-y) var(--dw-menu-pad-x);
-  border-bottom: 1px solid color-mix(in srgb, var(--dw-text) 8%, transparent);
+  padding: var(--dw-menu-pad-y) var(--dw-menu-pad-x) 2px;
 }
 
 .ws-switcher__action {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--dw-menu-gutter) minmax(0, 1fr);
   align-items: center;
   width: 100%;
   min-height: var(--dw-menu-item-h);
-  padding: 0 8px 0 0;
+  padding: 0 var(--dw-menu-item-pad-end) 0 0;
   border: none;
   border-radius: var(--dw-menu-item-radius);
   background: transparent;
   color: var(--dw-text);
+  font: inherit;
   font-size: var(--dw-font-size-menu);
   font-weight: 400;
   text-align: left;
@@ -470,18 +477,20 @@ onUnmounted(() => {
 
 .ws-switcher__action-label {
   min-width: 0;
-  padding-right: 8px;
 }
 
 .ws-switcher__body {
   min-height: 0;
   flex: 1;
+  overflow-x: hidden;
   overflow-y: auto;
-  padding: 4px var(--dw-menu-pad-x) var(--dw-menu-pad-y);
+  padding: 2px var(--dw-menu-pad-x) var(--dw-menu-pad-y);
+  border-top: 1px solid color-mix(in srgb, var(--dw-text) 8%, transparent);
+  margin-top: 2px;
 }
 
 .ws-switcher__section + .ws-switcher__section {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .ws-switcher__section-head {
@@ -489,7 +498,7 @@ onUnmounted(() => {
   font-size: var(--dw-font-size-menu-caption);
   font-weight: 600;
   color: var(--dw-text-muted);
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
 }
 
 .ws-switcher__list {
@@ -500,7 +509,7 @@ onUnmounted(() => {
 
 .ws-switcher__empty {
   margin: 0;
-  padding: 10px 12px 12px var(--dw-menu-gutter);
+  padding: 8px 10px 10px var(--dw-menu-gutter);
   font-size: var(--dw-font-size-menu-caption);
   color: var(--dw-text-muted);
 }
@@ -509,34 +518,41 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
-  gap: 0;
   border-radius: var(--dw-menu-item-radius);
 }
 
-.ws-switcher__row-wrap:hover {
+.ws-switcher__row-wrap:hover,
+.ws-switcher__row-wrap.is-current {
   background: var(--dw-menu-hover);
 }
 
+.ws-switcher__row-wrap:hover {
+  background: var(--dw-menu-active);
+}
+
 .ws-switcher__row {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--dw-menu-gutter) minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0;
   width: 100%;
-  min-height: var(--dw-density-xl);
-  padding: 5px 4px 5px 0;
+  min-height: 36px;
+  padding: 4px var(--dw-menu-item-pad-end) 4px 0;
   border: none;
-  border-radius: var(--dw-menu-item-radius) 0 0 var(--dw-menu-item-radius);
+  border-radius: var(--dw-menu-item-radius);
   background: transparent;
+  font: inherit;
   text-align: left;
   cursor: pointer;
+  color: inherit;
 }
 
-.ws-switcher__row-wrap:not(:has(.ws-switcher__remove)) .ws-switcher__row {
-  border-radius: var(--dw-menu-item-radius);
-  padding-right: 8px;
+.ws-switcher__row-wrap:has(.ws-switcher__remove) .ws-switcher__row {
+  border-radius: var(--dw-menu-item-radius) 0 0 var(--dw-menu-item-radius);
+  padding-right: 0;
 }
 
-.ws-switcher__row.is-current {
+.ws-switcher__row.is-current,
+.ws-switcher__row-wrap.is-current .ws-switcher__row {
   cursor: default;
 }
 
@@ -548,30 +564,30 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: var(--dw-density-sm);
-  border-radius: var(--dw-control-radius);
-  font-size: var(--dw-font-size-badge);
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   line-height: 1;
   user-select: none;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dw-on-accent) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 14%, transparent);
 }
 
 .ws-switcher__row-copy {
   min-width: 0;
-  flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
-  padding-right: 4px;
+  gap: 1px;
+  padding-right: 6px;
 }
 
 .ws-switcher__row-name {
   font-size: var(--dw-font-size-menu);
   font-weight: 500;
+  line-height: 1.25;
   color: var(--dw-text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -580,53 +596,59 @@ onUnmounted(() => {
 
 .ws-switcher__row-hint {
   font-size: var(--dw-font-size-menu-caption);
+  font-weight: 400;
   line-height: 1.25;
-  color: var(--dw-text-secondary);
+  color: var(--dw-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* 与行共用悬停底；无独立色块，仅图标淡入 */
+.ws-switcher__check {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-right: 2px;
+  color: var(--dw-text-secondary);
+  opacity: 0.9;
+}
+
 .ws-switcher__remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  align-self: stretch;
-  width: 40px;
-  margin: 0;
-  padding: 0 10px 0 4px;
+  width: 28px;
+  margin: 0 2px 0 0;
+  padding: 0;
   border: none;
-  border-radius: 0 var(--dw-menu-item-radius) var(--dw-menu-item-radius) 0;
+  border-radius: var(--dw-menu-item-radius);
   background: transparent;
   color: var(--dw-text-muted);
   cursor: pointer;
   opacity: 0;
-  transition:
-    opacity var(--dw-duration-fast) var(--dw-ease),
-    color var(--dw-duration-fast) var(--dw-ease);
+  transition: opacity 100ms ease, color 100ms ease, background 100ms ease;
 }
 
 .ws-switcher__row-wrap:hover .ws-switcher__remove {
-  opacity: 0.5;
+  opacity: 0.55;
 }
 
 .ws-switcher__remove:hover:not(:disabled),
 .ws-switcher__remove:focus-visible {
   opacity: 1;
-  color: var(--dw-text);
-  background: transparent;
+  color: var(--dw-danger);
+  background: color-mix(in srgb, var(--dw-danger) 12%, transparent);
   outline: none;
 }
 
 .ws-switcher__remove:disabled {
   cursor: not-allowed;
-  opacity: 0.35;
+  opacity: 0.28;
 }
 
 .ws-switcher-drop-enter-active,
 .ws-switcher-drop-leave-active {
-  transition: opacity 120ms ease, transform 120ms ease;
+  transition: opacity 110ms ease, transform 110ms ease;
 }
 
 .ws-switcher-drop-enter-from,

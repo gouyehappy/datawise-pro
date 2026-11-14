@@ -30,6 +30,7 @@ import {
   listSavedPluginConnections,
   type CommunityPluginWorkbenchIntent,
 } from '@/features/community-plugin/lib/connectCommunityPluginWorkbench'
+import {resolveCaughtApiErrorMessage, resolveCaughtMessage} from '@/shared/api/http/api-error-message'
 
 const ALLOW_UNSIGNED_KEY = 'datawise-community-plugin-allow-unsigned'
 
@@ -48,6 +49,10 @@ export type MarketplaceListItem = {
 export function useCommunityPluginCenter() {
   const {t, te, locale} = useI18n()
   const toast = useAppToast()
+
+  function caughtError(e: unknown, fallbackKey: string): string {
+    return resolveCaughtApiErrorMessage(e, t, fallbackKey)
+  }
   const api = createHttpCommunityPluginsApi()
   const workspace = useWorkspaceStore()
   const ui = useCommunityPluginCenterUiStore()
@@ -218,7 +223,7 @@ export function useCommunityPluginCenter() {
   }
 
   function contributionTypeLabel(type?: string) {
-    if (!type) return '—'
+    if (!type) return ''
     const key = `communityPlugin.contributionTypes.${type}`
     return te(key) ? t(key) : type
   }
@@ -268,7 +273,7 @@ export function useCommunityPluginCenter() {
       }
       await refreshPluginConnections(selectedId.value)
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.loadFailed')
     } finally {
       loading.value = false
     }
@@ -301,7 +306,7 @@ export function useCommunityPluginCenter() {
       noteInstallWarnings(result.plugin)
       await afterInstall(result.plugin.manifest.id)
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.actionFailed')
     } finally {
       installing.value = false
     }
@@ -317,7 +322,7 @@ export function useCommunityPluginCenter() {
       noteInstallWarnings(result.plugin)
       await afterInstall(result.plugin.manifest.id)
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.actionFailed')
     } finally {
       installing.value = false
     }
@@ -335,7 +340,7 @@ export function useCommunityPluginCenter() {
       noteInstallWarnings(result.plugin)
       await afterInstall(result.plugin.manifest.id)
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.actionFailed')
     } finally {
       installing.value = false
       installingCatalogKey.value = ''
@@ -353,7 +358,7 @@ export function useCommunityPluginCenter() {
       noteInstallWarnings(result.plugin)
       await afterInstall(result.plugin.manifest.id)
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.actionFailed')
     } finally {
       installing.value = false
       if (fileInputRef.value) fileInputRef.value.value = ''
@@ -374,7 +379,7 @@ export function useCommunityPluginCenter() {
       trustKeys.value = await api.replaceTrustKeys(next)
       trustKeyDraft.value = {id: '', label: '', publicKeyBase64: ''}
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.actionFailed')
     } finally {
       savingTrust.value = false
     }
@@ -387,7 +392,7 @@ export function useCommunityPluginCenter() {
     try {
       trustKeys.value = await api.replaceTrustKeys(trustKeys.value.filter((key) => key.id !== keyId))
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.actionFailed')
     } finally {
       savingTrust.value = false
     }
@@ -413,7 +418,7 @@ export function useCommunityPluginCenter() {
       repoDraft.value = {id: '', name: '', url: '', enabled: true}
       await refresh()
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.actionFailed')
     } finally {
       savingRepos.value = false
     }
@@ -427,7 +432,7 @@ export function useCommunityPluginCenter() {
       repositories.value = await api.replaceRepositories(repositories.value.filter((repo) => repo.id !== repoId))
       await refresh()
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.actionFailed')
     } finally {
       savingRepos.value = false
     }
@@ -483,7 +488,7 @@ export function useCommunityPluginCenter() {
       await refresh()
       notifyCommunityPluginChanged()
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.actionFailed')
     }
   }
 
@@ -501,7 +506,7 @@ export function useCommunityPluginCenter() {
       const result = await api.rollback(selectedId.value)
       await afterInstall(result.plugin.manifest.id)
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.actionFailed')
     }
   }
 
@@ -583,11 +588,15 @@ export function useCommunityPluginCenter() {
         intent: options.intent,
       })
       if (!result.ok) {
-        error.value = result.message || t('communityPlugin.openWorkbenchFailed')
+        error.value = resolveCaughtMessage(
+          result.message,
+          t,
+          'communityPlugin.openWorkbenchFailed',
+        )
         openConnectionFormForPlugin()
       }
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = caughtError(e, 'communityPlugin.openWorkbenchFailed')
       openConnectionFormForPlugin()
     }
   }

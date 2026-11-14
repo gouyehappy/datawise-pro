@@ -2,7 +2,9 @@ import {describe, it} from 'node:test'
 import assert from 'node:assert/strict'
 import type {DataSourceOption} from '@/core/types'
 import {
+    filterConsoleCapableDataSources,
     filterSelectableDataSources,
+    isConsoleCapableDataSource,
     isDataSourceSelectable,
     pickDefaultDataSource,
     resolvePreferredConsoleInstance,
@@ -28,6 +30,45 @@ const sources: DataSourceOption[] = [
         instances: [{id: 'db-2', label: 'legacy_db'}],
     },
 ]
+
+describe('console-capable data sources', () => {
+    it('keeps SQL-capable connections and drops workbench plugins', () => {
+        const mixed: DataSourceOption[] = [
+            {
+                id: 'mysql',
+                label: 'prod-mysql',
+                dbType: 'mysql',
+                instances: [{id: 'db-1', label: 'app'}],
+            },
+            {
+                id: 'k8s',
+                label: 'Kubernetes cluster',
+                dbType: 'kubernetes',
+                instances: [],
+            },
+            {
+                id: 'ssh',
+                label: 'SSH 203.0.113.32',
+                dbType: 'ssh',
+                instances: [],
+            },
+            {
+                id: 'redis',
+                label: 'Redis 203.0.113.110',
+                dbType: 'redis',
+                instances: [],
+            },
+        ]
+        assert.equal(isConsoleCapableDataSource(mixed[0]), true)
+        assert.equal(isConsoleCapableDataSource(mixed[1]), false)
+        assert.equal(isConsoleCapableDataSource(mixed[2]), false)
+        assert.equal(isConsoleCapableDataSource(mixed[3]), false)
+        assert.deepEqual(
+            filterConsoleCapableDataSources(mixed).map((item) => item.id),
+            ['mysql'],
+        )
+    })
+})
 
 describe('selectable console data sources', () => {
     const health = {

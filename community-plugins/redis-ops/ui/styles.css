@@ -1,12 +1,12 @@
 :root {
    color-scheme: dark;
-   --bg: var(--color-background, #131416);
-   --surface: var(--color-muted, #1a1a1c);
-   --surface-2: var(--color-accent, #2e2f33);
-   --panel: var(--color-popover, #1e1e20);
-   --panel-2: var(--color-accent, #2e2f33);
-   --rail: var(--color-muted, #1a1a1c);
-   --line: var(--color-border, rgb(110 110 114 / 0.28));
+   --bg: var(--color-background, #1a1b1e);
+   --surface: var(--color-muted, #222326);
+   --surface-2: var(--color-accent, #2a2b2e);
+   --panel: var(--color-popover, #1e1f22);
+   --panel-2: var(--color-accent, #2a2b2e);
+   --rail: var(--color-muted, #1e1f22);
+   --line: var(--color-border, rgba(255, 255, 255, 0.08));
    --line-2: color-mix(in srgb, var(--color-foreground, #d7d7db) 18%, transparent);
    --fg: var(--color-foreground, #d7d7db);
    --muted: var(--color-muted-foreground, #97989d);
@@ -90,6 +90,8 @@
  .app {
    display: grid; grid-template-columns: 48px 1fr; height: 100%;
    min-width: 0;
+   gap: var(--dw-panel-gap, 0px);
+   background: var(--color-chrome, transparent);
  }
  .rail {
    background: var(--rail);
@@ -123,7 +125,11 @@
    display: inline-grid; place-items: center;
  }
  .rail-spacer { flex: 1; }
- .shell { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+ .shell {
+   display: flex; flex-direction: column; min-width: 0; min-height: 0;
+   background: var(--bg);
+   border-radius: var(--dw-panel-radius, 0);
+ }
  .status { display: inline-flex; align-items: center; gap: 5px; font-size: var(--dw-font-size); color: var(--muted); white-space: nowrap; flex-shrink: 0; }
  .status i { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex-shrink: 0; }
  .status.ok i { background: var(--ok); }

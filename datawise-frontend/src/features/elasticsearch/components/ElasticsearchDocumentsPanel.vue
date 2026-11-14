@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import {computed, onMounted, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {DwCodeViewer, DwInlineAlert, DwSplitPane, EmptyState, IconButton, SettingsSelect} from '@/core/components'
+import {ConfirmDialog, DwCodeViewer, DwInlineAlert, DwSplitPane, EmptyState, IconButton, SettingsSelect} from '@/core/components'
+import {useConfirmDialog} from '@/core/composables/useConfirmDialog'
 import {DwIcon} from '@/core/icons'
 import {explorerApi} from '@/api'
 import {useLayoutStore} from '@/features/layout/stores/layout'
@@ -23,6 +24,17 @@ const emit = defineEmits<{
 
 const {t} = useI18n()
 const layout = useLayoutStore()
+const {
+    open: deleteConfirmOpen,
+    title: deleteConfirmTitle,
+    message: deleteConfirmMessage,
+    confirmLabel: deleteConfirmLabel,
+    confirmVariant: deleteConfirmVariant,
+    confirmLoading: deleteConfirmLoading,
+    ask: askDeleteConfirm,
+    onConfirm: onDeleteConfirm,
+    onOpenUpdate: onDeleteOpenUpdate,
+} = useConfirmDialog('danger')
 
 const indicesLoading = ref(false)
 const indicesError = ref<string | null>(null)
@@ -90,8 +102,8 @@ const contentSubtitle = computed(() => {
         : indexName.value
 })
 
-function confirmLeave(): boolean {
-    const ok = confirmDiscardConfigEdits(isDirty.value, t('common.codeViewer.discardConfirm'))
+async function confirmLeave(): Promise<boolean> {
+    const ok = await confirmDiscardConfigEdits(isDirty.value, t('common.codeViewer.discardConfirm'))
     if (ok) exitEdit()
     return ok
 }
@@ -221,9 +233,9 @@ async function loadDocuments(options?: {append?: boolean}) {
     }
 }
 
-function onIndexSelect(next: string) {
+async function onIndexSelect(next: string) {
     if (next === indexName.value) return
-    if (!confirmLeave()) return
+    if (!(await confirmLeave())) return
     indexName.value = next
     emit('update:indexName', next)
     filterDraft.value = ''
@@ -231,15 +243,15 @@ function onIndexSelect(next: string) {
     void loadDocuments()
 }
 
-function selectDocument(index: number) {
+async function selectDocument(index: number) {
     if (index === selectedRowIndex.value) return
-    if (!confirmLeave()) return
+    if (!(await confirmLeave())) return
     selectedRowIndex.value = index
     syncJsonFromSelection()
 }
 
-function applyFilter() {
-    if (!confirmLeave()) return
+async function applyFilter() {
+    if (!(await confirmLeave())) return
     const raw = filterDraft.value.trim()
     if (!raw) {
         appliedFilter.value = undefined
@@ -267,9 +279,9 @@ function startEdit() {
     editing.value = true
 }
 
-function newDocument() {
+async function newDocument() {
     if (!indexName.value) return
-    if (!confirmLeave()) return
+    if (!(await confirmLeave())) return
     selectedRowIndex.value = -1
     docIdDraft.value = ''
     jsonDraft.value = '{\n  \n}'
@@ -277,9 +289,9 @@ function newDocument() {
     editing.value = true
 }
 
-function cancelEdit() {
+async function cancelEdit() {
     if (saving.value) return
-    if (!confirmLeave()) return
+    if (!(await confirmLeave())) return
 }
 
 async function saveDocument() {
@@ -298,7 +310,6 @@ async function saveDocument() {
             sourceJson: jsonDraft.value,
         })
         editing.value = false
-        layout.showSuccessToast(t('explorer.elasticsearchDocuments.saveSuccess'))
         await loadDocuments()
         if (saved.id) {
             const idCol = columnKey('_id')
@@ -321,10 +332,13 @@ async function saveDocument() {
 
 async function deleteSelected() {
     if (!props.connectionId || !indexName.value || !selectedDocId.value) return
-    const ok = window.confirm(
-        t('explorer.elasticsearchDocuments.confirmDelete', {id: selectedDocId.value}),
-    )
-    if (!ok) return
+    const confirmed = await askDeleteConfirm({
+        title: t('common.confirm'),
+        message: t('explorer.elasticsearchDocuments.confirmDelete', {id: selectedDocId.value}),
+        confirmLabel: t('explorer.elasticsearchDocuments.delete'),
+    })
+    if (!confirmed) return
+    deleteConfirmLoading.value = true
     saving.value = true
     docsError.value = null
     try {
@@ -334,7 +348,6 @@ async function deleteSelected() {
             selectedDocId.value,
         )
         editing.value = false
-        layout.showSuccessToast(t('explorer.elasticsearchDocuments.deleteSuccess'))
         await loadDocuments()
     } catch (error) {
         docsError.value = resolveCaughtApiErrorMessage(
@@ -343,6 +356,7 @@ async function deleteSelected() {
             'explorer.elasticsearchDocuments.deleteFailed',
         )
     } finally {
+        deleteConfirmLoading.value = false
         saving.value = false
     }
 }
@@ -364,10 +378,10 @@ watch(
 
 watch(
     () => props.indexName,
-    (next) => {
+    async (next) => {
         const value = next ?? ''
         if (value === indexName.value) return
-        if (!confirmLeave()) return
+        if (!(await confirmLeave())) return
         indexName.value = value
         void loadDocuments()
     },
@@ -552,6 +566,17 @@ onMounted(() => {
         </DwCodeViewer>
       </template>
     </DwSplitPane>
+
+    <ConfirmDialog
+        :open="deleteConfirmOpen"
+        :title="deleteConfirmTitle"
+        :message="deleteConfirmMessage"
+        :confirm-label="deleteConfirmLabel"
+        :confirm-loading="deleteConfirmLoading"
+        :confirm-variant="deleteConfirmVariant"
+        @update:open="onDeleteOpenUpdate"
+        @confirm="onDeleteConfirm"
+    />
   </div>
 </template>
 

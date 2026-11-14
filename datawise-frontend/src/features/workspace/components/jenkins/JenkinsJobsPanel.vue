@@ -596,12 +596,12 @@ async function triggerSelected(parameters?: Record<string, string>) {
       ?? selectedJob.value?.builds?.[0]?.number
       ?? 0
   try {
-    const result = await explorerApi.triggerJenkinsBuild(
+    await explorerApi.triggerJenkinsBuild(
         props.connectionId,
         jobName,
         parameters && Object.keys(parameters).length ? {parameters} : undefined,
     )
-    toastNotice(result.message || t('explorer.jenkinsJobs.triggerQueued'), 'success')
+    toastNotice(t('explorer.jenkinsJobs.triggerQueued'), 'success')
     await loadJobDetail(jobName, {quiet: true})
     const startedNumber = await waitForQueuedBuild(jobName, previousBuildNumber)
     if (startedNumber != null) {
@@ -631,8 +631,8 @@ async function stopSelected() {
   error.value = null
   liveStatus.value = null
   try {
-    const result = await explorerApi.stopJenkinsBuild(props.connectionId, jobName, buildNumber)
-    toastNotice(result.message, 'info')
+    await explorerApi.stopJenkinsBuild(props.connectionId, jobName, buildNumber)
+    toastNotice(t('explorer.jenkinsJobs.stopSuccess'), 'info')
     await loadJobDetail(jobName, {preferBuildNumber: buildNumber})
     await loadBuildLog(jobName, buildNumber, {reset: true})
     if (selectedBuild.value?.building) {

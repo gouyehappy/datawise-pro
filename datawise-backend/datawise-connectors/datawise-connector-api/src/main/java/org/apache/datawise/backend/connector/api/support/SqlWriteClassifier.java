@@ -37,10 +37,6 @@ public final class SqlWriteClassifier {
             "(?i)\\bINTO\\s+(OUTFILE|DUMPFILE)\\b|\\bFOR\\s+UPDATE\\b|\\bLOCK\\s+IN\\s+SHARE\\s+MODE\\b|"
                     + "\\bLOAD_FILE\\s*\\(|\\bCOPY\\s+[\\s\\S]+?\\s+TO\\b|\\bCOPY\\s+[\\s\\S]+?\\s+FROM\\b");
 
-    /** MySQL versioned / conditional comments execute as SQL — expand before stripping. */
-    private static final Pattern MYSQL_EXECUTABLE_COMMENT = Pattern.compile(
-            "/\\*!\\d*([\\s\\S]*?)\\*/");
-
     private SqlWriteClassifier() {
     }
 
@@ -241,10 +237,7 @@ public final class SqlWriteClassifier {
     }
 
     static String expandMysqlExecutableComments(String sql) {
-        if (sql == null || !sql.contains("/*!")) {
-            return sql == null ? "" : sql;
-        }
-        return MYSQL_EXECUTABLE_COMMENT.matcher(sql).replaceAll(" $1 ");
+        return SqlTextSupport.expandMysqlExecutableComments(sql);
     }
 
     private static String stripSqlComments(String sql) {

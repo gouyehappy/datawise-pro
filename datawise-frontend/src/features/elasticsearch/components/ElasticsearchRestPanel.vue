@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {DwCodeViewer, DwInlineAlert, DwSplitPane, IconButton} from '@/core/components'
+import {ConfirmDialog, DwCodeViewer, DwInlineAlert, DwSplitPane, IconButton} from '@/core/components'
+import {useConfirmDialog} from '@/core/composables/useConfirmDialog'
 import {DwIcon} from '@/core/icons'
 import {explorerApi} from '@/api'
-import {resolveCaughtApiErrorMessage} from '@/shared/api'
+import {resolveCaughtApiErrorMessage, resolveCaughtMessage} from '@/shared/api'
 import ConnectorBrowseToolbar from '@/features/workspace/components/shared/ConnectorBrowseToolbar.vue'
 import ElasticsearchProfilePanel from '@/features/elasticsearch/components/ElasticsearchProfilePanel.vue'
 import {
@@ -32,6 +33,17 @@ const emit = defineEmits<{
 }>()
 
 const {t} = useI18n()
+const {
+  open: confirmOpen,
+  title: confirmTitle,
+  message: confirmMessage,
+  confirmLabel,
+  confirmVariant,
+  confirmLoading,
+  ask: askConfirm,
+  onConfirm,
+  onOpenUpdate,
+} = useConfirmDialog('danger')
 
 const requestText = ref(
     props.indexName
@@ -104,7 +116,12 @@ async function runRequest(text = requestText.value) {
     if (!props.connectionId || !text.trim()) return
     const classified = classifyElasticsearchRequestRisk(text)
     if (classified === 'dangerous' || classified === 'write') {
-        const ok = window.confirm(t('explorer.elasticsearchConsole.confirmWrite', {risk: classified}))
+        const riskLabel = t(`explorer.elasticsearchConsole.risk.${classified}`)
+        const ok = await askConfirm({
+            title: t('common.confirm'),
+            message: t('explorer.elasticsearchConsole.confirmWrite', {risk: riskLabel}),
+            confirmVariant: 'danger',
+        })
         if (!ok) return
     }
     running.value = true
@@ -113,7 +130,13 @@ async function runRequest(text = requestText.value) {
     completions.value = []
     try {
         result.value = await explorerApi.executeElasticsearchRest(props.connectionId, text)
-        if (result.value.error) error.value = result.value.error
+        if (result.value.error) {
+            error.value = resolveCaughtMessage(
+                result.value.error,
+                t,
+                'explorer.elasticsearchConsole.runFailed',
+            )
+        }
         if (parseElasticsearchProfile(result.value.rawBody)) viewMode.value = 'profile'
         else if (result.value.tabular) viewMode.value = 'table'
         else viewMode.value = 'json'
@@ -148,7 +171,11 @@ async function loadMetadata(kind?: string) {
 async function clearIndex() {
     const index = indexName.value.trim()
     if (!props.connectionId || !index) return
-    const ok = window.confirm(t('explorer.elasticsearchConsole.confirmClear', {index}))
+    const ok = await askConfirm({
+        title: t('common.confirm'),
+        message: t('explorer.elasticsearchConsole.confirmClear', {index}),
+        confirmVariant: 'danger',
+    })
     if (!ok) return
     running.value = true
     error.value = null
@@ -168,7 +195,7 @@ async function clearIndex() {
             error: cleared.timedOut ? 'timed_out' : null,
         }
         viewMode.value = 'json'
-        if (cleared.timedOut) error.value = 'timed_out'
+        if (cleared.timedOut) error.value = t('explorer.elasticsearchConsole.timedOut')
     } catch (caught) {
         error.value = resolveCaughtApiErrorMessage(caught, t, 'explorer.elasticsearchConsole.runFailed')
     } finally {
@@ -357,6 +384,16 @@ void refreshIndexNames()
         />
       </template>
     </DwSplitPane>
+    <ConfirmDialog
+        :open="confirmOpen"
+        :title="confirmTitle"
+        :message="confirmMessage"
+        :confirm-label="confirmLabel"
+        :confirm-variant="confirmVariant"
+        :confirm-loading="confirmLoading"
+        @update:open="onOpenUpdate"
+        @confirm="onConfirm"
+    />
   </div>
 </template>
 

@@ -316,14 +316,18 @@ function notifyMigrationOutcome(
         return
     }
     if (paused) {
-        layout.showSuccessToast(t('explorer.tableMigrationWizard.migrationPaused'))
         return
     }
     const summary = summarizeMigrationResults(results)
     if (summary.failed > 0) {
         layout.showWarningToast(t('explorer.tableMigrationPartial', summary))
     } else {
-        layout.showSuccessToast(t('explorer.tableMigrationSuccess', summary))
+        layout.notifyQuiet({
+            category: 'workspace',
+            titleKey: 'migrationDone',
+            bodyKey: 'migrationDone',
+            params: {summary: t('explorer.tableMigrationSuccess', summary)},
+        })
     }
 }
 
@@ -483,7 +487,6 @@ function formatCheckpointStatus(status: string): string {
 async function copyLog(record: TableMigrationRunRecord) {
     try {
         await navigator.clipboard.writeText(formatMigrationRunLogText(record))
-        layout.showSuccessToast(t('explorer.tableMigrationWizard.logCopied'))
     } catch {
         layout.showErrorToast(t('explorer.tableMigrationWizard.ddlCopyFailed'))
     }
@@ -491,7 +494,12 @@ async function copyLog(record: TableMigrationRunRecord) {
 
 function downloadReport(record: TableMigrationRunRecord) {
     downloadMigrationRunReport(record)
-    layout.showSuccessToast(t('explorer.tableMigrationWizard.reportDownloaded'))
+    layout.notifyQuiet({
+      category: 'export',
+      titleKey: 'exportDone',
+      bodyKey: 'exportDone',
+      params: {name: t('explorer.tableMigrationWizard.reportDownloaded')},
+    })
 }
 
 function formatRowCount(value: number | null | undefined): string {

@@ -7,6 +7,8 @@ import {prefetchWorkspaceTabs} from '@/features/workspace/tab-registry'
 import {prefetchSettingsPanels} from '@/features/settings/settings-section-registry'
 import {prefetchWorkbenchModules} from '@/features/layout/module-registry'
 import {ensureSqlEditorPlugin} from '@/features/workspace/services/ensure-sql-editor-plugin'
+import {ensureMonacoThemes} from '@/shared/config/monaco-editor-appearance'
+import {ensureDeferredDwIcons} from '@/core/icons'
 
 let scheduled = false
 
@@ -17,8 +19,16 @@ export function scheduleWorkbenchWarmup(): void {
         void prefetchWorkspaceTabs()
         void prefetchSettingsPanels()
         void prefetchWorkbenchModules()
+        // PERF-03: themes + SQL plugin after idle — not on the shell critical path.
+        void ensureMonacoThemes().catch((error) => {
+            console.warn('[datawise] monaco themes warmup failed', error)
+        })
         void ensureSqlEditorPlugin().catch((error) => {
             console.warn('[datawise] sql editor warmup failed', error)
+        })
+        // PERF-09: rare Lucide icons off the first-paint graph.
+        void ensureDeferredDwIcons().catch((error) => {
+            console.warn('[datawise] deferred icons warmup failed', error)
         })
     })
 }

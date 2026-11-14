@@ -71,6 +71,12 @@ export type ExplorerDeleteShortcutUiPlan =
           messageKey: string
       }
     | {
+          kind: 'delete-project-file'
+          permissionAction: 'delete-project-file'
+          messageKey: string
+          isDirectory: boolean
+      }
+    | {
           kind: 'delete-catalog'
           permissionAction: 'delete'
       }
@@ -80,9 +86,9 @@ export type ExplorerDeleteShortcutUiPlan =
  * Permission / DDL checks remain in the composable.
  */
 export function resolveExplorerDeleteShortcutUiPlan(
-    nodeType: TreeNode['type'],
+    node: Pick<TreeNode, 'type' | 'id'> | TreeNode['type'],
 ): ExplorerDeleteShortcutUiPlan | null {
-    const intent = resolveExplorerDeleteShortcutIntent(nodeType)
+    const intent = resolveExplorerDeleteShortcutIntent(node)
     if (!intent) return null
     if (intent.kind === 'delete-database') {
         return {...intent, requiresDdlCheck: true}
@@ -97,6 +103,17 @@ export function resolveExplorerDeleteShortcutUiPlan(
         return {
             ...intent,
             messageKey: resolveExplorerSqlFileMessageKey('deleteMessage'),
+        }
+    }
+    if (intent.kind === 'delete-project-file') {
+        const nodeType = typeof node === 'string' ? node : node.type
+        const isDirectory = nodeType === 'project-docs' || nodeType === 'project-scripts'
+        return {
+            ...intent,
+            isDirectory,
+            messageKey: isDirectory
+                ? 'explorer.deleteProjectFolderMessage'
+                : 'explorer.deleteProjectFileMessage',
         }
     }
     return intent

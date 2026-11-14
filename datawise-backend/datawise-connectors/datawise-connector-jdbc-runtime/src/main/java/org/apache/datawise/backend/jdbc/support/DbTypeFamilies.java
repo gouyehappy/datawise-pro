@@ -27,7 +27,7 @@ public final class DbTypeFamilies {
         return DbType.isOlapFamily(dbType);
     }
 
-    /** MySQL ?? JDBC?? Doris / StarRocks?? */
+    /** MySQL 协议族 JDBC 驱动（含 Doris / StarRocks 等 OLAP）。 */
     public static boolean isMysqlProtocol(String dbType) {
         return DbType.isMysqlProtocol(dbType);
     }

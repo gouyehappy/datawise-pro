@@ -8,14 +8,19 @@ import org.apache.datawise.backend.connector.facade.jdbc.ConnectorJdbcSessionAcc
 import org.apache.datawise.backend.connector.hook.SqlExecutionHookRunner;
 import org.apache.datawise.backend.connector.support.ConnectorCapabilityGuard;
 import org.apache.datawise.backend.database.context.ConnectionExecutionContext;
+import org.apache.datawise.backend.database.ddlhistory.DdlHistoryService;
+import org.apache.datawise.backend.event.SchemaStructureChangedEvent;
 import org.apache.datawise.backend.domain.ExecuteSqlRequest;
 import org.apache.datawise.backend.domain.ExecuteSqlResult;
+import org.apache.datawise.backend.jdbc.support.QueryTimeoutOverride;
 import org.apache.datawise.backend.model.ConnectionEntity;
+import org.apache.datawise.backend.security.UserContext;
 import org.apache.datawise.backend.service.ConnectionAccessService;
 import org.apache.datawise.backend.service.ProductionWriteGuardService;
 import org.apache.datawise.backend.service.outbound.OutboundEventSignals;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.sql.SQLException;
@@ -35,6 +40,8 @@ public class SqlExecuteService {
     private final SqlExecutionHookRunner sqlExecutionHookRunner;
     private final OutboundEventSignals outboundEventSignals;
     private final SqlQueryAdmissionService sqlQueryAdmissionService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final DdlHistoryService ddlHistoryService;
 
     public SqlExecuteService(
             ConnectionExecutionContext connectionContext,
@@ -45,7 +52,9 @@ public class SqlExecuteService {
             SqlCursorService sqlCursorService,
             SqlExecutionHookRunner sqlExecutionHookRunner,
             OutboundEventSignals outboundEventSignals,
-            SqlQueryAdmissionService sqlQueryAdmissionService
+            SqlQueryAdmissionService sqlQueryAdmissionService,
+            ApplicationEventPublisher eventPublisher,
+            DdlHistoryService ddlHistoryService
     ) {
         this.connectionContext = connectionContext;
         this.connectorFacade = connectorFacade;
@@ -56,12 +65,19 @@ public class SqlExecuteService {
         this.sqlExecutionHookRunner = sqlExecutionHookRunner;
         this.outboundEventSignals = outboundEventSignals;
         this.sqlQueryAdmissionService = sqlQueryAdmissionService;
+        this.eventPublisher = eventPublisher;
+        this.ddlHistoryService = ddlHistoryService;
     }
 
     public ExecuteSqlResult execute(ExecuteSqlRequest request) {
         long userId = connectionContext.requireUserId();
         try (SqlQueryAdmissionService.Lease ignored = sqlQueryAdmissionService.acquire(userId)) {
-            return executeAdmitted(request);
+            QueryTimeoutOverride.set(request.timeoutSeconds());
+            try {
+                return executeAdmitted(request);
+            } finally {
+                QueryTimeoutOverride.clear();
+            }
         }
     }
 
@@ -88,6 +104,7 @@ public class SqlExecuteService {
         long userId = resolved.userId();
         ConnectionEntity entity = resolved.entity();
 
+        connectionAccessService.requireEngineFeature(userId, request.connectionId(), "queryExecution");
         connectionAccessService.requireSqlWriteAccess(userId, request.connectionId(), trimmed);
         productionWriteGuardService.requireProductionWriteAllowed(
                 userId,
@@ -226,11 +243,27 @@ public class SqlExecuteService {
         String connectionId = entity.getId() != null ? entity.getId() : "";
         String name = entity.getName() != null ? entity.getName() : "";
         String db = database != null ? database : "";
+        ddlHistoryService.record(
+                connectionId,
+                db,
+                match.tableName(),
+                match.kind().name(),
+                sql,
+                userId
+        );
         if (match.kind() == SqlTableDdlClassifier.Kind.CREATE) {
             outboundEventSignals.tableCreated(connectionId, name, db, match.tableName(), userId);
         } else if (match.kind() == SqlTableDdlClassifier.Kind.DROP) {
             outboundEventSignals.tableDeleted(connectionId, name, db, match.tableName(), userId);
+        } else if (match.kind() == SqlTableDdlClassifier.Kind.ALTER) {
+            outboundEventSignals.tableAltered(connectionId, name, db, match.tableName(), userId);
         }
+        eventPublisher.publishEvent(new SchemaStructureChangedEvent(
+                UserContext.getTenantId(),
+                connectionId,
+                db,
+                match.tableName()
+        ));
     }
 
     private static String resolveExecutionKey(long userId, String sessionKey) {

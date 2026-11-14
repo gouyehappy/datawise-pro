@@ -41,6 +41,12 @@ public class DatawiseQueryProperties {
      */
     private int maxCursorOffset = 100_000;
 
+    /**
+     * SQL result cursor store: {@code in-memory} (process-local) or {@code jdbc}
+     * (shared {@code dw_sql_cursors}; requires {@code datawise.storage.backend=jdbc}).
+     */
+    private String cursorStoreType = "in-memory";
+
     public int getMaxResultRows() {
         return maxResultRows;
     }
@@ -87,5 +93,19 @@ public class DatawiseQueryProperties {
 
     public void setMaxCursorOffset(int maxCursorOffset) {
         this.maxCursorOffset = Math.max(0, maxCursorOffset);
+    }
+
+    public String getCursorStoreType() {
+        return cursorStoreType;
+    }
+
+    public void setCursorStoreType(String cursorStoreType) {
+        this.cursorStoreType = cursorStoreType != null && !cursorStoreType.isBlank()
+                ? cursorStoreType.trim()
+                : "in-memory";
+    }
+
+    public boolean isJdbcCursorStore() {
+        return "jdbc".equalsIgnoreCase(cursorStoreType);
     }
 }

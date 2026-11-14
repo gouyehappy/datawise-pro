@@ -34,9 +34,9 @@ select.dw-input {
     min-height: var(--dw-input-height);
     max-height: var(--dw-input-height);
     padding: 0 var(--dw-control-pad-x);
-    border: 1px solid var(--dw-border);
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border, var(--dw-border)));
     border-radius: var(--dw-input-radius);
-    background: var(--dw-bg-panel);
+    background: var(--dw-bg-input, var(--dw-bg));
     color: var(--dw-text);
     font-family: inherit;
     font-size: var(--dw-font-size-control);
@@ -220,7 +220,7 @@ select.dw-input:focus {
     gap: var(--dw-gap);
     width: 100%;
     padding: var(--dw-space-4) var(--dw-space-5);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     border-radius: var(--dw-control-radius);
     background: var(--dw-bg-panel);
     box-shadow: none;
@@ -332,9 +332,9 @@ select.dw-input--sm {
     min-height: var(--dw-select-trigger-h);
     max-height: var(--dw-select-trigger-h);
     padding: 0 var(--dw-space-2) 0 var(--dw-control-pad-x);
-    border: 1px solid var(--dw-border);
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border, var(--dw-border)));
     border-radius: var(--dw-input-radius);
-    background: var(--dw-bg-panel);
+    background: var(--dw-bg-input, var(--dw-bg));
     color: var(--dw-text);
     font-size: var(--dw-select-font);
     line-height: var(--dw-leading);
@@ -561,9 +561,9 @@ select.dw-input--sm {
     box-sizing: border-box;
     min-height: var(--dw-control-h-sm);
     padding: 0 var(--dw-space-3) 0 var(--dw-space-4);
-    border: 1px solid var(--dw-border);
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border, var(--dw-border)));
     border-radius: var(--dw-input-radius);
-    background: var(--dw-bg-panel);
+    background: var(--dw-bg-input, var(--dw-bg));
     color: var(--dw-text-muted);
 }
 
@@ -849,9 +849,9 @@ select.dw-input--sm {
     min-height: var(--dw-input-height);
     max-height: var(--dw-input-height);
     padding: 0 var(--dw-space-4) 0 var(--dw-control-pad-x);
-    border: 1px solid var(--dw-border);
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border, var(--dw-border)));
     border-radius: var(--dw-input-radius);
-    background: var(--dw-bg-panel);
+    background: var(--dw-bg-input, var(--dw-bg));
     color: var(--dw-text-muted);
     transition: var(--dw-transition-colors), var(--dw-transition-shadow);
 }

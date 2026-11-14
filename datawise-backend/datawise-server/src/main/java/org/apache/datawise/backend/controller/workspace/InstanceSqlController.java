@@ -25,8 +25,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/workspace/instance-sql")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_SAVE)
 public class InstanceSqlController {
 
     private static final Logger log = LoggerFactory.getLogger(InstanceSqlController.class);

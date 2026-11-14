@@ -1,4 +1,5 @@
 import type {
+    DdlHistoryEntry,
     MetadataDocPreviewOptions,
     MetadataDocPreviewResult,
     SchemaRelationsResult,
@@ -142,6 +143,17 @@ export function createHttpTableDetailApi(): TableDetailApi {
                     }),
                 ),
             ),
+        fetchDdlHistory: async (options) => {
+            const connectionId = requireConnectionId(options?.connectionId)
+            const wire = await getJson<DdlHistoryEntry[]>(
+                API_PATHS.ddlHistory({
+                    connectionId,
+                    database: options?.database,
+                    limit: options?.limit,
+                }),
+            )
+            return Array.isArray(wire) ? wire : []
+        },
         exportTableSql: async (tableName, options) => {
             if (!tableName?.trim()) {
                 throw new Error('tableName is required')

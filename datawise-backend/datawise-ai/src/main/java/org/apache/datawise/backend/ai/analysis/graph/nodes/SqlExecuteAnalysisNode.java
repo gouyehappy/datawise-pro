@@ -8,6 +8,7 @@ import org.apache.datawise.backend.ai.analysis.graph.support.AnalysisStepRunner;
 import org.apache.datawise.backend.ai.config.AiAnalysisProperties;
 import org.apache.datawise.backend.ai.support.AiAnalysisLlmResolver;
 import org.apache.datawise.backend.ai.support.AiCallLogger;
+import org.apache.datawise.backend.ai.support.AiSqlSafetyChecker;
 import org.apache.datawise.backend.common.SqlExecutionException;
 import org.apache.datawise.backend.ai.domain.AiChatRequest;
 import org.apache.datawise.backend.domain.ExecuteSqlResult;
@@ -66,12 +67,15 @@ public class SqlExecuteAnalysisNode {
         boolean federated = plan != null && plan.federated();
 
         String currentSql = state.value(AiAnalysisGraphKeys.SAFE_SQL, "");
+        // Resume / retry paths must not execute unverified SQL even if validate node was skipped historically.
+        currentSql = AiSqlSafetyChecker.requireReadOnlySelect(currentSql);
         SqlExecutionException lastError = null;
 
         for (int attempt = 1; attempt <= maxExecuteAttempts; attempt++) {
             long stepStart = AnalysisStepRunner.start();
             AnalysisStepRunner.running(AiAnalysisSteps.SQL_EXECUTE, "执行查询");
             try {
+                currentSql = AiSqlSafetyChecker.requireReadOnlySelect(currentSql);
                 ExecuteSqlResult result = federated
                         ? federatedSqlExecutionSupport.executeFederated(request, currentSql, ANALYSIS_MAX_ROWS)
                         : sqlService.execute(

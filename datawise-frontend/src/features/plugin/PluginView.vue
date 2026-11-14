@@ -154,7 +154,6 @@ function tryAutoApplyRolePreset() {
   pluginStore.applyPreset(autoPreset)
   markPresetAutoApplied(autoPreset)
   viewerHintDismissed.value = true
-  toast.success(t(`plugin.presets.${autoPreset}.autoApplied`))
 }
 
 function bumpUsageRevision() {
@@ -427,13 +426,23 @@ function enablePluginRequires(plugin: PluginItem) {
   const touched = pluginStore.satisfyPluginRequires(plugin.id as PluginId)
   if (touched.length) {
     bumpUsageRevision()
-    toast.success(t('plugin.enableRequiresSuccess', {count: touched.length}))
+    toast.notify({
+      category: 'system',
+      titleKey: 'installDone',
+      bodyKey: 'installDone',
+      params: {detail: t('plugin.enableRequiresSuccess', {count: touched.length})},
+    })
   }
 }
 
 function exportPluginConfig() {
   pluginStore.exportPluginConfig()
-  toast.success(t('plugin.config.exportSuccess'))
+  toast.notify({
+    category: 'export',
+    titleKey: 'exportDone',
+    bodyKey: 'exportDone',
+    params: {name: t('plugin.config.exportSuccess')},
+  })
 }
 
 function triggerImportPluginConfig() {
@@ -450,7 +459,6 @@ async function onImportPluginConfig(event: Event) {
     const ok = pluginStore.importPluginConfig(text)
     if (ok) {
       bumpUsageRevision()
-      toast.success(t('plugin.config.importSuccess'))
     } else {
       toast.error(t('plugin.config.importFailed'))
     }

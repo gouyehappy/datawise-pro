@@ -5,8 +5,18 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.List;
 
-/** 构建 Kubernetes Job 清单与 kubectl 参数。 */
+/**
+ * 构建 Kubernetes Job / NetworkPolicy 清单与 kubectl 参数。
+ * 对齐 Docker 隔离意图：cpu/memory、只读根盘、drop ALL、禁止提权、/tmp emptyDir、
+ * 禁 SA token / hostNetwork|PID|IPC、deny-all NetworkPolicy（等同 {@code --network none}）。
+ * 进程数上限仍依赖集群 kubelet {@code --pod-max-pids} / RuntimeClass，Job API 无便携字段。
+ */
 public final class PythonK8sSupport {
+
+    static final String DEFAULT_CPU = "1";
+    static final String DEFAULT_TMP_SIZE = "64Mi";
+    /** Pod label selecting the deny-all NetworkPolicy for this run. */
+    static final String RUN_LABEL = "datawise.ai/python-run";
 
     private PythonK8sSupport() {
     }
@@ -25,6 +35,10 @@ public final class PythonK8sSupport {
         return normalized;
     }
 
+    public static String networkPolicyName(String jobName) {
+        return jobName + "-net";
+    }
+
     public static String buildJobManifestJson(
             ObjectMapper objectMapper,
             String jobName,
@@ -34,6 +48,29 @@ public final class PythonK8sSupport {
             String configMapName,
             String shellCommand
     ) {
+        return buildJobManifestJson(
+                objectMapper,
+                jobName,
+                namespace,
+                image,
+                memoryLimit,
+                DEFAULT_CPU,
+                configMapName,
+                shellCommand
+        );
+    }
+
+    public static String buildJobManifestJson(
+            ObjectMapper objectMapper,
+            String jobName,
+            String namespace,
+            String image,
+            String memoryLimit,
+            String cpuLimit,
+            String configMapName,
+            String shellCommand
+    ) {
+        String cpu = cpuLimit != null && !cpuLimit.isBlank() ? cpuLimit.trim() : DEFAULT_CPU;
         ObjectNode root = objectMapper.createObjectNode();
         root.put("apiVersion", "batch/v1");
         root.put("kind", "Job");
@@ -44,22 +81,77 @@ public final class PythonK8sSupport {
         spec.put("ttlSecondsAfterFinished", 120);
         spec.put("backoffLimit", 0);
         ObjectNode template = spec.putObject("template");
+        ObjectNode podMeta = template.putObject("metadata");
+        ObjectNode podLabels = podMeta.putObject("labels");
+        podLabels.put(RUN_LABEL, jobName);
+        podLabels.put("app.kubernetes.io/name", "datawise-python");
+        podLabels.put("app.kubernetes.io/component", "ai-executor");
         ObjectNode podSpec = template.putObject("spec");
         podSpec.put("restartPolicy", "Never");
         podSpec.put("automountServiceAccountToken", false);
+        podSpec.put("enableServiceLinks", false);
+        podSpec.put("hostNetwork", false);
+        podSpec.put("hostPID", false);
+        podSpec.put("hostIPC", false);
+
         ObjectNode container = podSpec.putArray("containers").addObject();
         container.put("name", "python");
         container.put("image", image);
         container.putArray("command").add("sh").add("-c").add(shellCommand);
         ObjectNode resources = container.putObject("resources");
-        resources.putObject("limits").put("memory", memoryLimit);
-        ObjectNode mount = container.putArray("volumeMounts").addObject();
-        mount.put("name", "workspace");
-        mount.put("mountPath", "/workspace");
-        mount.put("readOnly", true);
-        ObjectNode volume = podSpec.putArray("volumes").addObject();
-        volume.put("name", "workspace");
-        volume.putObject("configMap").put("name", configMapName);
+        ObjectNode limits = resources.putObject("limits");
+        limits.put("memory", memoryLimit);
+        limits.put("cpu", cpu);
+
+        ObjectNode containerSecurity = container.putObject("securityContext");
+        containerSecurity.put("allowPrivilegeEscalation", false);
+        containerSecurity.put("readOnlyRootFilesystem", true);
+        containerSecurity.put("privileged", false);
+        containerSecurity.putObject("capabilities").putArray("drop").add("ALL");
+        containerSecurity.putObject("seccompProfile").put("type", "RuntimeDefault");
+
+        var volumeMounts = container.putArray("volumeMounts");
+        ObjectNode workspaceMount = volumeMounts.addObject();
+        workspaceMount.put("name", "workspace");
+        workspaceMount.put("mountPath", "/workspace");
+        workspaceMount.put("readOnly", true);
+        ObjectNode tmpMount = volumeMounts.addObject();
+        tmpMount.put("name", "tmp");
+        tmpMount.put("mountPath", "/tmp");
+
+        var volumes = podSpec.putArray("volumes");
+        ObjectNode workspaceVolume = volumes.addObject();
+        workspaceVolume.put("name", "workspace");
+        workspaceVolume.putObject("configMap").put("name", configMapName);
+        ObjectNode tmpVolume = volumes.addObject();
+        tmpVolume.put("name", "tmp");
+        tmpVolume.putObject("emptyDir").put("sizeLimit", DEFAULT_TMP_SIZE);
+        return root.toPrettyString();
+    }
+
+    /**
+     * Deny-all NetworkPolicy for the Job pod (Ingress + Egress empty = isolate like Docker {@code --network none}).
+     * Requires a CNI that enforces NetworkPolicy; apply failure should fail-closed.
+     */
+    public static String buildNetworkPolicyManifestJson(
+            ObjectMapper objectMapper,
+            String jobName,
+            String namespace
+    ) {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("apiVersion", "networking.k8s.io/v1");
+        root.put("kind", "NetworkPolicy");
+        ObjectNode metadata = root.putObject("metadata");
+        metadata.put("name", networkPolicyName(jobName));
+        metadata.put("namespace", namespace);
+        ObjectNode labels = metadata.putObject("labels");
+        labels.put(RUN_LABEL, jobName);
+        labels.put("app.kubernetes.io/name", "datawise-python");
+        ObjectNode spec = root.putObject("spec");
+        spec.putObject("podSelector").putObject("matchLabels").put(RUN_LABEL, jobName);
+        spec.putArray("policyTypes").add("Ingress").add("Egress");
+        // Empty ingress/egress arrays intentionally omitted — with both policyTypes set,
+        // absence of rules denies all traffic for selected pods.
         return root.toPrettyString();
     }
 

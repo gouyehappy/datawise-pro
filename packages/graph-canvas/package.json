@@ -3,7 +3,7 @@
   "version": "5.0.0",
   "private": false,
   "type": "module",
-  "description": "DataWise graph canvas �� Vue Flow wrappers with Dw skin",
+  "description": "DataWise graph canvas — Vue Flow wrappers with Dw skin",
   "license": "MIT",
   "files": [
     "src",

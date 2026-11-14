@@ -9,6 +9,7 @@ export default {
     openedConsole: 'Opened SQL console from MCP proposal',
     submittedApproval: 'Submitted production SQL for approval and opened the console for review',
     approvalTeamMissing: 'No team shares this production connection — cannot submit approval',
+    decideFailed: 'Could not confirm this action. Please try again.',
     rejected: 'MCP proposal rejected',
     prodApprovalHint: 'Write SQL on a shared production connection: confirming creates a team approval ticket and does not execute.',
     riskSession: 'session',

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 /**
  * @deprecated Host-only product SQL-result grid (entitlement / masking / editing / ClauseBar /
  * plugins / mongo). Do **not** lift wholesale into `@datawise/data-grid`.
@@ -7,7 +7,7 @@
  * `GridCellDetailDialog` from `@datawise/data-grid` (host thin wrappers under this module).
  * Callers today: `QueryResultPane` (+ shim `@/core/components/DataGrid.vue`).
  */
-import {computed, nextTick, onBeforeUnmount, ref, shallowRef, toRef, watch, watchEffect} from 'vue'
+import {computed, onBeforeUnmount, ref, toRef, watch, watchEffect} from 'vue'
 import {useGridVirtualWindow} from '../useGridVirtualWindow'
 import {useGridColumnVirtualWindow} from '../useGridColumnVirtualWindow'
 import {useGridColumnLayout} from '../useGridColumnLayout'
@@ -18,13 +18,11 @@ import {useSuppressSelectionPlugins} from '../useSuppressSelectionPlugins'
 import {useGridRangeSelection} from '../useGridRangeSelection'
 import type {GridCellCoord, GridColumnLayoutState} from '../types'
 import {useI18n} from 'vue-i18n'
-import IconButton from '@/core/components/IconButton.vue'
 import DwDataGrid from './DwDataGrid.vue'
-import DwDataGridTable from './DwDataGridTable.vue'
 import GridColumnPanel from './GridColumnPanel.vue'
+import GridColumnStatsPanel from './GridColumnStatsPanel.vue'
 import {DwIcon} from '@/core/icons'
 import GridCellDetailDialog from './GridCellDetailDialog.vue'
-import GridRowFormView from './GridRowFormView.vue'
 import GridDateTimePicker from './GridDateTimePicker.vue'
 import {
   useGridPendingEdit,
@@ -36,30 +34,15 @@ import {useDataGridHoverPreview} from '../composables/useDataGridHoverPreview'
 import type {TableColumn, TableRow} from '@/core/types'
 import type {TableColumnDetail} from '@/shared/api/types'
 import {columnRowKey, readRowCell} from '@/core/utils/query-result-column'
-import {
-    filterAndSortDisplayRows as filterAndSortDisplayRowsWithColumns,
-    readRawDisplayRowCell as readRawDisplayRowCellWithText,
-} from '../services/grid-display-rows.service'
-import {
-    computeDisplayTotal,
-    computePagedRowIds,
-    computePagedRows,
-    computeRowOffset,
-    computeTotalPages,
-    resolveFormViewCanNext,
-    resolveFormViewCanPrev,
-    resolveFormViewRow,
-    resolveFormViewRowIndex,
-    resolveFormViewRowNumber,
-    resolveFormViewRowTotal,
-    resolveNextFormViewTarget,
-    toggleLayoutMode as toggleLayoutModeForGrid,
-} from '../services/grid-pagination.service'
+import {readRawDisplayRowCell as readRawDisplayRowCellWithText} from '../services/grid-display-rows.service'
+import {useDataGridPaging} from '../composables/useDataGridPaging'
+import {useDataGridDateTimePicker} from '../composables/useDataGridDateTimePicker'
 import {useDataGridExport} from '../composables/useDataGridExport'
 import {useDataGridCellDetail} from '../composables/useDataGridCellDetail'
 import {useDataGridEditable} from '../composables/useDataGridEditable'
+import {useDataGridCellContextMenu} from '../composables/useDataGridCellContextMenu'
+import {useDataGridHeaderContextMenu} from '../composables/useDataGridHeaderContextMenu'
 import {
-  formatCellFullValue,
   formatCellPreviewValue,
   isExpandableCellValue,
 } from '@/core/utils/cell-value-format'
@@ -73,11 +56,14 @@ import {
   type GridViewState,
 } from '@/core/data-grid/services/grid-view-state.service'
 import GridExportDialog from './GridExportDialog.vue'
-import GridClauseBar from './GridClauseBar.vue'
+import DataGridToolbarActions from './DataGridToolbarActions.vue'
+import DataGridToolbarEnd from './DataGridToolbarEnd.vue'
+import DataGridLoadingSkeleton from './DataGridLoadingSkeleton.vue'
+import DataGridFilterStrip from './DataGridFilterStrip.vue'
+import DataGridMainViews from './DataGridMainViews.vue'
 import {compileWhereExpression, rowMatchesWhereExpression} from '@/core/data-grid/services/grid-where-expression.service'
 import {ContextMenuHost} from '@/core/context-menu'
 import {useContextMenuAnchor} from '@/core/context-menu'
-import type {ContextMenuItem} from '@/core/types'
 import {useDataGridHost} from '@/core/data-grid/data-grid-host'
 import {
   columnDensityWidthScale,
@@ -85,11 +71,6 @@ import {
 import {
   readGridCellValue,
 } from '@/core/data-grid/services/grid-cell-context.service'
-import {
-  computeGridColumnStats,
-  formatGridColumnStatsLines,
-  type GridColumnStats,
-} from '@/core/data-grid/services/grid-column-stats.service'
 import {CONSOLE_GRID_PAGE_SIZE_OPTIONS} from '@/shared/config/editor-presets'
 import {resolveGridPageSizeOption} from '@/shared/config/grid-pagination'
 import {CURSOR_LOADED_ROWS_WARN_THRESHOLD} from '@/shared/config/query-result-limits'
@@ -97,12 +78,9 @@ import {readStoredEditorSettings} from '@/shared/config/editor-settings-storage'
 import {
   isGridColumnPrimaryKey,
   isGridNumericColumn,
-  isGridTemporalColumn,
   resolveGridColumnCommentLabel,
   resolveGridColumnTypeKind,
   resolveGridColumnTypeLabel,
-  resolveGridTemporalKind,
-  type GridTemporalKind,
 } from '../meta/column-meta'
 import {
   buildDocumentFromGridRow,
@@ -149,7 +127,7 @@ const props = withDefaults(
       fullToolbar?: boolean
       exportBaseName?: string
       exportTableName?: string
-      /** 鐢熶骇鐜绛夊満鏅缓璁粯璁ゅ紑鍚劚鏁忓鍑?*/
+      /** 生产环境等场景建议默认开启敏感导出脱敏 */
       suggestExportMask?: boolean
       editable?: boolean
       /** 只读原因（数据源不支持 DML 等）；非 editable 时在工具栏下展示 */
@@ -161,10 +139,10 @@ const props = withDefaults(
       tableAutoIncrement?: string | null
       onSubmitChanges?: (batch: GridPendingBatch) => Promise<boolean>
       hasMore?: boolean
-      /** 棣栨鎷夊彇琛?鏌ヨ缁撴灉涓紙鏃犲垪鏃跺睍绀哄姞杞芥€侊級 */
+      /** 首次拉取行/查询结果中（无列时展示加载态） */
       loading?: boolean
       cursorLoading?: boolean
-      /** 婊戝姩绐楀彛涓㈠純鐨勬渶鏃╄鏁帮紝鐢ㄤ簬琛屽彿椤哄欢 */
+      /** 滑动窗口丢弃的最旧行数，用于行号顺延 */
       cursorTrimmedRows?: number
       /**
        * Result hit a hard row cap with no server cursor (e.g. federated JOIN).
@@ -175,18 +153,18 @@ const props = withDefaults(
       truncatedCapRows?: number
       /** Show raise-limit action when truncated at cap (federated / hard maxRows). */
       canRaiseMaxRows?: boolean
-      /** 鐢熶骇鐜宸插惎鐢ㄨ緝浣庣殑杩斿洖琛屾暟涓婇檺 */
+      /** 生产环境已启用较低的返回行数上限 */
       productionPerfActive?: boolean
       showDmlActions?: boolean
       connectionId?: string
       database?: string
       showExport?: boolean
-      /** 鍙抽敭鑿滃崟锛欰I 鎽樿锛堢敱鐖剁粍浠跺鐞嗭級 */
+      /** 右键菜单：AI 摘要（由父组件处理） */
       showAiSummary?: boolean
       aiSummaryLoading?: boolean
-      /** 鍙抽敭鑿滃崟锛氭祴璇曟暟鎹紙鐢辩埗缁勪欢澶勭悊锛?*/
+      /** 右键菜单：测试数据（由父组件处理） */
       showFakeData?: boolean
-      /** Mongo 绛夋枃妗ｆ簮锛氱偣鍑昏鍙锋墦寮€鏁磋 JSON 鏂囨。 */
+      /** Mongo 等文档源：点击行号打开整行 JSON 文档 */
       enableRowDocumentView?: boolean
       /** 控制台：Alt+点击 / 右键回填 SQL 到编辑器 */
       enableSqlFill?: boolean
@@ -434,7 +412,7 @@ const scrollableColumns = computed(() =>
 )
 
 
-// 琛ㄦ暟鎹紪杈戯細鏈湴鏆傚瓨 + 鎵归噺淇濆瓨锛堣 useGridPendingEdit锛?
+// 表数据编辑：本地暂存 + 批量保存（见 useGridPendingEdit）
 const pendingEdit = useGridPendingEdit({
   columns: () => gridColumns.value,
   rows: () => gridRows.value,
@@ -468,133 +446,71 @@ const {
   discardPending,
 } = pendingEdit
 
-const pageSize = computed(() => {
-  const parsed = Number(pageSizeModel.value)
-  if (Number.isFinite(parsed) && parsed > 0) return parsed
-  return Number(
-      resolveGridPageSizeOption(
-          pageSizeOptions,
-          readStoredEditorSettings().defaultGridPageSize,
-      ),
-  )
+const {
+  datePickerTarget,
+  datePickerStyle,
+  datePickerKeepOpen,
+  datePickerValue,
+  closeDateTimePicker,
+  onDatePickerChange,
+  onDatePickerPointerDown,
+  showDateTimeIcon,
+  onDateTimeIconClick,
+} = useDataGridDateTimePicker({
+  displayRows,
+  gridColumns,
+  getCellDisplayText,
+  setCellValue,
+  editingCell,
+  startEditCell,
+  cellInputRef,
+  columnDetails: () => props.columnDetails,
+  canUpdate: () => props.canUpdate,
+  // 下列依赖由 useDataGridEditable 产出，晚于本 composable 构造，故惰性取值
+  inlineEnabled: () => inlineEnabled.value,
+  isCellInputVisible: (item, columnName) => isCellInputVisible(item, columnName),
+  isCellActive: (item, columnName) => isCellActive(item, columnName),
 })
+
+
 
 function readRawDisplayRowCell(item: GridDisplayRow, column: TableColumn): unknown {
   return readRawDisplayRowCellWithText(item, column, getCellDisplayText)
 }
 
-function filterAndSortDisplayRows(rows: GridDisplayRow[], state: GridViewState): GridDisplayRow[] {
-  return filterAndSortDisplayRowsWithColumns(rows, gridColumns.value, state, getCellDisplayText)
-}
-
-/** Debounce text filters so each keystroke does not re-scan the full loaded set. */
-const debouncedFilterView = shallowRef<{
-  whereExpression: string
-  columnFilters: Record<string, string>
-} | null>(null)
-let filterDebounceTimer: ReturnType<typeof setTimeout> | null = null
-
-watch(
-    () => {
-      const state = viewState.value
-      if (!state) return null
-      return {
-        whereExpression: state.whereExpression ?? '',
-        columnFilters: state.columnFilters,
-      }
-    },
-    (next) => {
-      if (filterDebounceTimer) clearTimeout(filterDebounceTimer)
-      if (!next) {
-        debouncedFilterView.value = null
-        return
-      }
-      filterDebounceTimer = setTimeout(() => {
-        debouncedFilterView.value = {
-          whereExpression: next.whereExpression,
-          columnFilters: {...next.columnFilters},
-        }
-        filterDebounceTimer = null
-      }, 150)
-    },
-    {deep: true, immediate: true},
-)
-
-const viewFilteredDisplayRows = computed(() => {
-  if (!columnFiltersEnabled.value || !viewState.value) return displayRows.value
-  const filters = debouncedFilterView.value
-  const stateForFilter: GridViewState = {
-    ...viewState.value,
-    whereExpression: filters?.whereExpression ?? viewState.value.whereExpression,
-    columnFilters: filters?.columnFilters ?? viewState.value.columnFilters,
-  }
-  return filterAndSortDisplayRows(displayRows.value, stateForFilter)
+const {
+  pageSize,
+  viewFilteredDisplayRows,
+  totalPages,
+  displayTotal,
+  loadedRowsWarning,
+  cursorWindowTrimmed,
+  pagedRows,
+  pagedRowIds,
+  rowOffset,
+  formViewRow,
+  formViewRowIndex,
+  formViewRowNumber,
+  formViewRowTotal,
+  formViewCanPrev,
+  formViewCanNext,
+  selectFormViewRowByOffset,
+  toggleLayoutMode,
+} = useDataGridPaging({
+  pageSizeModel,
+  pageSizeOptions,
+  viewState,
+  columnFiltersEnabled,
+  displayRows,
+  gridColumns,
+  currentPage,
+  layoutMode,
+  selectedRowId,
+  getCellDisplayText,
+  loadedRowCount: () => gridRows.value.length,
+  cursorTrimmedRows: () => props.cursorTrimmedRows ?? 0,
+  selectRow,
 })
-
-const totalPages = computed(() =>
-    computeTotalPages(viewFilteredDisplayRows.value.length, pageSize.value),
-)
-
-const displayTotal = computed(() =>
-    computeDisplayTotal(viewFilteredDisplayRows.value.length),
-)
-
-const loadedRowsWarning = computed(() =>
-    gridRows.value.length >= CURSOR_LOADED_ROWS_WARN_THRESHOLD,
-)
-
-const cursorWindowTrimmed = computed(() => (props.cursorTrimmedRows ?? 0) > 0)
-
-const pagedRows = computed(() =>
-    computePagedRows(viewFilteredDisplayRows.value, currentPage.value, pageSize.value),
-)
-
-const pagedRowIds = computed(() => computePagedRowIds(pagedRows.value))
-
-const rowOffset = computed(() =>
-    computeRowOffset(props.cursorTrimmedRows ?? 0, currentPage.value, pageSize.value),
-)
-
-const formViewRow = computed(() =>
-    resolveFormViewRow(viewFilteredDisplayRows.value, selectedRowId.value),
-)
-
-/** 鍦ㄨ繃婊ゅ悗鐨勫叏閲忚涓殑涓嬫爣锛堣法椤碉級 */
-const formViewRowIndex = computed(() =>
-    resolveFormViewRowIndex(viewFilteredDisplayRows.value, formViewRow.value),
-)
-
-const formViewRowNumber = computed(() =>
-    resolveFormViewRowNumber(formViewRowIndex.value, props.cursorTrimmedRows ?? 0),
-)
-
-const formViewRowTotal = computed(() =>
-    resolveFormViewRowTotal(viewFilteredDisplayRows.value, props.cursorTrimmedRows ?? 0),
-)
-
-const formViewCanPrev = computed(() => resolveFormViewCanPrev(formViewRowIndex.value))
-const formViewCanNext = computed(() =>
-    resolveFormViewCanNext(formViewRowIndex.value, viewFilteredDisplayRows.value),
-)
-
-function selectFormViewRowByOffset(delta: number) {
-  const rows = viewFilteredDisplayRows.value
-  if (!rows.length) return
-  const currentIndex = formViewRowIndex.value >= 0 ? formViewRowIndex.value : 0
-  const target = resolveNextFormViewTarget(rows, currentIndex, delta, pageSize.value)
-  if (!target.row) return
-  if (currentPage.value !== target.page) {
-    currentPage.value = target.page
-  }
-  selectRow(target.row)
-}
-
-function toggleLayoutMode() {
-  layoutMode.value = toggleLayoutModeForGrid(layoutMode.value)
-  if (layoutMode.value === 'form' && formViewRow.value) {
-    selectRow(formViewRow.value)
-  }
-}
 
 const gridRootRef = ref<HTMLElement | null>(null)
 useSuppressSelectionPlugins(gridRootRef)
@@ -961,90 +877,6 @@ function toggleWrapCells() {
 }
 
 const activeCell = ref<{ rowId: string; column: string } | null>(null)
-const datePickerTarget = ref<{rowId: string; column: string; kind: GridTemporalKind} | null>(null)
-const datePickerStyle = ref<{top: string; left: string} | undefined>()
-const datePickerKeepOpen = ref(false)
-
-const datePickerValue = computed(() => {
-  const target = datePickerTarget.value
-  if (!target) return ''
-  const item = displayRows.value.find((row) => row.id === target.rowId)
-  if (!item) return ''
-  return getCellDisplayText(item, target.column)
-})
-
-function updateDatePickerPlacement() {
-  const input = cellInputRef.value
-  if (!input) return
-  const rect = input.getBoundingClientRect()
-  const width = 268
-  const left = Math.min(rect.left, window.innerWidth - width - 8)
-  datePickerStyle.value = {
-    top: `${Math.min(rect.bottom + 4, window.innerHeight - 320)}px`,
-    left: `${Math.max(8, left)}px`,
-  }
-}
-
-function openDateTimePicker(item: typeof displayRows.value[number], columnName: string) {
-  const column = gridColumns.value.find((col) => col.name === columnName)
-  if (!column) {
-    datePickerTarget.value = null
-    return
-  }
-  const kind = resolveGridTemporalKind(column, props.columnDetails)
-  if (!kind) {
-    datePickerTarget.value = null
-    return
-  }
-  datePickerTarget.value = {rowId: item.id, column: columnName, kind}
-  void nextTick(updateDatePickerPlacement)
-}
-
-function closeDateTimePicker() {
-  datePickerTarget.value = null
-  datePickerKeepOpen.value = false
-}
-
-function onDatePickerChange(value: string) {
-  const target = datePickerTarget.value
-  if (!target) return
-  const item = displayRows.value.find((row) => row.id === target.rowId)
-  if (!item) return
-  setCellValue(item, target.column, value)
-}
-
-function onDatePickerPointerDown() {
-  datePickerKeepOpen.value = true
-}
-
-function isTemporalColumn(column: TableColumn): boolean {
-  return isGridTemporalColumn(column, props.columnDetails)
-}
-
-function showDateTimeIcon(item: typeof displayRows.value[number], column: TableColumn): boolean {
-  return inlineEnabled.value && props.canUpdate && !item.pendingDelete
-      && isTemporalColumn(column)
-      && (
-        item.kind === 'insert'
-        || isCellActive(item, column.name)
-        || isCellInputVisible(item, column.name)
-      )
-}
-
-async function onDateTimeIconClick(item: typeof displayRows.value[number], columnName: string) {
-  datePickerKeepOpen.value = true
-  const openSame = datePickerTarget.value?.rowId === item.id
-      && datePickerTarget.value?.column === columnName
-  if (openSame) {
-    closeDateTimePicker()
-    return
-  }
-  if (!editingCell.value || editingCell.value.rowId !== item.id || editingCell.value.column !== columnName) {
-    await startEditCell(item, columnName)
-  }
-  await nextTick()
-  openDateTimePicker(item, columnName)
-}
 
 watch(selectedRowId, (rowId) => {
   if (!rowId) activeCell.value = null
@@ -1054,9 +886,9 @@ watch(hasPendingChanges, (pending) => {
   if (!pending) activeCell.value = null
 })
 
+// 日期选择器关闭由 useDataGridDateTimePicker 自行监听 editingCell
 watch(editingCell, (cell) => {
-  if (!cell) closeDateTimePicker()
-  else hideCellHoverPreview()
+  if (cell) hideCellHoverPreview()
 })
 
 watch(gridBodyRef, (el, _prev, onCleanup) => {
@@ -1067,7 +899,6 @@ watch(gridBodyRef, (el, _prev, onCleanup) => {
 }, {immediate: true})
 
 onBeforeUnmount(() => {
-  if (filterDebounceTimer) clearTimeout(filterDebounceTimer)
   hideCellHoverPreview()
 })
 
@@ -1314,138 +1145,41 @@ const {
   close: closeCellMenu,
 } = useContextMenuAnchor<{ item: GridDisplayRow; column: TableColumn }>()
 
-const cellMenuItems = computed<ContextMenuItem[]>(() => {
-  const items: ContextMenuItem[] = [
-    {id: 'copy-cell', label: t('dataGrid.contextMenu.copyCell'), icon: 'copy'},
-    {id: 'copy-row', label: t('dataGrid.contextMenu.copyRow'), icon: 'copy'},
-  ]
-
-  // 与工具栏一致：按 editable 显示，不依赖 columnDetails 是否已加载
-  if (props.editable) {
-    items.push(
-        {id: 'divider-edit', label: '', divider: true},
-    )
-    if (props.canUpdate) {
-      items.push({id: 'fill-down', label: t('dataGrid.contextMenu.fillDown')})
-    }
-    items.push(
-        {id: 'add-row', label: t('dataGrid.addRow'), icon: 'plus'},
-        {
-          id: 'delete-row',
-          label: t('dataGrid.deleteRow'),
-          icon: 'minus',
-          disabled: !deleteEnabled.value,
-          danger: true,
-        },
-    )
-  }
-
-  const hasDataActions =
-      (exportEnabled.value && props.showExport && displayColumns.value.length > 0)
-      || props.showDmlActions
-  if (hasDataActions) {
-    items.push({id: 'divider-data', label: '', divider: true})
-    if (props.showDmlActions) {
-      items.push({id: 'generate-dml', label: t('dataGrid.generateDml'), icon: 'ddl'})
-    }
-    if (exportEnabled.value && props.showExport && displayColumns.value.length > 0) {
-      items.push({id: 'export', label: t('dataGrid.export'), icon: 'export'})
-    }
-  }
-
-  if (props.showFakeData || props.showAiSummary) {
-    items.push({id: 'divider-extra', label: '', divider: true})
-    if (props.showFakeData) {
-      items.push({id: 'fake-data', label: t('workspace.fakeData.toolbar'), icon: 'dices'})
-    }
-    if (props.showAiSummary) {
-      items.push({
-        id: 'ai-summary',
-        label: props.aiSummaryLoading
-            ? t('queryResult.aiSummaryLoading')
-            : t('queryResult.aiSummary'),
-        icon: 'bot',
-        disabled: props.aiSummaryLoading,
-      })
-    }
-  }
-
-  return items
+const {
+  cellMenuItems,
+  onCellContextMenu,
+  copyContextText: copyGridContextText,
+  onCellMenuSelect,
+} = useDataGridCellContextMenu({
+  t,
+  flags: () => ({
+    editable: props.editable,
+    canUpdate: props.canUpdate,
+    showExport: props.showExport,
+    showDmlActions: props.showDmlActions,
+    showFakeData: props.showFakeData,
+    showAiSummary: props.showAiSummary,
+    aiSummaryLoading: props.aiSummaryLoading,
+  }),
+  target: cellMenuTarget,
+  openMenu: openCellMenu,
+  closeMenu: closeCellMenu,
+  activeCell,
+  deleteEnabled,
+  exportEnabled,
+  displayColumns,
+  pagedRows,
+  getCellDisplayText,
+  setCellValue,
+  selectRow,
+  showSuccessToast: layout.showSuccessToast,
+  onAddRowClick,
+  onDeleteRowClick,
+  onGenerateDmlClick,
+  openExportDialog,
+  emitGenerateFakeData: () => emit('generate-fake-data'),
+  emitRequestAiSummary: () => emit('request-ai-summary'),
 })
-
-function onCellContextMenu(event: MouseEvent, item: GridDisplayRow, column: TableColumn) {
-  event.preventDefault()
-  if (props.editable) {
-    selectRow(item)
-    activeCell.value = {rowId: item.id, column: column.name}
-  }
-  openCellMenu(event, {item, column})
-}
-
-async function copyGridContextText(
-    text: string,
-    toastKey: 'copied' | 'statsCopied',
-) {
-  if (!text.trim()) return
-  await navigator.clipboard.writeText(text)
-  layout.showSuccessToast(t(`dataGrid.contextMenu.${toastKey}`))
-}
-
-async function onCellMenuSelect(id: string) {
-  const target = cellMenuTarget.value
-  closeCellMenu()
-  if (!target) return
-  const {item, column} = target
-  const cellValue = item.originalRow ? readGridCellValue(item.originalRow, column) : null
-
-  if (id === 'fill-down') {
-    if (!props.canUpdate) return
-    const startIdx = pagedRows.value.findIndex((row) => row.id === item.id)
-    if (startIdx < 0) return
-    // Draft 约定：null 展示为空串，与 setCellValue / formatCellDraft 一致
-    const text = getCellDisplayText(item, column.name)
-    for (let i = startIdx + 1; i < pagedRows.value.length; i++) {
-      const row = pagedRows.value[i]
-      if (!row || row.pendingDelete) continue
-      setCellValue(row, column.name, text)
-    }
-    return
-  }
-  if (id === 'copy-cell') {
-    await copyGridContextText(formatCellFullValue(cellValue), 'copied')
-    return
-  }
-  if (id === 'copy-row') {
-    const text = displayColumns.value
-        .map((col) => getCellDisplayText(item, col.name))
-        .join('\t')
-    await copyGridContextText(text, 'copied')
-    return
-  }
-  if (id === 'add-row') {
-    await onAddRowClick()
-    return
-  }
-  if (id === 'delete-row') {
-    onDeleteRowClick()
-    return
-  }
-  if (id === 'generate-dml') {
-    onGenerateDmlClick()
-    return
-  }
-  if (id === 'export') {
-    openExportDialog()
-    return
-  }
-  if (id === 'fake-data') {
-    emit('generate-fake-data')
-    return
-  }
-  if (id === 'ai-summary') {
-    emit('request-ai-summary')
-  }
-}
 
 const {
   visible: headerMenuVisible,
@@ -1455,120 +1189,135 @@ const {
   close: closeHeaderMenu,
 } = useContextMenuAnchor<TableColumn>()
 
-const statsColumnName = ref<string | null>(null)
-
-const headerMenuItems = computed<ContextMenuItem[]>(() => {
-  const column = headerMenuTarget.value
-  const columnKey = column ? columnRowKey(column) : ''
-  const pinned = columnKey ? isColumnPinned(columnKey) : false
-  const pinnedRight = columnKey ? isColumnPinnedRight(columnKey) : false
-  const items: ContextMenuItem[] = [
-    {id: 'toggle-column-stats', label: t('dataGrid.contextMenu.toggleColumnStats')},
-    {id: 'copy-column-stats', label: t('dataGrid.contextMenu.copyColumnStats')},
-    {id: 'divider-layout', label: '', divider: true},
-    {id: 'auto-size-column', label: t('dataGrid.contextMenu.autoSizeColumn')},
-    {
-      id: 'toggle-pin-column',
-      label: pinned
-          ? t('dataGrid.contextMenu.unpinColumn')
-          : t('dataGrid.contextMenu.pinColumn'),
-    },
-    {
-      id: 'toggle-pin-column-right',
-      label: pinnedRight
-          ? t('dataGrid.contextMenu.unpinColumn')
-          : t('dataGrid.contextMenu.pinColumnRight'),
-    },
-    {id: 'hide-column', label: t('dataGrid.contextMenu.hideColumn')},
-    {id: 'manage-columns', label: t('dataGrid.contextMenu.manageColumns')},
-  ]
-  if (props.enableSqlFill) {
-    items.push(
-        {id: 'divider-sql-fill', label: '', divider: true},
-        {id: 'insert-order-by', label: t('dataGrid.contextMenu.insertOrderBy')},
-        {id: 'insert-order-by-desc', label: t('dataGrid.contextMenu.insertOrderByDesc')},
-        {id: 'rewrite-order-by', label: t('dataGrid.contextMenu.rewriteOrderBy')},
-        {id: 'rewrite-order-by-desc', label: t('dataGrid.contextMenu.rewriteOrderByDesc')},
-    )
-  }
-  return items
-})
-
-function resolveStatsRows(): TableRow[] {
-  return viewFilteredDisplayRows.value
-      .filter((row) => row.kind !== 'insert' && row.originalRow)
-      .map((row) => row.originalRow!)
-}
-
-const activeColumnStats = computed<GridColumnStats | null>(() => {
-  const name = statsColumnName.value
-  if (!name) return null
-  const column = gridColumns.value.find((entry) => entry.name === name)
-  if (!column) return null
-  return computeGridColumnStats(column, resolveStatsRows())
-})
-
-function onHeaderContextMenu(event: MouseEvent, column: TableColumn) {
-  event.preventDefault()
-  openHeaderMenu(event, column)
-}
-
-async function onHeaderMenuSelect(id: string) {
-  const column = headerMenuTarget.value
-  closeHeaderMenu()
-  if (!column) return
-
-  if (id === 'toggle-column-stats') {
-    statsColumnName.value = statsColumnName.value === column.name ? null : column.name
-    return
-  }
-
-  if (id === 'auto-size-column') {
-    const samples = pagedRows.value.slice(0, 80).map((row) => getCellDisplayText(row, column.name))
-    autoSizeColumn(columnRowKey(column), samples, {headerText: column.name})
-    return
-  }
-  if (id === 'toggle-pin-column') {
-    togglePinned(columnRowKey(column), 'left')
-    return
-  }
-  if (id === 'toggle-pin-column-right') {
-    togglePinned(columnRowKey(column), 'right')
-    return
-  }
-  if (id === 'hide-column') {
-    setColumnHidden(columnRowKey(column), true)
-    return
-  }
-  if (id === 'manage-columns') {
+const {
+  statsColumnName,
+  headerMenuItems,
+  activeColumnStats,
+  onHeaderContextMenu,
+  onHeaderMenuSelect,
+  dismissColumnStats,
+} = useDataGridHeaderContextMenu({
+  t,
+  enableSqlFill: () => props.enableSqlFill,
+  target: headerMenuTarget,
+  openMenu: openHeaderMenu,
+  closeMenu: closeHeaderMenu,
+  gridColumns,
+  viewFilteredDisplayRows,
+  pagedRows,
+  columnKey: columnRowKey,
+  isColumnPinned,
+  isColumnPinnedRight,
+  autoSizeColumn,
+  togglePinned,
+  setColumnHidden,
+  openColumnPanel: () => {
     columnPanelOpen.value = true
-    return
-  }
+  },
+  getCellDisplayText,
+  copyContextText: copyGridContextText,
+  emitInsertOrderBy: (payload) => emit('insert-order-by', payload),
+  emitRewriteOrderBy: (payload) => emit('rewrite-order-by', payload),
+})
 
-  if (id === 'copy-column-stats') {
-    const stats = computeGridColumnStats(column, resolveStatsRows())
-    await copyGridContextText(formatGridColumnStatsLines(stats).join('\n'), 'statsCopied')
-    return
-  }
-  if (id === 'insert-order-by') {
-    emit('insert-order-by', {column: column.name, direction: 'asc'})
-    return
-  }
-  if (id === 'insert-order-by-desc') {
-    emit('insert-order-by', {column: column.name, direction: 'desc'})
-    return
-  }
-  if (id === 'rewrite-order-by') {
-    emit('rewrite-order-by', {column: column.name, direction: 'asc'})
-    return
-  }
-  if (id === 'rewrite-order-by-desc') {
-    emit('rewrite-order-by', {column: column.name, direction: 'desc'})
-  }
+/** C7: bind/on objects so DwDataGridTable multi-arg emits are not collapsed. */
+const formViewBind = computed(() => ({
+  columns: displayColumns.value,
+  columnDetails: props.columnDetails ?? [],
+  pkColumns: props.pkColumns ?? [],
+  row: formViewRow.value,
+  rowNumber: formViewRowNumber.value,
+  rowTotal: formViewRowTotal.value,
+  canPrev: formViewCanPrev.value,
+  canNext: formViewCanNext.value,
+  editable: inlineEnabled.value,
+  canUpdate: props.canUpdate,
+  getCellText: (columnName: string) =>
+      formViewRow.value ? getCellDisplayText(formViewRow.value, columnName) : '',
+  readCellValue: (column: TableColumn) =>
+      formViewRow.value ? readRawDisplayRowCell(formViewRow.value, column) : null,
+}))
+
+const formViewOn: Record<string, Function> = {
+  selectPrev: () => selectFormViewRowByOffset(-1),
+  selectNext: () => selectFormViewRowByOffset(1),
+  fieldChange: (columnName: string, value: string) => {
+    if (formViewRow.value) setCellValue(formViewRow.value, columnName, value)
+  },
+  openEditor: onFormViewOpenEditor,
 }
 
-function dismissColumnStats() {
-  statsColumnName.value = null
+const tableViewBind = computed(() => ({
+  displayColumns: renderColumns.value,
+  pinnedLeftCount: pinnedLeftRenderColumns.value.length,
+  pinnedRightCount: pinnedRightRenderColumns.value.length,
+  columnPaddingLeftPx: columnPaddingLeftPx.value,
+  columnPaddingRightPx: columnPaddingRightPx.value,
+  virtualRows: virtualPagedRows.value,
+  useVirtual: useGridVirtual.value,
+  virtualPaddingTop: virtualPaddingTop.value,
+  virtualPaddingBottom: virtualPaddingBottom.value,
+  tableColumnCount: tableColumnCount.value,
+  tableMinWidthPx: scaledTableMinWidthPx.value,
+  rowOffset: rowOffset.value,
+  resizingKey: resizingKey.value,
+  dragFromKey: dragFromKey.value,
+  dragOverKey: dragOverKey.value,
+  columnFiltersEnabled: columnFiltersEnabled.value,
+  sortColumn: viewState.value?.sortColumn ?? null,
+  statsColumnName: statsColumnName.value,
+  inlineEnabled: inlineEnabled.value,
+  enableRowDocumentView: props.enableRowDocumentView,
+  indexColSelectableTitle: t('dataGrid.documentView.openHint'),
+  dateTimePickerTitle: t('dataGrid.dateTimePicker.title'),
+  nullValueLabel: t('common.nullValue'),
+  columnColStyle,
+  isPrimaryKeyColumn,
+  isNumericColumn,
+  columnTypeKind,
+  typeColoring: props.typeColoring,
+  columnTypeLabel,
+  columnCommentLabel,
+  sortDirection,
+  isRowSelected,
+  isRowMultiSelected,
+  isRowModified,
+  isRowPendingDelete,
+  isCellActive,
+  isCellInputVisible,
+  showDateTimeIcon,
+  isDatePickerOpen,
+  getCellDisplayText,
+  cellBackingText,
+  bindEditingInput,
+  isColumnPinned,
+  isColumnPinnedRight,
+  isCellInRange,
+  wrapCells: wrapCells.value,
+}))
+
+const tableViewOn: Record<string, Function> = {
+  headerClick: onHeaderClick,
+  headerContextMenu: onHeaderContextMenu,
+  headerDragStart: onHeaderDragStart,
+  headerDragOver: onHeaderDragOver,
+  headerDrop: onHeaderDrop,
+  headerDragEnd: onHeaderDragEnd,
+  resizeStart: onResizeStart,
+  resizeDblClick: onResizeDblClick,
+  indexColClick: onIndexColClick,
+  cellMouseDown: onCellMouseDown,
+  cellMouseUp: onCellMouseUp,
+  cellClick: onCellClick,
+  cellDblClick: onCellDblClick,
+  cellMouseEnter: onCellMouseEnterForGrid,
+  cellMouseLeave: onCellMouseLeave,
+  cellContextMenu: onCellContextMenu,
+  cellInput: onCellInput,
+  cellKeydownEnter: onCellKeydownEnter,
+  cellInputBlur: onCellInputBlur,
+  cellInputFocus: onCellInputFocus,
+  dateTimeIconClick: onDateTimeIconClick,
 }
 </script>
 
@@ -1602,369 +1351,106 @@ function dismissColumnStats() {
         class="data-grid__dw-shell"
     >
       <template #toolbar-actions>
-        <template v-if="!fullToolbar">
-          <span class="page-indicator page-indicator--solo">{{ currentPage }}</span>
-          <span class="pager-total">{{ t('dataGrid.total', {count: displayTotal}) }}</span>
-        </template>
-        <IconButton
-            v-if="!externalViewOptions"
-            class="grid-action-neutral"
-            :active="wrapCells"
-            :title="wrapCells ? t('dataGrid.unwrapCells') : t('dataGrid.wrapCells')"
-            @click="toggleWrapCells"
-        >
-          <DwIcon class="grid-glyph" name="format" fit :stroke-width="1.75"/>
-        </IconButton>
-        <IconButton
-            v-if="!externalViewOptions && fullToolbar && viewFilteredDisplayRows.length"
-            class="grid-action-neutral"
-            :active="layoutMode === 'form'"
-            :title="layoutMode === 'form' ? t('dataGrid.formView.showGrid') : t('dataGrid.formView.showForm')"
-            @click="toggleLayoutMode"
-        >
-          <DwIcon class="grid-glyph" name="table" fit :stroke-width="1.75"/>
-        </IconButton>
-        <template v-if="fullToolbar">
-          <IconButton
-              class="grid-action-neutral"
-              :title="t('dataGrid.refresh')"
-              :disabled="loading"
-              @click="emit('refresh')"
-          >
-            <DwIcon class="grid-glyph" name="refresh" fit :stroke-width="1.75"/>
-          </IconButton>
-        </template>
+        <DataGridToolbarActions
+            :full-toolbar="Boolean(fullToolbar)"
+            :external-view-options="Boolean(externalViewOptions)"
+            :wrap-cells="wrapCells"
+            :layout-mode="layoutMode"
+            :loading="Boolean(loading)"
+            :has-filtered-rows="viewFilteredDisplayRows.length > 0"
+            :current-page="currentPage"
+            :display-total="Number(displayTotal)"
+            @toggle-wrap="toggleWrapCells"
+            @toggle-layout="toggleLayoutMode"
+            @refresh="emit('refresh')"
+        />
       </template>
 
       <template v-if="fullToolbar" #toolbar-end>
-        <span v-if="loadedRowsWarning" class="loaded-rows-hint">
-          {{ t('dataGrid.loadedRowsWarning', {count: gridRows.length}) }}
-        </span>
-        <span v-if="cursorWindowTrimmed" class="loaded-rows-hint">
-          {{ t('dataGrid.cursorWindowTrimmed', {count: cursorTrimmedRows ?? 0}) }}
-        </span>
-        <span v-if="productionPerfActive" class="loaded-rows-hint">
-          {{ t('dataGrid.productionPerfActive') }}
-        </span>
-        <span v-if="truncatedAtCap" class="loaded-rows-hint loaded-rows-hint--warn" role="status">
-          {{
-            truncatedCapRows
-              ? t('dataGrid.truncatedAtCapWithLimit', {count: gridRows.length, limit: truncatedCapRows})
-              : t('dataGrid.truncatedAtCap', {count: gridRows.length})
-          }}
-        </span>
-        <div v-if="editable" class="grid-toolbar-group" role="group" :aria-label="t('dataGrid.editGroup')">
-          <IconButton
-              class="grid-action-save"
-              :title="submitActionTitle"
-              :disabled="!submitEnabled"
-              @click="onSubmitClick"
-          >
-            <DwIcon class="grid-glyph" name="submit" fit :stroke-width="3.2"/>
-          </IconButton>
-          <IconButton
-              class="grid-action-cancel"
-              :title="discardActionTitle"
-              :disabled="!discardEnabled"
-              @click="onDiscardClick"
-          >
-            <DwIcon class="grid-glyph" name="rollback" fit :stroke-width="3.2"/>
-          </IconButton>
-          <IconButton class="grid-action-neutral" :title="t('dataGrid.addRow')" @click="onAddRowClick">
-            <DwIcon class="grid-glyph" name="plus" fit :stroke-width="3.2"/>
-          </IconButton>
-          <IconButton
-              class="grid-action-neutral"
-              :title="deleteActionTitle"
-              :disabled="!deleteEnabled"
-              @click="onDeleteRowClick"
-          >
-            <DwIcon class="grid-glyph" name="minus" fit :stroke-width="3.2"/>
-          </IconButton>
-          <span
-              v-if="inlineEnabled"
-              class="grid-hint-tip"
-              :title="t('dataGrid.editHint')"
-              :aria-label="t('dataGrid.editHint')"
-          >
-            <DwIcon class="grid-glyph" name="help" fit :stroke-width="1.5"/>
-          </span>
-        </div>
-        <span
-            v-if="readOnlyHint && !editable"
-            class="grid-hint-tip"
-            :title="readOnlyHint"
-            :aria-label="readOnlyHint"
+        <DataGridToolbarEnd
+            :loaded-rows-warning="loadedRowsWarning"
+            :loaded-rows-count="gridRows.length"
+            :cursor-window-trimmed="cursorWindowTrimmed"
+            :cursor-trimmed-rows="cursorTrimmedRows"
+            :production-perf-active="Boolean(productionPerfActive)"
+            :truncated-at-cap="Boolean(truncatedAtCap)"
+            :truncated-cap-rows="truncatedCapRows"
+            :editable="Boolean(editable)"
+            :submit-action-title="submitActionTitle"
+            :submit-enabled="submitEnabled"
+            :discard-action-title="discardActionTitle"
+            :discard-enabled="discardEnabled"
+            :delete-action-title="deleteActionTitle"
+            :delete-enabled="deleteEnabled"
+            :inline-enabled="inlineEnabled"
+            :read-only-hint="readOnlyHint"
+            :show-dml-actions="showDmlActions"
+            :export-enabled="exportEnabled"
+            :show-export="showExport"
+            :has-more="Boolean(hasMore)"
+            :can-raise-max-rows="Boolean(canRaiseMaxRows)"
+            :cursor-loading="Boolean(cursorLoading)"
+            @submit="onSubmitClick"
+            @discard="onDiscardClick"
+            @add-row="onAddRowClick"
+            @delete-row="onDeleteRowClick"
+            @generate-dml="onGenerateDmlClick"
+            @export="openExportDialog"
+            @raise-max-rows="emit('raise-max-rows')"
+            @load-more="emit('load-more')"
         >
-          <DwIcon class="grid-glyph" name="help" fit :stroke-width="1.5"/>
-        </span>
-        <div
-            v-if="showDmlActions || $slots['toolbar-extra'] || (exportEnabled && showExport) || $slots['toolbar-tail']"
-            class="grid-toolbar-group"
-            role="group"
-            :aria-label="t('dataGrid.toolsGroup')"
-        >
-          <slot name="toolbar-extra"/>
-          <button
-              v-if="showDmlActions"
-              type="button"
-              class="grid-label-btn"
-              :title="t('dataGrid.generateDmlSelectedHint')"
-              @click="onGenerateDmlClick"
-          >
-            <DwIcon class="grid-glyph" name="ddl" fit :stroke-width="1.75"/>
-            <span>{{ t('dataGrid.generateDml') }}</span>
-          </button>
-          <button
-              v-if="exportEnabled && showExport"
-              type="button"
-              class="grid-label-btn"
-              @click="openExportDialog"
-          >
-            <DwIcon class="grid-glyph" name="export" fit :stroke-width="1.75"/>
-            <span>{{ t('dataGrid.export') }}</span>
-          </button>
-          <slot name="toolbar-tail"/>
-        </div>
-        <div
-            v-if="(hasMore && !truncatedAtCap) || (truncatedAtCap && canRaiseMaxRows)"
-            class="grid-toolbar-group"
-            role="group"
-            :aria-label="t('dataGrid.loadGroup')"
-        >
-          <button
-              v-if="truncatedAtCap && canRaiseMaxRows"
-              type="button"
-              class="grid-label-btn"
-              @click="emit('raise-max-rows')"
-          >
-            <DwIcon class="grid-glyph" name="arrow-up-down" fit :stroke-width="1.5"/>
-            <span>{{ t('dataGrid.raiseMaxRows') }}</span>
-          </button>
-          <button
-              v-if="hasMore && !truncatedAtCap"
-              type="button"
-              class="grid-label-btn"
-              :disabled="cursorLoading"
-              @click="emit('load-more')"
-          >
-            <DwIcon
-                class="grid-glyph"
-                :class="{ 'grid-glyph--spin': cursorLoading }"
-                :name="cursorLoading ? 'refresh' : 'chevrons-down'"
-                fit
-                :stroke-width="1.5"
-            />
-            <span>{{ cursorLoading ? t('dataGrid.loadingMore') : t('dataGrid.loadMore') }}</span>
-          </button>
-        </div>
+          <template #toolbar-extra>
+            <slot name="toolbar-extra"/>
+          </template>
+          <template #toolbar-tail>
+            <slot name="toolbar-tail"/>
+          </template>
+        </DataGridToolbarEnd>
       </template>
 
       <template #below-toolbar>
-        <GridClauseBar
-            v-if="columnFiltersEnabled"
-            v-model:where="whereClauseDraft"
-            v-model:order="orderClauseDraft"
-            :columns="filterColumnHints"
-            :where-invalid="whereClauseInvalid"
-            :order-invalid="orderClauseInvalid"
+        <DataGridFilterStrip
+            :column-filters-enabled="columnFiltersEnabled"
+            :show-filter-bar="showFilterBar"
+            :where-clause-draft="whereClauseDraft"
+            :order-clause-draft="orderClauseDraft"
+            :filter-column-hints="filterColumnHints"
+            :where-clause-invalid="whereClauseInvalid"
+            :order-clause-invalid="orderClauseInvalid"
+            :where="where"
+            :order-by="orderBy"
+            @update:where-clause-draft="whereClauseDraft = $event"
+            @update:order-clause-draft="orderClauseDraft = $event"
             @apply="applyClauseBar()"
             @focus-change="onClauseBarFocusChange"
         />
-        <div v-else-if="showFilterBar" class="filter-bar">
-          <div class="filter-left">
-            <DwIcon class="filter-icon" name="filter" size="xs" :stroke-width="1.6"/>
-            <span class="keyword">WHERE</span>
-            <span v-if="where" class="expr">{{ where }}</span>
-          </div>
-          <div class="filter-right">
-            <span class="keyword">ORDER BY</span>
-            <DwIcon class="sort-icon" name="arrow-up-down" size="xs" :stroke-width="1.4"/>
-            <span v-if="orderBy" class="expr">{{ orderBy }}</span>
-          </div>
-        </div>
       </template>
 
       <template #body>
-        <div v-if="activeColumnStats" class="grid-column-stats">
-          <div class="grid-column-stats__head">
-            <span class="grid-column-stats__title">
-              {{ t('dataGrid.columnStatsTitle', {column: activeColumnStats.columnName}) }}
-            </span>
-            <span class="grid-column-stats__scope">{{ t('dataGrid.columnStatsScope') }}</span>
-            <button class="grid-column-stats__close" type="button" @click="dismissColumnStats">
-              {{ t('common.close') }}
-            </button>
-          </div>
-          <div class="grid-column-stats__body">
-            <span class="grid-column-stats__pill">
-              {{ t('dataGrid.columnStatsRows', {count: activeColumnStats.rowCount}) }}
-            </span>
-            <span class="grid-column-stats__pill">
-              {{ t('dataGrid.columnStatsNulls', {count: activeColumnStats.nullCount}) }}
-            </span>
-            <span class="grid-column-stats__pill">
-              {{ t('dataGrid.columnStatsDistinct', {count: activeColumnStats.distinctCount}) }}
-            </span>
-            <span
-                v-if="activeColumnStats.numericMin !== undefined && activeColumnStats.numericMax !== undefined"
-                class="grid-column-stats__pill"
-            >
-              {{ t('dataGrid.columnStatsRange', {
-                min: activeColumnStats.numericMin,
-                max: activeColumnStats.numericMax,
-              }) }}
-            </span>
-            <span v-if="activeColumnStats.numericAvg !== undefined" class="grid-column-stats__pill">
-              {{ t('dataGrid.columnStatsAvg', {value: activeColumnStats.numericAvg.toFixed(2)}) }}
-            </span>
-            <span
-                v-for="item in activeColumnStats.topValues"
-                :key="`${item.value}:${item.count}`"
-                class="grid-column-stats__pill grid-column-stats__pill--muted"
-            >
-              {{ item.value }} 脳 {{ item.count }}
-            </span>
-          </div>
-        </div>
+        <GridColumnStatsPanel
+            v-if="activeColumnStats"
+            :stats="activeColumnStats"
+            @close="dismissColumnStats"
+        />
 
-        <div
+        <DataGridLoadingSkeleton
             v-if="showInitialLoading"
-            class="grid-body-state"
-            role="status"
-            aria-live="polite"
-            :aria-label="t('dataGrid.loadingTitle')"
-        >
-          <div class="grid-skeleton" aria-hidden="true">
-            <div class="grid-skeleton__head">
-              <span class="grid-skeleton__cell grid-skeleton__cell--index"/>
-              <span
-                  v-for="(width, colIndex) in GRID_SKELETON_COLS"
-                  :key="`h-${colIndex}`"
-                  class="grid-skeleton__cell grid-skeleton__cell--head"
-                  :style="{width: `${width}px`}"
-              />
-            </div>
-            <div
-                v-for="rowIndex in GRID_SKELETON_ROWS"
-                :key="`r-${rowIndex}`"
-                class="grid-skeleton__row"
-                :style="{'--sk-delay': `${(rowIndex - 1) * 45}ms`}"
-            >
-              <span class="grid-skeleton__cell grid-skeleton__cell--index"/>
-              <span
-                  v-for="(width, colIndex) in GRID_SKELETON_COLS"
-                  :key="`c-${rowIndex}-${colIndex}`"
-                  class="grid-skeleton__cell"
-                  :style="{
-                    width: `${Math.max(48, width - ((rowIndex + colIndex) % 3) * 14)}px`,
-                  }"
-              />
-            </div>
-          </div>
-          <div class="grid-skeleton__status">
-            <span class="grid-skeleton__spinner" aria-hidden="true"/>
-            <div class="grid-skeleton__copy">
-              <strong>{{ t('dataGrid.loadingTitle') }}</strong>
-              <span>{{ t('dataGrid.loadingHint') }}</span>
-            </div>
-          </div>
-        </div>
+            :columns="[...GRID_SKELETON_COLS]"
+            :rows="GRID_SKELETON_ROWS"
+        />
         <div
             v-else
             ref="gridBodyRef"
             class="grid-body"
             :class="{ 'grid-body--form': layoutMode === 'form' }"
         >
-      <GridRowFormView
-          v-if="layoutMode === 'form'"
-          :columns="displayColumns"
-          :column-details="columnDetails"
-          :pk-columns="pkColumns"
-          :row="formViewRow"
-          :row-number="formViewRowNumber"
-          :row-total="formViewRowTotal"
-          :can-prev="formViewCanPrev"
-          :can-next="formViewCanNext"
-          :editable="inlineEnabled"
-          :can-update="canUpdate"
-          :get-cell-text="(columnName) => formViewRow ? getCellDisplayText(formViewRow, columnName) : ''"
-          :read-cell-value="(column) => formViewRow ? readRawDisplayRowCell(formViewRow, column) : null"
-          @select-prev="selectFormViewRowByOffset(-1)"
-          @select-next="selectFormViewRowByOffset(1)"
-          @field-change="(columnName, value) => formViewRow && setCellValue(formViewRow, columnName, value)"
-          @open-editor="onFormViewOpenEditor"
-      />
-      <DwDataGridTable
-          v-else
-          :display-columns="renderColumns"
-          :pinned-left-count="pinnedLeftRenderColumns.length"
-          :pinned-right-count="pinnedRightRenderColumns.length"
-          :column-padding-left-px="columnPaddingLeftPx"
-          :column-padding-right-px="columnPaddingRightPx"
-          :virtual-rows="virtualPagedRows"
-          :use-virtual="useGridVirtual"
-          :virtual-padding-top="virtualPaddingTop"
-          :virtual-padding-bottom="virtualPaddingBottom"
-          :table-column-count="tableColumnCount"
-          :table-min-width-px="scaledTableMinWidthPx"
-          :row-offset="rowOffset"
-          :resizing-key="resizingKey"
-          :drag-from-key="dragFromKey"
-          :drag-over-key="dragOverKey"
-          :column-filters-enabled="columnFiltersEnabled"
-          :sort-column="viewState?.sortColumn ?? null"
-          :stats-column-name="statsColumnName"
-          :inline-enabled="inlineEnabled"
-          :enable-row-document-view="enableRowDocumentView"
-          :index-col-selectable-title="t('dataGrid.documentView.openHint')"
-          :date-time-picker-title="t('dataGrid.dateTimePicker.title')"
-          :null-value-label="t('common.nullValue')"
-          :column-col-style="columnColStyle"
-          :is-primary-key-column="isPrimaryKeyColumn"
-          :is-numeric-column="isNumericColumn"
-          :column-type-kind="columnTypeKind"
-          :type-coloring="typeColoring"
-          :column-type-label="columnTypeLabel"
-          :column-comment-label="columnCommentLabel"
-          :sort-direction="sortDirection"
-          :is-row-selected="isRowSelected"
-          :is-row-multi-selected="isRowMultiSelected"
-          :is-row-modified="isRowModified"
-          :is-row-pending-delete="isRowPendingDelete"
-          :is-cell-active="isCellActive"
-          :is-cell-input-visible="isCellInputVisible"
-          :show-date-time-icon="showDateTimeIcon"
-          :is-date-picker-open="isDatePickerOpen"
-          :get-cell-display-text="getCellDisplayText"
-          :cell-backing-text="cellBackingText"
-          :bind-editing-input="bindEditingInput"
-          :is-column-pinned="isColumnPinned"
-          :is-column-pinned-right="isColumnPinnedRight"
-          :is-cell-in-range="isCellInRange"
-          :wrap-cells="wrapCells"
-          @header-click="onHeaderClick"
-          @header-context-menu="onHeaderContextMenu"
-          @header-drag-start="onHeaderDragStart"
-          @header-drag-over="onHeaderDragOver"
-          @header-drop="onHeaderDrop"
-          @header-drag-end="onHeaderDragEnd"
-          @resize-start="onResizeStart"
-          @resize-dbl-click="onResizeDblClick"
-          @index-col-click="onIndexColClick"
-          @cell-mouse-down="onCellMouseDown"
-          @cell-mouse-up="onCellMouseUp"
-          @cell-click="onCellClick"
-          @cell-dbl-click="onCellDblClick"
-          @cell-mouse-enter="onCellMouseEnterForGrid"
-          @cell-mouse-leave="onCellMouseLeave"
-          @cell-context-menu="onCellContextMenu"
-          @cell-input="onCellInput"
-          @cell-keydown-enter="onCellKeydownEnter"
-          @cell-input-blur="onCellInputBlur"
-          @cell-input-focus="onCellInputFocus"
-          @date-time-icon-click="onDateTimeIconClick"
-      />
+          <DataGridMainViews
+              :layout-mode="layoutMode"
+              :form-bind="formViewBind"
+              :form-on="formViewOn"
+              :table-bind="tableViewBind"
+              :table-on="tableViewOn"
+          />
         </div>
       </template>
     </DwDataGrid>

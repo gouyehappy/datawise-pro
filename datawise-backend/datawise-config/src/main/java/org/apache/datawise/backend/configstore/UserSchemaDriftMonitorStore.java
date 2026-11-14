@@ -41,6 +41,14 @@ public class UserSchemaDriftMonitorStore {
         fileFor(userId).removeIf(entry -> id.equals(entry.getId()));
     }
 
+    public synchronized void replaceAll(long userId, List<SchemaDriftMonitorEntry> next) {
+        fileFor(userId).replaceAll(next != null ? next : List.of());
+    }
+
+    public synchronized void invalidate(long userId) {
+        cache.remove(TenantScopedConfigSupport.cacheKey(userId));
+    }
+
     private JsonListFile<SchemaDriftMonitorEntry> fileFor(long userId) {
         return cache.computeIfAbsent(TenantScopedConfigSupport.cacheKey(userId), ignored -> new JsonListFile<>(
                 configDirectory,

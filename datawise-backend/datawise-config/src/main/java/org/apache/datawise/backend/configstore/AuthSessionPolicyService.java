@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 /**
  * 会话策略：application.yml 提供默认值，{@code config/auth-session.json} 可覆盖（设置页可写）。
@@ -58,6 +60,24 @@ public class AuthSessionPolicyService {
 
     public boolean slidingRenewal() {
         return currentPolicy().slidingRenewal();
+    }
+
+    /**
+     * Whether sliding renewal should rewrite the session now.
+     * Renew only when less than half of TTL remains (min 2 minutes), to avoid write amplification
+     * on every authenticated request.
+     */
+    public boolean shouldRenewNow(Instant expiresAt) {
+        if (!slidingRenewal()) {
+            return false;
+        }
+        if (expiresAt == null) {
+            return true;
+        }
+        long ttl = ttlMinutes();
+        long renewWhenRemainingMinutes = Math.max(2L, ttl / 2L);
+        Instant threshold = Instant.now().plus(renewWhenRemainingMinutes, ChronoUnit.MINUTES);
+        return !expiresAt.isAfter(threshold);
     }
 
     private AuthSessionPolicyDto readStoredPolicy() {

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 /**
  * Build DataWise Log Controller community plugin (.dwp).
  *

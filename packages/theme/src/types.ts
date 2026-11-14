@@ -41,6 +41,8 @@ export interface ThemePreferences {
     uiFontSizePx?: number
     /** Interface control density; applied as data-ui-density */
     uiDensity: UiDensityId
+    /** Toolbar / rail functional icon colors → html[data-icon-tones] */
+    coloredToolbarIcons: boolean
 }
 
 export interface UiSkinCapabilities {
@@ -235,6 +237,7 @@ export const DEFAULT_THEME_PREFERENCES: ThemePreferences = {
     uiTextScale: 'md',
     uiFontSizePx: UI_FONT_SIZE_PX_MD,
     uiDensity: 'md',
+    coloredToolbarIcons: true,
 }
 
 export function resolveThemeMode(appearance: ThemeAppearance, systemPrefersDark = false): ThemeMode {
@@ -295,33 +298,40 @@ export const BACKGROUND_PRESETS_LIGHT: Record<BackgroundTone, BgTokens> = {
     },
 }
 
+/*
+ * Dark：中间井略提亮，四周 chrome 加重，对比不要跳。
+ *   rail/chrome → 沉一点的窗框灰（缝底）
+ *   panel       → 侧栏略抬
+ *   bg/editor   → 中间内容井（淡于纯黑）
+ *   muted       → 结果 / 次级
+ */
 export const BACKGROUND_PRESETS_DARK: Record<BackgroundTone, BgTokens> = {
     default: {
-        bg: '#0c0c0e',
-        muted: '#141416',
-        panel: '#18181b',
-        hover: '#222226',
-        rail: '#080809',
+        bg: '#1a1b1e',
+        muted: '#222326',
+        panel: '#1e1f22',
+        hover: '#323438',
+        rail: '#2b2d30',
     },
     warm: {
-        bg: '#100e0c',
-        muted: '#171512',
-        panel: '#1c1a16',
-        hover: '#27241f',
-        rail: '#0c0a08',
+        bg: '#1a1816',
+        muted: '#221f1c',
+        panel: '#1e1c19',
+        hover: '#34302c',
+        rail: '#2a2724',
     },
     cool: {
-        bg: '#0c1015',
-        muted: '#121820',
-        panel: '#171e27',
-        hover: '#1f2936',
-        rail: '#090c10',
+        bg: '#1a1b1e',
+        muted: '#222326',
+        panel: '#1e1f22',
+        hover: '#323438',
+        rail: '#2b2d30',
     },
     slate: {
-        bg: '#0e1013',
-        muted: '#15191e',
-        panel: '#1a1f25',
-        hover: '#242a32',
-        rail: '#0a0c0f',
+        bg: '#181a1f',
+        muted: '#21242a',
+        panel: '#1c1e24',
+        hover: '#32363e',
+        rail: '#2a2d33',
     },
 }

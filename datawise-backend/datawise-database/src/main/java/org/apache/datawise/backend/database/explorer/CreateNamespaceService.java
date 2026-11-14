@@ -139,6 +139,7 @@ public class CreateNamespaceService {
                         "Connection not found: " + connectionId
                 );
         connectionAccessService.requireDdlAccess(resolved.userId(), connectionId);
+        connectionAccessService.requireEngineFeature(resolved.userId(), connectionId, "databaseCreate");
         ConnectorCapabilityGuard.requireSqlExecute(connectorFacade, resolved.entity());
         return new Resolved(connectionId, resolved.entity());
     }

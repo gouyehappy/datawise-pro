@@ -57,7 +57,6 @@ async function copyMarkdown(event: MouseEvent) {
   event.stopPropagation()
   try {
     await navigator.clipboard.writeText(props.report.markdown)
-    toast.success(t('ai.analysis.reportCopied'))
   } catch {
     toast.error(t('ai.analysis.reportCopyFailed'))
   }

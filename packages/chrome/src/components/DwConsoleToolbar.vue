@@ -24,8 +24,8 @@
   gap: var(--dw-gap-sm);
   min-height: var(--dw-console-toolbar-height, var(--dw-density-md));
   padding: 0 var(--dw-space-3);
-  border-bottom: 1px solid var(--dw-border-light);
-  background: var(--dw-bg-panel);
+  border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
+  background: var(--dw-bg-editor, var(--dw-bg-panel));
 }
 
 .dw-console-toolbar__start,

@@ -116,6 +116,12 @@ function closePanel() {
   layout.showNotificationDrawer = false
 }
 
+/** AUDIT-02: Escape closes the tool window (menu Escape wins while open). */
+usePopoverEscape(
+    () => layout.showNotificationDrawer && !menuOpen.value,
+    closePanel,
+)
+
 function dismiss(item: AppNotification) {
   notifications.remove(item.id)
 }

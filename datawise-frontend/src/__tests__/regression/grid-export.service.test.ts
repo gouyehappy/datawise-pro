@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict'
 import {describe, it} from 'node:test'
 import {
+    applyFormulaGuard,
     buildExportFileName,
     GRID_EXPORT_INCOMPLETE_CSV_MARKER,
+    needsFormulaGuard,
     serializeGridData,
     serializeGridToCsv,
     serializeGridToJson,
     serializeGridToSql,
+    serializeGridToTsv,
 } from '../../features/workspace/services/grid-export.service.ts'
 
 describe('grid-export.service', () => {
@@ -28,6 +31,30 @@ describe('grid-export.service', () => {
         const csv = serializeGridToCsv(columns, rows)
         assert.match(csv, /"hello,world"/)
         assert.match(csv, /"line\nbreak"/)
+    })
+
+    it('needsFormulaGuard covers OWASP triggers without harming decimals', () => {
+        assert.equal(needsFormulaGuard('=1+1'), true)
+        assert.equal(needsFormulaGuard('@SUM(A1)'), true)
+        assert.equal(needsFormulaGuard('-2+1+cmd'), true)
+        assert.equal(needsFormulaGuard(' =cmd'), true)
+        assert.equal(needsFormulaGuard('-1.5'), false)
+        assert.equal(needsFormulaGuard('-abc'), true)
+        assert.equal(needsFormulaGuard('@冯十二'), false)
+        assert.equal(needsFormulaGuard('plain'), false)
+        assert.equal(applyFormulaGuard('=1+1'), "'=1+1")
+        assert.equal(applyFormulaGuard('-1'), '-1')
+    })
+
+    it('serializeGridToCsv/Tsv prefixes formula-like cells', () => {
+        const formulaCols = [{name: 'v', key: 'v'}]
+        const formulaRows = [{v: '=1+1'}, {v: '@SUM(1)'}, {v: 'safe'}]
+        const csv = serializeGridToCsv(formulaCols, formulaRows)
+        assert.match(csv, /'=1\+1/)
+        assert.match(csv, /'@SUM\(1\)/)
+        assert.match(csv, /safe/)
+        const tsv = serializeGridToTsv(formulaCols, formulaRows)
+        assert.match(tsv, /'=1\+1/)
     })
 
     it('serializeGridToJson preserves column names', () => {

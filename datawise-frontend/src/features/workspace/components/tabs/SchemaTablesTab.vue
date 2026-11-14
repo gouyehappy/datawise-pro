@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import DwDataGrid from '@/core/components/DwDataGrid.vue'
@@ -162,7 +162,6 @@ async function syncToAiDataset() {
         props.tab.connectionId,
         scopeDatabase.value,
     )
-    layout.showSuccessToast(result.message || t('workspace.schemaTables.syncToAiSuccess'))
   } catch {
     layout.showErrorToast(t('workspace.schemaTables.syncToAiFailed'))
   } finally {
@@ -184,7 +183,6 @@ async function updateSelectedTags(tagged: boolean) {
         tagged,
     )
     notifyAiTableTagsChanged()
-    layout.showSuccessToast(t('workspace.schemaTables.tagForAiSuccess'))
   } catch (err) {
     layout.showErrorToast(resolveCaughtApiErrorMessage(err, t, 'workspace.schemaTables.tagForAiFailed'))
   } finally {

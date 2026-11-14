@@ -364,15 +364,16 @@ public final class HiveMetadataSupport {
         }
         String quotedDatabase = DbType.HIVE.quoteName(database.trim());
         String quotedTable = DbType.HIVE.quoteName(tableName);
-        try (Statement statement = connection.createStatement()) {
-            statement.execute("USE " + quotedDatabase);
+        // Qualified DESCRIBE only — never USE on pooled connections (cross-DB pollution).
+        String qualified = quotedDatabase + "." + quotedTable;
+        try {
             for (String prefix : List.of("DESCRIBE ", "DESC ")) {
-                List<TableColumnDetail> columns = parseDescribe(connection, prefix + quotedTable);
+                List<TableColumnDetail> columns = parseDescribe(connection, prefix + qualified);
                 if (!columns.isEmpty()) {
                     return columns;
                 }
             }
-        } catch (SQLException ex) {
+        } catch (SQLException ignored) {
             return List.of();
         }
         return List.of();

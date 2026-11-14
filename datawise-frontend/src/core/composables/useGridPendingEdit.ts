@@ -1,1 +1,1 @@
-﻿export * from '@/core/data-grid/edit/useGridPendingEdit'
+export * from '@/core/data-grid/edit/useGridPendingEdit'

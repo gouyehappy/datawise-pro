@@ -7,6 +7,7 @@ import {
     type WorkbenchContextFocus,
     type WorkbenchContextSnapshot,
 } from '@/features/ai/context/types/workbench-context.types'
+import {truncateTextWithMeta, type TruncationMeta} from '@/shared/truncation/truncation-meta'
 
 function objectKindFromNode(type: TreeNode['type'] | undefined): WorkbenchContextFocus['objectKind'] {
     switch (type) {
@@ -67,17 +68,18 @@ function truncateBody(
     bodyPreview?: string
     bodyTruncated?: boolean
     bodyLength?: number
+    bodyTruncation?: TruncationMeta
 } {
     if (sql == null) return {}
-    const bodyLength = sql.length
-    if (bodyLength === 0) return {bodyPreview: '', bodyTruncated: false, bodyLength: 0}
-    if (bodyLength <= maxChars) {
-        return {bodyPreview: sql, bodyTruncated: false, bodyLength}
-    }
+    const {text, truncation} = truncateTextWithMeta(sql, maxChars, {
+        unit: 'chars',
+        reason: 'preview',
+    })
     return {
-        bodyPreview: sql.slice(0, maxChars),
-        bodyTruncated: true,
-        bodyLength,
+        bodyPreview: text,
+        bodyTruncated: truncation.truncated,
+        bodyLength: truncation.originalLength ?? sql.length,
+        bodyTruncation: truncation,
     }
 }
 

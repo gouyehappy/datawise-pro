@@ -4,6 +4,7 @@ import org.apache.datawise.backend.common.support.ConfigPathSandbox;
 import org.apache.datawise.backend.configstore.ConfigDirectoryService;
 import org.apache.datawise.backend.configstore.ConfigPaths;
 import org.apache.datawise.backend.configstore.ProjectStore;
+import org.apache.datawise.backend.domain.ProjectDeleteRequest;
 import org.apache.datawise.backend.domain.ProjectFileContentDto;
 import org.apache.datawise.backend.domain.ProjectFileEntryDto;
 import org.apache.datawise.backend.domain.ProjectIds;
@@ -17,8 +18,11 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -151,6 +155,32 @@ public class ProjectFilesService {
         }
     }
 
+    public void delete(String projectId, ProjectDeleteRequest request) {
+        userAccessPolicy.requireRegisteredUser();
+        if (request == null) {
+            throw new IllegalArgumentException("request body is required");
+        }
+        String root = normalizeRoot(request.root());
+        String relativePath = requireRelativeFile(request.path());
+        Path rootPath = resolveRoot(projectId, root);
+        Path target = resolveInsideRoot(projectId, root, relativePath);
+        if (target.equals(rootPath)) {
+            throw new IllegalArgumentException("PROJECT_ROOT_DELETE_FORBIDDEN");
+        }
+        if (!Files.exists(target)) {
+            throw new IllegalArgumentException("PROJECT_FILE_NOT_FOUND");
+        }
+        try {
+            if (Files.isDirectory(target)) {
+                deleteDirectoryRecursively(target);
+            } else {
+                Files.delete(target);
+            }
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to delete project file", ex);
+        }
+    }
+
     public ProjectFileEntryDto rename(String projectId, ProjectRenameRequest request) {
         userAccessPolicy.requireRegisteredUser();
         if (request == null) {
@@ -245,6 +275,25 @@ public class ProjectFilesService {
             throw new IllegalArgumentException("root must be docs or scripts");
         }
         return normalized;
+    }
+
+    private static void deleteDirectoryRecursively(Path directory) throws IOException {
+        Files.walkFileTree(directory, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                if (exc != null) {
+                    throw exc;
+                }
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     private static String requireRelativeFile(String path) {

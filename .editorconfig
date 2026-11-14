@@ -1,0 +1,24 @@
+# DataWise monorepo — 全仓源文件约定 UTF-8（无 BOM）+ LF
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.{java,kt,kts,gradle,xml,properties}]
+indent_size = 4
+
+[*.{py,sh}]
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false
+
+# Windows PowerShell 5.1：含非 ASCII 时需 BOM；纯 ASCII 脚本可无 BOM
+[*.ps1]
+charset = utf-8-bom
+end_of_line = crlf

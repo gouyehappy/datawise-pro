@@ -17,7 +17,8 @@ export function useProfileMenuActions(onClose?: () => void) {
     return {
         openSettings: () => closeAndRun(() => layout.openSettingsModule('basic')),
         openProfile: () => closeAndRun(() => layout.openSettingsModule('profile')),
-        openOnboardingGuide: () => closeAndRun(() => onboarding.showGuide()),
+        // 主动求助的用户要的是「界面在哪」，给完整 tour
+        openOnboardingGuide: () => closeAndRun(() => onboarding.showGuide('default')),
         openRuntimeSetup: () => closeAndRun(() => onboarding.showRuntimeSetup()),
         openTeam: () => closeAndRun(() => layout.openTeamModule()),
         openAccountLogin: () => closeAndRun(() => auth.openLoginDialog()),

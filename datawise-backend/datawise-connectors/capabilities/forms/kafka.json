@@ -1,0 +1,70 @@
+{
+  "id": "kafka",
+  "description": "Kafka connection fields (MetaForge S1). bootstrap/security use key=value advancedConfig.",
+  "fields": [
+    {
+      "key": "bootstrap.servers",
+      "label": "connection.kafkaBootstrap",
+      "type": "text",
+      "binding": "kafka_bootstrap",
+      "required": true,
+      "description": "connection.hints.kafkaBootstrap",
+      "placeholder": "connection.kafkaBootstrapPlaceholder"
+    },
+    {
+      "key": "security.protocol",
+      "label": "connection.kafkaSecurity",
+      "type": "select",
+      "binding": "config",
+      "options": [
+        {"value": "", "label": "connection.kafkaSecurityAuto"},
+        {"value": "PLAINTEXT", "label": "PLAINTEXT"},
+        {"value": "SSL", "label": "SSL"},
+        {"value": "SASL_PLAINTEXT", "label": "SASL_PLAINTEXT"},
+        {"value": "SASL_SSL", "label": "SASL_SSL"}
+      ]
+    },
+    {
+      "key": "auth",
+      "label": "connection.auth",
+      "type": "select",
+      "binding": "auth",
+      "options": [
+        {"value": "User&Password", "label": "User&Password"},
+        {"value": "NONE", "label": "NONE"}
+      ]
+    },
+    {
+      "key": "user",
+      "label": "connection.username",
+      "type": "text",
+      "binding": "user",
+      "visible_when": {"field": "auth", "one_of": ["User&Password"]}
+    },
+    {
+      "key": "password",
+      "label": "connection.password",
+      "type": "password",
+      "binding": "password",
+      "visible_when": {"field": "auth", "one_of": ["User&Password"]}
+    },
+    {
+      "key": "sasl.mechanism",
+      "label": "connection.kafkaSaslMechanism",
+      "type": "select",
+      "binding": "config",
+      "options": [
+        {"value": "PLAIN", "label": "PLAIN"},
+        {"value": "SCRAM-SHA-256", "label": "SCRAM-SHA-256"},
+        {"value": "SCRAM-SHA-512", "label": "SCRAM-SHA-512"}
+      ],
+      "visible_when": {"field": "auth", "one_of": ["User&Password"]}
+    },
+    {
+      "key": "kafka_skip_tls",
+      "label": "connection.kafkaSkipTls",
+      "type": "boolean",
+      "binding": "kafka_skip_tls"
+    }
+  ]
+}

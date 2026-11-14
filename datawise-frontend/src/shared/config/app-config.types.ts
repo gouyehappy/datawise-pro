@@ -8,6 +8,7 @@ import type {ShortcutPreferences} from '@/core/shortcuts/types'
 import type {SideRailItemId} from '@/shared/config/side-rail.types'
 import type {AiAnalysisConfigurableStepId, AiAnalysisMode} from '@/shared/api/ai.types'
 import type {DashboardPreferences} from '@/shared/config/dashboard-preferences'
+import type {WorkbenchMode} from '@/shared/config/workbench-mode'
 
 export type {DashboardPreferences}
 
@@ -39,6 +40,8 @@ export interface LayoutPreferences {
     terminalHeight: number
     lastModule: RestorableNavModule
     lastShortcutPanel: ShortcutPanel | null
+    /** B0: query / analyze / govern / ops — trims default chrome, does not remove capabilities */
+    workbenchMode: WorkbenchMode
     /**
      * Desktop only: open Jenkins / Nacos / markdown links in the built-in CEF window
      * or the OS default browser.

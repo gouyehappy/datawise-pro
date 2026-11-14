@@ -6,6 +6,7 @@ import IconButton from '@/core/components/IconButton.vue'
 import {DwIcon} from '@/core/icons'
 import AiTaggedScopeTree from '@/features/ai/datasource/components/AiTaggedScopeTree.vue'
 import AiTargetSchemaPreview from '@/features/ai/datasource/components/AiTargetSchemaPreview.vue'
+import {useAiTaggedScopeContext} from '@/features/ai/datasource/composables/ai-tagged-scope.context'
 import type {AiDatabaseTarget} from '@/features/ai/shared/utils/database-targets'
 
 const props = withDefaults(
@@ -22,6 +23,11 @@ const selectedIds = defineModel<string[]>('selectedIds', {required: true})
 const {t} = useI18n()
 const search = ref('')
 const treeRef = ref<InstanceType<typeof AiTaggedScopeTree>>()
+
+const {groups} = useAiTaggedScopeContext()
+
+/** 一张表都还没标记时，搜索与全选没有作用对象，交给空态推荐去引导 */
+const hasTaggedGroups = computed(() => groups.value.length > 0)
 
 const allVisibleSelected = computed(() => treeRef.value?.allVisibleSelected ?? false)
 
@@ -49,12 +55,14 @@ function refreshCatalog() {
     <template #toolbar>
       <div class="scope-toolbar">
         <SearchInput
+            v-if="hasTaggedGroups"
             v-model="search"
             class="scope-toolbar__search"
             :placeholder="t('ai.databasePanel.search')"
         />
         <div class="scope-toolbar__actions">
           <IconButton
+              v-if="hasTaggedGroups"
               :title="allVisibleSelected ? t('ai.databasePanel.clearVisible') : t('ai.databasePanel.selectVisible')"
               @click="toggleAllVisible"
           >
@@ -114,6 +122,7 @@ function refreshCatalog() {
 .scope-toolbar {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--dw-gap);
 }
 

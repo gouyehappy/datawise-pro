@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {DwButton, DwPanelState} from '@/core/components'
@@ -26,7 +26,6 @@ async function copyMarkdown() {
   if (!markdown.value.trim()) return
   try {
     await navigator.clipboard.writeText(markdown.value)
-    layout.showSuccessToast(t('workspace.metadoc.copySuccess'))
   } catch {
     layout.showErrorToast(t('workspace.metadoc.copyFailed'))
   }

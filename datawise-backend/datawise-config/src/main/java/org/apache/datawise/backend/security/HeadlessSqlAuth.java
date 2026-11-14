@@ -15,7 +15,10 @@ public final class HeadlessSqlAuth {
         if (UserContext.getUserId() == null) {
             throw new UnauthorizedException();
         }
-        if (!UserContext.hasApiTokenScope(ApiTokenScopes.SQL)) {
+        // sql:write implies sql; both may enter the SQL entrypoint, DDL/DML is still
+        // gated per-feature by FeaturePermissionAccess.requireSqlExecute().
+        if (!UserContext.hasApiTokenScope(ApiTokenScopes.SQL)
+                && !UserContext.hasApiTokenScope(ApiTokenScopes.SQL_WRITE)) {
             throw new IllegalArgumentException(HeadlessMigrationAuth.API_TOKEN_FORBIDDEN);
         }
     }

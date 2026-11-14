@@ -67,7 +67,7 @@
 }
 
 .dw-card--flat {
-  border: 1px solid transparent;
+  border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
   background: var(--dw-bg-muted);
   box-shadow: none;
 }

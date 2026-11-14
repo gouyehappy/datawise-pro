@@ -65,6 +65,7 @@ public class TaskConcurrencySpringProperties
                 .dispatchInterval(dispatchInterval)
                 .maintenanceInterval(maintenanceInterval)
                 .dispatchBatchSize(dispatchBatchSize)
+                .workerPoolSize(Math.max(1, globalMaxConcurrent))
                 .workerShutdownTimeout(workerShutdownTimeout)
                 .runtimeShutdownTimeout(runtimeShutdownTimeout)
                 .recoverOnStartup(recoverOnStartup)

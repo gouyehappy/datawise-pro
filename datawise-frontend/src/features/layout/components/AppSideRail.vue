@@ -17,8 +17,11 @@ import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import {runExplorerRefresh} from '@/features/explorer/services/explorer-toolbar.actions'
 import {isDesktopApp} from '@/features/layout/services/desktop-chrome'
 import {useConnectorUpdateBadge} from '@/features/layout/composables/useConnectorUpdateBadge'
+import {isSideRailVisibleInMode} from '@/shared/config/workbench-mode'
+import WorkbenchModeSwitcher from '@/features/layout/components/WorkbenchModeSwitcher.vue'
+import SideRailMoreNav from '@/features/layout/components/SideRailMoreNav.vue'
 
-const {t} = useI18n()
+const {t, te} = useI18n()
 const layout = useLayoutStore()
 const appConfig = useAppConfigStore()
 const pluginStore = usePluginStore()
@@ -81,21 +84,28 @@ interface NavItem {
 }
 
 const navDefs = SIDE_RAIL_NAV_DEFS
+const workbenchMode = computed(() => appConfig.workbenchMode)
 
 const mainItems = computed(() =>
     navDefs
         .filter((item) => item.section === 'main' && appConfig.isSideRailVisible(item.id))
+        .filter((item) => isSideRailVisibleInMode(item.id, workbenchMode.value))
         // Standard edition keeps AI rail as an upsell entry (guardAiNav → Paywall).
         .map((item) => ({
           ...item,
-          label: t(item.labelKey),
-          caption: t(item.captionKey),
+          label: item.id === 'ai' && workbenchMode.value === 'query'
+            ? t('nav.aiConsoleSecondary')
+            : t(item.labelKey),
+          caption: item.id === 'ai' && workbenchMode.value === 'query'
+            ? t('nav.caption.aiConsole')
+            : t(item.captionKey),
         })),
 )
 
 const utilItems = computed(() =>
     navDefs
         .filter((item) => item.section === 'util' && appConfig.isSideRailVisible(item.id))
+        .filter((item) => isSideRailVisibleInMode(item.id, workbenchMode.value))
         .map((item) => ({
           ...item,
           label: t(item.labelKey),
@@ -103,9 +113,25 @@ const utilItems = computed(() =>
         })),
 )
 
+/** Mode-hidden main entries — discoverable via「更多」instead of vanishing. */
+const moreMainItems = computed(() =>
+    navDefs
+        .filter((item) => item.section === 'main' && appConfig.isSideRailVisible(item.id))
+        .filter((item) => !isSideRailVisibleInMode(item.id, workbenchMode.value))
+        .map((item) => {
+          const hintKey = `nav.moreItems.${item.id}`
+          return {
+            id: item.id,
+            label: t(item.labelKey),
+            caption: te(hintKey) ? t(hintKey) : t(item.labelKey),
+          }
+        }),
+)
+
 const terminalItem = computed(() => {
   const item = navDefs.find((entry) => entry.id === 'terminal')
   if (!item || !appConfig.isSideRailVisible('terminal')) return null
+  if (!isSideRailVisibleInMode('terminal', workbenchMode.value)) return null
   return {
     ...item,
     label: t(item.labelKey),
@@ -198,6 +224,11 @@ onUnmounted(() => {
   clearExplorerFlyoutLeaveTimer()
 })
 
+function onMoreSelect(id: NavItem['id']) {
+  // 「更多」里的项在偏好里仍可见，只是当前焦点未置顶；直接走同一套导航
+  onClick(id)
+}
+
 function onClick(id: NavItem['id']) {
   if (!appConfig.isSideRailVisible(id)) return
   if (id === 'refresh') {
@@ -238,6 +269,11 @@ function onClick(id: NavItem['id']) {
     return
   }
   if (id === 'ai') {
+    // B2-1: query 模式优先唤起控制台 AI，不跳进 Agent 模块
+    if (appConfig.workbenchMode === 'query') {
+      void openQueryModeConsoleAi()
+      return
+    }
     if (!entitlement.guardAiNav()) {
       return
     }
@@ -249,6 +285,23 @@ function onClick(id: NavItem['id']) {
     return
   }
   layout.setModule(id)
+}
+
+async function openQueryModeConsoleAi() {
+  const {useWorkspaceStore} = await import('@/features/workspace/stores/workspace')
+  const workspace = useWorkspaceStore()
+  layout.setModule('database')
+  if (!appConfig.showExplorerPanel) {
+    appConfig.setShowExplorerPanel(true)
+  }
+  let tabId = workspace.activeTabId
+  const active = workspace.activeTab
+  if (!active || active.type !== 'console') {
+    tabId = await workspace.openConsole()
+  }
+  if (!tabId) return
+  workspace.activateTab(tabId)
+  workspace.requestConsoleAiPrompt(tabId)
 }
 
 function isActive(id: NavItem['id']) {
@@ -333,9 +386,14 @@ function toggleProfileMenu() {
           <span class="tool-btn__caption">{{ item.caption }}</span>
         </button>
       </template>
+      <SideRailMoreNav :items="moreMainItems" @select="onMoreSelect"/>
     </nav>
 
     <div class="tool-stripe__spacer" aria-hidden="true"/>
+
+    <div class="tool-stripe__group tool-stripe__group--modes">
+      <WorkbenchModeSwitcher/>
+    </div>
 
     <nav class="tool-stripe__group" :aria-label="t('nav.utilLabel')">
       <button
@@ -401,6 +459,12 @@ function toggleProfileMenu() {
 <style scoped>
 .tool-stripe__flyout-anchor {
   width: 100%;
+}
+
+/* 与上下主导航同款单列；轻分隔避免和主模块/工具混成一坨 */
+.tool-stripe__group--modes {
+  padding-block: var(--dw-space-1);
+  border-block: 1px solid color-mix(in srgb, var(--dw-border-light) 70%, transparent);
 }
 </style>
 

@@ -5,14 +5,14 @@
 :root.dark,
 :root[data-theme="dark"],
 :root[data-dw-theme="dark"] {
-  --wb-bg: #0c1015;
-  --wb-panel: #171e27;
-  --wb-sidebar: #090c10;
+  --wb-bg: #1a1b1e;
+  --wb-panel: #222326;
+  --wb-sidebar: #1e1f22;
   --wb-text: #f0f0f3;
   --wb-text-strong: #f4f4f7;
   --wb-muted: #c4c7cc;
   --wb-faint: #a8adb6;
-  --wb-border: #2e3440;
+  --wb-border: rgba(255, 255, 255, 0.08);
   --wb-border-2: #374151;
   --wb-card: #162234;
   --wb-input: #0b1320;

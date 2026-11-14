@@ -1,1 +1,1 @@
-﻿export * from '@/core/data-grid/meta/column-meta'
+export * from '@/core/data-grid/meta/column-meta'

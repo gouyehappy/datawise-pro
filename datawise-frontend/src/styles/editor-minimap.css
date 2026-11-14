@@ -25,11 +25,11 @@
 
 .monaco-host[data-minimap-tone='dark'],
 .dw-monaco-host[data-minimap-tone='dark'] {
-    --dw-minimap-border: rgba(255, 255, 255, 0.07);
+    --dw-minimap-border: var(--dw-panel-outline);
     --dw-minimap-inset-shadow: rgba(0, 0, 0, 0.18);
-    --dw-minimap-slider-bg: rgba(255, 255, 255, 0.05);
-    --dw-minimap-slider-border: rgba(255, 255, 255, 0.16);
-    --dw-minimap-slider-ring: rgba(255, 255, 255, 0.12);
+    --dw-minimap-slider-bg: color-mix(in srgb, #fff 5%, transparent);
+    --dw-minimap-slider-border: color-mix(in srgb, #fff 16%, transparent);
+    --dw-minimap-slider-ring: var(--dw-panel-outline);
     --dw-minimap-slider-hover-bg: color-mix(in srgb, var(--dw-primary) 14%, transparent);
     --dw-minimap-slider-hover-border: color-mix(in srgb, var(--dw-primary) 40%, transparent);
 }

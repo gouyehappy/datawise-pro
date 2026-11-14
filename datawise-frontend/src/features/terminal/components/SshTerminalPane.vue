@@ -431,9 +431,11 @@ async function startSession() {
     terminal.focus()
   } catch (error) {
     if (generation !== startGeneration) return
-    const message = error instanceof Error && error.message
-        ? error.message
-        : t('terminal.sshFailed')
+    const message = localizeSshTerminalError(
+        error instanceof Error ? error.message : undefined,
+        t,
+        'terminal.sshFailed',
+    )
     term.value?.writeln(`\x1b[31m${message}\x1b[0m`)
     applyFailureStatus(message, 'sshFailed')
   } finally {

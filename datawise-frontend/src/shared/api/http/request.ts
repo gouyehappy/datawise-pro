@@ -49,9 +49,47 @@ function combineAbortSignals(
         if (typeof anyFactory === 'function') {
             return anyFactory.call(AbortSignal, [timeoutSignal, userSignal])
         }
-        return userSignal
+        // Older CEF/Chromium without AbortSignal.any — abort when either fires.
+        return mergeAbortSignalsFallback([timeoutSignal, userSignal])
     }
     return userSignal ?? timeoutSignal
+}
+
+/** Polyfill for environments without AbortSignal.any (keeps timeout + cancel). */
+function mergeAbortSignalsFallback(signals: AbortSignal[]): AbortSignal {
+    const controller = new AbortController()
+    const onAbort = (source: AbortSignal) => {
+        if (controller.signal.aborted) return
+        try {
+            controller.abort(source.reason)
+        } catch {
+            controller.abort()
+        }
+    }
+    for (const signal of signals) {
+        if (signal.aborted) {
+            onAbort(signal)
+            break
+        }
+        signal.addEventListener('abort', () => onAbort(signal), {once: true})
+    }
+    return controller.signal
+}
+
+const IDEMPOTENT_GET_RETRY_MAX = 2
+const IDEMPOTENT_GET_RETRY_BASE_MS = 200
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isRetryableGetStatus(status: number): boolean {
+    return status === 502 || status === 503 || status === 504
+}
+
+function isRetryableTransportError(error: unknown): boolean {
+    if (isAbortError(error) || isTimeoutError(error)) return false
+    return true
 }
 
 function errorName(error: unknown): string {
@@ -130,28 +168,53 @@ async function ensureApiSuccess<T>(
 async function runFetch<T>(
     execute: (signal?: AbortSignal) => Promise<Response>,
     options?: HttpRequestOptions,
+    retry?: {attempts: number},
 ): Promise<T> {
     maybeRejectBlockedRequest(options)
     const guarded = bindSessionGuardOptions(options)
-    const signal = combineAbortSignals(options?.timeoutMs, options?.signal)
-    let response: Response
-    try {
-        response = await execute(signal)
-    } catch (error) {
-        rejectFetchTransportError(error, options)
+    const maxAttempts = Math.max(0, retry?.attempts ?? 0)
+    let attempt = 0
+    let lastError: unknown
+
+    while (attempt <= maxAttempts) {
+        const signal = combineAbortSignals(options?.timeoutMs, options?.signal)
+        let response: Response
+        try {
+            response = await execute(signal)
+        } catch (error) {
+            lastError = error
+            if (attempt < maxAttempts && isRetryableTransportError(error) && !options?.signal?.aborted) {
+                await sleep(IDEMPOTENT_GET_RETRY_BASE_MS * (attempt + 1))
+                attempt += 1
+                continue
+            }
+            rejectFetchTransportError(error, options)
+        }
+
+        if (
+            attempt < maxAttempts
+            && isRetryableGetStatus(response.status)
+            && !options?.signal?.aborted
+        ) {
+            await sleep(IDEMPOTENT_GET_RETRY_BASE_MS * (attempt + 1))
+            attempt += 1
+            continue
+        }
+
+        try {
+            const payload = await ensureApiSuccess<T>(response, guarded)
+            return payload.data
+        } catch (error) {
+            if (error instanceof ApiError) {
+                throw error
+            }
+            const apiError = new ApiError(resolveApiErrorMessage(error))
+            notifyApiError(apiError, options)
+            throw apiError
+        }
     }
 
-    try {
-        const payload = await ensureApiSuccess<T>(response, guarded)
-        return payload.data
-    } catch (error) {
-        if (error instanceof ApiError) {
-            throw error
-        }
-        const apiError = new ApiError(resolveApiErrorMessage(error))
-        notifyApiError(apiError, options)
-        throw apiError
-    }
+    rejectFetchTransportError(lastError ?? new Error(HTTP_NOT_READY), options)
 }
 
 export function requireBaseUrl(): string {
@@ -270,6 +333,7 @@ export async function getJson<T>(
                 signal,
             }),
         options,
+        {attempts: IDEMPOTENT_GET_RETRY_MAX},
     )
 }
 

@@ -5,7 +5,6 @@ import {DwButton, DwCheckbox, DwIcon, DwInput, DwSecretInput, DwSelect} from '@/
 import ConnectionFormField from '@/features/connection/components/ConnectionFormField.vue'
 import {
   createHttpCommunityPluginsApi,
-  type CommunityPluginFormField,
   type CommunityPluginInfo,
 } from '@/shared/api/http/community-plugins'
 import {
@@ -20,6 +19,20 @@ import {
 import {readDatawiseHost} from '@/features/layout/services/desktop-bridge'
 import type {ConnectionConfig} from '@/core/types'
 import {validateJumpHostsText} from '@/features/connection/utils/ssh-jump-hosts'
+import {resolveCaughtApiErrorMessage} from '@/shared/api/http/api-error-message'
+import {
+  collectFieldValues,
+  evalFieldCondition,
+  readAdvancedMap,
+  readDescriptorFieldValue,
+  readSecretsMap,
+  writeAdvancedMap,
+  writeDescriptorFieldValue,
+  writeSecretsMap,
+  usesSecretSlot,
+  type DescriptorFormField,
+  type FieldCondition,
+} from '@/features/connection/forms/descriptor-connection-bindings'
 
 const form = defineModel<ConnectionConfig>('form', {required: true})
 
@@ -36,19 +49,7 @@ const defaultsApplied = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const pendingPickerField = ref<PluginField | null>(null)
 
-type FieldCondition =
-  | {field: string; one_of: Array<string | boolean | number>}
-  | {all_of: FieldCondition[]}
-  | {any_of: FieldCondition[]}
-
-type PluginField = CommunityPluginFormField & {
-  options?: Array<{label?: string; value: string}>
-  visible_when?: FieldCondition
-  required_when?: FieldCondition
-  picker?: {kind?: string; accept?: string[]; content_field?: string}
-  /** Sidecar method that returns `{options}` for this select; opaque to the host. */
-  options_action?: string
-}
+type PluginField = DescriptorFormField
 
 type PluginAction = {
   id: string
@@ -106,166 +107,55 @@ const allFields = computed(() => (provider.value?.fields || []) as PluginField[]
 
 /** Plugin advanced settings are stored as JSON so multiline secrets (kubeconfig YAML) survive. */
 function readPluginAdvanced(): Record<string, string> {
-  const raw = form.value.advancedConfig?.trim()
-  if (!raw) return {}
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      const out: Record<string, string> = {}
-      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-        if (value == null) continue
-        out[key] = typeof value === 'string' ? value : String(value)
-      }
-      return out
-    }
-  } catch {
-    // migrate legacy key=value lines
-  }
-  const out: Record<string, string> = {}
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-    const eq = trimmed.indexOf('=')
-    if (eq <= 0) continue
-    out[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim()
-  }
-  return out
+  return readAdvancedMap(form.value.advancedConfig)
 }
 
 function writePluginAdvanced(next: Record<string, string>) {
-  form.value.advancedConfig = JSON.stringify(next)
+  writeAdvancedMap(form.value, next)
 }
 
 /** Secret-bound values live in the dedicated `secrets` slot (encrypted at rest). */
 function readPluginSecrets(): Record<string, string> {
-  const raw = form.value.secrets?.trim()
-  if (!raw) return {}
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      const out: Record<string, string> = {}
-      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-        if (value == null) continue
-        out[key] = typeof value === 'string' ? value : String(value)
-      }
-      return out
-    }
-  } catch {
-    // corrupt payload — start clean
-  }
-  return {}
+  return readSecretsMap(form.value.secrets)
 }
 
 function writePluginSecrets(next: Record<string, string>) {
   // Always a JSON string (never undefined): an all-empty secret form must still
   // reach the backend so applyDto overwrites stale stored secrets. undefined
   // would be dropped from the payload and keep the old values alive.
-  form.value.secrets = JSON.stringify(next)
+  writeSecretsMap(form.value, next)
 }
 
 function fieldValues(): Record<string, string> {
-  return {
-    ...readPluginAdvanced(),
-    ...readPluginSecrets(),
-    host: form.value.host || '',
-    port: form.value.port || '',
-    user: form.value.user || '',
-    password: form.value.password || '',
-    database: form.value.database || '',
-    name: form.value.name || '',
-  }
+  return collectFieldValues(form.value)
 }
 
 function evalCondition(condition: FieldCondition | undefined, values: Record<string, string>): boolean {
-  if (!condition) return true
-  if ('all_of' in condition) {
-    return (condition.all_of || []).every((item) => evalCondition(item, values))
-  }
-  if ('any_of' in condition) {
-    return (condition.any_of || []).some((item) => evalCondition(item, values))
-  }
-  if ('field' in condition && Array.isArray(condition.one_of)) {
-    const current = String(values[condition.field] ?? '')
-    return condition.one_of.map((item) => String(item)).includes(current)
-  }
-  return true
+  return evalFieldCondition(condition, values)
 }
 
 const visibleFields = computed(() => {
-  const values = fieldValues()
   void form.value.advancedConfig
   void form.value.host
   void form.value.port
   void form.value.user
   void form.value.password
   void form.value.name
+  void form.value.auth
+  const values = fieldValues()
   // Host already owns the connection name row — skip duplicate binding:name fields.
   return allFields.value.filter((field) => {
     if ((field.binding || 'config') === 'name') return false
-    return evalCondition(field.visible_when, values)
+    return evalCondition(field.visible_when as FieldCondition | undefined, values)
   })
 })
 
-function usesPasswordSlot(field: PluginField): boolean {
-  return field.binding === 'password' || (field.binding === 'secret' && field.key === 'password')
-}
-
-/** Mirror of the host-side classification: secret channel, not plaintext advancedConfig. */
-function usesSecretSlot(field: PluginField): boolean {
-  if (usesPasswordSlot(field)) return false
-  const binding = field.binding || 'config'
-  return binding === 'secret' || field.type === 'password'
-}
-
 function readFieldValue(field: PluginField): string {
-  const binding = field.binding || 'config'
-  if (binding === 'name') return form.value.name || ''
-  if (binding === 'host') return form.value.host || ''
-  if (binding === 'port') return form.value.port || ''
-  if (binding === 'username' || binding === 'user') return form.value.user || ''
-  if (usesPasswordSlot(field)) return form.value.password || ''
-  if (binding === 'database') return form.value.database || ''
-  if (usesSecretSlot(field)) return readPluginSecrets()[field.key] || ''
-  return readPluginAdvanced()[field.key] || ''
+  return readDescriptorFieldValue(form.value, field)
 }
 
 function writeFieldValue(field: PluginField, value: string) {
-  const binding = field.binding || 'config'
-  if (binding === 'name') {
-    form.value.name = value
-    return
-  }
-  if (binding === 'host') {
-    form.value.host = value
-    return
-  }
-  if (binding === 'port') {
-    form.value.port = value
-    return
-  }
-  if (binding === 'username' || binding === 'user') {
-    form.value.user = value
-    return
-  }
-  if (usesPasswordSlot(field)) {
-    form.value.password = value
-    return
-  }
-  if (binding === 'database') {
-    form.value.database = value
-    return
-  }
-  if (usesSecretSlot(field)) {
-    const next = readPluginSecrets()
-    if (value === '') delete next[field.key]
-    else next[field.key] = value
-    writePluginSecrets(next)
-    return
-  }
-  const next = readPluginAdvanced()
-  if (value === '') delete next[field.key]
-  else next[field.key] = value
-  writePluginAdvanced(next)
+  writeDescriptorFieldValue(form.value, field, value)
 }
 
 /** Saved before the `secrets` slot existed? Move secret-bound values out of advancedConfig. */
@@ -422,7 +312,7 @@ async function runProviderAction(action: PluginAction) {
     }
     actionStatus.value = (result?.message || '').trim()
   } catch (e) {
-    actionStatus.value = e instanceof Error ? e.message : String(e)
+    actionStatus.value = resolveCaughtApiErrorMessage(e, t, 'communityPlugin.connection.actionFailed')
   } finally {
     actionRunning.value = ''
   }
@@ -519,7 +409,7 @@ async function loadProvider() {
     void loadDynamicOptions()
   } catch (e) {
     pluginInfo.value = null
-    loadError.value = e instanceof Error ? e.message : String(e)
+    loadError.value = resolveCaughtApiErrorMessage(e, t, 'communityPlugin.connection.loadFailed')
   } finally {
     loading.value = false
   }

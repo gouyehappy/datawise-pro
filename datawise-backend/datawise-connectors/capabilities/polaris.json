@@ -1,0 +1,5 @@
+{
+  "dbType": "polaris",
+  "extends": "specialized-browse",
+  "formKind": "ops"
+}

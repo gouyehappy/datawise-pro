@@ -32,7 +32,7 @@ public final class CefRuntimeConfig {
         settings.persist_session_cookies = true;
         settings.cache_path = DesktopPaths.userDataDir().resolve("cef-cache").toString();
         settings.log_file = DesktopPaths.userDataDir().resolve("logs").resolve("cef.log").toString();
-        settings.user_agent_product = "DataWiseCLI/4.1.7";
+        settings.user_agent_product = "DataWiseCLI/5.0.0";
         Color chrome = SplashTheme.awtChromeBackground();
         // ColorType(alpha, red, green, blue) — alpha must be >0 to enable (JCEF docs).
         // Previous bug passed (r,g,b,a) so Chromium kept the default white background.
@@ -104,32 +104,45 @@ public final class CefRuntimeConfig {
         if (commandLine == null) {
             return;
         }
-        // Windows: disable GPU by default (stability); opt in via DATAWISE_CEF_ENABLE_GPU=1.
+        applyGpuPolicy(commandLine);
+        applyLinuxDeviceScale(commandLine);
+    }
+
+    /**
+     * 全局 GPU 策略：默认开启合成，避免 Windows Alt+Tab 软件重绘导致密 DOM（资源树）闪烁。
+     * {@code DATAWISE_CEF_DISABLE_GPU=1} 关闭；{@code DATAWISE_CEF_ENABLE_GPU=1} 可覆盖禁用。
+     */
+    static void applyGpuPolicy(CefCommandLine commandLine) {
         String enableGpu = System.getenv("DATAWISE_CEF_ENABLE_GPU");
-        boolean gpuOn = enableGpu != null
+        boolean forceOn = enableGpu != null
                 && (enableGpu.equals("1") || enableGpu.equalsIgnoreCase("true"));
         String disableGpu = System.getenv("DATAWISE_CEF_DISABLE_GPU");
         boolean forceOff = disableGpu != null
                 && (disableGpu.equals("1") || disableGpu.equalsIgnoreCase("true"));
-        if (OS.isWindows() && (!gpuOn || forceOff)) {
+        if (forceOff && !forceOn) {
             commandLine.appendSwitch("disable-gpu");
             commandLine.appendSwitch("disable-gpu-compositing");
-        } else if (forceOff) {
-            commandLine.appendSwitch("disable-gpu");
-            commandLine.appendSwitch("disable-gpu-compositing");
+            return;
         }
+        if (OS.isWindows()) {
+            commandLine.appendSwitchWithValue("use-angle", "d3d11");
+        }
+        commandLine.appendSwitch("enable-gpu-rasterization");
+    }
 
-        if (OS.isLinux()) {
-            try {
-                GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-                GraphicsDevice gd = ge.getDefaultScreenDevice();
-                GraphicsConfiguration gc = gd.getDefaultConfiguration();
-                double scale = gc != null ? gc.getDefaultTransform().getScaleX() : 1.0;
-                if (scale > 1.0) {
-                    commandLine.appendSwitchWithValue("force-device-scale-factor", String.valueOf(scale));
-                }
-            } catch (Exception ignored) {
+    private static void applyLinuxDeviceScale(CefCommandLine commandLine) {
+        if (!OS.isLinux()) {
+            return;
+        }
+        try {
+            GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+            GraphicsDevice gd = ge.getDefaultScreenDevice();
+            GraphicsConfiguration gc = gd.getDefaultConfiguration();
+            double scale = gc != null ? gc.getDefaultTransform().getScaleX() : 1.0;
+            if (scale > 1.0) {
+                commandLine.appendSwitchWithValue("force-device-scale-factor", String.valueOf(scale));
             }
+        } catch (Exception ignored) {
         }
     }
 }

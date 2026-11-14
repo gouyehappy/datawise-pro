@@ -9,6 +9,7 @@ import type {ContextMenuItem} from '@/core/types'
 import type {DatasourceDefinition} from '@/shared/api/datasource.types'
 import {CONNECTOR_CAPABILITY} from '@/shared/capabilities/capability-keys'
 import type {ConnectorCapabilityName} from '@/shared/capabilities/capability-keys'
+import {CONNECTION_CAPABILITY_MATRIX} from '@/shared/capabilities/generated/connection-capability-matrix'
 
 export interface DbTypeCapability {
     /** 是否可在连接向导中创建并正常使用 */
@@ -515,7 +516,7 @@ export function filterDmlContextMenuItems(
     return filterContextMenuItemsByIds(items, DML_CONTEXT_MENU_IDS)
 }
 
-/** 按连接器能力裁剪 Explorer 右键菜单（SQL 控制台 + DML/DDL） */
+/** 按连接器 SPI 能力裁剪 Explorer 右键菜单（SQL 控制台 + DML/DDL） */
 export function filterConnectionCapabilityMenuItems(
     items: ContextMenuItem[],
     dbType: DbType | undefined,
@@ -528,6 +529,14 @@ export function filterConnectionCapabilityMenuItems(
     )
 }
 
+/** 供产品矩阵过滤复用的菜单裁剪 */
+export function filterContextMenuByIds(
+    items: ContextMenuItem[],
+    blockedIds: ReadonlySet<string>,
+): ContextMenuItem[] {
+    return filterContextMenuItemsByIds(items, blockedIds)
+}
+
 export interface ConnectionCapabilitiesSnapshot {
     sqlExecute: boolean
     sqlExplain: boolean
@@ -537,12 +546,49 @@ export interface ConnectionCapabilitiesSnapshot {
     onlineDdl: boolean
     sshTunnel: boolean
     tableMutation: boolean
+    /** 产品矩阵（T-CAP-1） */
+    visualQueryBuilder: boolean
+    diagram: boolean
+    schemaCompare: boolean
+    transactionalDdl: boolean
+    specializedSurface: boolean
+}
+
+function productProfileFeatures(dbType: DbType | undefined) {
+    if (!dbType) {
+        return {
+            visualQueryBuilder: false,
+            diagram: false,
+            schemaCompare: false,
+            transactionalDdl: false,
+            specializedSurface: false,
+        }
+    }
+    const key = dbType === 'dameng' ? 'dm' : dbType
+    const profile = CONNECTION_CAPABILITY_MATRIX.types[key]
+    if (!profile) {
+        return {
+            visualQueryBuilder: false,
+            diagram: false,
+            schemaCompare: false,
+            transactionalDdl: false,
+            specializedSurface: false,
+        }
+    }
+    return {
+        visualQueryBuilder: profile.features.visualQueryBuilder,
+        diagram: profile.features.diagram,
+        schemaCompare: profile.features.schemaCompare,
+        transactionalDdl: profile.features.transactionalDdl,
+        specializedSurface: profile.specializedSurface,
+    }
 }
 
 export function buildConnectionCapabilities(
     dbType: DbType | undefined,
     catalog?: readonly DatasourceDefinition[],
 ): ConnectionCapabilitiesSnapshot {
+    const product = productProfileFeatures(dbType)
     return {
         sqlExecute: supportsSqlExecute(dbType, catalog),
         sqlExplain: supportsSqlExplain(dbType, catalog),
@@ -552,5 +598,10 @@ export function buildConnectionCapabilities(
         onlineDdl: supportsOnlineDdl(dbType, catalog),
         sshTunnel: supportsSshTunnel(dbType, catalog),
         tableMutation: supportsTableMutation(dbType, catalog),
+        visualQueryBuilder: product.visualQueryBuilder && supportsSqlExecute(dbType, catalog),
+        diagram: product.diagram && supportsSqlExecute(dbType, catalog),
+        schemaCompare: product.schemaCompare && supportsTableMutation(dbType, catalog),
+        transactionalDdl: product.transactionalDdl,
+        specializedSurface: product.specializedSurface,
     }
 }

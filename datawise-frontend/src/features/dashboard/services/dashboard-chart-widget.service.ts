@@ -9,6 +9,14 @@ export const DASHBOARD_CHART_WIDGET_MAX_ROWS = 500
 
 export type DashboardChartWidgetColumn = 'left' | 'main' | 'right'
 
+/** 卡片来源：AI 结论钉过来时记录血缘与责任人，便于回看与追责 */
+export interface DashboardChartWidgetSource {
+    lineage?: string
+    owner?: string
+    sessionTitle?: string
+    createdAt?: number
+}
+
 export interface DashboardChartWidget {
     id: string
     column: DashboardChartWidgetColumn
@@ -19,6 +27,7 @@ export interface DashboardChartWidget {
     columns: TableColumn[]
     rows: TableRow[]
     createdAt: number
+    source?: DashboardChartWidgetSource
 }
 
 export interface DashboardChartWidgetPrefs {
@@ -32,6 +41,20 @@ export interface CreateDashboardChartWidgetInput {
     pivotEnabled: boolean
     columns: TableColumn[]
     rows: TableRow[]
+    source?: DashboardChartWidgetSource
+}
+
+function normalizeSource(raw: unknown): DashboardChartWidgetSource | undefined {
+    if (!raw || typeof raw !== 'object') return undefined
+    const record = raw as Partial<DashboardChartWidgetSource>
+    const source: DashboardChartWidgetSource = {}
+    if (typeof record.lineage === 'string' && record.lineage.trim()) source.lineage = record.lineage.trim()
+    if (typeof record.owner === 'string' && record.owner.trim()) source.owner = record.owner.trim()
+    if (typeof record.sessionTitle === 'string' && record.sessionTitle.trim()) {
+        source.sessionTitle = record.sessionTitle.trim()
+    }
+    if (typeof record.createdAt === 'number') source.createdAt = record.createdAt
+    return Object.keys(source).length ? source : undefined
 }
 
 function isWidgetColumn(value: unknown): value is DashboardChartWidgetColumn {
@@ -100,6 +123,7 @@ export function createDashboardChartWidget(input: CreateDashboardChartWidgetInpu
         columns: input.columns.map((column) => ({...column})),
         rows: snapshotChartWidgetRows(input.rows, input.config, input.pivotEnabled),
         createdAt: Date.now(),
+        source: input.source,
     }
 }
 
@@ -123,6 +147,7 @@ export function normalizeChartWidgets(raw: unknown): DashboardChartWidget[] {
             columns,
             rows: rows.slice(0, DASHBOARD_CHART_WIDGET_MAX_ROWS),
             createdAt: typeof record.createdAt === 'number' ? record.createdAt : Date.now(),
+            source: normalizeSource(record.source),
         })
     }
     return widgets.sort((left, right) => right.createdAt - left.createdAt)

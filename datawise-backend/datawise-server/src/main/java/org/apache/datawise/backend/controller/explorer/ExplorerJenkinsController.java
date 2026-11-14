@@ -93,7 +93,8 @@ import org.apache.datawise.backend.domain.TreeNode;
 import org.apache.datawise.backend.domain.TreePayload;
 import org.apache.datawise.backend.security.HeadlessSqlAuth;
 import org.apache.datawise.backend.server.pack.EntitlementService;
-import org.apache.datawise.backend.service.FeaturePermissionAccess;
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -113,17 +114,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/explorer")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_OPEN)
 public class ExplorerJenkinsController {
 
     private final ExplorerJenkinsService jenkinsService;
-    private final FeaturePermissionAccess featurePermissionAccess;
 
-    public ExplorerJenkinsController(
-            ExplorerJenkinsService jenkinsService,
-            FeaturePermissionAccess featurePermissionAccess
-    ) {
+    public ExplorerJenkinsController(ExplorerJenkinsService jenkinsService) {
         this.jenkinsService = jenkinsService;
-        this.featurePermissionAccess = featurePermissionAccess;
     }
 
         @GetMapping("/connections/{connectionId}/jenkins/info")
@@ -156,23 +153,23 @@ public class ExplorerJenkinsController {
             return ApiResponse.ok(jenkinsService.describeJob(connectionId, name));
         }
     
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
         @PostMapping("/connections/{connectionId}/jenkins/job/build")
         public ApiResponse<JenkinsMutationResultDto> triggerJenkinsBuild(
                 @PathVariable String connectionId,
                 @RequestParam String name,
                 @RequestBody(required = false) JenkinsTriggerBuildRequest request
         ) {
-            featurePermissionAccess.requireExplorerContextExport();
             return ApiResponse.ok(jenkinsService.triggerBuild(connectionId, name, request));
         }
-    
+
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
         @PostMapping("/connections/{connectionId}/jenkins/job/builds/{buildNumber}/stop")
         public ApiResponse<JenkinsMutationResultDto> stopJenkinsBuild(
                 @PathVariable String connectionId,
                 @PathVariable int buildNumber,
                 @RequestParam String name
         ) {
-            featurePermissionAccess.requireExplorerContextExport();
             return ApiResponse.ok(jenkinsService.stopBuild(connectionId, name, buildNumber));
         }
     

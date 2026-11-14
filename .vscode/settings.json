@@ -1,0 +1,16 @@
+{
+    "java.compile.nullAnalysis.mode": "automatic",
+    "files.encoding": "utf8",
+    "files.autoGuessEncoding": false,
+    "files.eol": "\n",
+    "[powershell]": {
+        "files.encoding": "utf8bom",
+        "files.eol": "\r\n"
+    },
+    "files.watcherExclude": {
+        "**/datawise-desktop/installer/ui/release-portable/**": true
+    },
+    "search.exclude": {
+        "**/datawise-desktop/installer/ui/release-portable/**": true
+    }
+}

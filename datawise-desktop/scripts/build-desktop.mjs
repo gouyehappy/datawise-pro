@@ -50,6 +50,15 @@ function log(msg) {
     console.log(`[dist:desktop] ${msg}`)
 }
 
+/** ISO timestamp; honor SOURCE_DATE_EPOCH for reproducible release manifests (C5). */
+function buildTimestampIso() {
+    const epoch = process.env.SOURCE_DATE_EPOCH
+    if (epoch && /^\d+$/.test(String(epoch).trim())) {
+        return new Date(Number(epoch) * 1000).toISOString()
+    }
+    return new Date().toISOString()
+}
+
 /** Fail fast when layout / jpackage output is missing critical desktop assets. */
 function validateDesktopLayout(layoutDir, target, {jpackageRoot} = {}) {
     const errors = []
@@ -125,7 +134,7 @@ function writeLocalVersionManifest(dir, version, target) {
         schema: 1,
         version: String(version),
         platform: `${target.osKey}-${target.zipArch}`,
-        builtAt: new Date().toISOString(),
+        builtAt: buildTimestampIso(),
         files,
     }
     writeFileSync(join(dir, 'local_version.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
@@ -1140,7 +1149,7 @@ function writeReleaseVersionJson(version, target, artifacts) {
         schema: 1,
         version: String(version),
         platform: `${target.osKey}-${target.zipArch}`,
-        builtAt: new Date().toISOString(),
+        builtAt: buildTimestampIso(),
         // D-04: clients prefer frontend-dist / server-jar over full installer when present.
         preferIncremental: true,
         artifacts: Object.fromEntries(

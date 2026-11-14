@@ -80,6 +80,109 @@ export function clientPointToFloatOrigin(
     )
 }
 
+/** IDEA-like undock while dragging a tab out of the strip. */
+export type UndockDropKind = 'free' | 'left' | 'right' | 'top'
+
+export interface UndockDropTarget {
+    kind: UndockDropKind
+    rect: WorkspaceTabFloatRect
+}
+
+function halfLeftRect(bounds: {width: number; height: number}, margin = 8): WorkspaceTabFloatRect {
+    return clampTabFloatToBounds(
+        {
+            x: margin,
+            y: margin,
+            width: Math.floor((bounds.width - margin * 3) / 2),
+            height: bounds.height - margin * 2,
+        },
+        bounds,
+        margin,
+    )
+}
+
+function halfRightRect(bounds: {width: number; height: number}, margin = 8): WorkspaceTabFloatRect {
+    const width = Math.floor((bounds.width - margin * 3) / 2)
+    return clampTabFloatToBounds(
+        {
+            x: bounds.width - margin - width,
+            y: margin,
+            width,
+            height: bounds.height - margin * 2,
+        },
+        bounds,
+        margin,
+    )
+}
+
+function maximizeFloatRect(bounds: {width: number; height: number}, margin = 8): WorkspaceTabFloatRect {
+    return clampTabFloatToBounds(
+        {
+            x: margin,
+            y: margin,
+            width: bounds.width - margin * 2,
+            height: bounds.height - margin * 2,
+        },
+        bounds,
+        margin,
+    )
+}
+
+/**
+ * Map pointer → undock landing (free window, left/right half, or maximize).
+ * Edge bands scale with the workspace — similar to IDEA editor drop frames.
+ */
+export function resolveUndockDropFromPointer(
+    clientX: number,
+    clientY: number,
+    surface: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>,
+    freeSize: {width: number; height: number} = {
+        width: TAB_FLOAT_DEFAULT_WIDTH,
+        height: TAB_FLOAT_DEFAULT_HEIGHT,
+    },
+): UndockDropTarget {
+    const bounds = {width: surface.width, height: surface.height}
+    if (bounds.width <= 0 || bounds.height <= 0) {
+        return {
+            kind: 'free',
+            rect: clampTabFloatToBounds(
+                {x: 16, y: 16, width: freeSize.width, height: freeSize.height},
+                {width: Math.max(1, bounds.width), height: Math.max(1, bounds.height)},
+            ),
+        }
+    }
+
+    const lx = clientX - surface.left
+    const ly = clientY - surface.top
+    const edgeBand = Math.min(88, Math.max(52, bounds.width * 0.14))
+    const topBand = Math.min(64, Math.max(44, bounds.height * 0.11))
+
+    // Top band (not deep in a side pocket) → maximize, like IDEA "fill editor".
+    if (ly <= topBand && lx > edgeBand * 0.45 && lx < bounds.width - edgeBand * 0.45) {
+        return {kind: 'top', rect: maximizeFloatRect(bounds)}
+    }
+    if (lx <= edgeBand) {
+        return {kind: 'left', rect: halfLeftRect(bounds)}
+    }
+    if (lx >= bounds.width - edgeBand) {
+        return {kind: 'right', rect: halfRightRect(bounds)}
+    }
+
+    // Anchor so the title-bar tab chip sits under the pointer (IDEA tear-off grab).
+    return {
+        kind: 'free',
+        rect: clampTabFloatToBounds(
+            {
+                x: clientX - surface.left - 52,
+                y: clientY - surface.top - 16,
+                width: freeSize.width,
+                height: freeSize.height,
+            },
+            bounds,
+        ),
+    }
+}
+
 export type TabFloatSnapEdge =
     | 'left'
     | 'right'

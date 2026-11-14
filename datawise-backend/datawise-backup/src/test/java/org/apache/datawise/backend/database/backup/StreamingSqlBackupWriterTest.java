@@ -2,22 +2,27 @@ package org.apache.datawise.backend.database.backup;
 
 import org.apache.datawise.backend.connector.facade.ConnectorFacade;
 import org.apache.datawise.backend.connector.facade.dml.ConnectorDmlAccess;
-import org.apache.datawise.backend.database.table.TableDataService;
+import org.apache.datawise.backend.connector.facade.jdbc.ConnectorJdbcAccess;
 import org.apache.datawise.backend.database.table.TableDetailService;
-import org.apache.datawise.backend.domain.TableDataResult;
 import org.apache.datawise.backend.domain.TableDdlResult;
+import org.apache.datawise.backend.jdbc.stream.ResultStreamCallback;
+import org.apache.datawise.backend.jdbc.support.JdbcConnectionCallback;
 import org.apache.datawise.backend.model.ConnectionEntity;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -79,28 +84,39 @@ class StreamingSqlBackupWriterTest {
         assertEquals("table", DatabaseBackupService.sanitizeTableFileName("???"));
     }
 
-    private static StreamingSqlBackupWriter createWriter() {
+    @SuppressWarnings("unchecked")
+    private static StreamingSqlBackupWriter createWriter() throws Exception {
         TableDetailService tableDetailService = mock(TableDetailService.class);
-        TableDataService tableDataService = mock(TableDataService.class);
         ConnectorFacade connectorFacade = mock(ConnectorFacade.class);
         ConnectorDmlAccess dml = mock(ConnectorDmlAccess.class);
+        ConnectorJdbcAccess jdbc = mock(ConnectorJdbcAccess.class);
+        Connection connection = mock(Connection.class);
 
         when(connectorFacade.dml()).thenReturn(dml);
+        when(connectorFacade.jdbc()).thenReturn(jdbc);
         when(dml.buildDropTableIfExists(any(), any(), any())).thenReturn("DROP TABLE IF EXISTS t;\n");
         when(dml.buildInsertsFromTableData(any(), any(), any(), any())).thenReturn("INSERT INTO t VALUES (1);");
         when(tableDetailService.loadDdl(eq("t"), eq("conn-1"), eq("app")))
                 .thenReturn(new TableDdlResult("CREATE TABLE t (id INT);"));
-        when(tableDataService.fetch(eq("t"), eq("conn-1"), eq("app"), eq(0)))
-                .thenReturn(new TableDataResult(
-                        List.of(Map.of("name", "id")),
-                        List.of(Map.of("id", 1)),
-                        null,
-                        false,
-                        0,
-                        1000
-                ));
+        when(jdbc.buildTableSelectSql(any(), eq("t"), eq("app"))).thenReturn("SELECT * FROM t");
+        when(jdbc.withConnection(any(), any(), any())).thenAnswer(invocation -> {
+            JdbcConnectionCallback<Long> callback = invocation.getArgument(2);
+            return callback.apply(connection);
+        });
+        when(jdbc.streamQueryOnConnection(
+                any(Connection.class),
+                anyString(),
+                anyString(),
+                any(ResultStreamCallback.class),
+                isNull()
+        )).thenAnswer(invocation -> {
+            ResultStreamCallback callback = invocation.getArgument(3);
+            callback.onSchema(List.of(Map.of("key", "c1", "name", "id", "type", "INTEGER")));
+            callback.onRow(Map.of("c1", 1));
+            return 1L;
+        });
 
-        return new StreamingSqlBackupWriter(tableDetailService, tableDataService, connectorFacade);
+        return new StreamingSqlBackupWriter(tableDetailService, connectorFacade);
     }
 
     private static ConnectionEntity entity() {

@@ -40,6 +40,14 @@ import {
   resolveCatalogReorderDrop,
   type CatalogReorderPosition,
 } from '@/features/explorer/services/explorer-catalog-reorder.service'
+import {
+  isProjectSandboxMovableNode,
+  resolveProjectFileReorderDrop,
+} from '@/features/explorer/services/explorer-project-file-move.service'
+import {
+  dataSourceTreeItemDomId,
+  resolveDataSourceTreeKeyAction,
+} from '@/features/explorer/services/data-source-tree-keyboard'
 
 const DRAG_THRESHOLD_PX = 6
 
@@ -63,6 +71,8 @@ const props = withDefaults(
       compact?: boolean
       connectionDragEnabled?: boolean
       canMoveConnectionToGroup?: (connectionId: string, groupId: string) => boolean
+      /** Live explorer tree for project-file drop parent resolution */
+      explorerTree?: TreeNode[]
       /** 内联新建/重命名中的节点 id */
       inlineEditNodeId?: string | null
       inlineEditValue?: string
@@ -230,6 +240,95 @@ const selectedFlatIndex = computed(() =>
         : resolveLastFlatNodeIndex(props.flatNodes, props.selectedNodeId),
 )
 
+/** Keyboard / aria-activedescendant focus (FE-P2-5); separate from selection when multi-select. */
+const keyboardActiveId = ref<string | null>(null)
+
+watch(
+    () => props.selectedNodeId,
+    (id) => {
+      if (!props.selectable && id) keyboardActiveId.value = id
+    },
+    {immediate: true},
+)
+
+watch(
+    () => props.flatNodes,
+    (rows) => {
+      if (!rows.length) {
+        keyboardActiveId.value = null
+        return
+      }
+      if (keyboardActiveId.value && rows.some((row) => row.node.id === keyboardActiveId.value)) {
+        return
+      }
+      if (!props.selectable && props.selectedNodeId
+          && rows.some((row) => row.node.id === props.selectedNodeId)) {
+        keyboardActiveId.value = props.selectedNodeId
+        return
+      }
+      keyboardActiveId.value = rows[0]?.node.id ?? null
+    },
+)
+
+const ariaActiveDescendant = computed(() => {
+  const id = keyboardActiveId.value
+  return id ? dataSourceTreeItemDomId(id) : undefined
+})
+
+function onTreeKeydown(event: KeyboardEvent) {
+  if (props.inlineEditNodeId) return
+  if (isEventInsideInlineInput(event)) return
+  const target = event.target
+  if (target instanceof HTMLElement) {
+    const tag = target.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
+  }
+
+  const action = resolveDataSourceTreeKeyAction(
+      event.key,
+      props.flatNodes,
+      keyboardActiveId.value,
+      {
+        selectable: props.selectable,
+        isExpanded: (node) => isTreeTwistVisuallyExpanded(node, {
+          loading: props.loadingNodeIds?.has(node.id),
+        }),
+        isCheckable: props.isCheckable,
+      },
+  )
+  if (!action) return
+
+  event.preventDefault()
+  switch (action.type) {
+    case 'activate':
+      keyboardActiveId.value = action.node.id
+      scrollToFlatIndex(action.index)
+      if (!props.selectable) {
+        if (
+          action.node.type !== 'project-files-draft'
+          && action.node.type !== 'group-draft'
+          && action.node.type !== 'project-files-hint'
+          && action.node.type !== 'load_more'
+        ) {
+          emit('select', action.node)
+        }
+      }
+      break
+    case 'open':
+      keyboardActiveId.value = action.node.id
+      emit('select', action.node)
+      emit('open', action.node)
+      break
+    case 'toggleExpand':
+      emit('toggleExpand', action.nodeId)
+      break
+    case 'toggleCheck':
+      keyboardActiveId.value = action.node.id
+      emit('toggleCheck', action.node)
+      break
+  }
+}
+
 defineExpose({scrollToFlatIndex})
 const draggingNodeId = ref<string | null>(null)
 const dropTarget = ref<{targetId: string; position: CatalogReorderPosition} | null>(null)
@@ -237,6 +336,12 @@ const suppressNextClick = ref(false)
 
 type PointerDragSession = { cleanup: () => void }
 let activePointerDrag: PointerDragSession | null = null
+/** dbx-style: insert bar pinned to row center + name pill floating right of the pointer */
+let insertIndicatorEl: HTMLElement | null = null
+let insertLineEl: HTMLElement | null = null
+let insertPillEl: HTMLElement | null = null
+let hoverExpandTimer: number | null = null
+let hoverExpandTargetId: string | null = null
 
 onUnmounted(() => {
   cleanupOutsideCommit()
@@ -244,6 +349,12 @@ onUnmounted(() => {
 })
 
 const INDENT_STEP = 14
+const HOVER_EXPAND_MS = 480
+const INSERT_PILL_MAX_WIDTH = 132
+/** Distance from the pointer to the left edge of the floating name pill. */
+const INSERT_PILL_POINTER_GAP = 10
+/** How far the full-width insert bar stops short of the row's right edge. */
+const INSERT_LINE_RIGHT_INSET = 4
 
 function rowStyle(depth: number) {
   return {'--tree-depth': String(depth)}
@@ -261,11 +372,10 @@ function rowClass(node: TreeNode, index: number) {
   const loading = props.loadingNodeIds?.has(node.id)
   const expandable = canExpandTreeNode(node)
   const twistExpanded = isTreeTwistVisuallyExpanded(node, {loading})
-  const dragging = props.connectionDragEnabled && draggingNodeId.value === node.id
-  const activeDrop = props.connectionDragEnabled && dropTarget.value?.targetId === node.id
-  const dropBefore = activeDrop && dropTarget.value?.position === 'before'
-  const dropAfter = activeDrop && dropTarget.value?.position === 'after'
-  const dropInside = activeDrop && dropTarget.value?.position === 'inside'
+  const dragging = draggingNodeId.value === node.id
+  const dropBefore = isDropBefore(node)
+  const dropAfter = isDropAfter(node)
+  const dropInside = isDropInside(node)
   const extensionFolder = isExplorerExtensionCatalogFolder(node)
   const prevEntry = index > 0 ? props.flatNodes[index - 1] : undefined
   const currDepth = props.flatNodes[index]?.depth
@@ -281,7 +391,7 @@ function rowClass(node: TreeNode, index: number) {
       'tree-node--favorites-view-all': isExplorerFavoritesViewAllId(node.id),
       'tree-node--catalog-extension': extensionFolder,
       'tree-node--catalog-extension-start': extensionStart,
-      'is-selected': selected,
+      'is-selected': selected || dragging,
       'is-locate-flash': flash,
       'is-team-shared': teamShared,
       'is-checked': checked,
@@ -308,9 +418,128 @@ function canDropConnectionOnGroup(connectionId: string, groupId: string): boolea
   return true
 }
 
+function clearHoverExpandTimer() {
+  if (hoverExpandTimer != null) {
+    window.clearTimeout(hoverExpandTimer)
+    hoverExpandTimer = null
+  }
+  hoverExpandTargetId = null
+}
+
+function ensureInsertIndicator(label: string) {
+  if (insertIndicatorEl && insertLineEl && insertPillEl) {
+    insertPillEl.textContent = label
+    return
+  }
+  removeInsertIndicator()
+  const root = document.createElement('div')
+  root.className = 'datasource-tree-insert'
+  root.setAttribute('aria-hidden', 'true')
+  const line = document.createElement('div')
+  line.className = 'datasource-tree-insert__line'
+  const pill = document.createElement('div')
+  pill.className = 'datasource-tree-insert__pill'
+  pill.textContent = label
+  root.append(line, pill)
+  document.body.appendChild(root)
+  insertIndicatorEl = root
+  insertLineEl = line
+  insertPillEl = pill
+}
+
+function removeInsertIndicator() {
+  insertIndicatorEl?.remove()
+  insertIndicatorEl = null
+  insertLineEl = null
+  insertPillEl = null
+}
+
+/**
+ * Sync dbx insert chrome:
+ * - before/after → full-width bar from the row twistie (arrow) to the right edge;
+ *   fixed to the row, never derived from the pointer position
+ * - name pill floats just right of the pointer, on the same Y as the bar
+ * - otherwise → pill follows pointer (no bar); folder inside uses row ring
+ */
+function syncInsertIndicator(
+    label: string,
+    drop: {targetId: string; position: CatalogReorderPosition} | null,
+    clientX: number,
+    clientY: number,
+) {
+  ensureInsertIndicator(label)
+  if (!insertIndicatorEl || !insertLineEl || !insertPillEl) return
+
+  // Measure once with a full-width host so the absolutely positioned pill keeps its natural width.
+  insertIndicatorEl.style.width = 'auto'
+  insertPillEl.style.left = '0'
+  insertPillEl.style.top = '0'
+  insertPillEl.style.transform = 'translateY(-50%)'
+  insertPillEl.style.display = ''
+  const pillWidth = Math.min(
+      INSERT_PILL_MAX_WIDTH,
+      Math.max(Math.ceil(insertPillEl.getBoundingClientRect().width), 40),
+  )
+  // Pill left edge in viewport coordinates: always right of the pointer, clamped to the viewport.
+  const pillLeft = Math.min(
+      clientX + INSERT_PILL_POINTER_GAP,
+      Math.max(0, window.innerWidth - pillWidth - 8),
+  )
+
+  if (drop && (drop.position === 'before' || drop.position === 'after')) {
+    const row =
+        (document.getElementById(dataSourceTreeItemDomId(drop.targetId)) as HTMLElement | null)
+        ?? (document.querySelector(
+            `[data-tree-node-id="${CSS.escape?.(drop.targetId) ?? drop.targetId.replace(/"/g, '\\"')}"]`,
+        ) as HTMLElement | null)
+    if (row) {
+      const rect = row.getBoundingClientRect()
+      const y = drop.position === 'before' ? rect.top : rect.bottom
+      // Start at the expand arrow (or its spacer) and run all the way to the row's right edge.
+      const twistie = row.querySelector('.tree-twistie') as HTMLElement | null
+      const startX = twistie?.getBoundingClientRect().left ?? rect.left + 8
+      const endX = Math.max(startX + 1, rect.right - INSERT_LINE_RIGHT_INSET)
+      insertIndicatorEl.classList.add('is-between')
+      insertLineEl.style.display = ''
+      insertIndicatorEl.style.left = `${startX}px`
+      insertIndicatorEl.style.top = `${y}px`
+      insertIndicatorEl.style.width = `${endX - startX}px`
+      insertPillEl.style.left = `${pillLeft - startX}px`
+      return
+    }
+  }
+
+  // No between-row target: capsule follows pointer only
+  insertIndicatorEl.classList.remove('is-between')
+  insertLineEl.style.display = 'none'
+  insertIndicatorEl.style.left = '0'
+  insertIndicatorEl.style.top = `${clientY}px`
+  insertIndicatorEl.style.width = '0'
+  insertPillEl.style.left = `${pillLeft}px`
+}
+
 function cancelPointerDrag() {
   activePointerDrag?.cleanup()
   activePointerDrag = null
+}
+
+function scheduleHoverExpand(drop: {targetId: string; position: CatalogReorderPosition} | null) {
+  if (!drop || drop.position !== 'inside') {
+    clearHoverExpandTimer()
+    return
+  }
+  const entry = props.flatNodes.find(({node: n}) => n.id === drop.targetId)
+  if (!entry || !canExpandTreeNode(entry.node) || entry.node.expanded) {
+    clearHoverExpandTimer()
+    return
+  }
+  if (hoverExpandTargetId === drop.targetId) return
+  clearHoverExpandTimer()
+  hoverExpandTargetId = drop.targetId
+  hoverExpandTimer = window.setTimeout(() => {
+    hoverExpandTimer = null
+    emit('toggleExpand', drop.targetId)
+  }, HOVER_EXPAND_MS)
 }
 
 function resolveDropAtPoint(
@@ -325,6 +554,20 @@ function resolveDropAtPoint(
   const entry = props.flatNodes.find(({node: n}) => n.id === nodeId)
   if (!entry) return null
   const rect = hit.getBoundingClientRect()
+
+  if (isProjectSandboxMovableNode(dragged)) {
+    const tree = props.explorerTree
+    if (!tree?.length) return null
+    return resolveProjectFileReorderDrop(
+        tree,
+        dragged,
+        entry.node,
+        clientY,
+        rect.top,
+        rect.height,
+    )
+  }
+
   const resolved = resolveCatalogReorderDrop(
       dragged,
       entry.node,
@@ -343,9 +586,26 @@ function resolveDropAtPoint(
   return resolved
 }
 
+function isPointerDraggable(node: TreeNode): boolean {
+  if (isProjectSandboxMovableNode(node)) return true
+  return Boolean(props.connectionDragEnabled && isCatalogReorderDraggable(node))
+}
+
+function isDropBefore(node: TreeNode): boolean {
+  return dropTarget.value?.targetId === node.id && dropTarget.value.position === 'before'
+}
+
+function isDropAfter(node: TreeNode): boolean {
+  return dropTarget.value?.targetId === node.id && dropTarget.value.position === 'after'
+}
+
+function isDropInside(node: TreeNode): boolean {
+  return dropTarget.value?.targetId === node.id && dropTarget.value.position === 'inside'
+}
+
 function onCatalogPointerDown(event: MouseEvent, node: TreeNode) {
   commitInlineIfLeaving(node)
-  if (!props.connectionDragEnabled || !isCatalogReorderDraggable(node)) return
+  if (!isPointerDraggable(node)) return
   if (event.button !== 0) return
 
   cancelPointerDrag()
@@ -362,16 +622,25 @@ function onCatalogPointerDown(event: MouseEvent, node: TreeNode) {
       dragging = true
       draggingNodeId.value = node.id
       suppressNextClick.value = true
+      document.body.style.cursor = 'grabbing'
+      document.body.style.userSelect = 'none'
       e.preventDefault()
     }
-    dropTarget.value = resolveDropAtPoint(node, e.clientX, e.clientY)
+    const nextDrop = resolveDropAtPoint(node, e.clientX, e.clientY)
+    dropTarget.value = nextDrop
+    syncInsertIndicator(node.label, nextDrop, e.clientX, e.clientY)
+    scheduleHoverExpand(nextDrop)
   }
 
-  function onUp() {
+  function endDragSession(commit: boolean) {
     cleanupListeners()
+    clearHoverExpandTimer()
+    removeInsertIndicator()
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
     if (dragging) {
       const drop = dropTarget.value
-      if (drop) {
+      if (commit && drop) {
         emit('reorderCatalog', node.id, drop.targetId, drop.position)
       }
       draggingNodeId.value = null
@@ -380,23 +649,26 @@ function onCatalogPointerDown(event: MouseEvent, node: TreeNode) {
     activePointerDrag = null
   }
 
+  function onUp() {
+    endDragSession(true)
+  }
+
   function cleanupListeners() {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
-    window.removeEventListener('pointercancel', onUp)
+    window.removeEventListener('pointercancel', onCancel)
+  }
+
+  function onCancel() {
+    endDragSession(false)
   }
 
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
-  window.addEventListener('pointercancel', onUp)
+  window.addEventListener('pointercancel', onCancel)
   activePointerDrag = {
     cleanup() {
-      cleanupListeners()
-      if (dragging) {
-        draggingNodeId.value = null
-        dropTarget.value = null
-      }
-      activePointerDrag = null
+      endDragSession(false)
     },
   }
 }
@@ -408,6 +680,7 @@ function onRowClick(node: TreeNode) {
   }
   commitInlineIfLeaving(node)
   if (isInlineEditing(node) || node.type === 'project-files-draft' || node.type === 'group-draft') return
+  keyboardActiveId.value = node.id
   if (props.selectable) {
     if (props.isCheckable?.(node)) {
       emit('toggleCheck', node)
@@ -503,7 +776,7 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
       class="datasource-tree"
       :class="{
         'datasource-tree--compact': compact,
-        'is-connection-dragging': !!draggingNodeId,
+        'is-tree-dragging': !!draggingNodeId,
         'is-virtualized': useVirtual,
       }"
       :style="{ '--tree-indent': `${INDENT_STEP}px` }"
@@ -529,7 +802,11 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
     <div
         v-else
         class="tree-virtual-track"
+        role="tree"
+        tabindex="0"
+        :aria-activedescendant="ariaActiveDescendant"
         :style="useVirtual ? { minHeight: `${totalHeight}px` } : undefined"
+        @keydown="onTreeKeydown"
     >
       <div
           class="tree-virtual-window"
@@ -541,11 +818,22 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
     <div
         v-for="({ node, depth, index }) in visibleNodes"
         :key="`${index}:${node.id}`"
+        :id="dataSourceTreeItemDomId(node.id)"
         class="tree-node"
         :class="rowClass(node, index)"
+        role="treeitem"
+        :aria-level="depth + 1"
+        :aria-selected="keyboardActiveId === node.id"
+        :aria-expanded="canExpandTreeNode(node)
+          ? isTreeTwistVisuallyExpanded(node, {loading: loadingNodeIds?.has(node.id)})
+          : undefined"
         :data-tree-node-id="node.id"
         :style="rowStyle(depth)"
-        :title="connectionDragEnabled && isCatalogReorderDraggable(node) ? t('explorer.reorderCatalogDragHint') : undefined"
+        :title="isPointerDraggable(node)
+          ? (isProjectSandboxMovableNode(node)
+            ? t('explorer.projectFiles.moveDragHint')
+            : t('explorer.reorderCatalogDragHint'))
+          : undefined"
         @mousedown="onCatalogPointerDown($event, node)"
         @click="onRowClick(node)"
         @dblclick="onRowDblClick(node)"
@@ -568,6 +856,7 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
               'is-loading': loadingNodeIds?.has(node.id),
             }"
             type="button"
+            tabindex="-1"
             :aria-label="t('explorer.expandToggle')"
             :aria-expanded="isTreeTwistVisuallyExpanded(node, {loading: loadingNodeIds?.has(node.id)})"
             @mousedown.stop
@@ -694,6 +983,14 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
   --tree-row-height: var(--dw-control-h-sm);
   --tree-indent: 12px;
   padding: var(--dw-space-1) 0 var(--dw-space-3);
+}
+
+.tree-virtual-track {
+  outline: none;
+}
+
+.tree-virtual-track:focus-visible {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dw-primary) 45%, transparent);
 }
 
 .tree-empty {
@@ -871,7 +1168,7 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
   }
 }
 
-.datasource-tree.is-connection-dragging {
+.datasource-tree.is-tree-dragging {
   cursor: grabbing;
   user-select: none;
 }
@@ -880,38 +1177,34 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
   font-weight: 400;
 }
 
-.tree-node.is-dragging {
-  opacity: 0.45;
+/* Source stays selected-looking (dbx); slight fade only */
+.tree-node.is-dragging > .tree-node__body {
+  opacity: 0.72;
+  background: color-mix(in srgb, var(--dw-primary) 16%, transparent);
 }
 
-.tree-node.is-drop-target > .tree-node__body {
-  background: color-mix(in srgb, var(--dw-primary) 14%, transparent);
-  outline: 1px dashed color-mix(in srgb, var(--dw-primary) 45%, transparent);
-  outline-offset: -1px;
+.tree-node.is-dragging.is-selected > .tree-node__body,
+.tree-node.is-dragging > .tree-node__body {
+  background: color-mix(in srgb, var(--dw-primary) 18%, transparent);
 }
 
-.tree-node.is-drop-before > .tree-node__body {
-  box-shadow:
-    inset 0 2px 0 0 var(--dw-primary),
-    inset 3px 0 0 transparent;
-}
-
+/* before/after: no full-row paint — insert line lives in the body overlay */
+.tree-node.is-drop-before > .tree-node__body,
 .tree-node.is-drop-after > .tree-node__body {
-  box-shadow:
-    inset 0 -2px 0 0 var(--dw-primary),
-    inset 3px 0 0 transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
-.tree-node.is-team-shared.is-drop-before > .tree-node__body {
-  box-shadow:
-    inset 0 2px 0 0 var(--dw-primary),
-    inset 3px 0 0 var(--dw-primary);
+/* Drop into folder only */
+.tree-node.is-drop-target > .tree-node__body {
+  background: color-mix(in srgb, var(--dw-primary) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dw-primary) 55%, transparent);
 }
 
-.tree-node.is-team-shared.is-drop-after > .tree-node__body {
+.tree-node.is-team-shared.is-drop-target > .tree-node__body {
   box-shadow:
-    inset 0 -2px 0 0 var(--dw-primary),
-    inset 3px 0 0 var(--dw-primary);
+    inset 3px 0 0 var(--dw-primary),
+    inset 0 0 0 1px color-mix(in srgb, var(--dw-primary) 55%, transparent);
 }
 
 .tree-node--connection .tree-label,
@@ -1162,5 +1455,50 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
 .tree-node--favorites-view-all > .tree-row .tree-label {
   color: var(--dw-text-secondary);
   font-style: italic;
+}
+</style>
+
+<!-- Insert chrome is appended to document.body — must stay unscoped -->
+<style>
+.datasource-tree-insert {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  height: 0;
+}
+
+.datasource-tree-insert__line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  border-radius: 1px;
+  /* dbx: bright line between rows */
+  background: color-mix(in srgb, var(--dw-text, #f5f5f5) 92%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--dw-bg, #000) 35%, transparent),
+    0 0 6px color-mix(in srgb, var(--dw-text, #fff) 25%, transparent);
+}
+
+.datasource-tree-insert__pill {
+  position: absolute;
+  /* Compact label floating right of the pointer, independent of the insert bar width */
+  max-width: 132px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--dw-border, #444) 80%, transparent);
+  background: color-mix(in srgb, var(--dw-bg-elevated, #2a2a2a) 94%, #000);
+  color: var(--dw-text, #f0f0f0);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow:
+    0 1px 2px color-mix(in srgb, #000 25%, transparent),
+    0 4px 12px color-mix(in srgb, #000 28%, transparent);
 }
 </style>

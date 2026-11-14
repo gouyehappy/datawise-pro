@@ -11,6 +11,13 @@ import {useAuthStore} from '@/features/auth/stores/auth-store'
 import {canMutateConnectionCatalog} from '@/features/auth/services/feature-permission.service'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import type {DbType} from '@/core/types'
+import {isJdbcDriverRequired} from '@/features/connection/utils/connection-defaults'
+
+/** A2-4: 新建 SQL 类连接保存后预填一条可执行探活语句 */
+function starterSqlForNewConnection(dbType: DbType): string | undefined {
+    if (!isJdbcDriverRequired(dbType)) return undefined
+    return 'SELECT 1;'
+}
 
 /** 连接 Tab：保存 / 取消 */
 export function useConnectionTabActions(options: {
@@ -60,10 +67,10 @@ export function useConnectionTabActions(options: {
         actionMessage.value = null
         actionOk.value = null
         try {
+            let openedConsole = false
             if (persistedEditId) {
                 payload.id = persistedEditId
                 await explorer.updateConnection(persistedEditId, payload)
-                layout.showSuccessToast(t('connection.updateSuccess'))
                 explorer.selectNode(persistedEditId)
                 explorer.expandToNode(persistedEditId)
             } else {
@@ -73,13 +80,23 @@ export function useConnectionTabActions(options: {
                     setActionFeedback(t('connection.saveFailed'), false)
                     return
                 }
-                layout.showSuccessToast(t('connection.saveSuccess'))
                 explorer.expandToNode(id)
                 explorer.selectNode(id)
+                // A2-4: 新建连接后默认打开查询台，缩短「连上 → 能查」空窗
+                layout.setModule('database')
+                workspace.closeTab(options.tabId)
+                await workspace.openConsole({
+                    connectionId: id,
+                    connectionName: payload.name,
+                    sql: starterSqlForNewConnection(payload.dbType as DbType),
+                })
+                openedConsole = true
             }
 
-            layout.setModule('database')
-            workspace.closeTab(options.tabId)
+            if (!openedConsole) {
+                layout.setModule('database')
+                workspace.closeTab(options.tabId)
+            }
         } catch (error) {
             setActionFeedback(resolveConnectionCatalogErrorMessage(error, t, 'save'), false)
         } finally {

@@ -3,7 +3,7 @@
   "version": "5.0.0",
   "private": false,
   "type": "module",
-  "description": "DataWise shortcuts engine �� registry, scope, binding, local page handlers, execute pipeline",
+  "description": "DataWise shortcuts engine — registry, scope, binding, local page handlers, execute pipeline",
   "license": "MIT",
   "files": [
     "src",

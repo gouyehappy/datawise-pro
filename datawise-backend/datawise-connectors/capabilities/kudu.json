@@ -1,0 +1,4 @@
+{
+  "dbType": "kudu",
+  "extends": "specialized-browse"
+}

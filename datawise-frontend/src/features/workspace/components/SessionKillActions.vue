@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {useI18n} from 'vue-i18n'
 import {DwButton} from '@/core/components'
 import type {SessionKillMode} from '@/features/workspace/services/session-kill.service'

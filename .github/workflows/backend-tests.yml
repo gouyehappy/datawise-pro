@@ -31,8 +31,40 @@ jobs:
           java-version: '17'
           cache: maven
 
-      - name: Unit tests
-        run: mvn -B test -DskipITs
+      # One lifecycle run covers both layers: surefire executes *Test.java at `test`,
+      # failsafe executes *IT.java at `verify`. Skipping the verify phase would silently
+      # leave the integration tests unrun.
+      - name: Unit and integration tests
+        run: mvn -B verify -DskipITs=false
+
+      # A broken jacoco agent makes `jacoco:check` skip itself with a warning and still
+      # report success. Fail loudly instead of passing on empty data.
+      #
+      # Modules below all clear jacoco.line.minimum (0.25) today. datawise-sqlflow
+      # (11.9%) stays out until its key paths get tests.
+      - name: Assert coverage data exists
+        env:
+          COVERAGE_MODULES: >-
+            datawise-common datawise-config
+            datawise-connectors/datawise-connector-api
+            datawise-connectors/datawise-connector-spi
+            datawise-sqlparser datawise-lineage datawise-ai datawise-database
+        run: |
+          for m in $COVERAGE_MODULES; do
+            if [ ! -s "$m/target/jacoco.exec" ]; then
+              echo "::error::missing jacoco.exec for $m - coverage gate would be a no-op"
+              exit 1
+            fi
+          done
+
+      # Raise jacoco.line.minimum in the root pom as coverage improves.
+      - name: Coverage gate (core modules)
+        env:
+          # Keep this a single comma-separated value: Maven does not trim spaces after commas.
+          COVERAGE_MODULES: datawise-common,datawise-config,datawise-connectors/datawise-connector-api,datawise-connectors/datawise-connector-spi,datawise-sqlparser,datawise-lineage,datawise-ai,datawise-database
+        run: >
+          mvn -B -pl "$COVERAGE_MODULES"
+          jacoco:check -Djacoco.check.skip=false
 
       - name: Spotless (common + spi + api + config)
         run: >

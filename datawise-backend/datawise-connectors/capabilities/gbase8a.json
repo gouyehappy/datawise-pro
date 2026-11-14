@@ -1,0 +1,7 @@
+{
+  "dbType": "gbase8a",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false
+  }
+}

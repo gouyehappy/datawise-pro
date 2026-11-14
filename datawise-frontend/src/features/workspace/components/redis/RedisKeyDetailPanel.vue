@@ -15,7 +15,7 @@ import {
     buildRedisTtlCommand,
     buildRedisTypeCommand,
 } from '@/features/explorer/services/redis-command-hints.service'
-import {resolveCaughtApiErrorMessage} from '@/shared/api'
+import {resolveCaughtApiErrorMessage, resolveCaughtMessage} from '@/shared/api'
 import '@/features/workspace/components/shared/connector-browse-panel.css'
 
 const props = defineProps<{
@@ -84,7 +84,6 @@ function onRunType() {
 async function copyText(text: string) {
     try {
         await navigator.clipboard.writeText(text)
-        layout.showSuccessToast(t('explorer.redisConsole.copied'))
     } catch {
         // ignore clipboard failures
     }
@@ -102,13 +101,19 @@ async function confirmDeleteKey() {
             {database: props.database},
         )
         if (!result.success) {
-            layout.showErrorToast(result.error ?? result.output)
+            layout.showErrorToast(
+                resolveCaughtMessage(
+                    result.error ?? result.output,
+                    t,
+                    'explorer.redisKey.deleteFailed',
+                ),
+            )
             return
         }
         deleteConfirmOpen.value = false
         emit('deleted', props.redisKey)
     } catch (err) {
-        layout.showErrorToast(resolveCaughtApiErrorMessage(err, t, 'explorer.redisKey.loadFailed'))
+        layout.showErrorToast(resolveCaughtApiErrorMessage(err, t, 'explorer.redisKey.deleteFailed'))
     }
 }
 

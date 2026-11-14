@@ -2,6 +2,7 @@ package org.apache.datawise.backend.security;
 
 import org.apache.datawise.backend.model.ConnectionEntity;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -28,6 +29,31 @@ public final class ConnectionSecrets {
         for (ConnectionEntity connection : connections) {
             encrypt(connection, codec);
         }
+    }
+
+    /**
+     * Copy then decrypt so the long-lived catalog cache can retain ciphertext.
+     */
+    public static ConnectionEntity copyAndDecrypt(ConnectionEntity connection, SecretValueCodec codec) {
+        if (connection == null) {
+            return null;
+        }
+        ConnectionEntity copy = ConnectionEntity.copyOf(connection);
+        decrypt(copy, codec);
+        return copy;
+    }
+
+    public static List<ConnectionEntity> copyAndDecryptAll(
+                                                           List<ConnectionEntity> connections,
+                                                           SecretValueCodec codec) {
+        if (connections == null || connections.isEmpty()) {
+            return connections == null ? null : List.of();
+        }
+        List<ConnectionEntity> out = new ArrayList<>(connections.size());
+        for (ConnectionEntity connection : connections) {
+            out.add(copyAndDecrypt(connection, codec));
+        }
+        return out;
     }
 
     public static void decrypt(ConnectionEntity connection, SecretValueCodec codec) {

@@ -6,6 +6,11 @@
   "workspaces": [
     "packages/*"
   ],
+  "overrides": {
+    "vue": "3.5.45",
+    "lucide-vue-next": "0.577.0",
+    "monaco-editor": "0.55.1"
+  },
   "scripts": {
     "help": "node scripts/dw.mjs help",
     "clean": "node scripts/dw.mjs clean",
@@ -41,6 +46,10 @@
     "typecheck": "npm run typecheck:sql-editor && npm run typecheck:frontend",
     "typecheck:packages": "npm run typecheck --workspaces --if-present",
     "audit:packages-boundary": "node scripts/audit-packages-boundary.mjs",
+    "check:version-alignment": "node scripts/check-version-alignment.mjs",
+    "gen:connection-capabilities": "node scripts/generate-connection-capabilities.mjs",
+    "check:connection-capabilities": "node scripts/generate-connection-capabilities.mjs --check",
+    "clean:dwp-staging": "node scripts/clean-dwp-staging.mjs",
     "ensure:sql-editor": "npm run ensure:sql-editor --prefix datawise-frontend",
     "dev:frontend": "npm run dev --prefix datawise-frontend"
   }

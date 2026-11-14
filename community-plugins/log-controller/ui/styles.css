@@ -1,13 +1,13 @@
 :root {
   color-scheme: dark;
-  --dw-bg: var(--color-background, #0c1015);
-  --dw-bg-panel: var(--color-popover, #171e27);
-  --dw-bg-muted: var(--color-muted, #121820);
-  --dw-bg-hover: var(--color-accent, #1f2936);
-  --dw-bg-selected: color-mix(in srgb, var(--color-primary, #3b82f6) 18%, var(--color-muted, #121820));
-  --dw-bg-input: var(--color-background, #0c1015);
-  --dw-border: var(--color-border, rgba(255, 255, 255, 0.12));
-  --dw-border-light: color-mix(in srgb, var(--color-border, rgba(255, 255, 255, 0.12)) 70%, transparent);
+  --dw-bg: var(--color-background, #1a1b1e);
+  --dw-bg-panel: var(--color-popover, #222326);
+  --dw-bg-muted: var(--color-muted, #222326);
+  --dw-bg-hover: var(--color-accent, #2a2b2e);
+  --dw-bg-selected: color-mix(in srgb, var(--color-primary, #3b82f6) 18%, var(--color-muted, #222326));
+  --dw-bg-input: var(--color-background, #1a1b1e);
+  --dw-border: var(--color-border, rgba(255, 255, 255, 0.08));
+  --dw-border-light: color-mix(in srgb, var(--color-border, rgba(255, 255, 255, 0.08)) 70%, transparent);
   --dw-text: var(--color-foreground, #f0f0f3);
   --dw-text-secondary: var(--color-muted-foreground, #d4d4d8);
   --dw-text-muted: var(--color-muted-foreground, #c4c7cc);
@@ -125,6 +125,8 @@ input:focus-visible {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  gap: var(--dw-panel-gap, 0px);
+  background: var(--color-chrome, transparent);
 }
 
 .chrome {
@@ -459,11 +461,11 @@ input:focus-visible {
   cursor: pointer;
 }
 .side-fold__tog::before {
-  content: '▾ ';
+  content: '? ';
   opacity: 0.7;
 }
 .side-fold.is-collapsed .side-fold__tog::before,
-.health-rail.is-collapsed .side-fold__tog::before { content: '▸ '; }
+.health-rail.is-collapsed .side-fold__tog::before { content: '? '; }
 .side-fold.is-collapsed .side-fold__body,
 .health-rail.is-collapsed .health-rail__body { display: none; }
 .side-stats {
@@ -2420,7 +2422,7 @@ input:focus-visible {
   gap: 0.35rem;
 }
 .jump-list:empty::after {
-  content: "还没有跳板，需要时点下方添加";
+  content: "—û——壬—Ҫʱ—·——";
   display: block;
   color: var(--dw-text-muted);
   font-size: var(--dw-text-xs);

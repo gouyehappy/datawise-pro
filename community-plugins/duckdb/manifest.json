@@ -30,6 +30,9 @@
       "label": "DuckDB / files",
       "icon": "assets/plugin.svg",
       "capabilities": ["test", "connect"],
+      "localDataPreview": {
+        "extensions": [".parquet", ".csv", ".tsv", ".json", ".jsonl"]
+      },
       "fields": [
         {
           "key": "databasePath",

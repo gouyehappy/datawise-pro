@@ -13,6 +13,8 @@ import {
 
 export type TitleBarMenuKind = 'nav' | 'action' | 'header'
 export type TitleBarMenuMode = 'leaf' | 'dropdown'
+/** 顶栏的三段语义分区：创建动作 / 浏览导航 / 系统工具。组件据此插入分隔。 */
+export type TitleBarMenuGroup = 'create' | 'browse' | 'system'
 
 export interface TitleBarMenuItem {
     id: string
@@ -20,6 +22,7 @@ export interface TitleBarMenuItem {
     icon?: TitleBarMenuIconId
     menuMode?: TitleBarMenuMode
     kind?: TitleBarMenuKind
+    group?: TitleBarMenuGroup
     hintKey?: string
     active?: boolean
     checked?: boolean
@@ -51,7 +54,7 @@ export interface TitleBarNavContext {
 
 const HELP_SECTIONS: SettingsSection[] = ['about']
 
-type LeafOptions = Pick<TitleBarMenuItem, 'active' | 'badge' | 'icon' | 'primary' | 'kind' | 'menuMode'>
+type LeafOptions = Pick<TitleBarMenuItem, 'active' | 'badge' | 'icon' | 'primary' | 'kind' | 'menuMode' | 'group'>
 
 function leaf(
     id: string,
@@ -69,6 +72,7 @@ function configMenu(ctx: TitleBarNavContext, handlers: TitleBarNavHandlers): Tit
         icon: 'config',
         menuMode: 'dropdown',
         kind: 'nav',
+        group: 'system',
         children: buildQuickConfigMenuChildren(ctx.config, handlers.config),
     }
 }
@@ -81,6 +85,7 @@ function helpMenu(ctx: TitleBarNavContext, handlers: TitleBarNavHandlers): Title
         icon: 'help',
         menuMode: 'dropdown',
         kind: 'nav',
+        group: 'system',
         active: ctx.activeModule === 'settings' && HELP_SECTIONS.includes(ctx.settingsSection),
         children: [
             leaf('help:onboarding', 'app.titleBar.menu.helpOnboarding', () => handlers.openOnboarding(), {
@@ -123,21 +128,25 @@ function filterTitleBarMenuItem(item: TitleBarMenuItem): TitleBarMenuItem | null
 export function buildTitleBarNav(ctx: TitleBarNavContext, handlers: TitleBarNavHandlers): TitleBarMenuItem[] {
     return [
         leaf('new-connection', 'app.titleBar.menu.newConnection', () => handlers.openNewConnection(), {
-            icon: 'database',
+            icon: 'plus',
             primary: true,
             menuMode: 'dropdown',
+            group: 'create',
         }),
         leaf('new-console', 'app.titleBar.menu.newConsole', () => handlers.openNewConsole(), {
             icon: 'console',
             primary: true,
+            group: 'create',
         }),
         leaf('connectors', 'app.titleBar.menu.connectorMarket', () => handlers.setModule('connectorMarket'), {
             icon: 'connectors',
             active: ctx.activeModule === 'connectorMarket',
+            group: 'browse',
         }),
         leaf('community-plugins', 'app.titleBar.menu.communityPlugin', () => handlers.setModule('communityPlugin'), {
             icon: 'plugins',
             active: ctx.activeModule === 'communityPlugin' || Boolean(ctx.communityPluginCenterActive),
+            group: 'browse',
         }),
         configMenu(ctx, handlers),
         helpMenu(ctx, handlers),

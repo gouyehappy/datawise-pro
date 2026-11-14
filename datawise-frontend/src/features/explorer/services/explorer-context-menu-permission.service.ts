@@ -14,6 +14,7 @@ import {
 } from '@/features/auth/types/feature-permission.types'
 import {isDbTypeMenuId} from '@/features/explorer/constants/explorer-add-menu'
 import {MOVE_TARGET_MENU_PREFIX} from '@/features/explorer/services/explorer-move-connection.service'
+import {PROJECT_FILE_MOVE_TARGET_MENU_PREFIX} from '@/features/explorer/services/explorer-project-file-move.service'
 
 const EXPLORER_CONTEXT_MENU_PERMISSION_BY_ID: Record<string, FeaturePermissionKey> = {
     open: FeaturePermission.WorkbenchExplorerContextOpen,
@@ -36,9 +37,12 @@ const EXPLORER_CONTEXT_MENU_PERMISSION_BY_ID: Record<string, FeaturePermissionKe
     'new-project-file': FeaturePermission.WorkbenchExplorerContextEdit,
     'new-project-folder': FeaturePermission.WorkbenchExplorerContextEdit,
     'rename-project-file': FeaturePermission.WorkbenchExplorerContextEdit,
+    'move-project-file': FeaturePermission.WorkbenchExplorerContextEdit,
+    'delete-project-file': FeaturePermission.WorkbenchExplorerContextEdit,
     'refresh-project-files': FeaturePermission.WorkbenchExplorerContextOpen,
 
     console: FeaturePermission.WorkbenchExplorerContextConsole,
+    'ask-ai': FeaturePermission.NavAi,
     'sql-editor-open': FeaturePermission.WorkbenchExplorerContextConsole,
     'sql-editor-recent': FeaturePermission.WorkbenchExplorerContextConsole,
     'sql-editor-new': FeaturePermission.WorkbenchExplorerContextConsole,
@@ -148,6 +152,9 @@ export function explorerContextMenuFeatureKey(menuId: string): FeaturePermission
     if (menuId.startsWith('community-plugin:')) return null
     if (isDbTypeMenuId(menuId)) return FeaturePermission.WorkbenchExplorerContextEdit
     if (menuId.startsWith(MOVE_TARGET_MENU_PREFIX)) return FeaturePermission.WorkbenchExplorerContextEdit
+    if (menuId.startsWith(PROJECT_FILE_MOVE_TARGET_MENU_PREFIX)) {
+        return FeaturePermission.WorkbenchExplorerContextEdit
+    }
     return EXPLORER_CONTEXT_MENU_PERMISSION_BY_ID[menuId] ?? null
 }
 

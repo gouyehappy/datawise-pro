@@ -16,8 +16,12 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.validation.Valid;
 import java.util.List;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/platform/scheduled-tasks")
+@RequiresFeature(UserFeaturePermission.SETTINGS_DATA_AGENT)
 public class ScheduledTaskController {
 
     private final ScheduledTaskService scheduledTaskService;

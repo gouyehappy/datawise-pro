@@ -33,12 +33,15 @@ import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import {usePanelHeaderDrag} from '@/features/dock/composables/usePanelHeaderDrag'
+import {usePopoverEscape} from '@/core/composables/usePopoverEscape'
 import {
   clampAssistantFloatGeometry,
   readAssistantFloatGeometry,
   writeAssistantFloatGeometry,
 } from '@/features/ai/assistant/services/assistant-float-geometry.service'
 import AssistantHistoryPopover from '@/features/ai/assistant/components/AssistantHistoryPopover.vue'
+import AiConversationBindingBanner from '@/features/ai/context/components/AiConversationBindingBanner.vue'
+import type {AiChatMode} from '@/features/ai/types/session'
 
 const props = withDefaults(
     defineProps<{
@@ -251,7 +254,8 @@ const {scrollToBottom} = useAiChatScroll(
     computed(() => listRef.value?.getScrollEl?.()),
     activeSessionId,
 )
-const {openInConsole} = useAiConsoleBridge(selectedTargets)
+const activeBinding = computed(() => aiChat.activeSession?.binding ?? null)
+const {openInConsole} = useAiConsoleBridge(selectedTargets, activeBinding)
 const {
   canApplyToDocument,
   canUndoApplyToDocument,
@@ -331,8 +335,19 @@ function currentSnapshot() {
 function applyWorkbenchFocusToScope(options?: {force?: boolean}) {
   const snap = currentSnapshot()
   const ids = resolveTargetIdsFromWorkbenchFocus(allTargets.value, snap.focus)
-  if (!ids.length) return ids
   const session = aiChat.activeSession
+  if (session && snap.focus.connectionId) {
+    aiChat.seedSessionBindingIfEmpty(session.id, {
+      connectionId: snap.focus.connectionId,
+      connectionName: snap.focus.connectionName,
+      database: snap.focus.database,
+      schema: snap.focus.schema,
+      dialect: snap.focus.dialect,
+      environment: snap.focus.environment,
+      source: 'workbench_focus',
+    })
+  }
+  if (!ids.length) return ids
   const validSelected = (session?.selectedTargetIds ?? []).filter((id) =>
     allTargets.value.some((target) => target.id === id),
   )
@@ -342,6 +357,32 @@ function applyWorkbenchFocusToScope(options?: {force?: boolean}) {
   return ids
 }
 
+function onBindingModeChange(mode: AiChatMode) {
+  const id = activeSessionId.value
+  if (!id) return
+  aiChat.setSessionMode(id, mode)
+  if (mode === 'ask' && sqlConfirmPending.value && !resumingSql.value) {
+    void cancelSqlExecution()
+  }
+}
+
+function onNewChatFromFocus() {
+  const session = aiChat.createSession(resolveFocusTargetIds())
+  const snap = currentSnapshot()
+  if (snap.focus.connectionId) {
+    aiChat.setSessionBinding(session.id, {
+      connectionId: snap.focus.connectionId,
+      connectionName: snap.focus.connectionName,
+      database: snap.focus.database,
+      schema: snap.focus.schema,
+      dialect: snap.focus.dialect,
+      environment: snap.focus.environment,
+      source: 'workbench_focus',
+    })
+  }
+  void scrollToBottom({force: true})
+}
+
 function resolveFocusTargetIds() {
   return resolveTargetIdsFromWorkbenchFocus(allTargets.value, currentSnapshot().focus)
 }
@@ -349,6 +390,9 @@ function resolveFocusTargetIds() {
 function close() {
   layout.showAssistantDrawer = false
 }
+
+/** AUDIT-02: Escape dismisses the assistant tool window. */
+usePopoverEscape(() => layout.showAssistantDrawer, close)
 
 function openFullAgent() {
   if (!entitlement.guardAiNav()) return
@@ -473,7 +517,19 @@ watch(
       </template>
 
       <div class="assistant-drawer__body">
-        <div class="assistant-drawer__context" :title="focusLabel">
+        <AiConversationBindingBanner
+            v-if="activeSession"
+            variant="panel"
+            :mode="activeSession.mode ?? 'agent'"
+            :binding="activeSession.binding"
+            @update:mode="onBindingModeChange"
+            @new-from-focus="onNewChatFromFocus"
+        />
+        <div
+            v-if="focusLabel && !activeSession?.binding?.connectionId"
+            class="assistant-drawer__context"
+            :title="focusLabel"
+        >
           <DwIcon name="locate" size="sm" :stroke-width="1.5" aria-hidden="true"/>
           <span>{{ focusLabel }}</span>
         </div>

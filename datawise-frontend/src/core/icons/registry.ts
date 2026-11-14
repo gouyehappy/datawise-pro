@@ -1,4 +1,5 @@
 import type {Component} from 'vue'
+import {registerDwIcons} from '@datawise/icons'
 import {
     Activity,
     AlignCenter,
@@ -12,10 +13,7 @@ import {
     BookOpen,
     Bookmark,
     Bot,
-    Braces,
     Cable,
-    ChartColumn,
-    ChartPie,
     Check,
     ChevronDown,
     ChevronLeft,
@@ -42,20 +40,15 @@ import {
     EyeOff,
     File,
     FileCode,
-    FileCog,
-    FileDiff,
     FileJson,
     FileOutput,
-    FileSpreadsheet,
     FileText,
     Files,
     Filter,
     Folder,
     FolderOpen,
     FoldVertical,
-    GitCompare,
     Github,
-    Grid3x3,
     GripVertical,
     History,
     Home,
@@ -66,19 +59,16 @@ import {
     LayoutGrid,
     LayoutTemplate,
     Layers,
-    LineChart,
     Link,
     List,
     ListOrdered,
     ListPlus,
     ListMinus,
     ListTree,
-    ListVideo,
     Lock,
     LogOut,
     Maximize2,
     MessageSquare,
-    Mic,
     Minimize2,
     Minus,
     Moon,
@@ -93,9 +83,6 @@ import {
     Search,
     Send,
     Settings,
-    Share2,
-    ShieldCheck,
-    SlidersHorizontal,
     Sparkles,
     Square,
     Star,
@@ -103,7 +90,6 @@ import {
     Table,
     Terminal,
     Trash2,
-    TrendingUp,
     TriangleAlert,
     Undo2,
     UnfoldVertical,
@@ -112,7 +98,6 @@ import {
     Upload,
     User,
     Users,
-    Webhook,
     Wrench,
     X,
     Zap,
@@ -283,7 +268,11 @@ export type DwIconName =
     | 'zoom-reset'
     | 'tour'
 
-export const DW_ICON_REGISTRY: Record<DwIconName, Component> = {
+/**
+ * Shell Lucide set (first paint). Deferred names are filled by
+ * {@link ensureDeferredDwIcons} (PERF-09).
+ */
+export const DW_ICON_REGISTRY = {
     plus: Plus,
     minus: Minus,
     'list-plus': ListPlus,
@@ -320,7 +309,6 @@ export const DW_ICON_REGISTRY: Record<DwIconName, Component> = {
     'log-out': LogOut,
     link: Link,
     key: Key,
-    mic: Mic,
     bot: Bot,
     zap: Zap,
     layers: Layers,
@@ -340,7 +328,6 @@ export const DW_ICON_REGISTRY: Record<DwIconName, Component> = {
     'menu-import': Import,
     run: Play,
     stop: Square,
-    'explain-plan': ListVideo,
     submit: Check,
     rollback: Undo2,
     disconnect: Unplug,
@@ -375,45 +362,32 @@ export const DW_ICON_REGISTRY: Record<DwIconName, Component> = {
     file: File,
     code: Code,
     'file-json': FileJson,
-    'file-sheet': FileSpreadsheet,
     'file-log': ScrollText,
-    'file-braces': Braces,
     connection: Database,
     database: Database,
     plugins: LayoutGrid,
     'dev-tools': Wrench,
     dashboard: BarChart3,
     chart: BarChart3,
-    'chart-bar': ChartColumn,
-    'chart-line': LineChart,
-    'chart-pie': ChartPie,
     tools: Wrench,
     tree: ListTree,
     terminal: Terminal,
     align: AlignCenter,
-    matrix: Grid3x3,
-    usage: TrendingUp,
     connectors: Cable,
-    audit: ShieldCheck,
-    hooks: Webhook,
     notify: Bell,
     command: Command,
     layout: Columns2,
     editor: FileText,
     shortcuts: Keyboard,
     about: Info,
-    diff: FileDiff,
     visibility: Eye,
     'comment-column': Columns3,
     'comment-table': Table,
     'comment-all': List,
-    'settings-basic': SlidersHorizontal,
     'settings-layout': Columns2,
     'settings-connection-health': Activity,
-    'settings-system-metrics': LineChart,
     'settings-profile': User,
     'settings-editor': FileText,
-    'settings-sql-editor': FileCog,
     'settings-shortcuts': Keyboard,
     'settings-plugins': LayoutGrid,
     'settings-ai': Sparkles,
@@ -421,11 +395,11 @@ export const DW_ICON_REGISTRY: Record<DwIconName, Component> = {
     'settings-knowledge': BookOpen,
     'settings-about': Info,
     'tab-welcome': Home,
-    'tab-console': Terminal,
+    /* SQL scripts: FileCode reads clearer than Terminal next to SSH/xterm tabs. */
+    'tab-console': FileCode,
     'tab-table': Table,
     'tab-connection': Database,
     'tab-terminal': Terminal,
-    'tab-schema-compare': GitCompare,
     'tab-schema-er': Network,
     'tab-cross-env-compare': Columns2,
     'tab-view-model': FileText,
@@ -442,6 +416,27 @@ export const DW_ICON_REGISTRY: Record<DwIconName, Component> = {
     'zoom-out': ZoomOut,
     'zoom-reset': Scan,
     tour: BookOpen,
+} as Record<DwIconName, Component>
+
+let deferredIconsPromise: Promise<void> | null = null
+let deferredIconsReady = false
+
+/** PERF-09: load rare Lucide icons into the registry (idempotent). */
+export function ensureDeferredDwIcons(): Promise<void> {
+    if (deferredIconsReady) return Promise.resolve()
+    if (!deferredIconsPromise) {
+        deferredIconsPromise = import('@/core/icons/registry-deferred')
+            .then((mod) => {
+                Object.assign(DW_ICON_REGISTRY, mod.DW_ICON_DEFERRED_REGISTRY)
+                registerDwIcons(mod.DW_ICON_DEFERRED_REGISTRY as Record<string, Component>)
+                deferredIconsReady = true
+            })
+            .catch((error) => {
+                deferredIconsPromise = null
+                throw error
+            })
+    }
+    return deferredIconsPromise
 }
 
 export function resolveDwIcon(
@@ -451,5 +446,10 @@ export function resolveDwIcon(
     if (name === 'fullscreen') {
         return options?.active ? Minimize2 : Maximize2
     }
-    return DW_ICON_REGISTRY[name]
+    const icon = DW_ICON_REGISTRY[name]
+    if (!icon) {
+        void ensureDeferredDwIcons()
+        return Info
+    }
+    return icon
 }

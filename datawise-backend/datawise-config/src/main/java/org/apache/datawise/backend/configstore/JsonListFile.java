@@ -2,6 +2,7 @@ package org.apache.datawise.backend.configstore;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.datawise.backend.configstore.io.ConfigFileLock;
 import org.apache.datawise.backend.configstore.io.ConfigFileSupport;
 import org.apache.datawise.backend.configstore.io.ConfigPersistence;
 
@@ -52,44 +53,60 @@ public class JsonListFile<T> {
     }
 
     public synchronized void replaceAll(Collection<T> next) {
-        CopyOnWriteArrayList<T> replacement = new CopyOnWriteArrayList<>();
-        if (next != null) {
-            replacement.addAll(next);
-        }
-        items = replacement;
-        persist();
+        ConfigFileLock.runWithExclusiveLock(configDirectory.resolve(filename), () -> {
+            CopyOnWriteArrayList<T> replacement = new CopyOnWriteArrayList<>();
+            if (next != null) {
+                replacement.addAll(next);
+            }
+            items = replacement;
+            persist();
+        });
     }
 
     public synchronized T upsert(T item, Predicate<T> sameItem) {
-        CopyOnWriteArrayList<T> current = items;
-        current.removeIf(sameItem);
-        current.add(item);
-        persist();
-        return item;
+        return ConfigFileLock.withExclusiveLock(configDirectory.resolve(filename), () -> {
+            // Re-read under the lock so a concurrent writer — another store or another process
+            // (desktop + headless CLI share the config directory) — is merged instead of
+            // overwritten by a stale in-memory mirror.
+            reload();
+            items.removeIf(sameItem);
+            items.add(item);
+            persist();
+            return item;
+        });
     }
 
     public synchronized T append(T item) {
-        items.add(item);
-        persist();
-        return item;
+        return ConfigFileLock.withExclusiveLock(configDirectory.resolve(filename), () -> {
+            reload();
+            items.add(item);
+            persist();
+            return item;
+        });
     }
 
     public synchronized void removeIf(Predicate<T> predicate) {
-        items.removeIf(predicate);
-        persist();
+        ConfigFileLock.runWithExclusiveLock(configDirectory.resolve(filename), () -> {
+            reload();
+            items.removeIf(predicate);
+            persist();
+        });
     }
 
     public synchronized void updateMatching(Predicate<T> scope, java.util.function.Consumer<T> updater) {
-        boolean changed = false;
-        for (T item : items) {
-            if (scope.test(item)) {
-                updater.accept(item);
-                changed = true;
+        ConfigFileLock.runWithExclusiveLock(configDirectory.resolve(filename), () -> {
+            reload();
+            boolean changed = false;
+            for (T item : items) {
+                if (scope.test(item)) {
+                    updater.accept(item);
+                    changed = true;
+                }
             }
-        }
-        if (changed) {
-            persist();
-        }
+            if (changed) {
+                persist();
+            }
+        });
     }
 
     private void persist() {

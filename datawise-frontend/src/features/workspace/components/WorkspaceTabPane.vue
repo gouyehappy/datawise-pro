@@ -6,7 +6,7 @@
 import {computed, onBeforeUnmount, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
 import type {WorkspaceTab} from '@/core/types'
-import {IconButton} from '@/core/components'
+import {IconButton, PanelErrorBoundary} from '@/core/components'
 import {DwIcon} from '@/core/icons'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {resolveWorkspaceTab} from '@/features/workspace/tab-registry'
@@ -46,6 +46,8 @@ const isMain = computed(() => props.mode === 'main')
 const isHidden = computed(() => props.mode === 'hidden')
 const isFocused = computed(() => workspace.activeTabId === props.tab.id)
 const isDragging = ref(false)
+/** UX-01: drag/resize preview — avoid patching Pinia on every pointermove. */
+const liveRect = ref<{x: number; y: number; width: number; height: number} | null>(null)
 
 /**
  * Community / session hosts: live while main or floated (not background-hidden).
@@ -60,13 +62,14 @@ const contentActive = computed(() => {
 
 const hostStyle = computed(() => {
   if (!isFloat.value || !floatState.value) return undefined
-  const rect = floatState.value
+  const base = floatState.value
+  const rect = liveRect.value ?? base
   return {
     left: `${rect.x}px`,
     top: `${rect.y}px`,
     width: `${rect.width}px`,
     height: `${minimized.value ? TAB_FLOAT_MINIMIZED_HEIGHT : rect.height}px`,
-    zIndex: rect.zIndex,
+    zIndex: base.zIndex,
     '--dw-tab-float-opacity': String(workspace.tabFloatOpacity),
   }
 })
@@ -143,13 +146,14 @@ function onTitlePointerMove(event: PointerEvent) {
       },
       props.bounds,
   )
-  workspace.patchTabFloat(props.tab.id, {x: next.x, y: next.y})
+  liveRect.value = next
   workspace.setTabFloatSnapGuide(resolveTabFloatSnap(next, props.bounds))
 }
 
 function onTitlePointerUp(event: PointerEvent) {
   if (dragPointerId == null || event.pointerId !== dragPointerId) return
   const snap = workspace.tabFloatSnapGuide
+  const preview = liveRect.value
   dragPointerId = null
   isDragging.value = false
   window.removeEventListener('pointermove', onTitlePointerMove)
@@ -165,7 +169,10 @@ function onTitlePointerUp(event: PointerEvent) {
           ? {x: before.x, y: before.y, width: before.width, height: before.height}
           : undefined,
     })
+  } else if (preview) {
+    workspace.patchTabFloat(props.tab.id, {x: preview.x, y: preview.y})
   }
+  liveRect.value = null
   workspace.setTabFloatSnapGuide(null)
 }
 
@@ -202,19 +209,25 @@ function onResizePointerMove(event: PointerEvent) {
       },
       props.bounds,
   )
-  workspace.patchTabFloat(props.tab.id, {width: next.width, height: next.height})
+  liveRect.value = next
 }
 
 function onResizePointerUp(event: PointerEvent) {
   if (resizePointerId == null || event.pointerId !== resizePointerId) return
+  const preview = liveRect.value
   resizePointerId = null
   window.removeEventListener('pointermove', onResizePointerMove)
   window.removeEventListener('pointerup', onResizePointerUp)
   window.removeEventListener('pointercancel', onResizePointerUp)
+  if (preview) {
+    workspace.patchTabFloat(props.tab.id, {width: preview.width, height: preview.height})
+  }
+  liveRect.value = null
 }
 
 onBeforeUnmount(() => {
   isDragging.value = false
+  liveRect.value = null
   workspace.setTabFloatSnapGuide(null)
   window.removeEventListener('pointermove', onTitlePointerMove)
   window.removeEventListener('pointerup', onTitlePointerUp)
@@ -288,16 +301,23 @@ onBeforeUnmount(() => {
         class="workspace-tab-pane__body"
         :class="{ 'is-collapsed': isFloat && minimized }"
     >
-      <CommunityWorkbenchTab
-          v-if="isCommunity"
-          :tab="tab"
-          :active="contentActive"
-      />
-      <component
-          :is="tabComponent"
-          v-else-if="tabComponent"
-          :tab="tab"
-      />
+      <PanelErrorBoundary
+          :label="`tab:${tab.type}`"
+          closable
+          @close="onClose"
+      >
+        <CommunityWorkbenchTab
+            v-if="isCommunity"
+            :tab="tab"
+            :active="contentActive"
+        />
+        <component
+            :is="tabComponent"
+            v-else-if="tabComponent"
+            :tab="tab"
+            :pane-active="contentActive"
+        />
+      </PanelErrorBoundary>
     </div>
 
     <span
@@ -323,11 +343,16 @@ onBeforeUnmount(() => {
   z-index: 2;
   visibility: hidden;
   pointer-events: none;
+  /* AUDIT-03: keep visibility (not display:none) for CEF/session iframes; skip paint while shelled. */
+  contain: layout style paint;
+  content-visibility: hidden;
 }
 
 .workspace-tab-pane.is-main.is-main-foreground {
   visibility: visible;
   pointer-events: auto;
+  contain: none;
+  content-visibility: visible;
 }
 
 .workspace-tab-pane.is-hidden {
@@ -336,6 +361,8 @@ onBeforeUnmount(() => {
   z-index: 0;
   visibility: hidden;
   pointer-events: none;
+  contain: layout style paint;
+  content-visibility: hidden;
 }
 
 .workspace-tab-pane.is-float {

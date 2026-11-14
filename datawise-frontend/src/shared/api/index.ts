@@ -11,6 +11,8 @@ export {registerApiErrorNotifier} from '@/shared/api/http/api-error-notifier'
 export {
     resolveApiErrorMessage,
     resolveCaughtApiErrorMessage,
+    resolveCaughtMessage,
+    looksLikeDeveloperEnglish,
     resolveDisplayApiErrorMessage,
 } from '@/shared/api/http/api-error-message'
 export type {

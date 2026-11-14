@@ -52,6 +52,8 @@ public class StorageProperties {
         private String username = "sa";
         private String password = "";
         private String driverClassName = "org.h2.Driver";
+        /** Hikari maximum pool size for the metadata DataSource. */
+        private int maximumPoolSize = 10;
 
         public String getJdbcUrl() {
             return jdbcUrl;
@@ -83,6 +85,14 @@ public class StorageProperties {
 
         public void setDriverClassName(String driverClassName) {
             this.driverClassName = driverClassName;
+        }
+
+        public int getMaximumPoolSize() {
+            return maximumPoolSize;
+        }
+
+        public void setMaximumPoolSize(int maximumPoolSize) {
+            this.maximumPoolSize = Math.max(1, maximumPoolSize);
         }
     }
 }

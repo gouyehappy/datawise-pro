@@ -29,6 +29,10 @@ public class TaskConcurrencyProperties
     @Builder.Default
     int dispatchBatchSize = DEFAULT_DISPATCH_BATCH_SIZE;
 
+    /** Bounded worker pool size for {@code TaskDispatchExecutor} (aligned with slot admission). */
+    @Builder.Default
+    int workerPoolSize = DEFAULT_GLOBAL_MAX_CONCURRENT;
+
     @Builder.Default
     Duration workerShutdownTimeout = Duration.ofSeconds(60);
 

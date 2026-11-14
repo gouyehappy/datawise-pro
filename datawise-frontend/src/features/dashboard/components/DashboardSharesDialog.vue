@@ -98,7 +98,6 @@ async function revoke(share: ShareSnapshot) {
     shares.value = shares.value.map((item) =>
         item.id === share.id ? {...item, revoked: true} : item,
     )
-    toast.success(t('dashboard.shares.revoked'))
   } catch (error) {
     toast.error(
         resolveDisplayApiErrorMessage(error, (key) => String(t(key)))
@@ -176,7 +175,7 @@ async function revoke(share: ShareSnapshot) {
   justify-content: space-between;
   gap: var(--dw-space-4);
   padding: var(--dw-space-3) var(--dw-space-4);
-  border: 1px solid var(--dw-border-light);
+  border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
   border-radius: var(--dw-control-radius);
   background: var(--dw-surface-muted);
 }

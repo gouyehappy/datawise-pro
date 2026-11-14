@@ -1,0 +1,36 @@
+name: Desktop tests
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'datawise-desktop/**'
+      - '.github/workflows/desktop-tests.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'datawise-desktop/**'
+      - '.github/workflows/desktop-tests.yml'
+
+concurrency:
+  group: desktop-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: datawise-desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: datawise-desktop/pom.xml
+
+      - name: Unit tests
+        run: mvn -B test

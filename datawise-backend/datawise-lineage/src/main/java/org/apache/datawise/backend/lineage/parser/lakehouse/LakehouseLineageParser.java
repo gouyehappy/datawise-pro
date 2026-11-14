@@ -13,7 +13,7 @@ import org.apache.datawise.backend.lineage.parser.lakehouse.LakehouseSqlSupport.
 import org.apache.datawise.backend.lineage.parser.lakehouse.LakehouseSqlSupport.SoftenResult;
 import org.apache.datawise.backend.lineage.parser.sqlflow.SqlFlowAstLineageParser;
 import org.apache.datawise.backend.lineage.spi.SqlLineageParser;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -31,9 +31,10 @@ public class LakehouseLineageParser implements SqlLineageParser {
     private static final int PRIORITY = 40;
     private static final String TABLE_LEVEL_OUTPUT = "_table_deps";
 
-    private final SqlFlowAstLineageParser sqlFlowAstLineageParser;
+    /** Late lookup avoids sibling-parser cycle via the registry list (BE-P2-1). */
+    private final ObjectFactory<SqlFlowAstLineageParser> sqlFlowAstLineageParser;
 
-    public LakehouseLineageParser(@Lazy SqlFlowAstLineageParser sqlFlowAstLineageParser) {
+    public LakehouseLineageParser(ObjectFactory<SqlFlowAstLineageParser> sqlFlowAstLineageParser) {
         this.sqlFlowAstLineageParser = sqlFlowAstLineageParser;
     }
 
@@ -144,7 +145,7 @@ public class LakehouseLineageParser implements SqlLineageParser {
                 request.resolution(),
                 request.federatedSources()
         );
-        LineageParseResult result = sqlFlowAstLineageParser.parse(delegated);
+        LineageParseResult result = sqlFlowAstLineageParser.getObject().parse(delegated);
         List<LineageWarning> merged = new ArrayList<>(warnings);
         merged.addAll(result.warnings());
         if (result.status() == ParseStatus.FAILED) {

@@ -1,8 +1,12 @@
 import {onBeforeUnmount} from 'vue'
 import {useDockPlacementStore} from '@/features/dock/stores/dock-placement-store'
-import {toDockDropTarget} from '@/features/dock/components/dock-minimap.config'
 import type {DockDragPanel, DockFloatRect} from '@/features/dock/types/dock.types'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
+import {
+    clearDockFloatLivePreview,
+    setDockFloatLivePreview,
+} from '@/features/dock/services/dock-float-live-preview'
+import {toDockDropTarget} from '@/features/dock/components/dock-minimap.config'
 
 /** Ignore tiny pointer jitter before dock-drag starts (grip / header). */
 const DRAG_THRESHOLD_PX = 4
@@ -54,6 +58,15 @@ export function usePanelHeaderDrag(
     }
 
     function writeFloatPosition(dx: number, dy: number) {
+        // UX-01: preview locally; commit to Pinia on pointerup / Escape restore.
+        setDockFloatLivePreview(panel, {
+            x: Math.max(0, floatStartX + dx),
+            y: Math.max(0, floatStartY + dy),
+        })
+    }
+
+    function commitFloatPosition(dx: number, dy: number) {
+        clearDockFloatLivePreview(panel)
         dock.patchFloat(panel, {
             x: Math.max(0, floatStartX + dx),
             y: Math.max(0, floatStartY + dy),
@@ -62,7 +75,11 @@ export function usePanelHeaderDrag(
 
     function restoreFloatOrigin() {
         if (!movingFloat) return
-        writeFloatPosition(0, 0)
+        clearDockFloatLivePreview(panel)
+        dock.patchFloat(panel, {
+            x: Math.max(0, floatStartX),
+            y: Math.max(0, floatStartY),
+        })
     }
 
     function endSessionChrome() {
@@ -180,6 +197,7 @@ export function usePanelHeaderDrag(
 
         if (movingFloat) writeFloatPosition(dx, dy)
 
+        // Drop only when the pointer is over a minimap thumbnail slot.
         const el = document.elementFromPoint(event.clientX, event.clientY)
         const zone = el?.closest('[data-dock-drop]') as HTMLElement | null
         if (!zone) {
@@ -226,6 +244,13 @@ export function usePanelHeaderDrag(
 
         const target = dock.hoverTarget
         const matched = target && target.panel === panel ? target : null
+        if (movingFloat && !matched) {
+            const dx = event.clientX - startX
+            const dy = event.clientY - startY
+            commitFloatPosition(dx, dy)
+        } else {
+            clearDockFloatLivePreview(panel)
+        }
         dock.commitDrop(matched, {x: event.clientX, y: event.clientY})
         if (matched) {
             appConfig.setDockPlacement({...dock.placement})
@@ -249,6 +274,7 @@ export function usePanelHeaderDrag(
         cleanupListeners()
         releaseCapture()
         endSessionChrome()
+        clearDockFloatLivePreview(panel)
         if (dragging) dock.cancelDrag()
     })
 

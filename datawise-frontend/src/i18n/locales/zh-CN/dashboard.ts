@@ -189,6 +189,8 @@ export default {
         snapshotNote: 'Dashboard 最多保存 500 行快照。如需更新数据，请从查询结果重新保存。',
         saveAction: '保存到 Dashboard',
         snapshotHint: '来自查询结果',
+        sourceLineage: '血缘：{lineage}',
+        sourceOwner: '责任人：{owner}',
         meta: '快照 {rows} 行',
         share: '分享链接',
         shareCopied: '只读分享链接已复制到剪贴板',

@@ -11,14 +11,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 生产级任务消费者：dispatch 取任务 → 线程池执行 {@link TaskHandler} → 失败不 ack（由租约回收重试）。
+ * 生产级任务消费者：dispatch 取任务 → 有界线程池执行 {@link TaskHandler} → 失败不 ack（由租约回收重试）。
  */
 public final class TaskDispatchExecutor implements AutoCloseable
 {
@@ -40,7 +41,16 @@ public final class TaskDispatchExecutor implements AutoCloseable
         this.handler = handler;
         this.properties = properties;
         this.listeners = listeners;
-        this.workers = Executors.newCachedThreadPool(new NamedThreadFactory("tc-worker"));
+        int poolSize = Math.max(1, properties.getWorkerPoolSize());
+        this.workers = new ThreadPoolExecutor(
+                poolSize,
+                poolSize,
+                60L,
+                TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(Math.max(poolSize * 4, 16)),
+                new NamedThreadFactory("tc-worker"),
+                new ThreadPoolExecutor.AbortPolicy());
+        log.info("Task dispatch executor ready workers={} queue={}", poolSize, Math.max(poolSize * 4, 16));
     }
 
     /** 单次调度周期：分配卡槽并异步执行 */

@@ -30,8 +30,7 @@ export function useDatawiseSqlEditorHost(): SqlEditorGlobalConfig {
         if (!monacoThemesReady) {
             monacoThemesReady = true
             const apply = () => {
-                ensureMonacoThemes()
-                applyEditorTheme(theme)
+                void ensureMonacoThemes().then(() => applyEditorTheme(theme))
             }
             if (typeof requestIdleCallback === 'function') {
                 requestIdleCallback(apply, {timeout: 4000})

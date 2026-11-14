@@ -2,7 +2,7 @@ export default {
     title: 'Extension Store',
     subtitle: 'Unlock professional capabilities on demand. Standard covers daily SQL; upgrade for AI, migration, backup, or enterprise databases.',
     eyebrow: 'Product extensions',
-    hint: 'The store sells packs—not tiny toggles. After unlock, fine-tune features under Switches.',
+    hint: 'Choose by Core / Team / Insight / Extend. The store sells packs—not tiny toggles. After unlock, fine-tune under Switches.',
     tabs: {
         store: 'Store',
         switches: 'Switches',
@@ -14,6 +14,27 @@ export default {
         connector: 'Connectors',
         locked: 'Upgradeable',
         active: 'Active',
+        layerLabel: 'Capability layer',
+        layerAll: 'All layers',
+    },
+    /** B3-1: human capability layers (soften raw pack ids) */
+    layers: {
+        core: {
+            name: 'Core',
+            blurb: 'Connect, query, results, and basic safety — included in Standard.',
+        },
+        team: {
+            name: 'Team',
+            blurb: 'Sharing, approvals, audit, and collaborative governance.',
+        },
+        insight: {
+            name: 'Insight',
+            blurb: 'AI generate / explain, workbench analysis, and chart insights.',
+        },
+        extend: {
+            name: 'Extend',
+            blurb: 'Migration, backup, lineage, ops, and extra database connectors.',
+        },
     },
     searchPlaceholder: 'Search packs…',
     catalogTitle: 'Pack catalog',
@@ -196,8 +217,10 @@ export default {
     paywall: {
         title: 'Unlock {name}',
         lockedTitle: 'Unlock {name}',
+        lockedLayerTitle: 'Unlock {layer} · {name}',
         trialTitle: 'Try {name}',
         subtitle: 'Takes effect in the workbench immediately. Manage anytime in the store.',
+        layerEyebrow: '{layer} layer',
         benefitsTitle: 'What you get',
         ctaUpgrade: 'Unlock pack',
         ctaTrial: 'Start 7-day trial',
@@ -225,7 +248,11 @@ export default {
             'SELECT customer_id, SUM(amount) AS total\nFROM orders\nWHERE created_at >= CURRENT_DATE - INTERVAL \'7\' DAY\nGROUP BY customer_id\nORDER BY total DESC;',
         sampleCaption: 'Unlock unlimited generation, workbench analysis, and Pro developer tools.',
         context: {
-            'nav/ai': 'AI Agent needs the AI Pack. Limited free calls may still be available today.',
+            'nav/ai': 'AI Agent is part of the Insight layer (AI Pack). Limited free calls may still be available today.',
+            'console/ai': 'Console AI (explain / generate SQL) is part of the Insight layer. Unlock the AI Pack to use Alt+/ in the query console.',
+            'console/ai/fix': 'Error reading and fix SQL are part of Insight. Local tips stay available; unlock for one-click rewrites.',
+            'console/ai/explain': 'Explaining selected SQL / plans is part of Insight. Steps and table plans stay free.',
+            'console/ai/lite': 'Lite console AI (explain selection / read errors) is part of Insight. Unlock to use it anytime while querying.',
             'ai/quota': 'Today’s free AI calls are used up. Unlock the AI Pack to continue.',
             'ai/sqlSuccess': 'SQL generated. Unlock the AI Pack for unlimited generation and workbench analysis.',
             'settings/ai': 'AI models, Data Agent, and knowledge settings ship with the AI Pack.',

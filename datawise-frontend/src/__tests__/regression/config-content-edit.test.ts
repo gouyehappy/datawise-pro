@@ -14,19 +14,19 @@ describe('config-content-edit', () => {
         assert.equal(isConfigContentDirty(true, undefined, 'x'), true)
     })
 
-    it('confirmDiscardConfigEdits skips confirm when clean', () => {
+    it('confirmDiscardConfigEdits skips confirm when clean', async () => {
         const confirm = mock.fn(() => false)
-        assert.equal(confirmDiscardConfigEdits(false, 'discard?', confirm), true)
+        assert.equal(await confirmDiscardConfigEdits(false, 'discard?', confirm), true)
         assert.equal(confirm.mock.calls.length, 0)
     })
 
-    it('confirmDiscardConfigEdits uses confirm when dirty', () => {
+    it('confirmDiscardConfigEdits uses confirm when dirty', async () => {
         const confirm = mock.fn(() => true)
-        assert.equal(confirmDiscardConfigEdits(true, 'discard?', confirm), true)
+        assert.equal(await confirmDiscardConfigEdits(true, 'discard?', confirm), true)
         assert.equal(confirm.mock.calls.length, 1)
         assert.equal(confirm.mock.calls[0]?.arguments[0], 'discard?')
 
         confirm.mock.mockImplementationOnce(() => false)
-        assert.equal(confirmDiscardConfigEdits(true, 'discard?', confirm), false)
+        assert.equal(await confirmDiscardConfigEdits(true, 'discard?', confirm), false)
     })
 })

@@ -1,0 +1,25 @@
+{
+  "id": "jdbc-operate",
+  "supportLevel": "operate",
+  "specializedSurface": false,
+  "formKind": "jdbc",
+  "features": {
+    "queryExecution": true,
+    "metadataBrowse": true,
+    "objectBrowser": true,
+    "objectSource": true,
+    "schemaSearch": true,
+    "diagram": true,
+    "tableDataEdit": true,
+    "tableStructureEdit": true,
+    "tableImport": true,
+    "dataTransfer": true,
+    "sqlFileExecution": true,
+    "databaseCreate": true,
+    "fieldLineage": true,
+    "sqlExplain": true,
+    "visualQueryBuilder": true,
+    "schemaCompare": true,
+    "transactionalDdl": false
+  }
+}

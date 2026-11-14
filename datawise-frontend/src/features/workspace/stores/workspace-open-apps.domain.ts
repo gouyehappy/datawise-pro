@@ -102,6 +102,8 @@ export type WorkspaceOpenAppsDeps = {
     /** Evict oldest inactive community iframes before creating another (ENG-10). */
     ensureCommunityWorkbenchIframeCapacity?: () => void
     touchCommunityWorkbenchFocus?: (tabId: string) => void
+    /** PERF-01: LRU order for shelled SQL consoles. */
+    touchConsoleShellFocus?: (tabId: string) => void
     guardAiNav: () => boolean
     guardGovernancePack: (feature: PlatformFeatureId) => boolean
     readViewModel: (args: {
@@ -398,6 +400,7 @@ export function createWorkspaceOpenAppsDomain(deps: WorkspaceOpenAppsDeps) {
         deps.tabs.value.push(tab)
         deps.activeTabId.value = id
         deps.ensureConsoleQueryState(id)
+        deps.touchConsoleShellFocus?.(id)
         if (!sqlFile && finalResolved.connectionId && !options?.skipEnsureScriptFile) {
             ensureConsoleTabScriptFile(tab)
         }

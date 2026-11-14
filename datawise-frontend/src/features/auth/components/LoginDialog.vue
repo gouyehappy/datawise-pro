@@ -139,11 +139,9 @@ async function handleSubmit() {
       })
       // Session apply already closes the dialog; toast after so sign-in feels instant.
       emit('success')
-      toast.success(t('auth.registerSuccess'))
     } else {
       await auth.login(form.userName.trim(), form.userPassword)
       emit('success')
-      toast.success(t('auth.success'))
     }
   } catch (err) {
     errors.form = resolveErrorMessage(err)

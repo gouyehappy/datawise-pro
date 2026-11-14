@@ -1,0 +1,6 @@
+{
+  "dbType": "plugin",
+  "extends": "specialized-browse",
+  "supportLevel": "connect",
+  "formKind": "other"
+}

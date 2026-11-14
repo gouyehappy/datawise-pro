@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, onMounted, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {userAdminApi} from '@/api'
@@ -473,11 +473,9 @@ async function savePermissions() {
             (auth.user?.userId != null && auth.user.userId === updated.id)
         if (affectsCurrentSession) {
             await auth.refreshSessionPermissions()
-            toast.success(t('settings.userPermissions.saved'))
         } else if (updated.guest) {
             toast.show(t('settings.userPermissions.guestReLoginHint'), {variant: 'info'})
         } else {
-            toast.success(t('settings.userPermissions.saved'))
         }
     } catch (error) {
         panelError.value = apiErrorMessage(error, 'settings.userPermissions.saveFailed')
@@ -509,7 +507,6 @@ async function saveRole() {
         })
         roles.value = roles.value.map((role) => (role.id === updated.id ? updated : role))
         syncDraftFromRole(updated)
-        toast.success(t('settings.userPermissions.roleSaved'))
     } catch (error) {
         panelError.value = apiErrorMessage(error, 'settings.userPermissions.saveFailed')
     } finally {
@@ -538,7 +535,6 @@ async function createCustomRole() {
         selectedRoleId.value = created.id
         syncDraftFromRole(created)
         roleCreateOpen.value = false
-        toast.success(t('settings.userPermissions.roleCreated'))
     } catch (error) {
         panelError.value = apiErrorMessage(error, 'settings.userPermissions.saveFailed')
     } finally {
@@ -567,7 +563,6 @@ async function deleteSelectedRole() {
         if (selectedRole.value) {
             syncDraftFromRole(selectedRole.value)
         }
-        toast.success(t('settings.userPermissions.roleDeleted'))
     } catch (error) {
         panelError.value = apiErrorMessage(error, 'settings.userPermissions.saveFailed')
     } finally {

@@ -63,3 +63,24 @@ export function normalizeKafkaTopicPattern(pattern: string): string {
 }
 
 export const KAFKA_TOPICS_PAGE_SIZE = 500
+
+/** PERF-04: DOM cap per prefix group (matches Redis keys virtual page). */
+export const KAFKA_TOPICS_VIRTUAL_PAGE = 150
+
+/** First virtual page of topics unless the group has been expanded. */
+export function sliceKafkaTopicsVirtualPage(
+    topics: readonly string[],
+    expanded: boolean,
+    pageSize = KAFKA_TOPICS_VIRTUAL_PAGE,
+): string[] {
+    if (expanded || topics.length <= pageSize) return [...topics]
+    return topics.slice(0, pageSize)
+}
+
+export function kafkaTopicGroupHasMore(
+    topics: readonly string[],
+    expanded: boolean,
+    pageSize = KAFKA_TOPICS_VIRTUAL_PAGE,
+): boolean {
+    return topics.length > pageSize && !expanded
+}

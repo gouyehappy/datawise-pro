@@ -127,7 +127,6 @@ async function saveSelected() {
       description: editDescription.value.trim(),
       defaultEnv: editDefaultEnv.value.trim() || null,
     })
-    toast.success(t('settings.projects.saved'))
   } catch (error) {
     toast.error(apiError(error, 'settings.projects.saveFailed'))
   } finally {
@@ -146,7 +145,12 @@ async function exportSelected() {
     anchor.download = fileName || `project-${selected.value.id}.zip`
     anchor.click()
     URL.revokeObjectURL(url)
-    toast.success(t('settings.projects.exported'))
+    toast.notify({
+      category: 'export',
+      titleKey: 'exportDone',
+      bodyKey: 'exportDone',
+      params: {name: t('settings.projects.exported')},
+    })
   } catch (error) {
     toast.error(apiError(error, 'settings.projects.exportFailed'))
   } finally {
@@ -166,7 +170,12 @@ async function onImportFile(event: Event) {
   saving.value = true
   try {
     const created = await projectStore.importProject(file)
-    toast.success(t('settings.projects.imported', {name: created.name}))
+    toast.notify({
+      category: 'workspace',
+      titleKey: 'importDone',
+      bodyKey: 'importDone',
+      params: {detail: t('settings.projects.imported', {name: created.name})},
+    })
     selectProject(created)
     await reload()
   } catch (error) {
@@ -183,7 +192,6 @@ async function onConfirmCreate(payload: {name: string; templateId: ProjectTempla
       switchTo: false,
       templateId: payload.templateId,
     })
-    toast.success(t('settings.projects.created', {name: created.name}))
     selectProject(created)
     await reload()
   } catch (error) {
@@ -201,7 +209,6 @@ async function toggleArchive() {
     await projectStore.updateProject(selected.value.id, {
       archived: nextArchived,
     })
-    toast.success(nextArchived ? t('settings.projects.archived') : t('settings.projects.unarchived'))
   } catch (error) {
     toast.error(apiError(error, 'settings.projects.saveFailed'))
   } finally {
@@ -227,7 +234,6 @@ async function deleteSelected() {
       mode,
       confirmPurgeConnections: mode === 'purge',
     })
-    toast.success(t('settings.projects.deleted', {name: selected.value.name}))
     selectedId.value = ''
     await reload()
   } catch (error) {

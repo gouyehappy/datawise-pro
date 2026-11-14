@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import {computed, ref} from 'vue'
+import {computed, nextTick, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {DwIcon} from '@/core/icons'
 import AiMessageRow from '@/features/ai/chat/components/AiMessageRow.vue'
 import AiChatLoading from '@/features/ai/chat/components/AiChatLoading.vue'
 import AiAnalysisSqlConfirm from '@/features/ai/analysis/components/AiAnalysisSqlConfirm.vue'
+import {
+  AI_CHAT_MESSAGE_WINDOW_REVEAL_STEP,
+  resolveAiChatMessageWindow,
+} from '@/features/ai/chat/services/ai-chat-message-window'
 import type {AiChatMessage} from '@/features/ai/types'
 import type {AiAnalysisStepEvent} from '@/features/ai/types/analysis'
 import type {AiSqlConfirmPending} from '@/features/ai/types/chat'
@@ -84,9 +88,46 @@ const emit = defineEmits<{
   quickPrompt: [prompt: string]
   confirmSql: []
   cancelSql: []
+  pinConclusion: [messageId: string]
+  archiveConclusion: [messageId: string]
 }>()
 
 const scrollRef = ref<HTMLElement>()
+/** PERF-05: additional older messages revealed beyond the default tail window. */
+const extraReveal = ref(0)
+
+const messageWindow = computed(() =>
+    resolveAiChatMessageWindow(props.messages.length, extraReveal.value),
+)
+
+const visibleMessages = computed(() =>
+    props.messages.slice(messageWindow.value.start),
+)
+
+const hiddenEarlierCount = computed(() => messageWindow.value.hiddenCount)
+
+watch(
+    () => props.sessionId,
+    () => {
+      extraReveal.value = 0
+    },
+)
+
+async function revealEarlierMessages() {
+  const el = scrollRef.value
+  const prevHeight = el?.scrollHeight ?? 0
+  const prevTop = el?.scrollTop ?? 0
+  if (hiddenEarlierCount.value <= AI_CHAT_MESSAGE_WINDOW_REVEAL_STEP) {
+    extraReveal.value += hiddenEarlierCount.value
+  } else {
+    extraReveal.value += AI_CHAT_MESSAGE_WINDOW_REVEAL_STEP
+  }
+  await nextTick()
+  if (!el) return
+  // Keep the previously visible rows in place after prepending older messages.
+  el.scrollTop = prevTop + (el.scrollHeight - prevHeight)
+}
+
 defineExpose({
   getScrollEl: () => scrollRef.value,
 })
@@ -104,8 +145,18 @@ defineExpose({
       {{ t('ai.documentApplyTarget', {name: documentApplyTargetLabel}) }}
     </p>
 
+    <div v-if="hiddenEarlierCount > 0" class="chat-scroll__earlier">
+      <button
+          type="button"
+          class="dw-text-btn chat-scroll__earlier-btn"
+          @click="revealEarlierMessages"
+      >
+        {{ t('ai.chat.showEarlier', {count: hiddenEarlierCount}) }}
+      </button>
+    </div>
+
     <AiMessageRow
-        v-for="msg in messages"
+        v-for="msg in visibleMessages"
         :key="msg.id"
         :message="msg"
         :user-initial="userInitial"
@@ -123,6 +174,8 @@ defineExpose({
         @undo-apply-to-document="emit('undoApplyToDocument')"
         @confirm-sql="emit('confirmSql')"
         @cancel-sql="emit('cancelSql')"
+        @pin-conclusion="emit('pinConclusion', msg.id)"
+        @archive-conclusion="emit('archiveConclusion', msg.id)"
     />
 
     <!-- Fallback only when no analysis turn exists to host the gate. -->
@@ -200,6 +253,17 @@ defineExpose({
   color: var(--dw-primary);
   font-size: var(--dw-text-xs);
   line-height: var(--dw-leading-snug);
+}
+
+.chat-scroll__earlier {
+  display: flex;
+  justify-content: center;
+  padding: var(--dw-space-1) 0;
+}
+
+.chat-scroll__earlier-btn {
+  font-size: var(--dw-text-xs);
+  color: var(--dw-text-muted);
 }
 
 .quick-prompts {

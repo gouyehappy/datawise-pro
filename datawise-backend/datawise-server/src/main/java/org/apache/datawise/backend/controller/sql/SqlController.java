@@ -17,14 +17,18 @@ import org.apache.datawise.backend.database.sql.ConsoleSqlCancelService;
 import org.apache.datawise.backend.database.sql.SqlService;
 import org.apache.datawise.backend.connector.api.support.SqlWriteClassifier;
 import org.apache.datawise.backend.security.HeadlessSqlAuth;
+import org.apache.datawise.backend.security.RequiresFeature;
+import org.apache.datawise.backend.security.RequiresSqlExecute;
+import org.apache.datawise.backend.security.UserContext;
 import org.apache.datawise.backend.service.SqlVisibleConnectionsService;
 import org.apache.datawise.backend.service.TeamService;
-import org.apache.datawise.backend.service.FeaturePermissionAccess;
 import org.apache.datawise.backend.domain.UserFeaturePermission;
 import org.apache.datawise.backend.domain.pack.PackEntitlementChecker;
 import org.apache.datawise.backend.domain.pack.PackIds;
 import org.apache.datawise.backend.common.support.ApiRequestLogger;
 import org.apache.datawise.backend.common.support.PerfLogger;
+import org.apache.datawise.backend.config.DatawiseQueryProperties;
+import org.apache.datawise.backend.jdbc.support.QueryOperationBudget;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.validation.annotation.Validated;
@@ -35,11 +39,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.async.WebAsyncTask;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @RestController
 @RequestMapping("/api/sql")
@@ -54,9 +60,9 @@ public class SqlController {
     private final SessionKillService sessionKillService;
     private final ConsoleSqlCancelService consoleSqlCancelService;
     private final TeamService teamService;
-    private final FeaturePermissionAccess featurePermissionAccess;
     private final PackEntitlementChecker packEntitlementChecker;
     private final SqlVisibleConnectionsService sqlVisibleConnectionsService;
+    private final DatawiseQueryProperties queryProperties;
 
     public SqlController(
             SqlService sqlService,
@@ -65,9 +71,9 @@ public class SqlController {
             SessionKillService sessionKillService,
             ConsoleSqlCancelService consoleSqlCancelService,
             TeamService teamService,
-            FeaturePermissionAccess featurePermissionAccess,
             PackEntitlementChecker packEntitlementChecker,
-            SqlVisibleConnectionsService sqlVisibleConnectionsService
+            SqlVisibleConnectionsService sqlVisibleConnectionsService,
+            DatawiseQueryProperties queryProperties
     ) {
         this.sqlService = sqlService;
         this.activeSessionService = activeSessionService;
@@ -75,9 +81,9 @@ public class SqlController {
         this.sessionKillService = sessionKillService;
         this.consoleSqlCancelService = consoleSqlCancelService;
         this.teamService = teamService;
-        this.featurePermissionAccess = featurePermissionAccess;
         this.packEntitlementChecker = packEntitlementChecker;
         this.sqlVisibleConnectionsService = sqlVisibleConnectionsService;
+        this.queryProperties = queryProperties;
     }
 
     /**
@@ -91,9 +97,17 @@ public class SqlController {
     }
 
     @PostMapping("/execute")
-    public ApiResponse<ExecuteSqlResult> executeSql(@RequestBody ExecuteSqlRequest request) {
+    @RequiresSqlExecute
+    public Object executeSql(@RequestBody ExecuteSqlRequest request) {
         HeadlessSqlAuth.requireSqlAccess();
-        featurePermissionAccess.requireSqlExecute(request.sql());
+        // Console tabs with sessionKey: async so client disconnect / timeout can cancel JDBC.
+        if (request.sessionKey() != null && !request.sessionKey().isBlank()) {
+            return executeSqlAsync(request);
+        }
+        return executeSqlSync(request);
+    }
+
+    private ApiResponse<ExecuteSqlResult> executeSqlSync(ExecuteSqlRequest request) {
         int sqlLen = request.sql() != null ? request.sql().length() : 0;
         ApiRequestLogger.logEntry(
                 log,
@@ -125,6 +139,56 @@ public class SqlController {
             );
             throw ex;
         }
+    }
+
+    private WebAsyncTask<ApiResponse<ExecuteSqlResult>> executeSqlAsync(ExecuteSqlRequest request) {
+        UserContext.Snapshot snapshot = UserContext.snapshotOrNull();
+        AtomicBoolean finished = new AtomicBoolean(false);
+        long timeoutMs = resolveAsyncTimeoutMs(request);
+        WebAsyncTask<ApiResponse<ExecuteSqlResult>> task = new WebAsyncTask<>(timeoutMs, () ->
+                UserContext.runAs(snapshot, () -> {
+                    try {
+                        return executeSqlSync(request);
+                    } finally {
+                        finished.set(true);
+                    }
+                })
+        );
+        Runnable cancelRunning = () -> {
+            if (finished.get()) {
+                return;
+            }
+            try {
+                UserContext.runAs(snapshot, () -> consoleSqlCancelService.cancel(
+                        new CancelSqlExecutionRequest(request.sessionKey(), "query", null)
+                ));
+            } catch (RuntimeException ex) {
+                log.debug("sql.execute.disconnect_cancel_failed sessionKey={} | {}",
+                        request.sessionKey(), ex.getMessage());
+            }
+        };
+        task.onTimeout(() -> {
+            cancelRunning.run();
+            return ApiResponse.fail("SQL execution timed out");
+        });
+        task.onError(() -> {
+            cancelRunning.run();
+            return ApiResponse.fail("SQL execution aborted");
+        });
+        return task;
+    }
+
+    private long resolveAsyncTimeoutMs(ExecuteSqlRequest request) {
+        int seconds = QueryOperationBudget.resolveQueryTimeoutSeconds(
+                request.timeoutSeconds(),
+                queryProperties.getTimeoutSeconds()
+        );
+        if (seconds > 0) {
+            // Allow statement timeout to fire first; add cancel hard-cap buffer.
+            return seconds * 1000L + QueryOperationBudget.CANCEL_HARD_TIMEOUT_MS;
+        }
+        // No configured timeout: keep container async window generous (30m).
+        return 1_800_000L;
     }
 
     @DeleteMapping("/cursor")
@@ -221,10 +285,10 @@ public class SqlController {
     }
 
     @PostMapping("/kill-session")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_DANGEROUS_SQL)
     public ApiResponse<KillSessionResultDto> killSession(@Valid @RequestBody KillSessionRequest request) {
         HeadlessSqlAuth.requireSqlAccess();
         packEntitlementChecker.requirePack(PackIds.DATAOPS);
-        featurePermissionAccess.requirePermission(UserFeaturePermission.WORKBENCH_CONSOLE_DANGEROUS_SQL);
         ApiRequestLogger.logEntry(
                 log,
                 "POST /api/sql/kill-session",

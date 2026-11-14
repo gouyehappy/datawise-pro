@@ -11,11 +11,11 @@
 }
 
 .dw-side-panel--border-right {
-  border-right: 1px solid var(--dw-border-light);
+  border-right: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .dw-side-panel--border-left {
-  border-left: 1px solid var(--dw-border-light);
+  border-left: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .dw-side-panel__head {
@@ -24,7 +24,7 @@
   justify-content: space-between;
   gap: var(--dw-space-6);
   padding: var(--dw-space-8) var(--dw-space-7) var(--dw-space-6);
-  border-bottom: 1px solid var(--dw-border-light);
+  border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .dw-side-panel__head h2 {
@@ -42,7 +42,7 @@
 
 .dw-side-panel__toolbar {
   padding: var(--dw-space-5) var(--dw-space-7);
-  border-bottom: 1px solid var(--dw-border-light);
+  border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .dw-side-panel__toolbar-actions {
@@ -64,7 +64,7 @@
 .dw-page-head {
   flex-shrink: 0;
   padding: 18px var(--dw-space-10) var(--dw-space-7);
-  border-bottom: 1px solid var(--dw-border-light);
+  border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
   background: radial-gradient(
       ellipse 70% 80% at 0% 0%,
       color-mix(in srgb, var(--dw-primary) 7%, transparent),

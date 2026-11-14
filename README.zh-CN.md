@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/image/logo.png" width="72" alt="DataWise" />
+  <img src="docs/screenshot/logo.png" width="72" alt="DataWise" />
 </p>
 
 <h1 align="center">DataWise</h1>
@@ -49,7 +49,7 @@ DataWise 是面向团队的开源数据工作台：在同一处连接数据库�
 统一管理多类数据源与运维连接，按环境标签浏览，回看最近使用，并从首页进入查询或 AI。
 
 <p align="center">
-  <img src="docs/image/home.png" alt="首页" width="900" />
+  <img src="docs/screenshot/home.png" alt="首页" width="900" />
 </p>
 
 ### SQL 控制台 — 脚本与连接同屏
@@ -57,7 +57,7 @@ DataWise 是面向团队的开源数据工作台：在同一处连接数据库�
 Monaco SQL 编辑器，左侧挂载项目脚本、文档与多环境目录，打开连接即可编写与执行查询。
 
 <p align="center">
-  <img src="docs/image/console.png" alt="SQL 控制台" width="900" />
+  <img src="docs/screenshot/console.png" alt="SQL 控制台" width="900" />
 </p>
 
 ### AI Agent — 从问题到洞察
@@ -65,7 +65,7 @@ Monaco SQL 编辑器，左侧挂载项目脚本、文档与多环境目录，打
 自然语言转 SQL、解释与优化，再跑分析流水线；同一工作台内得到图表、报告与结果预览。
 
 <p align="center">
-  <img src="docs/image/agent.png" alt="AI Agent" width="900" />
+  <img src="docs/screenshot/agent.png" alt="AI Agent" width="900" />
 </p>
 
 ### 社区插件 — 运维工作台挂进宿主
@@ -73,7 +73,7 @@ Monaco SQL 编辑器，左侧挂载项目脚本、文档与多环境目录，打
 安装 `.dwp` 插件（SSH、Git Ops、Docker / K8s、Redis / Kafka、日志、HTTP 等）。连接由宿主统一管理，插件打开各自工作台。
 
 <p align="center">
-  <img src="docs/image/plugin.png" alt="社区插件" width="900" />
+  <img src="docs/screenshot/plugin.png" alt="社区插件" width="900" />
 </p>
 
 ---
@@ -136,6 +136,12 @@ npm run help     # 常用命令
 |------|------|
 | Gitee | https://gitee.com/gouyehappy/datawise-pro.git |
 | GitHub | https://github.com/gouyehappy/datawise-pro.git |
+
+---
+
+## 发布
+
+桌面产物前缀为 `desktop-v5.0.0-`。发版请执行 `git tag v5.0.0`。
 
 ---
 

@@ -12,11 +12,15 @@ export type WorkspaceChromeSignalsDeps = {
     tabs: Ref<WorkspaceTab[]>
     status: Ref<StatusSnapshot>
     sshScriptDirtyByTabId: Ref<Record<string, boolean>>
+    /** PERF-17: cached dirty bits for console/local-text so Tab bar skips sql string compares. */
+    contentDirtyByTabId: Ref<Record<string, boolean>>
     tableDataRefreshSeq: Ref<Record<string, number>>
     /** Bumped when a sticky tab is re-activated so hosts can soft-refresh (docs / plugins / forms). */
     tabActivateRefreshSeq: Ref<Record<string, number>>
     fakeDataDialogRequest: Ref<{tabId: string; nonce: number} | null>
     consoleAutoRunRequest: Ref<{tabId: string; nonce: number} | null>
+    /** B2-1: side-rail AI in query mode → focus console AI prompt */
+    consoleAiPromptRequest: Ref<{tabId: string; nonce: number} | null>
 }
 
 export function createWorkspaceChromeSignalsDomain(deps: WorkspaceChromeSignalsDeps) {
@@ -30,9 +34,37 @@ export function createWorkspaceChromeSignalsDomain(deps: WorkspaceChromeSignalsD
         )
     }
 
+    function syncContentDirtyFlag(tab: WorkspaceTab) {
+        if (tab.type !== 'console' && tab.type !== 'local-text') return
+        const dirty = isWorkspaceTabDirty(tab, deps.sshScriptDirtyByTabId.value)
+        const prev = deps.contentDirtyByTabId.value[tab.id] ?? false
+        if (dirty === prev) return
+        if (dirty) {
+            deps.contentDirtyByTabId.value = {
+                ...deps.contentDirtyByTabId.value,
+                [tab.id]: true,
+            }
+            return
+        }
+        if (!(tab.id in deps.contentDirtyByTabId.value)) return
+        const next = {...deps.contentDirtyByTabId.value}
+        delete next[tab.id]
+        deps.contentDirtyByTabId.value = next
+    }
+
+    function clearContentDirtyFlag(tabId: string) {
+        if (!(tabId in deps.contentDirtyByTabId.value)) return
+        const next = {...deps.contentDirtyByTabId.value}
+        delete next[tabId]
+        deps.contentDirtyByTabId.value = next
+    }
+
     function isTabDirty(tabId: string): boolean {
         const tab = deps.tabs.value.find((item) => item.id === tabId)
         if (!tab) return false
+        if (tab.type === 'console' || tab.type === 'local-text') {
+            return Boolean(deps.contentDirtyByTabId.value[tabId])
+        }
         return isWorkspaceTabDirty(tab, deps.sshScriptDirtyByTabId.value)
     }
 
@@ -76,16 +108,28 @@ export function createWorkspaceChromeSignalsDomain(deps: WorkspaceChromeSignalsD
         deps.consoleAutoRunRequest.value = null
     }
 
+    function requestConsoleAiPrompt(tabId: string) {
+        deps.consoleAiPromptRequest.value = {tabId, nonce: Date.now()}
+    }
+
+    function clearConsoleAiPrompt() {
+        deps.consoleAiPromptRequest.value = null
+    }
+
     return {
         setStatus,
         setExecutionResult,
         isTabDirty,
+        syncContentDirtyFlag,
+        clearContentDirtyFlag,
         setSshScriptDirty,
         bumpTableDataRefresh,
         bumpTabActivateRefresh,
         requestFakeDataDialog,
         requestConsoleAutoRun,
         clearConsoleAutoRun,
+        requestConsoleAiPrompt,
+        clearConsoleAiPrompt,
     }
 }
 

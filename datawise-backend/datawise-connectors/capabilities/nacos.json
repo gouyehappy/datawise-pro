@@ -1,0 +1,5 @@
+{
+  "dbType": "nacos",
+  "extends": "specialized-browse",
+  "formKind": "ops"
+}

@@ -67,6 +67,8 @@ export const WORKSPACE_TAB_WARMUP_TYPES: WorkspaceTabType[] = [
     'connection',
     'create-database',
     'welcome',
+    // Project docs / local files — avoid first-open stuck on PanelLoadingShell
+    'local-text',
 ]
 
 export function resolveWorkspaceTab(type: WorkspaceTabType): Component | null {
@@ -88,7 +90,10 @@ export function resolveWorkspaceTab(type: WorkspaceTabType): Component | null {
 
     let cached = contributionComponentCache.get(type)
     if (!cached) {
-        cached = createLazyView(entry.loader, entry.asyncName ? {name: entry.asyncName} : undefined)
+        cached = createLazyView(entry.loader, {
+            ...(entry.asyncName ? {name: entry.asyncName} : {}),
+            ...(entry.timeout != null ? {timeout: entry.timeout} : {}),
+        })
         contributionComponentCache.set(type, cached)
     }
     return cached

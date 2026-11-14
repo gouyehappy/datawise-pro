@@ -18,6 +18,7 @@ import org.apache.datawise.backend.migration.TableMigrationPreflightSupport.Colu
 import org.apache.datawise.backend.model.ConnectionEntity;
 import org.apache.datawise.backend.model.SchemaDriftMonitorEntry;
 import org.apache.datawise.backend.security.UserContext;
+import org.apache.datawise.backend.service.ConnectionAccessService;
 import org.apache.datawise.backend.service.ConnectionVisibilityService;
 import org.apache.datawise.backend.service.outbound.OutboundEventSignals;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class SchemaDriftService {
     private final SchemaDriftMonitorStore monitorStore;
     private final TableDetailService tableDetailService;
     private final ConnectionVisibilityService connectionVisibilityService;
+    private final ConnectionAccessService connectionAccessService;
     private final OutboundEventSignals outboundEventSignals;
     private final ObjectMapper objectMapper;
 
@@ -42,12 +44,14 @@ public class SchemaDriftService {
             SchemaDriftMonitorStore monitorStore,
             TableDetailService tableDetailService,
             ConnectionVisibilityService connectionVisibilityService,
+            ConnectionAccessService connectionAccessService,
             OutboundEventSignals outboundEventSignals,
             ObjectMapper objectMapper
     ) {
         this.monitorStore = monitorStore;
         this.tableDetailService = tableDetailService;
         this.connectionVisibilityService = connectionVisibilityService;
+        this.connectionAccessService = connectionAccessService;
         this.outboundEventSignals = outboundEventSignals;
         this.objectMapper = objectMapper;
     }
@@ -90,6 +94,9 @@ public class SchemaDriftService {
     public SchemaDriftReportDto compare(SchemaDriftCompareRequest request) {
         ConnectionEntity source = requireConnection(request.sourceConnectionId());
         ConnectionEntity target = requireConnection(request.targetConnectionId());
+        Long userId = UserContext.requireUserId();
+        connectionAccessService.requireEngineFeature(userId, request.sourceConnectionId(), "schemaCompare");
+        connectionAccessService.requireEngineFeature(userId, request.targetConnectionId(), "schemaCompare");
         Instant now = Instant.now();
         Pattern pattern = compilePattern(request.tablePattern());
 
@@ -175,22 +182,71 @@ public class SchemaDriftService {
                 sourceExists,
                 targetExists,
                 compare.missingOnTarget(),
-                compare.extraOnTarget()
+                compare.extraOnTarget(),
+                compare.typeMismatches(),
+                compare.attributeMismatches()
         );
 
-        String suggestedAlter = null;
-        if (!compare.missingOnTarget().isEmpty() && sourceExists) {
-            suggestedAlter = "-- Suggested ALTER for " + tableName + "\n"
-                    + "-- Missing on target: " + String.join(", ", compare.missingOnTarget());
-        }
+        String suggestedAlter = buildSuggestedSyncSql(
+                tableName,
+                source,
+                sourceDatabase,
+                target,
+                targetDatabase,
+                sourceExists,
+                targetExists,
+                sourceColumns,
+                compare.missingOnTarget(),
+                compare.extraOnTarget(),
+                compare.typeMismatches(),
+                compare.attributeMismatches()
+        );
 
         return new SchemaDriftTableDiffDto(
                 tableName,
                 mapDriftStatus(statusResult.status()),
                 compare.missingOnTarget(),
                 compare.extraOnTarget(),
-                List.of(),
+                compare.typeMismatches(),
+                compare.attributeMismatches(),
                 suggestedAlter
+        );
+    }
+
+    private String buildSuggestedSyncSql(
+            String tableName,
+            ConnectionEntity source,
+            String sourceDatabase,
+            ConnectionEntity target,
+            String targetDatabase,
+            boolean sourceExists,
+            boolean targetExists,
+            List<TableColumnDetail> sourceColumns,
+            List<String> missingOnTarget,
+            List<String> extraOnTarget,
+            List<String> typeMismatches,
+            List<String> attributeMismatches
+    ) {
+        if (!sourceExists) {
+            return null;
+        }
+        if (!targetExists) {
+            try {
+                var ddl = tableDetailService.loadDdl(tableName, source.getId(), sourceDatabase);
+                return SchemaDriftSyncSql.wrapCreateTableDdl(ddl != null ? ddl.ddl() : null);
+            } catch (RuntimeException ignored) {
+                return "-- Target table missing; export source DDL manually for: " + tableName + "\n";
+            }
+        }
+        return SchemaDriftSyncSql.buildColumnSyncSql(
+                target.getDbType(),
+                targetDatabase,
+                tableName,
+                sourceColumns,
+                missingOnTarget,
+                extraOnTarget,
+                typeMismatches,
+                attributeMismatches
         );
     }
 

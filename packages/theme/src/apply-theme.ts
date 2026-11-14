@@ -39,6 +39,8 @@ export const MANAGED_THEME_VARS = [
     '--dw-border',
     '--dw-border-light',
     '--dw-panel-border',
+    '--dw-panel-outline',
+    '--dw-seam-divider',
     '--dw-panel-shadow',
     '--dw-text',
     '--dw-text-secondary',
@@ -60,31 +62,32 @@ export const MANAGED_THEME_VARS = [
 ] as const
 
 const DARK_UI = {
-    border: '#2e3440',
-    borderLight: '#252b33',
-    panelBorder: 'rgba(255, 255, 255, 0.12)',
-    panelShadow: '0 1px 3px rgba(0, 0, 0, 0.28)',
+    /* 中间略淡、四周加重；控件边与分栏 outline 同一套软白边 */
+    border: 'rgba(255, 255, 255, 0.08)',
+    borderLight: 'rgba(255, 255, 255, 0.08)',
+    panelBorder: 'rgba(255, 255, 255, 0.08)',
+    panelShadow: '0 1px 2px rgba(0, 0, 0, 0.14)',
     text: '#f0f0f3',
     textSecondary: '#d4d4d8',
     textMuted: '#c4c7cc',
     textDim: '#a8adb6',
-    tabBarBg: '#161a20',
-    tabBarBorder: '#1e242c',
-    tabActiveBg: '#222831',
-    tabActiveBorder: '#3574f0',
+    tabBarBg: '#1a1b1e',
+    tabBarBorder: 'rgba(255, 255, 255, 0.08)',
+    tabActiveBg: '#2b2d30',
+    tabActiveBorder: 'transparent',
     tabActiveText: '#f4f4f7',
     tabInactiveText: '#c8c8d0',
-    tabHoverBg: 'rgba(255, 255, 255, 0.1)',
+    tabHoverBg: 'rgba(255, 255, 255, 0.08)',
     tabCloseHover: 'rgba(255, 255, 255, 0.12)',
-    toolPillActive: '#2a3038',
-    shadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+    toolPillActive: 'color-mix(in srgb, #fff 10%, var(--dw-bg-rail))',
+    shadow: '0 8px 24px rgba(0, 0, 0, 0.32)',
     menuShadow:
         '0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.24), 0 16px 40px rgba(0, 0, 0, 0.32)',
 } as const
 
 const LIGHT_UI = {
     border: '#e2e8f0',
-    borderLight: '#eef2f7',
+    borderLight: 'rgba(15, 23, 42, 0.08)',
     panelBorder: 'rgba(15, 23, 42, 0.08)',
     panelShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
     text: '#111827',
@@ -137,10 +140,15 @@ export function buildThemeVars(
     const caps = skinDef.capabilities
     const panelShadow = caps.panelShadow === 'none' ? 'none' : ui.panelShadow
 
-    const chrome = mode === 'dark' ? surfaces.rail : LIGHT_UI.chrome
+    /* Light chrome：ide 略加重窗框，其余跟共享 LIGHT_UI；勿压扁皮肤 CSS */
+    const chrome = mode === 'dark'
+        ? surfaces.rail
+        : (uiSkin === 'ide' ? '#cfd8e6' : LIGHT_UI.chrome)
     const tabStrip = caps.tabStyle === 'strip'
+    /* atelier pill：Tab 条贴 panel，不要跟 chrome 条带混成一条 */
+    const pillTabBarBg = uiSkin === 'atelier' ? surfaces.panel : ui.tabBarBg
 
-    return {
+    const vars: Record<string, string> = {
         '--dw-primary': primary.primary,
         '--dw-primary-hover': primary.hover,
         '--dw-primary-softer': withAlpha(primary.primary, mode === 'dark' ? 0.08 : 0.06),
@@ -159,7 +167,6 @@ export function buildThemeVars(
         '--dw-bg-editor': surfaces.bg,
         '--dw-bg-chrome': chrome,
         '--dw-border': ui.border,
-        '--dw-border-light': ui.borderLight,
         '--dw-panel-border': ui.panelBorder,
         '--dw-panel-shadow': panelShadow,
         '--dw-text': ui.text,
@@ -173,7 +180,8 @@ export function buildThemeVars(
         '--dw-tool-pill-active': mode === 'dark'
             ? DARK_UI.toolPillActive
             : 'color-mix(in srgb, var(--dw-text) 9%, var(--dw-bg-hover))',
-        '--dw-tab-bar-bg': tabStrip ? chrome : ui.tabBarBg,
+        /* IDE/ledger strip：Tab 贴编辑井；atelier pill 贴 panel */
+        '--dw-tab-bar-bg': tabStrip ? surfaces.bg : pillTabBarBg,
         '--dw-tab-bar-border': tabStrip ? ui.panelBorder : ui.tabBarBorder,
         '--dw-tab-active-bg': tabStrip ? surfaces.bg : ui.tabActiveBg,
         '--dw-tab-active-border': tabStrip ? 'transparent' : ui.tabActiveBorder,
@@ -192,6 +200,18 @@ export function buildThemeVars(
         '--dw-shadow': ui.shadow,
         '--dw-menu-shadow': ui.menuShadow,
     }
+
+    /*
+     * Dark：强制软白 outline / border-light 同阶。
+     * Light：不写 outline / seam / border-light，留给 skins/*.css 软混（classic 55% 等）。
+     */
+    if (mode === 'dark') {
+        vars['--dw-border-light'] = ui.borderLight
+        vars['--dw-panel-outline'] = 'rgba(255, 255, 255, 0.08)'
+        vars['--dw-seam-divider'] = 'rgba(255, 255, 255, 0.08)'
+    }
+
+    return vars
 }
 
 export interface ApplyThemeOptions {
@@ -226,6 +246,7 @@ export function applyTheme(
     const uiFont = prefs.uiFont ?? DEFAULT_THEME_PREFERENCES.uiFont
     const uiTextScale = prefs.uiTextScale ?? DEFAULT_THEME_PREFERENCES.uiTextScale
     const uiDensity = prefs.uiDensity ?? DEFAULT_THEME_PREFERENCES.uiDensity
+    const iconTones = (prefs.coloredToolbarIcons !== false) ? 'on' : 'off'
     const bodyPx = resolveBodyFontSizePx(prefs)
     const textScaleFactor = resolveUiTextScaleFactorFromPrefs(prefs)
 
@@ -236,6 +257,7 @@ export function applyTheme(
     root.setAttribute('data-ui-font', uiFont)
     root.setAttribute('data-ui-text-scale', uiTextScale)
     root.setAttribute('data-ui-density', uiDensity)
+    root.setAttribute('data-icon-tones', iconTones)
     if (uiTextScale === 'custom') {
         root.setAttribute('data-ui-font-size-px', String(bodyPx))
     } else {

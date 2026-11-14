@@ -8,6 +8,7 @@ import {
     projectFilesApi,
     type ProjectFileRoot,
 } from '@/features/project/services/project-files-api'
+import {HTTP_NOT_READY, HTTP_TIMEOUT} from '@/shared/api/http/request'
 import {isLocalSqlFileName, localFileBaseName} from '@/features/local-files/services/local-files-path'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {useLayoutStore} from '@/features/layout/stores/layout'
@@ -308,6 +309,45 @@ export async function createProjectFolder(options: {
     return projectFileNodeId(ctx.projectId, ctx.root, path)
 }
 
+/** Close workspace tabs bound to a deleted project sandbox path (file or folder). */
+export function closeWorkspaceTabsForProjectFile(
+    projectId: string,
+    root: ProjectFileRoot,
+    relativePath: string,
+    isDirectory: boolean,
+): void {
+    const workspace = useWorkspaceStore()
+    const baseUri = buildProjectFileUri(projectId, root, relativePath)
+    const baseKey = baseUri.replace(/\/+$/, '').toLowerCase()
+    const toClose = workspace.tabs
+        .filter((tab) => {
+            const path = (tab.type === 'local-text' ? tab.localFilePath : tab.sqlFile)?.trim()
+            if (!path) return false
+            const key = path.replace(/\/+$/, '').toLowerCase()
+            if (key === baseKey) return true
+            if (isDirectory && key.startsWith(`${baseKey}/`)) return true
+            return false
+        })
+        .map((tab) => tab.id)
+    for (const id of toClose) {
+        workspace.closeTab(id)
+    }
+}
+
+export async function deleteProjectFileNode(node: TreeNode): Promise<string | null> {
+    const parsed = parseProjectFileNodeId(node.id)
+    if (!parsed?.path?.trim()) return null
+    const isDirectory = isProjectFilesFolderNode(node)
+    await projectFilesApi.delete(parsed.projectId, {
+        root: parsed.root,
+        path: parsed.path,
+    })
+    closeWorkspaceTabsForProjectFile(parsed.projectId, parsed.root, parsed.path, isDirectory)
+    const parentFolderId = parentFolderNodeId(parsed)
+    await refreshProjectFilesFolder(parentFolderId)
+    return parentFolderId
+}
+
 export async function renameProjectFileNode(
     node: TreeNode,
     nextName: string,
@@ -335,12 +375,131 @@ export async function renameProjectFileNode(
         fromPath: parsed.path,
         toPath,
     })
+    remapWorkspaceTabsForProjectFilePath(parsed.projectId, parsed.root, parsed.path, toPath, isDir)
     const parentFolderId = parentFolderNodeId(parsed)
     await refreshProjectFilesFolder(parentFolderId)
     return {
         nodeId: projectFileNodeId(parsed.projectId, parsed.root, toPath),
         name,
         parentFolderId,
+    }
+}
+
+function isProjectPathUnder(ancestorPath: string, candidatePath: string): boolean {
+    const a = ancestorPath.replace(/\/+$/, '')
+    const c = candidatePath.replace(/\/+$/, '')
+    if (!a) return true
+    return c === a || c.startsWith(`${a}/`)
+}
+
+/** Remap open workspace tabs after a project sandbox path change (rename or move). */
+export function remapWorkspaceTabsForProjectFilePath(
+    projectId: string,
+    root: ProjectFileRoot,
+    fromPath: string,
+    toPath: string,
+    isDirectory: boolean,
+): void {
+    const workspace = useWorkspaceStore()
+    const oldUri = buildProjectFileUri(projectId, root, fromPath)
+    const newUri = buildProjectFileUri(projectId, root, toPath)
+    const oldKey = oldUri.replace(/\/+$/, '').toLowerCase()
+    const newBase = newUri.replace(/\/+$/, '')
+    if (!oldKey || oldKey === newBase.toLowerCase()) return
+
+    for (const tab of workspace.tabs) {
+        const path = (tab.type === 'local-text' ? tab.localFilePath : tab.sqlFile)?.trim()
+        if (!path) continue
+        const key = path.replace(/\/+$/, '').toLowerCase()
+        let nextUri: string | null = null
+        let nextRelative: string | null = null
+        if (key === oldKey) {
+            nextUri = newUri
+            nextRelative = toPath
+        } else if (isDirectory && key.startsWith(`${oldKey}/`)) {
+            const relative = path.slice(oldUri.length).replace(/^\/+/, '')
+            nextUri = relative ? `${newBase}/${relative}` : newUri
+            nextRelative = relative ? joinProjectRelativePath(toPath, relative) : toPath
+        }
+        if (!nextUri || nextRelative == null) continue
+
+        if (tab.type === 'local-text') {
+            tab.localFilePath = nextUri
+            tab.title = localFileBaseName(nextRelative)
+            tab.explorerNodeId = projectFileNodeId(projectId, root, nextRelative)
+        } else if (tab.type === 'console') {
+            tab.sqlFile = nextUri
+            tab.title = localFileBaseName(nextRelative)
+            tab.explorerNodeId = projectFileNodeId(projectId, root, nextRelative)
+        }
+    }
+}
+
+/**
+ * Move a project sandbox file/folder into `targetFolder`
+ * (virtual docs/scripts root or nested project folder).
+ */
+export async function moveProjectFileNode(
+    source: TreeNode,
+    targetFolder: TreeNode,
+): Promise<{
+    nodeId: string
+    name: string
+    fromParentFolderId: string
+    toParentFolderId: string
+    fromPath: string
+    toPath: string
+} | null> {
+    const parsed = parseProjectFileNodeId(source.id)
+    if (!parsed?.path?.trim()) return null
+
+    let targetPath = ''
+    if (targetFolder.id === PROJECT_DOCS_ROOT_ID || targetFolder.id === PROJECT_SCRIPTS_ROOT_ID) {
+        const expectedRoot = targetFolder.id === PROJECT_DOCS_ROOT_ID ? 'docs' : 'scripts'
+        if (parsed.root !== expectedRoot) return null
+        targetPath = ''
+    } else {
+        const targetParsed = parseProjectFileNodeId(targetFolder.id)
+        if (
+            !targetParsed
+            || targetParsed.projectId !== parsed.projectId
+            || targetParsed.root !== parsed.root
+        ) {
+            return null
+        }
+        targetPath = targetParsed.path
+    }
+
+    const isDir = isProjectFilesFolderNode(source)
+    if (isDir && isProjectPathUnder(parsed.path, targetPath)) {
+        throw new Error('invalid_target')
+    }
+
+    const slash = parsed.path.lastIndexOf('/')
+    const baseName = slash >= 0 ? parsed.path.slice(slash + 1) : parsed.path
+    const toPath = joinProjectRelativePath(targetPath, baseName)
+    if (toPath === parsed.path) return null
+
+    await projectFilesApi.rename(parsed.projectId, {
+        root: parsed.root,
+        fromPath: parsed.path,
+        toPath,
+    })
+    remapWorkspaceTabsForProjectFilePath(parsed.projectId, parsed.root, parsed.path, toPath, isDir)
+
+    const fromParentFolderId = parentFolderNodeId(parsed)
+    const toParentFolderId = targetFolder.id
+    await refreshProjectFilesFolder(fromParentFolderId)
+    if (toParentFolderId !== fromParentFolderId) {
+        await refreshProjectFilesFolder(toParentFolderId)
+    }
+    return {
+        nodeId: projectFileNodeId(parsed.projectId, parsed.root, toPath),
+        name: baseName,
+        fromParentFolderId,
+        toParentFolderId,
+        fromPath: parsed.path,
+        toPath,
     }
 }
 
@@ -365,7 +524,11 @@ export async function openProjectFileNode(node: TreeNode): Promise<string | null
     const layout = useLayoutStore()
     const workspace = useWorkspaceStore()
     try {
-        const file = await projectFilesApi.read(parsed.projectId, parsed.root, parsed.path)
+        // Fail fast when backend is down — default 60s timeout leaves the UI feeling frozen.
+        const file = await projectFilesApi.read(parsed.projectId, parsed.root, parsed.path, {
+            timeoutMs: 8_000,
+            silent: true,
+        })
         const uri = buildProjectFileUri(parsed.projectId, parsed.root, parsed.path)
         const title = localFileBaseName(parsed.path) || node.label
         if (isLocalSqlFileName(parsed.path)) {
@@ -387,8 +550,17 @@ export async function openProjectFileNode(node: TreeNode): Promise<string | null
                 explorerNodeId: node.id,
             })) ?? null
         )
-    } catch {
-        layout.showErrorToast(t('explorer.projectFileOpenFailed'))
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err ?? '')
+        const backendDown =
+            msg === HTTP_NOT_READY
+            || msg === HTTP_TIMEOUT
+            || /Failed to fetch|NetworkError|ECONNREFUSED|ERR_CONNECTION_REFUSED|TimeoutError|timeout/i.test(
+                msg,
+            )
+        layout.showErrorToast(
+            t(backendDown ? 'explorer.projectFileBackendDown' : 'explorer.projectFileOpenFailed'),
+        )
         return null
     }
 }

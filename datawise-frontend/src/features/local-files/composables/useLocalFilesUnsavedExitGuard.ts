@@ -54,7 +54,15 @@ export function useLocalFilesUnsavedExitGuard() {
     })
 
     return {
+        /** @deprecated prefer flattened open/title/… bindings */
         exitConfirm,
+        open: exitConfirm.open,
+        title: exitConfirm.title,
+        message: exitConfirm.message,
+        confirmLabel: exitConfirm.confirmLabel,
+        confirmVariant: exitConfirm.confirmVariant,
+        onOpenUpdate: exitConfirm.onOpenUpdate,
+        onConfirm: exitConfirm.onConfirm,
         confirmCloseIfNeeded,
         confirmLocalFilesExitIfNeeded,
     }

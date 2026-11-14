@@ -469,14 +469,14 @@ function cancelAddSnippetForm() {
 }
 
 .sql-settings-shell[data-tone='dark'] {
-  --se-bg: #171e27;
-  --se-bg-muted: #121820;
-  --se-bg-hover: #1f2936;
-  --se-border: #2e3440;
-  --se-text: #f0f0f3;
-  --se-text-secondary: #d4d4d8;
-  --se-text-muted: #c4c7cc;
-  --se-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --se-bg: var(--dw-bg-panel, #1e1f22);
+  --se-bg-muted: var(--dw-bg-muted, #222326);
+  --se-bg-hover: var(--dw-bg-hover, #2a2b2e);
+  --se-border: var(--dw-panel-outline, var(--dw-panel-border, rgba(255, 255, 255, 0.08)));
+  --se-text: var(--dw-text, #f0f0f3);
+  --se-text-secondary: var(--dw-text-secondary, #d4d4d8);
+  --se-text-muted: var(--dw-text-muted, #c4c7cc);
+  --se-shadow: var(--dw-menu-shadow, 0 8px 28px rgba(0, 0, 0, 0.45));
 }
 
 .sql-settings-shell[data-tone='light'] {

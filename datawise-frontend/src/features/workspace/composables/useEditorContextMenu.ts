@@ -19,6 +19,9 @@ export interface EditorContextMenuHandlers {
     requestIndexSuggest: (sql: string) => void
     formatSelection: () => void
     openAiInput: (prefill?: string) => void
+    /** T-AI-2：选区 → AI 工作台（Ask / Fix） */
+    askAiInWorkbench?: (sql: string) => void
+    fixAiInWorkbench?: (sql: string) => void
     getDbType: () => DbType | undefined
     getCapabilities?: () => ConnectionCapabilitiesSnapshot
     getCapabilityHint?: (key: 'sqlExplain') => string
@@ -135,6 +138,16 @@ export function useEditorContextMenu(handlers: EditorContextMenuHandlers) {
         }
         if (id === 'generate-insert') {
             void handlers.openAiInput(t('console.generateInsertPrompt', {sql: targetSql}))
+            close()
+            return
+        }
+        if (id === 'ask-ai') {
+            handlers.askAiInWorkbench?.(targetSql)
+            close()
+            return
+        }
+        if (id === 'fix-ai') {
+            handlers.fixAiInWorkbench?.(targetSql)
             close()
             return
         }

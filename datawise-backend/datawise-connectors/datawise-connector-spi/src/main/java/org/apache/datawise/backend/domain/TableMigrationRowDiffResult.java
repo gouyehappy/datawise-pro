@@ -12,5 +12,32 @@ public record TableMigrationRowDiffResult(
         int unchangedCount,
         boolean truncated,
         String message,
-        List<TableMigrationRowDiffItem> samples) {
+        List<TableMigrationRowDiffItem> samples,
+        String syncSql) {
+
+    /** Backward-compatible constructor when sync SQL is unavailable. */
+    public TableMigrationRowDiffResult(
+            String tableName,
+            List<String> primaryKeyColumns,
+            int sampledSourceRows,
+            int insertCount,
+            int updateCount,
+            int unchangedCount,
+            boolean truncated,
+            String message,
+            List<TableMigrationRowDiffItem> samples
+    ) {
+        this(
+                tableName,
+                primaryKeyColumns,
+                sampledSourceRows,
+                insertCount,
+                updateCount,
+                unchangedCount,
+                truncated,
+                message,
+                samples,
+                null
+        );
+    }
 }

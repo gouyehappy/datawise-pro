@@ -69,7 +69,7 @@ function buildTheme(): ITheme {
   const appearance = hostAppearance();
   const dark = appearance ? appearance === 'dark' : !window.matchMedia('(prefers-color-scheme: dark)').matches;
   const palette = dark ? ANSI_DARK : ANSI_LIGHT;
-  const background = readToken('--color-background', readToken('--background', dark ? '#0c1015' : '#ffffff'));
+  const background = readToken('--color-background', readToken('--background', dark ? '#1a1b1e' : '#ffffff'));
   const foreground = readToken('--color-foreground', readToken('--foreground', dark ? '#f0f0f3' : '#18181b'));
   const accent = readToken('--color-primary', readToken('--primary', '#2563eb'));
   return {

@@ -12,7 +12,7 @@ datawise:
     # 本地插件开发可不强制 manifest SHA
     require-manifest-integrity: false
   community-plugin:
-    # 本机联调可装未签名 .dwp；生产 profile 保持 false
+    # 仅社区插件 .dwp（≠ entitlement .dpk）。本机联调可装未签名；生产 profile 保持 false。
     allow-unsigned: true
   ai:
     analysis:

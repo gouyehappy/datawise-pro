@@ -9,6 +9,7 @@ import {sqlApi} from '@/api'
 import type {SessionKillMode} from '@/shared/api/types'
 import type {PendingSessionKill} from '@/features/workspace/composables/session-kill-context'
 import {useConnectionCapabilities} from '@/features/datasource/composables/useConnectionCapabilities'
+import {resolveCaughtMessage} from '@/shared/api/http/api-error-message'
 
 export function useSessionKill(
     connectionId: Ref<string | undefined>,
@@ -81,21 +82,22 @@ export function useSessionKill(
                 mode: pending.mode,
             })
             if (!result.killed) {
-                const stale = result.message?.includes('already ended')
+                const code = (result as {errorCode?: string}).errorCode?.trim()
+                const stale = code === 'SESSION_ALREADY_ENDED'
+                    || /already ended/i.test(result.message ?? '')
                 toast.show(
                     stale
                         ? t('shortcut.sessionKill.staleSession', {id: pending.sessionId})
-                        : (result.message || t('shortcut.sessionKill.failed')),
+                        : resolveCaughtMessage(result.message, t, 'shortcut.sessionKill.failed'),
                     {variant: stale ? 'info' : 'error'},
                 )
-                if (result.message?.includes('already ended')) {
+                if (stale) {
                     confirmOpen.value = false
                     pendingKill.value = null
                     await pending.onSuccess?.()
                 }
                 return false
             }
-            toast.success(t('shortcut.sessionKill.success', {id: pending.sessionId}))
             confirmOpen.value = false
             pendingKill.value = null
             await pending.onSuccess?.()

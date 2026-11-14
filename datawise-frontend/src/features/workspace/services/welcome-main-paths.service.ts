@@ -1,6 +1,12 @@
 import type {DwIconName} from '@/core/icons'
 import type {DbType, TreeNode} from '@/core/types'
 import {walkTree} from '@/core/utils/tree'
+import {
+    isWelcomeCommonActionVisibleInMode,
+    isWelcomeExploreVisibleInMode,
+    isWelcomeMainPathVisibleInMode,
+    type WorkbenchMode,
+} from '@/shared/config/workbench-mode'
 
 /** Welcome 首屏开始项（探索 / 可治理 SQL / AI） */
 export type WelcomeMainPathId = 'explore' | 'sql' | 'ai'
@@ -43,6 +49,7 @@ export type WelcomeCommonActionId =
     | 'newConsole'
     | 'history'
     | 'import'
+    | 'localData'
     | 'ai'
 
 export interface WelcomeCommonActionDef {
@@ -56,6 +63,7 @@ export const WELCOME_COMMON_ACTIONS: readonly WelcomeCommonActionDef[] = [
     {id: 'newConsole', titleKey: 'welcome.newConsole', icon: 'console'},
     {id: 'history', titleKey: 'welcome.common.history', icon: 'history'},
     {id: 'import', titleKey: 'explorer.importConnections', icon: 'import'},
+    {id: 'localData', titleKey: 'welcome.common.localData', icon: 'file'},
     {id: 'ai', titleKey: 'welcome.paths.aiAction', icon: 'ai'},
 ] as const
 
@@ -152,8 +160,13 @@ export function filterWelcomeExploreLinks(options: {
     canTeam: boolean
     canSettings: boolean
     canAi: boolean
+    /** B1: optional workbench mode filter */
+    workbenchMode?: WorkbenchMode
 }): WelcomeExploreLinkDef[] {
     return WELCOME_EXPLORE_LINKS.filter((link) => {
+        if (options.workbenchMode && !isWelcomeExploreVisibleInMode(link.id, options.workbenchMode)) {
+            return false
+        }
         if (link.id === 'connectors') return options.canConnectors
         if (link.id === 'dashboard') return options.canDashboard
         if (link.id === 'team') return options.canTeam
@@ -272,8 +285,13 @@ export function filterWelcomeMainPaths(options: {
     canCreateConnection: boolean
     canNewConsole: boolean
     canAi: boolean
+    /** B1: optional workbench mode filter */
+    workbenchMode?: WorkbenchMode
 }): WelcomeMainPathDef[] {
     return WELCOME_MAIN_PATHS.filter((path) => {
+        if (options.workbenchMode && !isWelcomeMainPathVisibleInMode(path.id, options.workbenchMode)) {
+            return false
+        }
         if (path.id === 'explore') return options.canCreateConnection
         if (path.id === 'sql') return options.canNewConsole
         if (path.id === 'ai') return options.canAi
@@ -287,8 +305,13 @@ export function filterWelcomeCommonActions(options: {
     canHistory: boolean
     canImport: boolean
     canAi: boolean
+    /** B1: optional workbench mode filter */
+    workbenchMode?: WorkbenchMode
 }): WelcomeCommonActionDef[] {
     return WELCOME_COMMON_ACTIONS.filter((action) => {
+        if (options.workbenchMode && !isWelcomeCommonActionVisibleInMode(action.id, options.workbenchMode)) {
+            return false
+        }
         if (action.id === 'newConnection') return options.canCreateConnection
         if (action.id === 'newConsole') return options.canNewConsole
         if (action.id === 'history') return options.canHistory

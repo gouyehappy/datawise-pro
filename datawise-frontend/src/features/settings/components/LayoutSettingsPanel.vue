@@ -42,13 +42,17 @@ const rightVisibleCount = computed(
 function onResetDockPlacement() {
   if (denyIfReadOnly()) return
   appConfig.resetDockPlacement()
-  toast.success(t('settings.layout.resetDockPlacementSuccess'))
 }
 
 function onExport() {
   if (denyIfReadOnly()) return
   appConfig.exportConfig()
-  toast.success(t('settings.layout.exportSuccess'))
+  toast.notify({
+    category: 'export',
+    titleKey: 'exportDone',
+    bodyKey: 'exportDone',
+    params: {name: t('settings.layout.exportSuccess')},
+  })
 }
 
 function onImportClick() {
@@ -65,8 +69,7 @@ async function onFileChange(event: Event) {
   try {
     const text = await file.text()
     const ok = appConfig.importConfigText(text)
-    if (ok) toast.success(t('settings.layout.importSuccess'))
-    else toast.error(t('settings.layout.importFailed'))
+    if (!ok) toast.error(t('settings.layout.importFailed'))
   } catch {
     toast.error(t('settings.layout.importFailed'))
   }

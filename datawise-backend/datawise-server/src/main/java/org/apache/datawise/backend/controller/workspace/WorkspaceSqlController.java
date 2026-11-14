@@ -16,8 +16,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/workspace")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_RUN)
 public class WorkspaceSqlController {
 
     private final WorkspaceService workspaceService;
@@ -57,6 +61,7 @@ public class WorkspaceSqlController {
     }
 
     @PostMapping("/saved-consoles")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_SAVE)
     public ApiResponse<SavedConsoleDto> saveConsole(@RequestBody SaveConsoleRequest request) {
         return ApiResponse.ok(workspaceService.saveConsole(request));
     }

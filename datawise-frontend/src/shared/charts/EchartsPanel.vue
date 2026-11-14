@@ -1,19 +1,29 @@
 <script setup lang="ts">
-import * as echarts from 'echarts'
 import {onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import type {EChartsOption} from 'echarts'
+import type {EChartsOption, EChartsType} from 'echarts'
 
 const props = defineProps<{
   option: EChartsOption | null
 }>()
 
 const chartRef = ref<HTMLElement>()
-let chart: echarts.ECharts | null = null
+let chart: EChartsType | null = null
+let echartsApi: typeof import('echarts') | null = null
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 let lastOptionJson = ''
+let renderGeneration = 0
 
-function render() {
+async function ensureEcharts() {
+  echartsApi ??= await import('echarts')
+  return echartsApi
+}
+
+async function render() {
   if (!chartRef.value || !props.option) return
+  const generation = ++renderGeneration
+  const echarts = await ensureEcharts()
+  if (generation !== renderGeneration) return
+  if (!chartRef.value) return
   chart ??= echarts.init(chartRef.value)
   chart.setOption(props.option, true)
   chart.resize()
@@ -24,7 +34,7 @@ function scheduleRender() {
   const nextJson = JSON.stringify(props.option)
   if (nextJson === lastOptionJson) return
   lastOptionJson = nextJson
-  render()
+  void render()
 }
 
 function onWindowResize() {
@@ -36,6 +46,7 @@ function onWindowResize() {
 }
 
 function dispose() {
+  renderGeneration += 1
   chart?.dispose()
   chart = null
 }

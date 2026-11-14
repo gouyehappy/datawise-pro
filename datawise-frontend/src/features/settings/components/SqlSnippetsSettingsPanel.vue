@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, onBeforeMount, ref, shallowRef} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {DwIcon} from '@/core/icons'
@@ -44,7 +44,6 @@ function onAddSnippet() {
 }
 
 function onSnippetSaved() {
-  toast.success(t('settings.sqlSnippets.saved'))
 }
 
 function onImportShared() {
@@ -68,8 +67,7 @@ async function onSharedFileChange(event: Event) {
   try {
     const text = await file.text()
     const ok = store.importSharedConfigText(text)
-    if (ok) toast.success(t('settings.sqlEditor.sharedImportSuccess'))
-    else toast.error(t('settings.sqlEditor.sharedImportFailed'))
+    if (!ok) toast.error(t('settings.sqlEditor.sharedImportFailed'))
   } catch {
     toast.error(t('settings.sqlEditor.sharedImportFailed'))
   }

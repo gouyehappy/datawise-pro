@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 defineOptions({name: 'RedisConsoleTab'})
 
 import {computed, nextTick, onMounted, ref, watch} from 'vue'
@@ -89,7 +89,6 @@ function onOpenKey(key: string) {
 }
 
 function onKeyDeleted() {
-    layout.showSuccessToast(t('explorer.redisConsole.keyDeleted'))
 }
 
 onMounted(async () => {

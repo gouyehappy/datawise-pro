@@ -52,6 +52,14 @@
 @import '@datawise/tokens/plugins/inset-split.css';
 @import '@datawise/tokens/plugins/seam-collapse.css';
 @import './plugins/dock-inplace.css';
+/* 仪表盘/扩展/插件分卡透气 — 在皮肤之后，仅限这三页根选择器 */
+@import './plugins/module-hub-air.css';
+
+/* IDE 直角 + 半缝：必须在 soft-card / hub 之后，盖过 Vue scoped */
+@import './plugins/ide-workbench-flush.css';
+
+/* Functional icon tones — after skins so toolbar/tab hues win inheritance */
+@import './icon-tones.css';
 
 *,
 *::before,

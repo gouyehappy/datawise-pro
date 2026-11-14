@@ -5,10 +5,11 @@ import org.apache.datawise.backend.common.UnauthorizedException;
 import org.apache.datawise.backend.domain.TerminalExecRequest;
 import org.apache.datawise.backend.domain.TerminalExecResult;
 import org.apache.datawise.backend.domain.TerminalStatusDto;
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
 import org.apache.datawise.backend.security.UserContext;
 import org.apache.datawise.backend.service.TerminalService;
 import org.apache.datawise.backend.service.UserAccessPolicy;
-import org.apache.datawise.backend.service.FeaturePermissionAccess;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,20 +22,18 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/terminal")
+@RequiresFeature(UserFeaturePermission.UTIL_TERMINAL)
 public class TerminalController {
 
     private final TerminalService terminalService;
     private final UserAccessPolicy userAccessPolicy;
-    private final FeaturePermissionAccess featurePermissionAccess;
 
     public TerminalController(
             TerminalService terminalService,
-            UserAccessPolicy userAccessPolicy,
-            FeaturePermissionAccess featurePermissionAccess
+            UserAccessPolicy userAccessPolicy
     ) {
         this.terminalService = terminalService;
         this.userAccessPolicy = userAccessPolicy;
-        this.featurePermissionAccess = featurePermissionAccess;
     }
 
     @PostMapping("/execute")
@@ -60,6 +59,5 @@ public class TerminalController {
             throw new UnauthorizedException();
         }
         userAccessPolicy.requireRegisteredUser();
-        featurePermissionAccess.requireUtilTerminal();
     }
 }

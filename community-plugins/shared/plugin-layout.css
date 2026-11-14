@@ -1,0 +1,48 @@
+/**
+ * Community plugin layout contract (host-injected baseline mirrors this).
+ * IDE: chrome gaps between major panes (half classic) + square corners.
+ * Classic/atelier: keep plugin-local radius; gap still follows --dw-panel-gap when set.
+ */
+
+html[data-ui-skin='ide'] body {
+  background: var(--color-chrome, var(--dw-bg-chrome, #2b2d30)) !important;
+}
+
+html[data-ui-skin='ide'] :is(#root, #app) {
+  background: transparent !important;
+  min-height: 100%;
+}
+
+html[data-ui-skin='ide'] :is(
+  .app,
+  .shell,
+  .workbench,
+  .wb,
+  .wb-root,
+  .layout,
+  .layout-root,
+  .main-layout,
+  .page-shell,
+  .keys-split,
+  .split-view,
+  .panes,
+  .wb-split,
+  .jk-split
+) {
+  gap: var(--dw-panel-gap, 3px) !important;
+  column-gap: var(--dw-panel-gap, 3px) !important;
+  row-gap: var(--dw-panel-gap, 3px) !important;
+  background: transparent !important;
+}
+
+html[data-ui-skin='ide'] :is(.rail, .sidebar, .side-nav, .nav-rail, .wb-rail) {
+  border-radius: 0 !important;
+  border-right: 1px solid var(--color-border, rgba(255, 255, 255, 0.08)) !important;
+  background: var(--color-muted, var(--rail, #1e1f22)) !important;
+}
+
+html[data-ui-skin='ide'] :is(.shell, .main, .content, .workspace, .stage, .workbench) {
+  border-radius: 0 !important;
+  background: var(--color-background, var(--bg, #1a1b1e)) !important;
+  background-clip: padding-box;
+}

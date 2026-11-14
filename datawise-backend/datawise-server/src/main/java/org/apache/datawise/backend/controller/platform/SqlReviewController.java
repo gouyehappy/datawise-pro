@@ -9,8 +9,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/platform/sql-review")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_RUN)
 public class SqlReviewController {
 
     private final SqlReviewOrchestrator sqlReviewOrchestrator;

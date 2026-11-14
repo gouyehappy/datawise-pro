@@ -1,6 +1,13 @@
 # SaaS / 多租户云部署 profile（--spring.profiles.active=cloud）
 # 默认开启商业门禁 + 新租户自动领取 14 天 Pro（§1.3）。
 # 本地 / 桌面请继续用 default=dev 或 desktop，勿误激活本 profile。
+spring:
+  servlet:
+    multipart:
+      # Lower than desktop 512MB .dwp design cap — reduce anonymous/authenticated upload DoS surface.
+      # Raise only if cloud tenants must install large community packs via HTTP.
+      max-file-size: 128MB
+      max-request-size: 128MB
 datawise:
   tenancy:
     # SaaS multi-tenant: base defaults to single, cloud profile opts into multi
@@ -18,6 +25,21 @@ datawise:
     auth:
       # Cloud: no wildcard loopback CORS (set explicit SaaS frontend origins if cross-origin)
       allowed-origin-patterns: []
+      # Explicit allowlist — no anonymous swagger / prometheus (scrape privately or behind auth)
+      public-path-prefixes:
+        - /login
+        - /signOut
+        - /api/auth/register
+        - /api/auth/login-options
+        - /api/auth/oidc/login
+        - /api/auth/oidc/callback
+        - /api/health
+        - /actuator/health
+        - /api/public/shares
+        - /ws/ssh-shell
+        - /ws/k8s-exec
+        - /ws/terminal
+        - /ws/community-plugin-stream
     master-key:
       # Refuse auto-generated / config-colocated keys — require DATAWISE_MASTER_KEY(_FILE)
       require-external: true
@@ -31,9 +53,27 @@ datawise:
     timeout-seconds: 300
     max-concurrent-global: 64
     max-concurrent-per-user: 4
-  # Multi-instance: set storage.backend=jdbc, then task-concurrency.store-type=jdbc and
-  # sse.bus-type=jdbc. Console SQL sessions/cursors and AI analysis SSE stay process-local —
+    # Shared cursor metadata for multi-replica paging (non-TX); see DEPLOYMENT.md#affinity
+    cursor-store-type: jdbc
+  # Multi-instance shared metadata (override jdbc-url in config/ overlay for production).
+  # Console SQL sessions and live AI SSE stay process-local —
   # sticky LB or single replica required (docs/DEPLOYMENT.md#affinity).
+  storage:
+    backend: jdbc
+    datasource:
+      # Replace with a durable Postgres (or compatible) URL in production overlays.
+      jdbc-url: jdbc:h2:mem:datawise_metadata_cloud;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+      username: sa
+      password: ""
+      driver-class-name: org.h2.Driver
+      maximum-pool-size: 10
+  task-concurrency:
+    store-type: jdbc
+  sse:
+    bus-type: jdbc
+  deployment:
+    # sticky = multi-replica + LB affinity; single = one replica (no sticky needed)
+    affinity-mode: sticky
   ai:
     analysis:
       semantic-check: strict

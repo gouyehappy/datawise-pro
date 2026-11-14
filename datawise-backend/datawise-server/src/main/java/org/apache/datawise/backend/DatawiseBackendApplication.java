@@ -8,6 +8,8 @@ import org.apache.datawise.backend.config.EntitlementProperties;
 import org.apache.datawise.backend.config.ConnectorDownloadProperties;
 import org.apache.datawise.backend.config.ConnectionProbeProperties;
 import org.apache.datawise.backend.config.DatawiseConfigProperties;
+import org.apache.datawise.backend.config.DeploymentAffinityProperties;
+import org.apache.datawise.backend.config.ObjectStorageProperties;
 import org.apache.datawise.backend.config.StorageProperties;
 import org.apache.datawise.backend.config.TenancyProperties;
 import org.apache.datawise.backend.config.DatawiseQueryProperties;
@@ -50,6 +52,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         ConnectorDownloadProperties.class,
         TenancyProperties.class,
         StorageProperties.class,
+        ObjectStorageProperties.class,
+        DeploymentAffinityProperties.class,
         AuthSessionProperties.class,
         AuthSecurityProperties.class,
         CommunityPluginProperties.class,

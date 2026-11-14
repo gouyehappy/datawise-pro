@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 
 import {computed, inject, onMounted, ref, toRef, watch} from 'vue'
 

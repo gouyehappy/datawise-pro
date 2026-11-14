@@ -23,7 +23,18 @@ import {SUITE_CATALOG} from '@/features/pack/catalog/pack-catalog'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import {useAuthStore} from '@/features/auth/stores/auth-store'
 import type {PackId, SuiteId} from '@/features/pack/types/pack.types'
-import {packNameKey, packPitchKey, suiteNameKey, suiteTaglineKey} from '@/features/pack/services/pack-i18n'
+import {
+  packLayerNameKey,
+  packNameKey,
+  packPitchKey,
+  suiteNameKey,
+  suiteTaglineKey,
+} from '@/features/pack/services/pack-i18n'
+import {
+  PACK_STORE_LAYER_FILTERS,
+  resolvePackLayer,
+  type CapabilityLayer,
+} from '@/features/pack/services/pack-layer'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import '@/features/pack/styles/pack-store.css'
 
@@ -39,6 +50,7 @@ const layout = useLayoutStore()
 type StoreFilter = 'all' | 'capability' | 'connector' | 'locked' | 'active'
 
 const filter = ref<StoreFilter>('all')
+const layerFilter = ref<CapabilityLayer | 'all'>('all')
 const searchQuery = ref('')
 const persona = ref<PackStorePersona>('general')
 const claimingSitePro = ref(false)
@@ -89,19 +101,35 @@ const showFreeAiStat = computed(() =>
     && entitlement.freeAiCallsRemaining != null,
 )
 
+const layerFilterOptions = computed(() =>
+  [
+    {id: 'all' as const, label: t('pack.filter.layerAll')},
+    ...PACK_STORE_LAYER_FILTERS.map((id) => ({
+      id,
+      label: t(packLayerNameKey(id)),
+    })),
+  ],
+)
+
 const filtered = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
+  const layer = layerFilter.value
   return entitlement.catalogItems.filter((pack) => {
     if (filter.value === 'capability' && pack.category !== 'capability') return false
     if (filter.value === 'connector' && pack.category !== 'connector') return false
     if (filter.value === 'locked' && pack.state !== 'locked' && pack.state !== 'expired') return false
     if (filter.value === 'active' && pack.state !== 'active' && pack.state !== 'trial') return false
+    if (layer !== 'all' && resolvePackLayer(pack.id) !== layer) return false
     if (!q) return true
     const name = t(packNameKey(pack.id)).toLowerCase()
     const pitch = t(packPitchKey(pack.id)).toLowerCase()
     return name.includes(q) || pitch.includes(q) || pack.id.includes(q)
   })
 })
+
+const showCoreLayerEmpty = computed(
+    () => layerFilter.value === 'core' && filtered.value.length === 0,
+)
 
 const capabilityItems = computed(() =>
     filtered.value.filter((pack) => pack.category === 'capability'),
@@ -141,7 +169,6 @@ function focusSuite(suiteId: string) {
   const target = resolveSuitePaywallTarget(suiteId, suiteUsable.value)
   if (!target) return
   if (target.kind === 'complete') {
-    layout.showSuccessToast(t('pack.suite.openCompleteToast', {name: t(suiteNameKey(target.suiteId))}))
     return
   }
   entitlement.openPaywall(target.packId, target.context)
@@ -285,7 +312,31 @@ function focusSuite(suiteId: string) {
         />
       </div>
 
-      <EmptyState v-if="filtered.length === 0" :title="t('pack.empty')"/>
+      <div
+          class="dw-segment dw-segment--wrap pack-store__layers"
+          role="tablist"
+          :aria-label="t('pack.filter.layerLabel')"
+      >
+        <button
+            v-for="item in layerFilterOptions"
+            :key="item.id"
+            class="dw-segment__btn"
+            :class="{'is-active': layerFilter === item.id}"
+            type="button"
+            role="tab"
+            :aria-selected="layerFilter === item.id"
+            @click="layerFilter = item.id"
+        >
+          {{ item.label }}
+        </button>
+      </div>
+
+      <EmptyState
+          v-if="showCoreLayerEmpty"
+          :title="t('pack.layers.core.name')"
+          :hint="t('pack.layers.core.blurb')"
+      />
+      <EmptyState v-else-if="filtered.length === 0" :title="t('pack.empty')"/>
 
       <template v-else>
         <section v-if="capabilityItems.length" class="pack-store__section">

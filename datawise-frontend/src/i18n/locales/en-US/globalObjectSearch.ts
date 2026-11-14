@@ -1,6 +1,7 @@
 export default {
     title: 'Command palette',
     placeholder: 'Search navigation, objects, SQL…  > commands   # knowledge',
+    clear: 'Clear search',
     empty: 'No matching navigation, objects, knowledge entries, or commands',
     noIndexedObjects: 'No searchable objects in the explorer tree yet. Expand a connection to load schema, or type to search the org schema cache and metrics.',
     commandModeHint: 'Command mode: pick an action below',
@@ -9,6 +10,11 @@ export default {
     knowledgeLabel: 'Knowledge',
     objectsGroup: 'Objects',
     knowledgeCopied: 'Knowledge entry copied',
+    footer: {
+        navigate: 'Navigate',
+        open: 'Open',
+        close: 'Close',
+    },
     types: {
         table: 'Table',
         view: 'View',

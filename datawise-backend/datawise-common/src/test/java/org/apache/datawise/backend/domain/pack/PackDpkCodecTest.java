@@ -100,10 +100,20 @@ class PackDpkCodecTest {
     @Test
     void missingSignatureRejectedUnlessAllowUnsigned() throws Exception {
         PackManifest manifest = PackManifest.of(PackIds.DATAGEN, "2.0.0");
-        byte[] unsigned = zipOnlyManifest(manifest);
+        byte[] unsigned = zipManifestWithPayloadDigest(manifest);
         assertThrows(PackEntitlementException.class, () -> PackDpkCodec.verify(unsigned, secret, false, mapper));
         PackDpkCodec.VerifiedPack ok = PackDpkCodec.verify(unsigned, secret, true, mapper);
         assertEquals(PackIds.DATAGEN, ok.manifest().packId());
+    }
+
+    @Test
+    void allowUnsignedStillRequiresPayloadDigest() throws Exception {
+        PackManifest manifest = PackManifest.of(PackIds.DATAGEN, "2.0.0");
+        byte[] unsigned = zipOnlyManifest(manifest);
+        PackEntitlementException ex = assertThrows(
+                PackEntitlementException.class,
+                () -> PackDpkCodec.verify(unsigned, secret, true, mapper));
+        assertEquals(DatawiseErrorCodes.PACK_INTEGRITY_FAILED, ex.errorCode());
     }
 
     @Test
@@ -124,6 +134,26 @@ class PackDpkCodecTest {
             zos.putNextEntry(new ZipEntry(PackDpkCodec.MANIFEST_ENTRY));
             zos.write(json);
             zos.closeEntry();
+        }
+        return bos.toByteArray();
+    }
+
+    /** Manifest + matching payload.sha256, but no pack.sig / ed25519 (unsigned). */
+    private byte[] zipManifestWithPayloadDigest(PackManifest manifest) throws Exception {
+        byte[] signed = PackDpkCodec.build(manifest, Map.of(), secret, mapper);
+        var bos = new java.io.ByteArrayOutputStream();
+        try (var zis = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(signed));
+             ZipOutputStream zos = new ZipOutputStream(bos)) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                String name = entry.getName();
+                if (PackDpkCodec.PACK_SIG_ENTRY.equals(name) || PackDpkCodec.PACK_ED25519_ENTRY.equals(name)) {
+                    continue;
+                }
+                zos.putNextEntry(new ZipEntry(name));
+                zis.transferTo(zos);
+                zos.closeEntry();
+            }
         }
         return bos.toByteArray();
     }

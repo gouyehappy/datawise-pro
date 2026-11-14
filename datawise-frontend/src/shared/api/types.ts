@@ -313,6 +313,8 @@ export interface OutboundEventVariable {
 
 export interface OutboundEventDefinition {
     type: string
+    /** Scene bucket: task | connection | schema | quality | security | system */
+    category?: string | null
     displayNameZh: string
     displayNameEn: string
     defaultTitleTemplate?: string | null
@@ -425,6 +427,13 @@ export interface ExecuteSqlResult {
     hasMore?: boolean
     pageOffset?: number
     pageSize?: number
+    /**
+     * T-MULTI-1：一次 JDBC execute 的全部结果集（含主结果）。
+     * 缺省 / 单结果时为 undefined；扁平字段始终镜像第一项。
+     */
+    resultSets?: ExecuteSqlResult[]
+    /** Precise cancel id when the run was tracked (console sessionKey path). */
+    queryId?: string
 }
 
 export type FederatedViewExecuteResult = ExecuteSqlResult
@@ -525,12 +534,15 @@ export interface KillSessionResult {
 export interface CancelConsoleSqlRequest {
     sessionKey: string
     mode?: SessionKillMode
+    /** When set, cancel this precise query instead of the tab's latest. */
+    queryId?: string
 }
 
 export interface CancelConsoleSqlResult {
     cancelled: boolean
     mode: SessionKillMode
     message: string
+    queryId?: string
 }
 
 export interface SqlApi {
@@ -655,7 +667,7 @@ export interface TableDataResult {
     hasMore?: boolean
     pageOffset?: number
     pageSize?: number
-    /** 婊戝姩绐楀彛宸蹭粠鍐呭瓨涓㈠純鐨勬渶鏃╄鏁?*/
+    /** 滑动窗口已从内存丢弃的最早行数 */
     cursorTrimmedRows?: number
 }
 
@@ -811,9 +823,38 @@ export interface TableDdlResult {
     ddl: string
 }
 
+/** MetaForge B1 — successful table DDL executions for a connection. */
+export interface DdlHistoryEntry {
+    id: string
+    at: string
+    userId?: number | null
+    connectionId: string
+    database: string
+    objectName: string
+    objectKind: string
+    action: string
+    sql: string
+}
+
+/** MetaForge B1: successful table DDL execution history. */
+export interface DdlHistoryEntry {
+    id: string
+    at: string
+    userId?: number | null
+    connectionId: string
+    database: string
+    objectName: string
+    objectKind: string
+    action: string
+    sql: string
+}
+
 export interface TableSqlExportResult {
     sql: string
     fileName: string
+    /** Present when datawise.object-storage.publish-exports is enabled. */
+    objectStorageKey?: string | null
+    objectStorageUri?: string | null
 }
 
 // 鈹€鈹€ Datagen 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -988,12 +1029,14 @@ export interface TableMigrationRowDiffResult {
     truncated: boolean
     message?: string | null
     samples: TableMigrationRowDiffItem[]
+    /** Sampled INSERT/UPDATE preview SQL for the target dialect (not a full table sync). */
+    syncSql?: string | null
 }
 
 export interface TableDetailFetchOptions {
     connectionId?: string
     database?: string
-    kind?: 'table' | 'view'
+    kind?: 'table' | 'view' | 'trigger' | 'function' | 'procedure' | 'sequence'
 }
 
 export interface TableSqlExportOptions extends TableDetailFetchOptions {
@@ -1011,6 +1054,13 @@ export interface TableDetailApi {
     fetchSchemaRelations(options?: TableDetailFetchOptions): Promise<SchemaRelationsResult>
 
     fetchSchemaTables(options?: TableDetailFetchOptions): Promise<SchemaTablesResult>
+
+    /** MetaForge B1 — successful table DDL history for a connection. */
+    fetchDdlHistory(options: {
+        connectionId: string
+        database?: string
+        limit?: number
+    }): Promise<DdlHistoryEntry[]>
 
     exportTableSql(tableName: string, options?: TableSqlExportOptions): Promise<TableSqlExportResult>
 
@@ -1526,7 +1576,7 @@ export interface ExplorerApi {
 
     pingConnection(connectionId: string): Promise<ConnectionTestResult>
 
-    /** 浠呭埛鏂板凡寤烘睜杩炴帴娲昏穬鏃堕棿锛涙湭杩炴帴杩斿洖 false锛屼笉鑷姩 connect */
+    /** 仅刷新已建池连接活跃时间；未连接返回 false，不自动 connect */
     touchConnection(connectionId: string): Promise<boolean>
 
     disconnectConnection(connectionId: string): Promise<void>
@@ -1568,6 +1618,10 @@ export interface ExplorerApi {
     ): Promise<CreateNamespaceResult>
 
     fetchMysqlCharsets(connectionId: string): Promise<MysqlCharsetOptionsResult>
+
+    fetchEngines(connectionId: string): Promise<EngineOptionsResult>
+
+    fetchDataTypes(connectionId: string): Promise<DataTypeOptionsResult>
 }
 
 export interface CreateNamespaceResult {
@@ -1580,6 +1634,23 @@ export interface CreateNamespaceResult {
 export interface MysqlCharsetOptionsResult {
     charsets: Array<{ name: string; description: string; defaultCollation: string }>
     collations: Array<{ name: string; charset: string; isDefault: boolean }>
+}
+
+export interface EngineOptionsResult {
+    supported: boolean
+    engines: Array<{
+        name: string
+        support: string
+        comment: string
+        transactions: boolean
+        xa: boolean
+        savepoints: boolean
+    }>
+}
+
+export interface DataTypeOptionsResult {
+    supported: boolean
+    dataTypes: Array<{ name: string; category: string; description: string }>
 }
 
 // 鈹€鈹€ Workspace (shortcut panel) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€

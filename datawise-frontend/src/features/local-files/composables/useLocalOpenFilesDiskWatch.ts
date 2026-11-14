@@ -9,8 +9,14 @@ import {
 } from '@/features/local-files/services/local-files.service'
 import {normalizeLocalPathKey} from '@/features/local-files/services/local-files-path'
 import {resolveTabLocalPath} from '@/features/local-files/services/local-files-workspace-tabs'
+import {bindForegroundSettleRefresh} from '@/shared/browser/foreground-settle'
 
-const POLL_MS = 2500
+/** PERF-21: poll cadence for the active open file. */
+const POLL_ACTIVE_MS = 2500
+/**
+ * Background tabs are checked every Nth active tick (≈10s when ACTIVE=2.5s).
+ */
+const BACKGROUND_EVERY_N_TICKS = 4
 
 /**
  * Poll open local-file tabs for external disk changes.
@@ -25,6 +31,7 @@ export function useLocalOpenFilesDiskWatch() {
     const prompting = new Set<string>()
     let timer: number | null = null
     let running = false
+    let tick = 0
 
     const dialogOpen = confirm.open
     const dialogTitle = confirm.title
@@ -53,6 +60,7 @@ export function useLocalOpenFilesDiskWatch() {
         if (tab.type === 'local-text') {
             tab.sql = content
             tab.savedContent = content
+            workspace.syncContentDirtyFlag(tab)
         } else if (tab.type === 'console') {
             tab.sql = content
             workspace.markConsoleTabSaved(tabId, content)
@@ -68,7 +76,6 @@ export function useLocalOpenFilesDiskWatch() {
             const dirty = workspace.isTabDirty(tabId)
             if (!dirty) {
                 await applyDiskContent(tabId, path, content)
-                layout.showSuccessToast(t('explorer.localFiles.externalReloaded'))
                 return
             }
 
@@ -80,71 +87,88 @@ export function useLocalOpenFilesDiskWatch() {
             })
             if (!ok) return
             await applyDiskContent(tabId, path, content)
-            layout.showSuccessToast(t('explorer.localFiles.externalReloaded'))
         } finally {
             prompting.delete(key)
         }
     }
 
-    async function pollOnce() {
+    async function pollTab(tab: (typeof workspace.tabs)[number]) {
+        const path = resolveTabLocalPath(tab)
+        if (!path) return
+        const key = normalizeLocalPathKey(path)
+        let stat
+        try {
+            stat = await statLocal(path)
+        } catch {
+            return
+        }
+        if (!stat.exists || typeof stat.mtimeMs !== 'number') {
+            if (baselines.has(key)) {
+                baselines.delete(key)
+                layout.showErrorToast(t('explorer.localFiles.externalGone', {
+                    name: tab.title || path,
+                }))
+            }
+            return
+        }
+        const prev = baselines.get(key)
+        if (prev == null) {
+            baselines.set(key, stat.mtimeMs)
+            return
+        }
+        if (stat.mtimeMs === prev) return
+
+        let diskContent: string
+        try {
+            diskContent = await readLocalTextFile(path)
+        } catch {
+            baselines.delete(key)
+            layout.showErrorToast(t('explorer.localFiles.externalGone', {
+                name: tab.title || path,
+            }))
+            return
+        }
+
+        const saved =
+            tab.type === 'local-text'
+                ? (tab.savedContent ?? '')
+                : (tab.savedSql ?? '')
+        const editor = tab.sql ?? ''
+
+        // Self-save or already in sync with disk — only refresh mtime baseline.
+        if (diskContent === saved || diskContent === editor) {
+            baselines.set(key, stat.mtimeMs)
+            if (diskContent === editor && diskContent !== saved) {
+                if (tab.type === 'local-text') {
+                    tab.savedContent = diskContent
+                    workspace.syncContentDirtyFlag(tab)
+                } else if (tab.type === 'console') {
+                    workspace.markConsoleTabSaved(tab.id, diskContent)
+                }
+            }
+            return
+        }
+
+        baselines.set(key, stat.mtimeMs)
+        await handleExternalChange(tab.id, path, diskContent)
+    }
+
+    async function pollOnce(options?: {forceAll?: boolean}) {
         if (running) return
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
         running = true
         try {
+            const forceAll = options?.forceAll === true
+            const includeBackground = forceAll || tick % BACKGROUND_EVERY_N_TICKS === 0
+            tick += 1
+            const activeId = workspace.activeTabId
+
             for (const tab of workspace.tabs) {
                 const path = resolveTabLocalPath(tab)
                 if (!path) continue
-                const key = normalizeLocalPathKey(path)
-                let stat
-                try {
-                    stat = await statLocal(path)
-                } catch {
-                    continue
-                }
-                if (!stat.exists || typeof stat.mtimeMs !== 'number') {
-                    if (baselines.has(key)) {
-                        baselines.delete(key)
-                        layout.showErrorToast(t('explorer.localFiles.externalGone', {
-                            name: tab.title || path,
-                        }))
-                    }
-                    continue
-                }
-                const prev = baselines.get(key)
-                if (prev == null) {
-                    baselines.set(key, stat.mtimeMs)
-                    continue
-                }
-                if (stat.mtimeMs === prev) continue
-
-                let diskContent: string
-                try {
-                    diskContent = await readLocalTextFile(path)
-                } catch {
-                    baselines.delete(key)
-                    layout.showErrorToast(t('explorer.localFiles.externalGone', {
-                        name: tab.title || path,
-                    }))
-                    continue
-                }
-
-                const saved =
-                    tab.type === 'local-text'
-                        ? (tab.savedContent ?? '')
-                        : (tab.savedSql ?? '')
-                const editor = tab.sql ?? ''
-
-                // Self-save or already in sync with disk — only refresh mtime baseline.
-                if (diskContent === saved || diskContent === editor) {
-                    baselines.set(key, stat.mtimeMs)
-                    if (diskContent === editor && diskContent !== saved) {
-                        if (tab.type === 'local-text') tab.savedContent = diskContent
-                        else if (tab.type === 'console') workspace.markConsoleTabSaved(tab.id, diskContent)
-                    }
-                    continue
-                }
-
-                baselines.set(key, stat.mtimeMs)
-                await handleExternalChange(tab.id, path, diskContent)
+                const isActive = tab.id === activeId
+                if (!isActive && !includeBackground) continue
+                await pollTab(tab)
             }
 
             const openKeys = new Set(
@@ -161,21 +185,30 @@ export function useLocalOpenFilesDiskWatch() {
         }
     }
 
-    function onVisibility() {
-        if (document.visibilityState === 'visible') void pollOnce()
+    function onInterval() {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+        void pollOnce()
     }
 
+    let unbindForeground: (() => void) | null = null
+
     onMounted(() => {
-        timer = window.setInterval(() => void pollOnce(), POLL_MS)
-        window.addEventListener('focus', onVisibility)
-        document.addEventListener('visibilitychange', onVisibility)
-        void pollOnce()
+        timer = window.setInterval(onInterval, POLL_ACTIVE_MS)
+        // 与 git 状态刷新同一套前台稳态调度，避免切回瞬间 forceAll 加重首帧
+        unbindForeground = bindForegroundSettleRefresh(
+            () => {
+                tick = 0
+                void pollOnce({forceAll: true})
+            },
+            {afterMs: 120},
+        )
+        void pollOnce({forceAll: true})
     })
 
     onUnmounted(() => {
         if (timer != null) window.clearInterval(timer)
-        window.removeEventListener('focus', onVisibility)
-        document.removeEventListener('visibilitychange', onVisibility)
+        unbindForeground?.()
+        unbindForeground = null
     })
 
     return {

@@ -1,0 +1,5 @@
+{
+  "dbType": "yarn",
+  "extends": "specialized-browse",
+  "formKind": "ops"
+}

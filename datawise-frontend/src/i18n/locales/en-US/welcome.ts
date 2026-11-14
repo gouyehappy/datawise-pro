@@ -1,16 +1,16 @@
 export default {
     brand: 'DataWise',
     gettingStarted: 'Make this workbench yours',
-    lead: 'Connect sources, write governed SQL, and accelerate insight with AI — start on one path.',
-    leadReturning: 'Resume on a recent connection, or open Agent with workbench context.',
+    lead: 'Add a data source first — then open a console and see results.',
+    leadReturning: 'Pick up a recent connection, or open a console and keep querying.',
     continueWork: 'Continue',
     recentUsed: 'Recent',
     newestAdded: 'Newly added',
     secondaryActions: 'More',
-    capabilities: 'Capabilities',
+    capabilities: 'Open when needed',
     shortcutsHint: 'Shortcuts',
     paths: {
-        title: 'Main paths',
+        title: 'Other paths',
         exploreTitle: 'Explore',
         exploreDesc: 'Connect a source and browse schemas with environment labels in the tree.',
         exploreAction: 'New connection',
@@ -23,6 +23,8 @@ export default {
         aiDesc: 'Ask, generate, and explain SQL with workbench context.',
         aiAction: 'Open Agent',
     },
+    aiNeedsConnection: 'Create a connection first, then open AI.',
+    primaryCtaHint: 'Pick a database type, fill in the form, test, then query.',
     intro:
         'A database workbench. This build connects to data sources and runs queries through the <strong>backend API</strong>.',
     docsHint:
@@ -75,6 +77,8 @@ export default {
     },
     common: {
         history: 'History',
+        localData: 'Local data file',
+        localDataNeedsDesktop: 'Use the desktop app to pick a local Parquet / CSV / JSON file for preview',
     },
     quickLinks: 'More',
     workflow: {
@@ -88,8 +92,8 @@ export default {
         analyzeDesc: 'Ask AI to explain SQL, or turn results into dashboard charts.',
     },
     explore: {
-        title: 'Other',
-        subtitle: 'Open when you need them',
+        title: 'Open when needed',
+        subtitle: 'Connectors, dashboard, team, and settings',
         connectorsTitle: 'Connectors',
         connectorsDesc: 'Install and update drivers on demand',
         aiTitle: 'AI',

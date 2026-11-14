@@ -1,0 +1,5 @@
+{
+  "dbType": "ssh",
+  "extends": "specialized-browse",
+  "formKind": "ssh"
+}

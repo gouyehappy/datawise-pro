@@ -85,8 +85,9 @@ function bindInputRef(el: Element | ComponentPublicInstance | null) {
   inputRef.value = node instanceof HTMLInputElement ? node : null
 }
 
+/** Align with DataSourceTree: space-3 + depth × 14 */
 function depthPadding(depth: number) {
-  return `${6 + depth * 14}px`
+  return `calc(var(--dw-space-3) + ${depth} * 14px)`
 }
 
 function iconSpec(node: LocalFileTreeNode, expanded: boolean) {
@@ -359,67 +360,73 @@ function onEmptyDrop(event: DragEvent, parentPath: string) {
         @dragover="onRowDragOver($event, row.file)"
         @drop="onRowDrop($event, row.file)"
     >
-      <span
-          class="local-files-row__twist"
-          :class="{
-            'is-expanded': isDirVisuallyExpanded(row.file),
-            'is-leaf': !row.file.isDirectory,
-          }"
-          aria-hidden="true"
-          @click.stop="row.file.isDirectory && emit('toggle-expand', row.file)"
-          @dblclick.stop
-      >
-        <DwIcon
-            v-if="row.file.isDirectory"
-            name="chevron-right"
-            size="xs"
-            :stroke-width="2"
-            class="local-files-row__twist-icon"
-        />
-      </span>
-      <span
-          class="local-files-row__icon"
-          :class="`tone-${iconSpec(row.file, isDirVisuallyExpanded(row.file)).tone}`"
-          aria-hidden="true"
-      >
-        <DwIcon
-            :name="iconSpec(row.file, isDirVisuallyExpanded(row.file)).icon"
-            size="md"
-            :stroke-width="1.55"
-        />
-      </span>
-      <input
-          v-if="isRenameTarget(row.file)"
-          :ref="bindInputRef"
-          class="local-files-row__input"
-          data-local-inline-input
-          :value="localFiles.inlineEdit?.value ?? ''"
-          @click.stop
-          @dblclick.stop
-          @mousedown.stop
-          @pointerdown.stop
-          @focus="onInlineFocus"
-          @input="onDraftInput"
-          @keydown="onDraftKeydown"
-          @blur="onDraftBlur"
-      >
-      <span v-else class="local-files-row__label" :title="rowTooltip(row.file)">
-        {{ row.file.name }}
+      <!-- Match DataSourceTree: outer depth pad + inner rounded body for selection -->
+      <span class="local-files-row__body">
         <span
-            v-if="isDirty(row.file, dirtyKeys)"
-            class="local-files-row__dirty"
+            class="local-files-row__twist"
+            :class="{
+              'is-expanded': isDirVisuallyExpanded(row.file),
+              'is-leaf': !row.file.isDirectory,
+            }"
             aria-hidden="true"
-        >●</span>
-      </span>
-      <template v-for="badge in [gitBadge(row.file)]" :key="`git-${row.file.id}`">
+            @click.stop="row.file.isDirectory && emit('toggle-expand', row.file)"
+            @dblclick.stop
+        >
+          <DwIcon
+              v-if="row.file.isDirectory"
+              name="chevron-right"
+              size="xs"
+              :stroke-width="1.5"
+              class="local-files-row__twist-icon"
+          />
+        </span>
         <span
-            v-if="badge"
-            class="local-files-row__git"
-            :class="`is-${badge.status}`"
-            :title="badge.title"
+            class="local-files-row__icon"
+            :class="[
+              `tone-${iconSpec(row.file, isDirVisuallyExpanded(row.file)).tone}`,
+              { 'is-folder': row.file.isDirectory },
+            ]"
             aria-hidden="true"
-        >{{ badge.glyph }}</span>
-      </template>
+        >
+          <DwIcon
+              :name="iconSpec(row.file, isDirVisuallyExpanded(row.file)).icon"
+              :size="row.file.isDirectory ? 20 : 18"
+              :stroke-width="1.55"
+          />
+        </span>
+        <input
+            v-if="isRenameTarget(row.file)"
+            :ref="bindInputRef"
+            class="local-files-row__input"
+            data-local-inline-input
+            :value="localFiles.inlineEdit?.value ?? ''"
+            @click.stop
+            @dblclick.stop
+            @mousedown.stop
+            @pointerdown.stop
+            @focus="onInlineFocus"
+            @input="onDraftInput"
+            @keydown="onDraftKeydown"
+            @blur="onDraftBlur"
+        >
+        <span v-else class="local-files-row__label" :title="rowTooltip(row.file)">
+          {{ row.file.name }}
+          <span
+              v-if="isDirty(row.file, dirtyKeys)"
+              class="local-files-row__dirty"
+              aria-hidden="true"
+          >●</span>
+        </span>
+        <template v-for="badge in [gitBadge(row.file)]" :key="`git-${row.file.id}`">
+          <span
+              v-if="badge"
+              class="local-files-row__git"
+              :class="`is-${badge.status}`"
+              :title="badge.title"
+              aria-hidden="true"
+          >{{ badge.glyph }}</span>
+        </template>
+      </span>
     </div>
 
     <div
@@ -427,28 +434,40 @@ function onEmptyDrop(event: DragEvent, parentPath: string) {
         class="local-files-row is-draft"
         :style="{ paddingLeft: depthPadding(depth) }"
     >
-      <span class="local-files-row__twist is-leaf" aria-hidden="true"/>
-      <span
-          class="local-files-row__icon"
-          :class="`tone-${draftTone()}`"
-          aria-hidden="true"
-      >
-        <DwIcon :name="draftIconName()" size="md" :stroke-width="1.55"/>
+      <span class="local-files-row__body">
+        <span class="local-files-row__twist is-leaf" aria-hidden="true"/>
+        <span
+            class="local-files-row__icon"
+            :class="[
+              `tone-${draftTone()}`,
+              {
+                'is-folder': localFiles.inlineEdit?.mode === 'create-folder'
+                    || localFiles.inlineEdit?.isDirectory,
+              },
+            ]"
+            aria-hidden="true"
+        >
+          <DwIcon
+              :name="draftIconName()"
+              :size="localFiles.inlineEdit?.mode === 'create-folder' || localFiles.inlineEdit?.isDirectory ? 20 : 18"
+              :stroke-width="1.55"
+          />
+        </span>
+        <input
+            :ref="bindInputRef"
+            class="local-files-row__input"
+            data-local-inline-input
+            :value="localFiles.inlineEdit.value"
+            @click.stop
+            @dblclick.stop
+            @mousedown.stop
+            @pointerdown.stop
+            @focus="onInlineFocus"
+            @input="onDraftInput"
+            @keydown="onDraftKeydown"
+            @blur="onDraftBlur"
+        >
       </span>
-      <input
-          :ref="bindInputRef"
-          class="local-files-row__input"
-          data-local-inline-input
-          :value="localFiles.inlineEdit.value"
-          @click.stop
-          @dblclick.stop
-          @mousedown.stop
-          @pointerdown.stop
-          @focus="onInlineFocus"
-          @input="onDraftInput"
-          @keydown="onDraftKeydown"
-          @blur="onDraftBlur"
-      >
     </div>
 
     <div
@@ -459,23 +478,25 @@ function onEmptyDrop(event: DragEvent, parentPath: string) {
         @dragover="onEmptyDragOver($event, row.parent.path, row.parent.id)"
         @drop="onEmptyDrop($event, row.parent.path)"
     >
-      <span class="local-files-row__twist is-leaf" aria-hidden="true"/>
-      <span class="local-files-empty-hint">
-        <span class="local-files-empty-hint__label">{{ t('explorer.localFiles.emptyFolder') }}</span>
-        <button
-            type="button"
-            class="local-files-empty-hint__action"
-            @click.stop="emit('empty-create-file', row.parent.path)"
-        >
-          {{ t('explorer.localFiles.emptyFolderNewFile') }}
-        </button>
-        <button
-            type="button"
-            class="local-files-empty-hint__action"
-            @click.stop="emit('empty-create-folder', row.parent.path)"
-        >
-          {{ t('explorer.localFiles.emptyFolderNewFolder') }}
-        </button>
+      <span class="local-files-row__body">
+        <span class="local-files-row__twist is-leaf" aria-hidden="true"/>
+        <span class="local-files-empty-hint">
+          <span class="local-files-empty-hint__label">{{ t('explorer.localFiles.emptyFolder') }}</span>
+          <button
+              type="button"
+              class="local-files-empty-hint__action"
+              @click.stop="emit('empty-create-file', row.parent.path)"
+          >
+            {{ t('explorer.localFiles.emptyFolderNewFile') }}
+          </button>
+          <button
+              type="button"
+              class="local-files-empty-hint__action"
+              @click.stop="emit('empty-create-folder', row.parent.path)"
+          >
+            {{ t('explorer.localFiles.emptyFolderNewFolder') }}
+          </button>
+        </span>
       </span>
     </div>
   </template>
@@ -483,67 +504,95 @@ function onEmptyDrop(event: DragEvent, parentPath: string) {
 
 <style>
 .local-files-row {
-  --lf-row-height: var(--dw-density-sm);
+  /* Match DataSourceTree: outer depth shell, selection lives on __body */
+  --lf-row-height: 28px;
+  --lf-twistie-size: 18px;
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--lf-row-height);
+  margin: 0;
+  padding-right: var(--dw-space-3);
+  cursor: default;
+  user-select: none;
+  color: var(--dw-text);
+  font-size: var(--dw-text-sm);
+  line-height: var(--dw-leading-snug);
+}
+
+.local-files-row__body {
   position: relative;
   display: flex;
   align-items: center;
   gap: var(--dw-space-2);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   min-height: var(--lf-row-height);
-  margin: 0 var(--dw-space-2);
-  padding-right: var(--dw-space-3);
+  padding: 0 var(--dw-space-3) 0 var(--dw-space-1);
   border-radius: var(--dw-control-radius-sm);
-  cursor: default;
-  user-select: none;
-  color: var(--dw-text);
-  transition: background var(--dw-duration-fast, 0.12s) ease;
+  transition: var(--dw-transition-bg, background var(--dw-duration-fast, 0.12s) ease);
 }
 
-.local-files-row::before {
+.local-files-row__body::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 4px;
-  bottom: 4px;
+  top: 3px;
+  bottom: 3px;
   width: 2px;
   border-radius: var(--dw-radius-xs);
   background: transparent;
-  transition: background var(--dw-duration-fast, 0.12s) ease;
+  transition: var(--dw-transition-bg, background var(--dw-duration-fast, 0.12s) ease);
 }
 
-.local-files-row:hover {
+.local-files-row:hover .local-files-row__body {
   background: var(--dw-bg-hover);
 }
 
-.local-files-row.is-selected {
+.local-files-row.is-selected .local-files-row__body {
   background: color-mix(in srgb, var(--dw-primary) 8%, var(--dw-bg-hover));
 }
 
-.local-files-row.is-selected::before {
+.local-files-row.is-selected .local-files-row__body::before {
   background: var(--dw-primary);
 }
 
-.local-files-row.is-draft,
-.local-files-row.is-editing {
+/* Folders: same amber select accent as DataSourceTree groups */
+.local-files-row.is-dir.is-selected .local-files-row__body {
+  background: color-mix(in srgb, var(--mp-tone-amber) 10%, var(--dw-bg-hover));
+}
+
+.local-files-row.is-dir.is-selected .local-files-row__body::before {
+  background: var(--mp-tone-amber);
+}
+
+.local-files-row.is-draft .local-files-row__body,
+.local-files-row.is-editing .local-files-row__body {
   background: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg-hover));
 }
 
-.local-files-row.is-draft::before,
-.local-files-row.is-editing::before {
+.local-files-row.is-draft .local-files-row__body::before,
+.local-files-row.is-editing .local-files-row__body::before {
   background: var(--dw-primary);
 }
 
-.local-files-row.is-drop-target {
-  background: color-mix(in srgb, var(--dw-primary) 14%, var(--dw-bg-hover));
-  outline: 1px dashed color-mix(in srgb, var(--dw-primary) 55%, transparent);
-  outline-offset: -1px;
+.local-files-row.is-drop-target .local-files-row__body {
+  background: color-mix(in srgb, var(--dw-primary) 8%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dw-primary) 48%, transparent);
+  outline: none;
 }
 
-.local-files-row.is-drop-target::before {
+.local-files-row.is-drop-target .local-files-row__body::before {
   background: var(--dw-primary);
 }
 
 .local-files-row.is-dragging {
-  opacity: 0.55;
+  opacity: 0.42;
 }
 
 .local-files-row.is-dir .local-files-row__label {
@@ -556,11 +605,7 @@ function onEmptyDrop(event: DragEvent, parentPath: string) {
   color: var(--dw-text);
 }
 
-.local-files-row.is-root .local-files-row__icon.tone-folder {
-  color: color-mix(in srgb, var(--mp-tone-amber) 82%, var(--dw-primary));
-}
-
-.local-files-row.is-flash {
+.local-files-row.is-flash .local-files-row__body {
   animation: local-files-flash 1.1s ease;
 }
 
@@ -568,8 +613,8 @@ function onEmptyDrop(event: DragEvent, parentPath: string) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: var(--lf-twistie-size);
+  height: var(--lf-twistie-size);
   flex-shrink: 0;
   color: var(--dw-text-muted);
   opacity: 0.55;
@@ -589,8 +634,8 @@ function onEmptyDrop(event: DragEvent, parentPath: string) {
 
 .local-files-row__twist-icon {
   display: block;
-  width: 12px;
-  height: 12px;
+  width: var(--dw-icon-size-sm);
+  height: var(--dw-icon-size-sm);
   transition: transform var(--dw-duration, 0.16s) var(--dw-ease, ease);
 }
 
@@ -603,13 +648,17 @@ function onEmptyDrop(event: DragEvent, parentPath: string) {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: var(--dw-icon-size-lg);
+  height: var(--dw-icon-size-lg);
   color: var(--dw-text-muted);
 }
 
+.local-files-row__icon.is-folder,
 .local-files-row__icon.tone-folder {
-  color: color-mix(in srgb, var(--mp-tone-amber) 72%, var(--dw-text-muted));
+  width: 24px;
+  height: var(--dw-control-h-xs, 22px);
+  /* Match TreeNodeIcon folder amber */
+  color: #f59e0b;
 }
 
 .local-files-row__icon.tone-sql {
@@ -696,11 +745,11 @@ function onEmptyDrop(event: DragEvent, parentPath: string) {
   color: var(--dw-text-muted);
 }
 
-.local-files-row.is-empty-hint:hover {
+.local-files-row.is-empty-hint:hover .local-files-row__body {
   background: transparent;
 }
 
-.local-files-row.is-empty-hint.is-drop-target {
+.local-files-row.is-empty-hint.is-drop-target .local-files-row__body {
   background: color-mix(in srgb, var(--dw-primary) 10%, transparent);
 }
 

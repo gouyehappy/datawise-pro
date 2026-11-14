@@ -14,6 +14,9 @@ import type {PluginId} from '@/features/plugin/services/plugin-registry.service'
 import {usePluginStore} from '@/features/plugin/stores/plugin-store'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import {hasDevProductivityAccess} from '@/features/pack/services/dev-productivity-entitlement'
+import {ensureDeferredDwIcons} from '@/core/icons'
+
+void ensureDeferredDwIcons()
 
 const CATEGORY_ORDER = ['ai', 'export', 'tool', 'datasource'] as const
 

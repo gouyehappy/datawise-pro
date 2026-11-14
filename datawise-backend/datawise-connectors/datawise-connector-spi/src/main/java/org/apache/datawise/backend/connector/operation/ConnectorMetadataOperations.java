@@ -25,9 +25,23 @@ public interface ConnectorMetadataOperations {
                                                          String database,
                                                          String relationName,
                                                          RelationKind kind) throws SQLException {
-        return kind == RelationKind.VIEW
-                ? loadViewProperties(connection, entity, database, relationName)
-                : loadProperties(connection, entity, database, relationName);
+        if (kind == RelationKind.VIEW) {
+            return loadViewProperties(connection, entity, database, relationName);
+        }
+        if (kind == RelationKind.TRIGGER || kind == RelationKind.FUNCTION || kind == RelationKind.PROCEDURE) {
+            return new TablePropertiesResult(
+                    relationName,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    java.util.List.of(),
+                    java.util.List.of(),
+                    java.util.List.of()
+            );
+        }
+        return loadProperties(connection, entity, database, relationName);
     }
 
     default TablePropertiesResult loadViewProperties(

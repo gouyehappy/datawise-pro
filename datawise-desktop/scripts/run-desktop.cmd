@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0\.."
 
 REM Prefer cached jbr_jcef from ensure-jbr-jcef / dist (has CEF natives).
@@ -17,9 +17,22 @@ if defined JBR_JAVA (
   echo            Run: node scripts/ensure-and-run.mjs   ^(downloads jbr_jcef^)
 )
 
-set "JAR=target\datawise-desktop-4.1.7.jar"
-if not exist "%JAR%" (
-  echo Missing %JAR%. Run: mvn -q package
+REM Resolve jar from pom <version>, else first datawise-desktop-*.jar under target.
+set "JAR="
+for /f "usebackq tokens=2 delims=<>" %%V in (`findstr /i /c:"<version>" pom.xml`) do (
+  if not defined JAR (
+    if exist "target\datawise-desktop-%%V.jar" set "JAR=target\datawise-desktop-%%V.jar"
+  )
+)
+if not defined JAR (
+  for %%F in ("target\datawise-desktop-*.jar") do (
+    echo %%~nxF | findstr /i /c:"-sources.jar" >nul
+    if errorlevel 1 set "JAR=%%F"
+  )
+)
+if not defined JAR (
+  echo Missing target\datawise-desktop-*.jar. Run: mvn -q package
   exit /b 1
 )
+echo [run-desktop] jar=%JAR%
 "%JAVA%" -Djava.awt.headless=false -cp "%JAR%;target\lib\*" org.apache.datawise.desktop.DatawiseDesktopApp %*

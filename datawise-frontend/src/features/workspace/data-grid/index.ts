@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Workspace data-grid barrel — view-state / clause / datetime live here;
  * `GridExportDialog` is a **shim** to core’s thin wrapper over `@datawise/data-grid`.
  */

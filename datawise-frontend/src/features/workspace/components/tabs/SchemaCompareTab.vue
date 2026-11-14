@@ -17,7 +17,10 @@ import {
 } from '@/features/schema-compare/services/schema-compare-selection.service'
 import {scopesEqual} from '@/features/schema-compare/services/schema-scope.service'
 import type {SchemaCompareResult, SchemaScope} from '@/features/schema-compare/types/schema-compare.types'
-import {executeSchemaSyncSql} from '@/features/schema-compare/services/schema-sync-execute.service'
+import {
+    executeSchemaSyncSql,
+    previewSchemaSyncAtomicity,
+} from '@/features/schema-compare/services/schema-sync-execute.service'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {useTeamStore} from '@/features/team/stores/team-store'
 import {canDdlConnection} from '@/features/team/services/connection-access.service'
@@ -73,6 +76,15 @@ const exportDialogOpen = ref(false)
 const exporting = ref(false)
 const syncExecuting = ref(false)
 const syncConfirmArmed = ref(false)
+const syncPartialAck = ref(false)
+const lastDeployReport = ref<{
+  ok: boolean
+  atomicity: string
+  outcome: string
+  statementCount?: number
+  executedCount?: number
+  message?: string
+} | null>(null)
 const syncProductionApprovalDialogOpen = ref(false)
 const syncProductionApprovalSubmitting = ref(false)
 const syncProductionApprovalError = ref('')
@@ -285,6 +297,16 @@ const syncProductionApprovalTeams = computed(() => {
 
 const needsSyncProductionApproval = computed(() => syncProductionApprovalTeams.value.length > 0)
 
+const syncAtomicity = computed(() =>
+    previewSchemaSyncAtomicity(effectiveDdl.value, rightScope.value?.dbType),
+)
+
+const syncAtomicityHint = computed(() =>
+    syncAtomicity.value === 'guaranteed_rollback'
+        ? t('schemaCompare.syncAtomicGuaranteed')
+        : t('schemaCompare.syncAtomicPartial'),
+)
+
 const syncExecuteActionLabel = computed(() => {
     if (syncExecuting.value) return t('schemaCompare.syncExecuting')
     if (syncConfirmArmed.value) {
@@ -430,7 +452,6 @@ async function runCompare() {
     selectedTable.value = result.value.tableDiffs.find((item) => item.status !== 'unchanged')?.tableName
         ?? result.value.tableDiffs[0]?.tableName
         ?? null
-    layout.showSuccessToast(t('schemaCompare.compareDone'))
   } catch (error) {
     const message = resolveCaughtApiErrorMessage(error, t, 'schemaCompare.compareFailed')
     layout.showErrorToast(message)
@@ -447,7 +468,6 @@ async function copyDdl() {
   }
   try {
     await navigator.clipboard.writeText(effectiveDdl.value)
-    layout.showSuccessToast(t('schemaCompare.ddlCopied'))
   } catch {
     layout.showErrorToast(t('schemaCompare.ddlCopyFailed'))
   }
@@ -475,11 +495,16 @@ function exportFullReport() {
       title: t('schemaCompare.reportTitle'),
       watermarkFooter: entitlement.watermarkFooter,
     })
-    layout.showSuccessToast(
-        t(printOpened ? 'schemaCompare.exportReportDonePrint' : 'schemaCompare.exportReportDone', {
-            path: fileName,
+    layout.notifyQuiet({
+      category: 'export',
+      titleKey: 'exportDone',
+      bodyKey: 'exportDone',
+      params: {
+        name: t(printOpened ? 'schemaCompare.exportReportDonePrint' : 'schemaCompare.exportReportDone', {
+          path: fileName,
         }),
-    )
+      },
+    })
   } catch (error) {
     const message = resolveCaughtApiErrorMessage(error, t, 'schemaCompare.exportReportFailed')
     layout.showErrorToast(message)
@@ -501,7 +526,7 @@ async function confirmExportMigration(fileName: string) {
       fileName: normalized,
       ddl: effectiveDdl.value,
     })
-    layout.showSuccessToast(t('schemaCompare.exportDone', {path: relativePath}))
+    layout.startExport(relativePath)
   } catch (error) {
     const message = resolveCaughtApiErrorMessage(error, t, 'schemaCompare.exportFailed')
     layout.showErrorToast(message)
@@ -543,6 +568,15 @@ async function executeSync() {
   }
   if (!syncConfirmArmed.value) {
     syncConfirmArmed.value = true
+    syncPartialAck.value = false
+    return
+  }
+  if (
+    syncAtomicity.value === 'partial_effects_possible'
+    && !syncPartialAck.value
+    && !needsSyncProductionApproval.value
+  ) {
+    layout.showWarningToast(t('schemaCompare.syncPartialAckRequired'))
     return
   }
   if (needsSyncProductionApproval.value) {
@@ -557,12 +591,38 @@ async function executeSync() {
       database: rightScope.value.database,
       dbType: rightScope.value.dbType,
     })
+    lastDeployReport.value = {
+      ok: outcome.ok,
+      atomicity: outcome.atomicity,
+      outcome: outcome.outcome,
+      statementCount: outcome.ok ? outcome.statementCount : undefined,
+      executedCount: outcome.ok ? undefined : outcome.executedCount,
+      message: outcome.ok ? undefined : outcome.message,
+    }
     if (!outcome.ok) {
-      layout.showErrorToast(t('schemaCompare.syncFailedWithDetail', {message: outcome.message}))
+      const honesty =
+        outcome.outcome === 'mixed'
+          ? t('schemaCompare.syncPartialEffects')
+          : outcome.outcome === 'rolled_back'
+            ? t('schemaCompare.syncRolledBack')
+            : ''
+      layout.showErrorToast(
+        [t('schemaCompare.syncFailedWithDetail', {message: outcome.message}), honesty]
+          .filter(Boolean)
+          .join(' — '),
+      )
       return
     }
-    layout.showSuccessToast(t('schemaCompare.syncSuccess', {count: outcome.statementCount}))
+    layout.notifyQuiet({
+      category: 'workspace',
+      titleKey: 'operationDone',
+      bodyKey: 'operationDone',
+      params: {
+        detail: t('schemaCompare.syncSuccess', {count: outcome.statementCount}),
+      },
+    })
     syncConfirmArmed.value = false
+    syncPartialAck.value = false
     await runCompare()
   } catch (error) {
     const message = resolveCaughtApiErrorMessage(error, t, 'schemaCompare.syncFailed')
@@ -586,7 +646,12 @@ async function onSubmitSyncProductionApproval(teamId: string) {
     })
     syncProductionApprovalDialogOpen.value = false
     syncConfirmArmed.value = false
-    layout.showSuccessToast(t('console.productionApproval.submitted'))
+    layout.notifyQuiet({
+      category: 'workspace',
+      titleKey: 'approvalDone',
+      bodyKey: 'approvalDone',
+      params: {detail: t('console.productionApproval.submitted')},
+    })
   } catch (error) {
     syncProductionApprovalError.value =
         resolveCaughtApiErrorMessage(error, t, 'console.productionApproval.submitFailed')
@@ -856,7 +921,14 @@ async function onSubmitSyncProductionApproval(teamId: string) {
         </div>
 
         <p v-if="syncExecuteDisabledHint && !canExecuteSync" class="ddl-panel__hint">{{ syncExecuteDisabledHint }}</p>
-        <p v-else-if="syncConfirmArmed" class="ddl-panel__hint ddl-panel__hint--warn">
+        <p
+            v-if="effectiveDdl"
+            class="ddl-panel__hint"
+            :class="syncAtomicity === 'partial_effects_possible' ? 'ddl-panel__hint--warn' : ''"
+        >
+          {{ syncAtomicityHint }}
+        </p>
+        <p v-if="syncConfirmArmed" class="ddl-panel__hint ddl-panel__hint--warn">
           {{
             needsSyncProductionApproval
               ? t('schemaCompare.syncSubmitForApproval')
@@ -865,6 +937,32 @@ async function onSubmitSyncProductionApproval(teamId: string) {
                 : t('schemaCompare.syncConfirmHint'))
           }}
         </p>
+        <DwCheckbox
+            v-if="syncConfirmArmed && syncAtomicity === 'partial_effects_possible'"
+            v-model="syncPartialAck"
+            class="ddl-panel__ack"
+            :label="t('schemaCompare.syncPartialAck')"
+        />
+        <DwInlineAlert
+            v-if="lastDeployReport"
+            class="ddl-panel__report"
+            density="banner"
+            :variant="lastDeployReport.ok
+              ? 'success'
+              : (lastDeployReport.outcome === 'mixed' ? 'warning' : 'error')"
+            :message="lastDeployReport.ok
+              ? t('schemaCompare.deployReportOk', {
+                  atomicity: lastDeployReport.atomicity,
+                  outcome: lastDeployReport.outcome,
+                  count: lastDeployReport.statementCount ?? 0,
+                })
+              : t('schemaCompare.deployReportFail', {
+                  atomicity: lastDeployReport.atomicity,
+                  outcome: lastDeployReport.outcome,
+                  executed: lastDeployReport.executedCount ?? 0,
+                  message: lastDeployReport.message || '',
+                })"
+        />
         <p v-if="appliedUpDdl" class="ddl-panel__ai-note">{{ t('schemaCompare.aiMigrationApplied') }}</p>
         <pre class="ddl-panel__code">{{ effectiveDdl || t('schemaCompare.noSelectionDdl') }}</pre>
       </section>
@@ -1199,6 +1297,14 @@ async function onSubmitSyncProductionApproval(teamId: string) {
 
 .ddl-panel__hint--warn {
   color: var(--dw-warning-fg);
+}
+
+.ddl-panel__ack {
+  margin: 0 0 var(--dw-space-4);
+}
+
+.ddl-panel__report {
+  margin: 0 0 var(--dw-space-4);
 }
 
 .ddl-panel__ai-note {

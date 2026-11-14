@@ -115,7 +115,6 @@ function applyAnalysisMode(mode: AiAnalysisMode) {
     appConfig.setDisabledAnalysisSteps([])
   }
   analysisStepError.value = ''
-  layout.showSuccessToast(t(`settings.dataAgent.analysisModeApplied.${mode}`))
 }
 
 function isAnalysisStepEnabled(step: AiAnalysisConfigurableStepId): boolean {

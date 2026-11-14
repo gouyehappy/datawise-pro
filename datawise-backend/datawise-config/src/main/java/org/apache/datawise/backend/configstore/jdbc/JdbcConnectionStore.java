@@ -96,7 +96,10 @@ public class JdbcConnectionStore implements ConnectionStore {
 
     @Override
     public List<ConnectionEntity> findAllConnections() {
-        return sortedConnections(requireEntry().catalog());
+        ConnectionsXmlCodec.ParsedCatalog cached = requireEntry().catalog();
+        return sortedConnections(new ConnectionsXmlCodec.ParsedCatalog(
+                new ArrayList<>(cached.groups()),
+                ConnectionSecrets.copyAndDecryptAll(cached.connections(), secretValueCodec)));
     }
 
     @Override
@@ -168,7 +171,11 @@ public class JdbcConnectionStore implements ConnectionStore {
         if (connectionId == null || connectionId.isBlank()) {
             return Optional.empty();
         }
-        return Optional.ofNullable(requireEntry().connectionsById().get(connectionId));
+        ConnectionEntity cached = requireEntry().connectionsById().get(connectionId);
+        if (cached == null) {
+            return Optional.empty();
+        }
+        return Optional.of(ConnectionSecrets.copyAndDecrypt(cached, secretValueCodec));
     }
 
     @Override
@@ -176,7 +183,8 @@ public class JdbcConnectionStore implements ConnectionStore {
         if (groupId == null || groupId.isBlank()) {
             return List.of();
         }
-        return requireEntry().connectionsByGroupId().getOrDefault(groupId, List.of());
+        List<ConnectionEntity> cached = requireEntry().connectionsByGroupId().getOrDefault(groupId, List.of());
+        return ConnectionSecrets.copyAndDecryptAll(cached, secretValueCodec);
     }
 
     @Override
@@ -239,11 +247,9 @@ public class JdbcConnectionStore implements ConnectionStore {
                 return again;
             }
             ConnectionsXmlCodec.ParsedCatalog raw = parseXml(againRow.payload());
-            List<ConnectionEntity> connections = new ArrayList<>(raw.connections());
-            ConnectionSecrets.decryptAll(connections, secretValueCodec);
             ConnectionsXmlCodec.ParsedCatalog catalog = new ConnectionsXmlCodec.ParsedCatalog(
                     new ArrayList<>(raw.groups()),
-                    connections);
+                    new ArrayList<>(raw.connections()));
             return cache.putAndGet(againRow.version(), catalog);
         }
     }

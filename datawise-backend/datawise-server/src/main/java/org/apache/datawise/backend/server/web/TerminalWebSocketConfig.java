@@ -1,6 +1,7 @@
 package org.apache.datawise.backend.server.web;
 
 import org.apache.datawise.backend.configstore.SessionStore;
+import org.apache.datawise.backend.service.FeaturePermissionAccess;
 import org.apache.datawise.backend.service.TeamService;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -17,17 +18,20 @@ public class TerminalWebSocketConfig implements WebSocketConfigurer {
     private final TerminalWebSocketHandler terminalWebSocketHandler;
     private final SessionStore sessionStore;
     private final TeamService teamService;
+    private final FeaturePermissionAccess featurePermissionAccess;
 
     public TerminalWebSocketConfig(
             TerminalWebSocketProperties properties,
             TerminalWebSocketHandler terminalWebSocketHandler,
             SessionStore sessionStore,
-            TeamService teamService
+            TeamService teamService,
+            FeaturePermissionAccess featurePermissionAccess
     ) {
         this.properties = properties;
         this.terminalWebSocketHandler = terminalWebSocketHandler;
         this.sessionStore = sessionStore;
         this.teamService = teamService;
+        this.featurePermissionAccess = featurePermissionAccess;
     }
 
     @Override
@@ -36,7 +40,8 @@ public class TerminalWebSocketConfig implements WebSocketConfigurer {
             return;
         }
         registry.addHandler(terminalWebSocketHandler, properties.getPath())
-                .addInterceptors(new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService))
+                .addInterceptors(new TerminalSessionHandshakeInterceptor(
+                        sessionStore, properties, teamService, featurePermissionAccess))
                 .setHandshakeHandler(new SessionAwareHandshakeHandler())
                 .setAllowedOriginPatterns("*");
     }

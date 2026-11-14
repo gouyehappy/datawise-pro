@@ -1,4 +1,4 @@
-/* Kafka Ops �?fleet.js */
+/* Kafka Ops — fleet.js */
 (function () {
   const KO = (window.KO = window.KO || {});
   const state = KO.state;
@@ -21,18 +21,19 @@
     const picker = $('#clusterPicker')
     picker.classList.toggle('solo', !state.fleet)
     let active = state.clusters.find(c => c.id === state.activeId) || state.clusters[0]
-    // Pulse may succeed via connectionId even before/without inventory rows �?    // fall back to last pulse so the topbar never says「无集群」while healthy.
+    // Pulse may succeed via connectionId even before/without inventory rows —
+    // fall back to last pulse so the topbar never says「无集群」while healthy.
     if (!active && state._lastPulse) {
       const p = state._lastPulse
       active = {
         id: state.activeId || 'connected',
         name: p.name || p.clusterId || '',
-        shortLabel: p.name || (p.bootstrapServers || '').split(',')[0] || '已连�?,
+        shortLabel: p.name || (p.bootstrapServers || '').split(',')[0] || '已连接',
         bootstrapServers: p.bootstrapServers || '',
         securityProtocol: p.securityProtocol || '',
       }
     }
-    const label = active ? KO.util.shortCluster(active) : '无集�?
+    const label = active ? KO.util.shortCluster(active) : '无集群'
     $('#clusterLab').textContent = label
     $('#clusterMeta').textContent = active ? (active.securityProtocol || '') : ''
     $('#clusterTrigger').title = active
@@ -48,7 +49,7 @@
     if (!state.clusters.length) {
       box.innerHTML = active
         ? `<div class="empty" style="text-align:left;padding:8px 10px">${KO.util.esc(label)}<div class="muted" style="margin-top:4px;font-size: var(--dw-text-xs)">${KO.util.esc(active.bootstrapServers || '')}</div></div>`
-        : '<div class="empty">无集�?/div>'
+        : '<div class="empty">无集群</div>'
       return
     }
     box.innerHTML = state.clusters.map(c => `

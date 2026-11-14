@@ -7,6 +7,7 @@ import {
     layoutTabFloatsTile,
     placeNewTabFloat,
     resolveTabFloatSnap,
+    resolveUndockDropFromPointer,
     TAB_FLOAT_MIN_HEIGHT,
     TAB_FLOAT_MIN_WIDTH,
 } from './workspace-tab-float.service'
@@ -58,6 +59,17 @@ describe('workspace-tab-float.service', () => {
         expect(resolveTabFloatSnap({x: 0, y: 450, width: 400, height: 300}, bounds)?.edge).toBe('bottom-left')
         expect(resolveTabFloatSnap({x: 700, y: 450, width: 400, height: 300}, bounds)?.edge).toBe('bottom-right')
         expect(resolveTabFloatSnap({x: 300, y: 200, width: 400, height: 300}, bounds)).toBeNull()
+    })
+
+    it('resolves undock drop from pointer like IDEA editor frames', () => {
+        const surface = {left: 0, top: 0, width: 1000, height: 700}
+        expect(resolveUndockDropFromPointer(40, 300, surface).kind).toBe('left')
+        expect(resolveUndockDropFromPointer(960, 300, surface).kind).toBe('right')
+        expect(resolveUndockDropFromPointer(500, 20, surface).kind).toBe('top')
+        expect(resolveUndockDropFromPointer(500, 320, surface).kind).toBe('free')
+        const left = resolveUndockDropFromPointer(20, 280, surface)
+        expect(left.rect.x).toBeLessThan(40)
+        expect(left.rect.width).toBeGreaterThan(400)
     })
 
     it('tiles and cascades floats without overlap of origins', () => {

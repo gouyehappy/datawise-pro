@@ -140,8 +140,8 @@ function assertFile(name) {
 }
 
 async function main() {
-    const setupLocal = assertFile('DataWiseCLI Setup 4.1.7.exe')
-    const blockmapLocal = assertFile('DataWiseCLI Setup 4.1.7.exe.blockmap')
+    const setupLocal = assertFile('DataWiseCLI Setup 5.0.0.exe')
+    const blockmapLocal = assertFile('DataWiseCLI Setup 5.0.0.exe.blockmap')
     const portableLocal = assertFile('DataWiseCLI 4.1.7.exe')
 
     writeLatestYml(setupLocal, 'DataWiseCLI-Setup-4.1.7.exe')

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {onMounted, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import type {AiAnalysisMode} from '@/features/ai/types/analysis'
@@ -54,7 +54,6 @@ function saveCurrent() {
         toast.error(t('ai.templates.saveFailed'))
         return
     }
-    toast.success(t('ai.templates.saved', {name: template.name}))
 }
 
 function applyTemplate(template: AiAnalysisTemplate) {
@@ -66,7 +65,6 @@ function deleteTemplate(template: AiAnalysisTemplate, event: MouseEvent) {
     event.stopPropagation()
     templates.value = removeAnalysisTemplate(templates.value, template.id)
     writeAnalysisTemplates(templates.value)
-    toast.success(t('ai.templates.deleted'))
 }
 </script>
 

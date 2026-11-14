@@ -103,7 +103,6 @@ async function restoreSelected() {
     restoring.value = true
     try {
         await restoreScriptHistoryVersion(ctx, versionId)
-        layout.showSuccessToast(t('explorer.scriptHistory.restoreSuccess'))
         drawer.closeDrawer()
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'explorer.scriptHistory.restoreFailed')

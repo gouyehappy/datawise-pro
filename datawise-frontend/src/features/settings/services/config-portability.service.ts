@@ -18,13 +18,18 @@ export interface ProfileDomainOptions {
 }
 
 export interface ProfileExportRequest {
-    passphrase: string
-    confirmPassphrase: string
+    passphrase?: string
+    confirmPassphrase?: string
     domains: ProfileDomainOptions
     /** When set, only these connection ids are exported in the connections domain. */
     connectionIds?: string[]
     /** When set (and connectionIds empty), export all connections in this project. */
     projectId?: string
+    /**
+     * Default (unset/true): passphrase-seal secrets for machine migration.
+     * False: cloud-sync package with secretMode=omitted.
+     */
+    includeSecrets?: boolean
 }
 
 export interface ProfileConflictItem {
@@ -41,6 +46,7 @@ export interface ProfilePreflightResult {
         kind?: string
         schemaVersion?: number
         appVersion?: string
+        secretMode?: string
         domains?: string[]
         warnings?: string[]
         counts?: Record<string, unknown>
@@ -95,11 +101,11 @@ export async function exportProfilePackage(request: ProfileExportRequest): Promi
 
 export async function preflightProfilePackage(
     file: File,
-    passphrase: string,
+    passphrase: string = '',
 ): Promise<ProfilePreflightResult> {
     const form = new FormData()
     form.append('file', file)
-    form.append('passphrase', passphrase)
+    form.append('passphrase', passphrase ?? '')
     const response = await fetch(buildApiUrl(API_PATHS.config.portability.importPreflight), {
         method: 'POST',
         headers: sessionHeaders(),
@@ -119,12 +125,12 @@ export async function preflightProfilePackage(
 
 export async function importProfilePackage(
     file: File,
-    passphrase: string,
-    domains: ProfileDomainOptions,
+    passphrase: string = '',
+    domains: ProfileDomainOptions = DEFAULT_PROFILE_DOMAINS,
 ): Promise<ProfileImportResult> {
     const form = new FormData()
     form.append('file', file)
-    form.append('passphrase', passphrase)
+    form.append('passphrase', passphrase ?? '')
     form.append('options', JSON.stringify({domains}))
     const response = await fetch(buildApiUrl(API_PATHS.config.portability.import), {
         method: 'POST',

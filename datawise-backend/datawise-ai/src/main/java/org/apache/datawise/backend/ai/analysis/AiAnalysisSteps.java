@@ -46,12 +46,11 @@ public final class AiAnalysisSteps {
     );
 
     /**
-     * 可在设置 / step_route 中禁用的可选步骤
+     * 可在设置 / step_route 中禁用的可选步骤（不含安全闸门 sql_validate）。
      */
     public static final List<String> CONFIGURABLE = List.of(
             PLANNER,
             EVIDENCE,
-            SQL_VALIDATE,
             "python",
             CHART,
             SUMMARY,
@@ -76,6 +75,7 @@ public final class AiAnalysisSteps {
             INTENT,
             SCHEMA,
             SQL_GENERATE,
+            SQL_VALIDATE,
             SQL_EXECUTE
     );
 

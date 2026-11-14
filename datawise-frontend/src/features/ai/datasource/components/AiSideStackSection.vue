@@ -1,3 +1,7 @@
+<!--
+  AI 侧栏的可折叠分段：两段各自独立展开/收起，不再互斥。
+  理由：选完范围想回头看历史是高频动作，互斥切换会把它变成两次点击。
+-->
 <script setup lang="ts">
 import {computed} from 'vue'
 import {useI18n} from 'vue-i18n'
@@ -7,16 +11,18 @@ const props = defineProps<{
   title: string
   subtitle?: string
   position: 'top' | 'bottom'
-  active: boolean
+  expanded: boolean
   icon: 'history' | 'database'
 }>()
 
-const emit = defineEmits<{ activate: [] }>()
+const emit = defineEmits<{ toggle: [] }>()
 
 const {t} = useI18n()
 
 const actionLabel = computed(() =>
-    props.active ? t('ai.sidePanel.current') : t('ai.sidePanel.switchTo', {title: props.title}),
+    props.expanded
+        ? t('ai.sidePanel.collapse', {title: props.title})
+        : t('ai.sidePanel.expand', {title: props.title}),
 )
 </script>
 
@@ -25,27 +31,23 @@ const actionLabel = computed(() =>
       class="stack-section"
       :class="[
       `stack-section--${position}`,
-      { 'is-active': active, 'is-collapsed': !active },
+      { 'is-expanded': expanded, 'is-collapsed': !expanded },
     ]"
   >
     <button
         class="stack-section__head"
         type="button"
-        :aria-expanded="active"
-        :aria-current="active ? 'true' : undefined"
+        :aria-expanded="expanded"
         :title="actionLabel"
-        @click="emit('activate')"
+        @click="emit('toggle')"
     >
-      <span class="stack-section__accent" aria-hidden="true"/>
       <span class="stack-section__icon" aria-hidden="true">
-        <DwIcon v-if="icon === 'history'" name="history" size="sm" :stroke-width="1.6"/>
-        <DwIcon v-else name="database" size="sm" :stroke-width="1.6"/>
+        <DwIcon :name="icon" size="sm" :stroke-width="1.7"/>
       </span>
 
       <span class="stack-section__titles">
-        <span class="stack-section__label">{{ t('ai.sidePanel.sectionLabel') }}</span>
         <span class="stack-section__title">{{ title }}</span>
-        <span v-if="subtitle && active" class="stack-section__subtitle">{{ subtitle }}</span>
+        <span v-if="subtitle && expanded" class="stack-section__subtitle">{{ subtitle }}</span>
       </span>
 
       <span v-if="$slots.badge" class="stack-section__badge">
@@ -55,7 +57,7 @@ const actionLabel = computed(() =>
       <DwIcon class="stack-section__chevron" name="chevron-down" size="sm" :stroke-width="1.5"/>
     </button>
 
-    <div v-show="active" class="stack-section__body">
+    <div v-show="expanded" class="stack-section__body">
       <slot/>
     </div>
   </section>
@@ -70,79 +72,38 @@ const actionLabel = computed(() =>
   overflow: hidden;
 }
 
-.stack-section--top.is-collapsed {
+.stack-section.is-collapsed {
   flex: 0 0 auto;
 }
 
-.stack-section--top.is-active {
-  flex: 1 1 0;
-  min-height: 0;
-}
-
-.stack-section--bottom.is-collapsed {
-  flex: 0 0 auto;
-}
-
-.stack-section--bottom.is-active {
+.stack-section.is-expanded {
   flex: 1 1 0;
   min-height: 0;
 }
 
 .stack-section__head {
-  position: relative;
   display: flex;
   align-items: center;
   gap: var(--dw-gap);
   flex-shrink: 0;
   width: 100%;
-  min-height: var(--dw-density-lg);
-  padding: var(--dw-space-4) var(--dw-space-5) var(--dw-space-4) var(--dw-space-6);
+  min-height: 42px;
+  padding: var(--dw-space-3) var(--dw-space-5);
   border: none;
   border-bottom: 1px solid var(--dw-border-light);
-  background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--dw-bg-panel) 92%, var(--dw-bg)) 0%,
-      color-mix(in srgb, var(--dw-bg-panel) 78%, var(--dw-bg-muted)) 100%
-  );
+  background: var(--dw-bg-panel);
   color: var(--dw-text);
   text-align: left;
   cursor: pointer;
-  transition: var(--dw-transition-colors),
-  box-shadow 0.15s ease;
+  transition: background var(--dw-duration-fast) var(--dw-ease);
 }
 
-.stack-section.is-active .stack-section__head {
-  border-bottom-color: color-mix(in srgb, var(--dw-primary) 22%, var(--dw-border-light));
-  background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--dw-primary-soft) 70%, var(--dw-bg-panel)) 0%,
-      color-mix(in srgb, var(--dw-primary-soft) 35%, var(--dw-bg-panel)) 100%
-  );
-  box-shadow: var(--dw-surface-inset-highlight);
+.stack-section__head:hover {
+  background: var(--dw-bg-hover);
 }
 
 .stack-section.is-collapsed .stack-section__head {
   border-bottom-color: transparent;
-}
-
-.stack-section.is-collapsed .stack-section__head:hover {
-  background: var(--dw-bg-hover);
-}
-
-.stack-section__accent {
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 0 var(--dw-control-radius-sm) var(--dw-control-radius-sm) 0;
-  background: color-mix(in srgb, var(--dw-text-muted) 35%, transparent);
-  transition: background var(--dw-duration) var(--dw-ease) ease, box-shadow 0.15s ease;
-}
-
-.stack-section.is-active .stack-section__accent {
-  background: var(--dw-primary);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--dw-primary) 45%, transparent);
 }
 
 .stack-section__icon {
@@ -150,19 +111,13 @@ const actionLabel = computed(() =>
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 28px;
-  height: var(--dw-btn-height);
-  border-radius: var(--dw-control-radius);
-  border: 1px solid var(--dw-border-light);
-  background: var(--dw-bg);
-  color: var(--dw-text-secondary);
-  transition: var(--dw-transition-colors),
-  color 0.15s ease;
+  width: 20px;
+  height: 20px;
+  color: var(--dw-text-muted);
+  transition: color var(--dw-duration-fast) var(--dw-ease);
 }
 
-.stack-section.is-active .stack-section__icon {
-  border-color: color-mix(in srgb, var(--dw-primary) 30%, var(--dw-border-light));
-  background: color-mix(in srgb, var(--dw-primary-soft) 80%, var(--dw-on-accent));
+.stack-section.is-expanded .stack-section__icon {
   color: var(--dw-primary);
 }
 
@@ -172,15 +127,6 @@ const actionLabel = computed(() =>
   flex-direction: column;
   gap: 1px;
   min-width: 0;
-}
-
-.stack-section__label {
-  color: var(--dw-text-muted);
-  font-size: var(--dw-text-xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  line-height: var(--dw-leading-tight);
 }
 
 .stack-section__title {
@@ -209,10 +155,6 @@ const actionLabel = computed(() =>
   flex-shrink: 0;
   color: var(--dw-text-muted);
   transition: transform 0.18s ease, color 0.12s ease;
-}
-
-.stack-section.is-active .stack-section__chevron {
-  color: var(--dw-primary);
 }
 
 .stack-section.is-collapsed .stack-section__chevron {

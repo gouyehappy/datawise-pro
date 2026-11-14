@@ -3,7 +3,7 @@
   "version": "5.0.0",
   "private": false,
   "type": "module",
-  "description": "DataWise data grid �� portable SPI + DwDataGrid/Table + Export/CellDetail + hooks (SQL DataGrid.vue stays host-only)",
+  "description": "DataWise data grid — portable SPI + DwDataGrid/Table + Export/CellDetail + hooks (SQL DataGrid.vue stays host-only)",
   "license": "MIT",
   "files": [
     "src",

@@ -63,20 +63,41 @@ public class MemoryVectorAiEvidenceRetriever implements VectorAiEvidenceRetrieve
         if (query.isBlank()) {
             return List.of();
         }
-        float[] queryVector = embeddingService.embed(query);
-        List<ScoredSnippet> scored = new ArrayList<>();
-        for (AiKnowledgeEntry entry : knowledgeStore.listScoped(request.connectionId(), request.database())) {
+        List<AiKnowledgeEntry> entries = knowledgeStore.listScoped(request.connectionId(), request.database());
+        List<String> titles = new ArrayList<>();
+        List<String> contents = new ArrayList<>();
+        List<String> docTexts = new ArrayList<>();
+        for (AiKnowledgeEntry entry : entries) {
             String content = buildContent(entry);
             if (content.isBlank()) {
                 continue;
             }
             String title = entry.getTerm() != null ? entry.getTerm() : "knowledge";
-            float[] docVector = embeddingService.embed(title + "\n" + content);
-            double score = AiEmbeddingCosineSupport.cosineSimilarity(queryVector, docVector);
+            titles.add(title);
+            contents.add(content);
+            docTexts.add(title + "\n" + content);
+        }
+        if (docTexts.isEmpty()) {
+            return List.of();
+        }
+        List<String> batch = new ArrayList<>(docTexts.size() + 1);
+        batch.add(query);
+        batch.addAll(docTexts);
+        List<float[]> vectors = embeddingService.embedAll(batch);
+        if (vectors.size() != batch.size()) {
+            throw new IllegalStateException("Embedding batch size mismatch");
+        }
+        float[] queryVector = vectors.get(0);
+        List<ScoredSnippet> scored = new ArrayList<>();
+        for (int i = 0; i < docTexts.size(); i++) {
+            double score = AiEmbeddingCosineSupport.cosineSimilarity(queryVector, vectors.get(i + 1));
             if (score <= 0D) {
                 continue;
             }
-            scored.add(new ScoredSnippet(AiEvidenceSnippet.vector(title, content, score), score));
+            scored.add(new ScoredSnippet(
+                    AiEvidenceSnippet.vector(titles.get(i), contents.get(i), score),
+                    score
+            ));
         }
         return topSnippets(scored);
     }

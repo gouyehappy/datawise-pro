@@ -162,15 +162,13 @@ public final class PackDpkCodec {
         String expectedDigest = sha256HexCanonical(payload);
         byte[] digestUtf8 = expectedDigest.getBytes(StandardCharsets.UTF_8);
         byte[] declaredDigest = entries.get(PAYLOAD_SHA_ENTRY);
-        if (declaredDigest == null) {
-            if (!allowUnsigned) {
-                throw integrity("Missing signatures/payload.sha256");
-            }
-        } else {
-            String declared = new String(declaredDigest, StandardCharsets.UTF_8).trim();
-            if (!expectedDigest.equalsIgnoreCase(declared)) {
-                throw integrity("Payload digest mismatch");
-            }
+        // Always require payload↔digest consistency (even when allowUnsigned skips HMAC/Ed25519).
+        if (declaredDigest == null || declaredDigest.length == 0) {
+            throw integrity("Missing signatures/payload.sha256");
+        }
+        String declared = new String(declaredDigest, StandardCharsets.UTF_8).trim();
+        if (!expectedDigest.equalsIgnoreCase(declared)) {
+            throw integrity("Payload digest mismatch");
         }
 
         boolean hmacOk = false;

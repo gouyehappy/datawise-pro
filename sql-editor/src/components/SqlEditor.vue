@@ -632,7 +632,7 @@ defineExpose<SqlEditorExpose>({
   }
 }
 
-.sql-editor-surface :deep(.sql-monaco-host) {
+.sql-editor-surface :deep(.sql-monaco-shell) {
   height: 100%;
 }
 </style>

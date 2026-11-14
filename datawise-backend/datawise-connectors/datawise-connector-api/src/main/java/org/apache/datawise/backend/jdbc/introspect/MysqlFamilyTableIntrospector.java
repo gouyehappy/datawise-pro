@@ -70,6 +70,39 @@ public abstract class MysqlFamilyTableIntrospector implements TableMetadataIntro
         return loadViewDdl(connection, catalog, viewName);
     }
 
+    @Override
+    public TableDdlResult loadTriggerDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String triggerName
+    ) throws SQLException {
+        String catalog = TableMetadataSupport.resolveCatalog(connection, entity, database);
+        return loadShowCreateRoutine(connection, catalog, triggerName, "TRIGGER", "SQL Original Statement");
+    }
+
+    @Override
+    public TableDdlResult loadFunctionDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String functionName
+    ) throws SQLException {
+        String catalog = TableMetadataSupport.resolveCatalog(connection, entity, database);
+        return loadShowCreateRoutine(connection, catalog, functionName, "FUNCTION", "Create Function");
+    }
+
+    @Override
+    public TableDdlResult loadProcedureDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String procedureName
+    ) throws SQLException {
+        String catalog = TableMetadataSupport.resolveCatalog(connection, entity, database);
+        return loadShowCreateRoutine(connection, catalog, procedureName, "PROCEDURE", "Create Procedure");
+    }
+
     private TablePropertiesResult loadProperties(
                                                  Connection connection,
                                                  String catalog,
@@ -229,6 +262,31 @@ public abstract class MysqlFamilyTableIntrospector implements TableMetadataIntro
             // fall through to SHOW CREATE TABLE
         }
         return loadDdl(connection, catalog, viewName);
+    }
+
+    private TableDdlResult loadShowCreateRoutine(
+            Connection connection,
+            String catalog,
+            String name,
+            String objectKind,
+            String preferredColumn
+    ) throws SQLException {
+        String sql = "SHOW CREATE " + objectKind + " " + qualifyBacktick(catalog, name);
+        try (
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(sql)) {
+            if (!rs.next()) {
+                throw new IllegalArgumentException(objectKind + " not found: " + name);
+            }
+            String ddl = rs.getString(preferredColumn);
+            if (ddl == null || ddl.isBlank()) {
+                ddl = rs.getString(3);
+            }
+            if (ddl == null || ddl.isBlank()) {
+                ddl = rs.getString(2);
+            }
+            return new TableDdlResult(ddl != null ? ddl : "");
+        }
     }
 
     private static String qualifyBacktick(String catalog, String name) {

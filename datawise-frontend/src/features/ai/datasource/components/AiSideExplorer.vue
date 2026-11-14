@@ -1,21 +1,23 @@
 <!--
-  AI 模块左侧面板：会话历史 / 目标数据库互斥切换，始终有一块展开
+  AI 模块左侧面板：会话历史 / 数据范围两段各自独立折叠，默认同时展开。
+  互斥切换会让「选完范围回看历史」变成两次点击，这里按高频路径改成双段并排。
 -->
 <script setup lang="ts">
-import {computed} from 'vue'
+import {ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import AiChatHistoryPanel from '@/features/ai/datasource/components/AiChatHistoryPanel.vue'
 import AiDatabasePanel from '@/features/ai/datasource/components/AiDatabasePanel.vue'
 import AiSideStackSection from '@/features/ai/datasource/components/AiSideStackSection.vue'
 import type {AiChatSession} from '@/features/ai/stores/ai-chat'
 import type {AiDatabaseTarget} from '@/features/ai/shared/utils/database-targets'
-import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import type {AiSidePanel} from '@/shared/config/app-config.types'
 
-defineProps<{
+const props = defineProps<{
   sessions: AiChatSession[]
   activeSessionId: string | null
   selectedTargets: AiDatabaseTarget[]
+  /** 外部请求聚焦某一段时自增：只展开目标段，不动另一段 */
+  focusRequest?: { panel: AiSidePanel; seq: number }
 }>()
 
 const selectedIds = defineModel<string[]>('selectedIds', {required: true})
@@ -28,19 +30,18 @@ const emit = defineEmits<{
 }>()
 
 const {t} = useI18n()
-const appConfig = useAppConfigStore()
 
-const activePanel = computed({
-  get: () => appConfig.aiPreferences.sideActivePanel,
-  set: (panel: AiSidePanel) => appConfig.setAiSideActivePanel(panel),
-})
+const historyOpen = ref(true)
+const scopeOpen = ref(true)
 
-const historyActive = computed(() => activePanel.value === 'history')
-const scopeActive = computed(() => activePanel.value === 'scope')
-
-function activate(panel: AiSidePanel) {
-  activePanel.value = panel
-}
+watch(
+    () => props.focusRequest,
+    (request) => {
+      if (!request) return
+      if (request.panel === 'scope') scopeOpen.value = true
+      else historyOpen.value = true
+    },
+)
 </script>
 
 <template>
@@ -50,10 +51,13 @@ function activate(panel: AiSidePanel) {
           class="ai-side-stack__history"
           position="top"
           icon="history"
-          :active="historyActive"
+          :expanded="historyOpen"
           :title="t('ai.history.title')"
-          @activate="activate('history')"
+          @toggle="historyOpen = !historyOpen"
       >
+        <template #badge>
+          <span v-if="sessions.length" class="dw-badge">{{ sessions.length }}</span>
+        </template>
         <AiChatHistoryPanel
             embedded
             border="none"
@@ -70,10 +74,10 @@ function activate(panel: AiSidePanel) {
           class="ai-side-stack__scope"
           position="bottom"
           icon="database"
-          :active="scopeActive"
+          :expanded="scopeOpen"
           :title="t('ai.databasePanel.title')"
           :subtitle="t('ai.databasePanel.subtitle')"
-          @activate="activate('scope')"
+          @toggle="scopeOpen = !scopeOpen"
       >
         <template #badge>
           <span v-if="selectedIds.length" class="dw-badge">{{ selectedIds.length }}</span>

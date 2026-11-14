@@ -8,10 +8,12 @@ import {registerRuntimeCommand} from './commands/runtime.js'
 import {formatCliError} from './cli-error.js'
 import {registerSqlConnectionsCommand} from './commands/sql-connections.js'
 import {registerSqlExecCommand} from './commands/sql-exec.js'
+import {registerContextCommand} from './commands/context.js'
+import {registerAgentSetupCommand} from './commands/agent-setup.js'
 
 const program = new Command('datawise')
     .description('DataWise headless CLI for CI and automation')
-    .version('4.1.7')
+    .version('5.0.0')
     .option('--server <url>', 'Backend base URL', process.env.DATAWISE_SERVER ?? 'http://localhost:18421')
     .option('--token <token>', 'API token (or DATAWISE_API_TOKEN env)')
 
@@ -26,6 +28,8 @@ registerQueryLibraryCommand(program)
 registerConfigMigrateCommand(program)
 registerRuntimeCommand(program)
 registerProjectCommand(program)
+registerContextCommand(program)
+registerAgentSetupCommand(program)
 
 program.parseAsync(process.argv).catch((error: unknown) => {
     console.error(`Error: ${formatCliError(error)}`)

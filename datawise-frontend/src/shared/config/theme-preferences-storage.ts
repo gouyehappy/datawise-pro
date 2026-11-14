@@ -85,6 +85,9 @@ export function normalizeThemePreferences(
             parsed.uiFontSizePx ?? DEFAULT_THEME_PREFERENCES.uiFontSizePx ?? UI_FONT_SIZE_PX_MD,
         ),
         uiDensity: readUiDensity(parsed.uiDensity),
+        // One-shot: legacy prefs defaulted colored icons on; v2 defaults monochrome (opt-in).
+        coloredToolbarIcons: parsed.iconToneV2 === true && parsed.coloredToolbarIcons === true,
+        iconToneV2: true,
     }
 }
 

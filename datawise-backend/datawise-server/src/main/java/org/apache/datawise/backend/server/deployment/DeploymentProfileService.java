@@ -3,6 +3,7 @@ package org.apache.datawise.backend.server.deployment;
 import org.apache.datawise.backend.config.AuthSecurityProperties;
 import org.apache.datawise.backend.config.ConnectionProbeProperties;
 import org.apache.datawise.backend.config.DatawiseQueryProperties;
+import org.apache.datawise.backend.config.DeploymentAffinityProperties;
 import org.apache.datawise.backend.config.StorageProperties;
 import org.apache.datawise.backend.domain.DeploymentProfileDto;
 import org.apache.datawise.backend.domain.DeploymentProfileDto.DeploymentCheckDto;
@@ -29,6 +30,7 @@ public class DeploymentProfileService {
     private final ConnectionProbeProperties connectionProbeProperties;
     private final DatawiseQueryProperties queryProperties;
     private final TaskConcurrencySpringProperties taskConcurrencyProperties;
+    private final DeploymentAffinityProperties deploymentAffinityProperties;
     private final boolean requireManifestIntegrity;
 
     public DeploymentProfileService(
@@ -38,6 +40,7 @@ public class DeploymentProfileService {
             ConnectionProbeProperties connectionProbeProperties,
             DatawiseQueryProperties queryProperties,
             TaskConcurrencySpringProperties taskConcurrencyProperties,
+            DeploymentAffinityProperties deploymentAffinityProperties,
             @Value("${datawise.connectors.require-manifest-integrity:true}") boolean requireManifestIntegrity
     ) {
         this.environment = environment;
@@ -46,6 +49,9 @@ public class DeploymentProfileService {
         this.connectionProbeProperties = connectionProbeProperties;
         this.queryProperties = queryProperties;
         this.taskConcurrencyProperties = taskConcurrencyProperties;
+        this.deploymentAffinityProperties = deploymentAffinityProperties != null
+                ? deploymentAffinityProperties
+                : new DeploymentAffinityProperties();
         this.requireManifestIntegrity = requireManifestIntegrity;
     }
 
@@ -63,6 +69,17 @@ public class DeploymentProfileService {
                 storageProperties.getBackend(),
                 "jdbc",
                 storageProperties.isJdbc(),
+                localMode,
+                "DEPLOYMENT.md#jdbc"
+        ));
+        boolean durableMeta = storageProperties.isJdbc() && !storageProperties.isMemoryH2Metadata();
+        checks.add(check(
+                "storage.datasource.durable",
+                storageProperties.isJdbc()
+                        ? (storageProperties.isMemoryH2Metadata() ? "h2:mem (ephemeral)" : "durable")
+                        : "n/a (file)",
+                "durable JDBC (not h2:mem) on cloud/server",
+                durableMeta || localMode,
                 localMode,
                 "DEPLOYMENT.md#jdbc"
         ));
@@ -172,6 +189,15 @@ public class DeploymentProfileService {
                 localMode,
                 "DEPLOYMENT.md"
         ));
+        String cursorStoreType = queryProperties.getCursorStoreType();
+        checks.add(check(
+                "query.cursor-store-type",
+                nullToEmpty(cursorStoreType),
+                "jdbc (shared dw_sql_cursors; requires storage.jdbc)",
+                queryProperties.isJdbcCursorStore() && storageProperties.isJdbc(),
+                localMode,
+                "DEPLOYMENT.md#affinity"
+        ));
         String sseBusType = env("datawise.sse.bus-type", "in-memory");
         checks.add(check(
                 "sse.bus-type",
@@ -183,19 +209,46 @@ public class DeploymentProfileService {
         ));
         // application.yml defaults to file; memory loses interrupt resume on restart
         String checkpointStorage = env("datawise.ai.analysis.checkpoint.storage", "file");
+        boolean checkpointFile = "file".equalsIgnoreCase(checkpointStorage);
         checks.add(check(
                 "ai.analysis.checkpoint.storage",
                 nullToEmpty(checkpointStorage),
-                "file",
-                "file".equalsIgnoreCase(checkpointStorage),
+                "file (+ shared volume for multi-replica resume)",
+                checkpointFile,
                 localMode,
-                "AI_PRODUCTION.md"
+                "DEPLOYMENT.md#affinity"
         ));
-        // Process-local state cannot be auto-detected as sticky; always surface the constraint.
+        if (checkpointFile && !localMode) {
+            checks.add(new DeploymentCheckDto(
+                    "ai.analysis.checkpoint.shared-volume",
+                    "file saver under config/ai-checkpoints/",
+                    "shared PVC/NFS across replicas (else resume sticks to one node)",
+                    "info",
+                    "DEPLOYMENT.md#affinity"
+            ));
+        }
+        String affinityMode = deploymentAffinityProperties.getAffinityMode().name().toLowerCase(Locale.ROOT);
+        checks.add(check(
+                "deployment.affinity-mode",
+                affinityMode,
+                "sticky (multi-replica LB) or single",
+                true,
+                localMode,
+                "DEPLOYMENT.md#affinity"
+        ));
+        // Process-local: console TX + live AI SSE (cursors OK when jdbc).
+        String affinityRecommended = deploymentAffinityProperties.stickyRequired()
+                ? "sticky session LB (affinity-mode=sticky)"
+                : "single replica (affinity-mode=single)";
+        String processLocalCurrent = queryProperties.isJdbcCursorStore()
+                ? "SQL sessions + live AI SSE (in-process); cursors=jdbc; stickyRequired="
+                + deploymentAffinityProperties.stickyRequired()
+                : "SQL sessions/cursors + live AI SSE (in-process); stickyRequired="
+                + deploymentAffinityProperties.stickyRequired();
         checks.add(new DeploymentCheckDto(
                 "runtime.process-local-affinity",
-                "SQL sessions/cursors + AI analysis SSE (in-process)",
-                "sticky session LB or single replica",
+                processLocalCurrent,
+                affinityRecommended,
                 "info",
                 "DEPLOYMENT.md#affinity"
         ));

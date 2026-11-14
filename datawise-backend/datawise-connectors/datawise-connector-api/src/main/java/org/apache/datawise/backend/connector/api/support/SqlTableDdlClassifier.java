@@ -5,12 +5,13 @@ import org.apache.datawise.sqlparser.SqlTransformOps;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Detects successful CREATE/DROP TABLE statements for outbound notifications. */
+/** Detects successful CREATE/DROP/ALTER TABLE statements for outbound notifications and DDL history. */
 public final class SqlTableDdlClassifier {
 
     public enum Kind {
         CREATE,
-        DROP
+        DROP,
+        ALTER
     }
 
     public record Match(Kind kind, String tableName) {
@@ -24,6 +25,12 @@ public final class SqlTableDdlClassifier {
 
     private static final Pattern DROP_TABLE = Pattern.compile(
             "^DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?"
+                    + "(?:(?:[`\"\\[]?[\\w.-]+[`\"\\]]?)\\s*\\.\\s*)?"
+                    + "([`\"\\[]?[\\w$]+[`\"\\]]?)",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    private static final Pattern ALTER_TABLE = Pattern.compile(
+            "^ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?"
                     + "(?:(?:[`\"\\[]?[\\w.-]+[`\"\\]]?)\\s*\\.\\s*)?"
                     + "([`\"\\[]?[\\w$]+[`\"\\]]?)",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
@@ -52,6 +59,10 @@ public final class SqlTableDdlClassifier {
         Matcher drop = DROP_TABLE.matcher(first);
         if (drop.find()) {
             return new Match(Kind.DROP, unquote(drop.group(1)));
+        }
+        Matcher alter = ALTER_TABLE.matcher(first);
+        if (alter.find()) {
+            return new Match(Kind.ALTER, unquote(alter.group(1)));
         }
         return null;
     }

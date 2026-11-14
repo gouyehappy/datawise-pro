@@ -14,15 +14,39 @@ import {useNotificationStore} from '@/features/layout/stores/notification-store'
 import {useShortcutPanelStore} from '@/features/layout/stores/shortcut-panel-store'
 import {useToastStore} from '@/features/layout/stores/toast-store'
 import {useTeamStore} from '@/features/team/stores/team-store'
-import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
+import {getAppConfigStore} from '@/features/layout/stores/app-config-store-accessor'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
-import {canAccessFeature, sideRailFeatureKey} from '@/features/auth/services/feature-permission.service'
+import {
+    canAccessFeature,
+    canOpenSettingsSection,
+    sideRailFeatureKey,
+} from '@/features/auth/services/feature-permission.service'
 import {FeaturePermission} from '@/features/auth/types/feature-permission.types'
 import type {SideRailItemId} from '@/features/layout/constants/side-rail-nav'
 import {tryDispatchNavModuleContribution} from '@/features/layout/services/nav-module-host.service'
+import {
+    defaultModuleForWorkbenchMode,
+    inferWorkbenchModeFromModule,
+    type WorkbenchMode,
+} from '@/shared/config/workbench-mode'
+import {
+    notifyExportDone,
+    pushAppNotification,
+    type AppNotificationPushInput,
+} from '@/features/layout/services/app-feedback.service'
 
 /** 系统首页：工作台（database） */
 const HOME_NAV_MODULE: NavModule = 'database'
+
+function unresolvedWorkbenchMode(value: unknown): WorkbenchMode | null {
+    if (value == null) return null
+    if (typeof value === 'string') return value as WorkbenchMode
+    if (typeof value === 'object' && value !== null && 'value' in value) {
+        const inner = (value as {value: unknown}).value
+        return typeof inner === 'string' ? (inner as WorkbenchMode) : null
+    }
+    return null
+}
 
 export const useLayoutStore = defineStore('layout', () => {
     const toast = useToastStore()
@@ -39,8 +63,21 @@ export const useLayoutStore = defineStore('layout', () => {
     const showAssistantDrawer = ref(false)
     const showProfileMenu = ref(false)
 
-    const profileName = ref(t('profile.defaultName'))
-    const profileEmail = ref('user@datawise.local')
+    /** Custom name when set; otherwise follow locale via computed (C8 i18n snapshot fix). */
+    const profileNameOverride = ref<string | null>(null)
+    const profileEmailOverride = ref<string | null>(null)
+    const profileName = computed({
+        get: () => profileNameOverride.value ?? t('profile.defaultName'),
+        set: (value: string) => {
+            profileNameOverride.value = value
+        },
+    })
+    const profileEmail = computed({
+        get: () => profileEmailOverride.value ?? 'user@datawise.local',
+        set: (value: string) => {
+            profileEmailOverride.value = value
+        },
+    })
 
     /** A-10: database / ai come from Feature Contract shell-slot contributions. */
     const activeShellSlot = computed(() => resolveShellSlotForModule(activeModule.value))
@@ -75,11 +112,63 @@ export const useLayoutStore = defineStore('layout', () => {
             return
         }
         activeModule.value = module
+        // B0-2: soft-align mode only (no applyLayoutState) — avoids re-entrancy from applyLayoutEffects
+        const inferred = inferWorkbenchModeFromModule(module)
+        if (inferred) {
+            try {
+                const appConfig = getAppConfigStore()
+                const current = unresolvedWorkbenchMode(appConfig.workbenchMode)
+                if (current !== inferred && typeof appConfig.softSetWorkbenchMode === 'function') {
+                    appConfig.softSetWorkbenchMode(inferred)
+                } else if (current !== inferred && typeof appConfig.setWorkbenchMode === 'function') {
+                    // Older store shapes: still avoid crashing boot
+                    appConfig.setWorkbenchMode(inferred)
+                }
+            } catch {
+                // Store mid-init during hydrate — mode will catch up on next layout apply
+            }
+        }
+    }
+
+    /** B0-3: switch mode, persist, and jump to the mode's default module when accessible */
+    function setWorkbenchMode(mode: WorkbenchMode) {
+        const appConfig = getAppConfigStore()
+        if (typeof appConfig.setWorkbenchMode === 'function') {
+            appConfig.setWorkbenchMode(mode)
+        } else if (typeof appConfig.softSetWorkbenchMode === 'function') {
+            appConfig.softSetWorkbenchMode(mode)
+        }
+        const target = defaultModuleForWorkbenchMode(mode) as NavModule
+        if (!canAccessNavModule(target)) {
+            if (canAccessNavModule(HOME_NAV_MODULE) && activeModule.value !== HOME_NAV_MODULE) {
+                activeModule.value = HOME_NAV_MODULE
+            }
+            return
+        }
+        if (activeModule.value === target) {
+            if (target === 'database' && appConfig.showExplorerPanel === false) {
+                appConfig.setShowExplorerPanel?.(true)
+            }
+            return
+        }
+        showProfileMenu.value = false
+        if (target === 'ai') {
+            if (!useEntitlementStore().guardAiNav()) return
+            activeModule.value = 'ai'
+            return
+        }
+        if (target === 'team') {
+            openTeamModule()
+            return
+        }
+        activeModule.value = target
+        if (target === 'database' && !appConfig.showExplorerPanel) {
+            appConfig.setShowExplorerPanel(true)
+        }
     }
 
     function openSettingsModule(section: SettingsSection = 'basic', anchor?: string) {
-        const appConfig = useAppConfigStore()
-        if (!appConfig.canOpenSettingsSection(section)) return
+        if (!canOpenSettingsSection(section)) return
         if (section === 'backupCenter' && !useEntitlementStore().guardPack('pack.backup', 'settings.backup')) {
             return
         }
@@ -180,41 +269,41 @@ export const useLayoutStore = defineStore('layout', () => {
         // 刷新后树与工作区 UI 自行更新，无需 Toast
     }
 
-    function startExport(fileName: string, path?: string) {
+    function startExport(fileName: string, _path?: string) {
+        // 导出完成进通知抽屉，避免长任务结束再抢焦点弹 toast。
         shortcutPanel.addExportTask(fileName, () => {
-            toast.showSuccess(
-                path
-                    ? t('toast.exportCompletePath', {name: fileName, path})
-                    : t('toast.exportComplete', {name: fileName}),
-            )
+            void notifyExportDone(fileName)
         })
         activeShortcutPanel.value = 'export'
+    }
+
+    /** 写入通知抽屉（不弹 toast）。 */
+    function notifyQuiet(input: AppNotificationPushInput) {
+        void pushAppNotification(input)
     }
 
     /**
      * 权限变更后校正当前模块（仅在 auth 会话就绪后调用，勿在 app-config store 初始化链路中调用）。
      */
     function ensureAccessibleModule() {
-        const appConfig = useAppConfigStore()
-
         if (activeModule.value === 'settings') {
-            if (appConfig.canOpenSettingsSection(settingsSection.value)) return
+            if (canOpenSettingsSection(settingsSection.value)) return
         } else if (activeModule.value === 'team' && canAccessNavModule('team')) {
             return
         } else if (canAccessNavModule(activeModule.value)) {
             return
         }
 
-        activeModule.value = appConfig.pickAccessibleModule()
+        activeModule.value = getAppConfigStore().pickAccessibleModule()
         if (!canAccessNavModule(activeModule.value)) {
             activeModule.value = HOME_NAV_MODULE
         }
     }
 
     function updateProfile(name: string, email: string) {
-        profileName.value = name
-        profileEmail.value = email
-        toast.showSuccess(t('toast.profileUpdated'))
+        profileNameOverride.value = name
+        profileEmailOverride.value = email
+        // 资料页已展示当前值，无需再 toast。
     }
 
     return {
@@ -234,6 +323,7 @@ export const useLayoutStore = defineStore('layout', () => {
         isWorkbenchModule,
         canAccessNavModule,
         setModule,
+        setWorkbenchMode,
         openSettingsModule,
         clearSettingsScrollAnchor,
         setSettingsSection,
@@ -252,6 +342,7 @@ export const useLayoutStore = defineStore('layout', () => {
         showSuccessToast,
         showWarningToast,
         showErrorToast,
+        notifyQuiet,
         globalRefresh,
         startExport,
         updateProfile,

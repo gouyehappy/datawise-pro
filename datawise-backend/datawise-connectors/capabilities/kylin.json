@@ -1,0 +1,4 @@
+{
+  "dbType": "kylin",
+  "extends": "jdbc-query"
+}

@@ -41,6 +41,14 @@ public class UserAnalysisCanvasStore {
                 .orElse(null);
     }
 
+    public synchronized void replaceAll(long userId, List<AiAnalysisCanvasEntry> next) {
+        fileFor(userId).replaceAll(next != null ? next : List.of());
+    }
+
+    public synchronized void invalidate(long userId) {
+        cache.remove(TenantScopedConfigSupport.cacheKey(userId));
+    }
+
     private JsonListFile<AiAnalysisCanvasEntry> fileFor(long userId) {
         return cache.computeIfAbsent(TenantScopedConfigSupport.cacheKey(userId), ignored -> new JsonListFile<>(
                 configDirectory,

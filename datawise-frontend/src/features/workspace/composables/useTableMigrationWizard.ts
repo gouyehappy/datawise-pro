@@ -54,6 +54,7 @@ import type {MigrationFlowStep} from '@/features/workspace/components/migration/
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import {packPaywallContextKey} from '@/features/pack/services/pack-i18n'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
+import {classifyStructureDeployAtomicity} from '@/features/schema-compare/services/deploy-atomicity.service'
 
 export function useTableMigrationWizard(tab: WorkspaceTab) {
     const {t} = useI18n()
@@ -178,6 +179,18 @@ export function useTableMigrationWizard(tab: WorkspaceTab) {
     const targetConnectionLabel = computed(() =>
         connections.value.find((item) => item.id === form.value.targetConnectionId)?.label
         ?? form.value.targetConnectionId,
+    )
+
+    const targetDbType = computed(
+        () => connections.value.find((item) => item.id === form.value.targetConnectionId)?.dbType,
+    )
+
+    /** T-SCHEMA-1：仅在「自动建表」策略下展示结构 DDL 原子性。 */
+    const structureDeployAtomicity = computed(() =>
+        classifyStructureDeployAtomicity({
+            dbType: targetDbType.value,
+            includesDdl: form.value.targetMissingPolicy === 'create',
+        }),
     )
 
     const completionSummary = computed(() => {
@@ -578,7 +591,6 @@ export function useTableMigrationWizard(tab: WorkspaceTab) {
         if (!ddl) return
         try {
             await navigator.clipboard.writeText(ddl)
-            layout.showSuccessToast(t('explorer.tableMigrationWizard.ddlCopied'))
         } catch {
             layout.showErrorToast(t('explorer.tableMigrationWizard.ddlCopyFailed'))
         }
@@ -727,7 +739,6 @@ export function useTableMigrationWizard(tab: WorkspaceTab) {
         if (!record) return
         try {
             await navigator.clipboard.writeText(formatMigrationRunLogText(record))
-            layout.showSuccessToast(t('explorer.tableMigrationWizard.logCopied'))
         } catch {
             layout.showErrorToast(t('explorer.tableMigrationWizard.ddlCopyFailed'))
         }
@@ -737,7 +748,12 @@ export function useTableMigrationWizard(tab: WorkspaceTab) {
         const record = migrationRunRecord.value ?? migrationTasks.selectedRecord
         if (!record || record.status === 'running') return
         downloadMigrationRunReport(record)
-        layout.showSuccessToast(t('explorer.tableMigrationWizard.reportDownloaded'))
+        layout.notifyQuiet({
+          category: 'export',
+          titleKey: 'exportDone',
+          bodyKey: 'exportDone',
+          params: {name: t('explorer.tableMigrationWizard.reportDownloaded')},
+        })
     }
 
     async function pauseActiveMigration() {
@@ -824,13 +840,17 @@ export function useTableMigrationWizard(tab: WorkspaceTab) {
             if (outcome.cancelled) {
                 layout.showWarningToast(t('explorer.tableMigrationWizard.migrationCancelled'))
             } else if (outcome.paused) {
-                layout.showSuccessToast(t('explorer.tableMigrationWizard.migrationPaused'))
             } else {
                 const summary = summarizeMigrationResults(outcome.results)
                 if (summary.failed > 0) {
                     layout.showWarningToast(t('explorer.tableMigrationPartial', summary))
                 } else {
-                    layout.showSuccessToast(t('explorer.tableMigrationSuccess', summary))
+                    layout.notifyQuiet({
+                        category: 'workspace',
+                        titleKey: 'migrationDone',
+                        bodyKey: 'migrationDone',
+                        params: {summary: t('explorer.tableMigrationSuccess', summary)},
+                    })
                 }
             }
         } catch (error) {
@@ -907,7 +927,12 @@ export function useTableMigrationWizard(tab: WorkspaceTab) {
                 sql,
             })
             productionApprovalDialogOpen.value = false
-            layout.showSuccessToast(t('explorer.tableMigrationWizard.productionApprovalSubmitted'))
+            layout.notifyQuiet({
+              category: 'workspace',
+              titleKey: 'approvalDone',
+              bodyKey: 'approvalDone',
+              params: {detail: t('explorer.tableMigrationWizard.productionApprovalSubmitted')},
+            })
         } catch (error) {
             productionApprovalError.value =
                 resolveCaughtApiErrorMessage(error, t, 'console.productionApproval.submitFailed')
@@ -1010,7 +1035,6 @@ export function useTableMigrationWizard(tab: WorkspaceTab) {
             if (outcome.cancelled) {
                 layout.showWarningToast(t('explorer.tableMigrationWizard.migrationCancelled'))
             } else if (outcome.paused) {
-                layout.showSuccessToast(t('explorer.tableMigrationWizard.migrationPaused'))
             } else {
                 const summary = summarizeMigrationResults(outcome.results)
                 if (summary.failed > 0) {
@@ -1022,7 +1046,12 @@ export function useTableMigrationWizard(tab: WorkspaceTab) {
                         mismatch: summary.validationMismatch,
                     }))
                 } else {
-                    layout.showSuccessToast(t('explorer.tableMigrationSuccess', summary))
+                    layout.notifyQuiet({
+                        category: 'workspace',
+                        titleKey: 'migrationDone',
+                        bodyKey: 'migrationDone',
+                        params: {summary: t('explorer.tableMigrationSuccess', summary)},
+                    })
                 }
             }
         } catch (error) {
@@ -1109,6 +1138,8 @@ export function useTableMigrationWizard(tab: WorkspaceTab) {
         allSelected,
         targetDatabases,
         targetConnectionLabel,
+        targetDbType,
+        structureDeployAtomicity,
         completionSummary,
         completionStatusKey,
         selectedCountLabel,

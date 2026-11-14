@@ -236,7 +236,6 @@ async function executeAlterColumn(sql: string) {
       await loadDdl()
     }
     workspace.bumpTableDataRefresh(props.tab.id)
-    layout.showSuccessToast(t('workspace.tableDetail.alterColumn.success'))
   } catch (error) {
     const message = resolveCaughtApiErrorMessage(error, t, 'workspace.tableDetail.alterColumn.failed')
     alterActionFeedback.value = {
@@ -304,7 +303,6 @@ function keyTypeVariant(keyType?: string | null): StatusVariant {
 
 function onDdlCopied(ok: boolean) {
   if (ok) {
-    layout.showSuccessToast(t('workspace.tableDetail.copyDdlSuccess'))
   } else {
     layout.showErrorToast(t('workspace.tableDetail.copyDdlFailed'))
   }

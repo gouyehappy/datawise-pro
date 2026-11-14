@@ -71,6 +71,10 @@ class WorkbenchContextStoreTest {
         assertEquals(WorkbenchContextSnapshot.DEFAULT_BODY_PREVIEW_MAX_CHARS, snap.activeTab().bodyPreview().length());
         assertTrue(snap.activeTab().bodyTruncated());
         assertEquals(longSql.length(), snap.activeTab().bodyLength());
+        assertTrue(snap.activeTab().bodyTruncation().truncated());
+        assertEquals((long) longSql.length(), snap.activeTab().bodyTruncation().originalLength());
+        assertEquals(WorkbenchContextSnapshot.DEFAULT_BODY_PREVIEW_MAX_CHARS, snap.activeTab().bodyTruncation().limit());
+        assertEquals("chars", snap.activeTab().bodyTruncation().unit());
     }
 
     @Test

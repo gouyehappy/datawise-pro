@@ -122,10 +122,10 @@
      * 终端调色板（附录 D / color-exception：独立暗色 PTY 表面）。
      * 与 features/terminal/services/terminal-palette.ts 保持同值。
      */
-    --dw-terminal-bg: #1a1d24;
+    --dw-terminal-bg: #000000;
     --dw-terminal-fg: #d1d5db;
     --dw-terminal-border: #2d3340;
-    --dw-terminal-input-bg: #151820;
+    --dw-terminal-input-bg: #000000;
     --dw-terminal-cursor: #16a34a;
     --dw-terminal-selection: #264f78;
     --terminal-bg: var(--dw-terminal-bg);
@@ -134,11 +134,14 @@
     --terminal-input-bg: var(--dw-terminal-input-bg);
 
     --dw-border: #e2e8f0;
-    --dw-border-light: #eef2f7;
     --dw-border-subtle: color-mix(in srgb, var(--dw-border) 72%, transparent);
     --dw-border-strong: color-mix(in srgb, var(--dw-text) 18%, var(--dw-border));
     --dw-border-width: 1px;
     --dw-panel-border: rgba(15, 23, 42, 0.08);
+    /* Shell panel outline (skins soften / clear this; keeps 1px layout slot) */
+    --dw-panel-outline: var(--dw-panel-border);
+    /* 结构缝与 outline 同语；皮肤软混 outline 时设置/面板一起跟着 */
+    --dw-border-light: var(--dw-panel-outline);
     --dw-surface: var(--dw-bg);
     --dw-surface-muted: var(--dw-bg-muted);
     --dw-surface-raised: var(--dw-bg-panel);
@@ -154,10 +157,10 @@
 
     /*
      * 圆角指挥官（业务只许用这几档语义别名）：
-     *   面板 / 卡片 / 内嵌壳 → --dw-panel-radius（IDE=0，跟壳层一起直角）
+     *   面板 / 卡片 / 内嵌壳 → --dw-panel-radius（IDE/ledger=0 贴边；classic/atelier 有圆角）
      *   按钮 / 芯片 / 导航项 / 图标块 → --dw-control-radius / --dw-control-radius-sm
      *   菜单浮层 → --dw-menu-radius；模态 → --dw-modal-radius
-     * 禁止业务再写 --dw-radius-lg 当面板圆角（IDE 下仍是 6px，会跟直角壳打架）。
+     * 禁止业务再写 --dw-radius-lg 当面板圆角（应走 --dw-panel-radius，皮肤自动跟随）。
      */
     --dw-control-radius: var(--dw-radius-md);
     --dw-control-radius-sm: clamp(4px, 0.5vmin, 5px);
@@ -285,6 +288,31 @@
     --dw-titlebar-chip-hover: color-mix(in srgb, var(--dw-text) 8%, transparent);
     --dw-titlebar-chip-active: color-mix(in srgb, var(--dw-text) 11%, transparent);
 
+    /*
+     * Window header —— 与 chrome 底色同族的中性灰（IDEA header ≈ #33353b）。
+     * 深色色阶里 rail/chrome 已是窗框底色，顶栏用中性基色混入 chrome，
+     * 由 data-ui-skin 决定混合比 / 项目色渐变 / 控件高（见 skins/*.css）。
+     */
+    --dw-titlebar-neutral: #edeff2;
+    --dw-titlebar-rail-neutral: #e4e7eb;
+    --dw-titlebar-bg: color-mix(in srgb, var(--dw-titlebar-neutral) 88%, var(--dw-bg-chrome));
+    --dw-titlebar-rail-bg: color-mix(in srgb, var(--dw-titlebar-rail-neutral) 88%, var(--dw-bg-chrome));
+    --dw-titlebar-seam: color-mix(in srgb, #c9ced6 65%, var(--dw-border));
+    --dw-titlebar-fg: #59636f;
+    --dw-titlebar-fg-strong: var(--dw-text);
+    --dw-titlebar-fg-muted: #9aa3ae;
+    /* 连接状态点：低饱和，不再用 #34d399 在中性条上炸出一块荧光绿 */
+    --dw-titlebar-status: #2f9e68;
+    --dw-titlebar-status-ring: rgba(47, 158, 104, 0.16);
+    /*
+     * IDEA 左侧项目色渐变：项目色是低饱和紫，不是主题蓝。
+     * 用 30% 主色 + 固定中性紫，既跟随用户主色调，又不会把刚中和掉的蓝味带回来。
+     * 只铺顶栏左侧 36%，不铺满整条；各皮肤自行调节透明度（见 skins/*.css）。
+     */
+    --dw-titlebar-project: color-mix(in srgb, var(--dw-primary) 30%, #8b6bb0);
+    --dw-titlebar-tint: color-mix(in srgb, var(--dw-titlebar-project) 12%, transparent);
+    --dw-titlebar-widget-h: var(--dw-density-sm);
+
     /* 遮罩 / 弹层 */
     --dw-overlay-bg: color-mix(in srgb, var(--dw-text) 42%, transparent);
     --dw-overlay-bg-strong: color-mix(in srgb, var(--dw-text) 58%, transparent);
@@ -352,8 +380,8 @@
     --dw-shortcut-width: var(--dw-tool-stripe-width);
     --dw-menu-height: var(--dw-density-sm);
     --dw-toolbar-height: var(--dw-density-lg);
-    /* Includes shell bottom pad so status content centers in the full bottom chrome strip. */
-    --dw-status-height: calc(var(--dw-density-md) + var(--dw-shell-padding) + 4px);
+    /* 底栏再压一档，略低于 density-sm */
+    --dw-status-height: calc(var(--dw-density-sm) - 2px);
     --dw-tab-height: var(--dw-density-md);
     --dw-tab-pill-height: var(--dw-density-xs);
     --dw-tab-pill-radius: var(--dw-control-radius);
@@ -394,22 +422,23 @@
     --dw-console-toolbar-height: var(--dw-density-md);
     /* 热区 = icon-btn；glyph 对齐 md，避免工具栏「小而碎」 */
     --dw-console-btn-size: var(--dw-icon-btn-size);
-    --dw-console-icon-size: clamp(14px, 1.55vmin, 16px);
-    --dw-console-icon-stroke: 1.75;
+    --dw-console-icon-size: clamp(15px, 1.65vmin, 17px);
+    --dw-console-icon-stroke: 2;
     /* 结果集 / DataGrid 工具栏：与 btn-height-sm 同排，glyph 吃满热区 */
     --dw-grid-toolbar-control-h: var(--dw-btn-height-sm);
     --dw-grid-toolbar-icon-size: clamp(16px, 1.8vmin, 18px);
-    --dw-grid-toolbar-icon-stroke: 1.75;
+    --dw-grid-toolbar-icon-stroke: 2;
 
-    --dw-icon-size-xs: clamp(10px, 1.15vmin, 12px);
-    --dw-icon-size-sm: clamp(12px, 1.35vmin, 14px);
-    --dw-icon-size-md: clamp(14px, 1.55vmin, 16px);
+    --dw-icon-size-xs: clamp(11px, 1.2vmin, 13px);
+    --dw-icon-size-sm: clamp(13px, 1.45vmin, 15px);
+    --dw-icon-size-md: clamp(15px, 1.65vmin, 17px);
     --dw-icon-size-lg: clamp(18px, 2vmin, 20px);
     --dw-icon-size-xl: clamp(20px, 2.35vmin, 22px);
     --dw-icon-size-rail: 20px;
     --dw-icon-size-console: var(--dw-console-icon-size);
-    --dw-icon-size-tab: clamp(13px, 1.45vmin, 14px);
-    --dw-icon-size-menu: clamp(13px, 1.5vmin, 15px);
+    /* Tab leading icons: slightly larger than title glyphs so they read at a glance. */
+    --dw-icon-size-tab: clamp(15px, 1.7vmin, 16px);
+    --dw-icon-size-menu: clamp(14px, 1.6vmin, 16px);
     --dw-icon-size: var(--dw-icon-size-md);
     --dw-console-ctx-height: var(--dw-density-xs);
     /*
@@ -466,52 +495,57 @@
     --dw-primary-softer: rgba(37, 99, 235, 0.08);
     --dw-primary-mild: rgba(37, 99, 235, 0.16);
     --dw-primary-soft: rgba(37, 99, 235, 0.14);
-    --dw-primary-tint: color-mix(in srgb, #2563eb 18%, #171e27);
+    --dw-primary-tint: color-mix(in srgb, #2563eb 18%, #000000);
     --dw-primary-border: rgba(37, 99, 235, 0.45);
     --dw-primary-ring: rgba(37, 99, 235, 0.34);
-    /* 默认背景 cool dark（更深更纯，与 theme-presets BACKGROUND_PRESETS_DARK.cool 同步） */
-    --dw-bg: #0c1015;
+    /*
+     * 默认背景 cool dark（与 BACKGROUND_PRESETS_DARK.cool 同步）。
+     * 中间略淡、四周 chrome 加重；描边收一点。
+     */
+    --dw-bg: #1a1b1e;
     --dw-bg-base: var(--dw-bg);
-    --dw-bg-muted: #121820;
+    --dw-bg-muted: #222326;
     --dw-bg-subtle: var(--dw-bg-muted);
-    --dw-bg-panel: #171e27;
-    --dw-bg-hover: #1f2936;
+    --dw-bg-panel: #1e1f22;
+    /* hover 抬在 rail 之上，避免 chrome 上悬停下沉 */
+    --dw-bg-hover: #323438;
     --dw-bg-input: var(--dw-bg);
-    --dw-bg-rail: #090c10;
+    --dw-bg-rail: #2b2d30;
     --dw-bg-editor: var(--dw-bg);
     --dw-bg-chrome: var(--dw-bg-rail);
-    --dw-border: #2e3440;
-    --dw-border-light: #252b33;
+    --dw-border: rgba(255, 255, 255, 0.08);
+    --dw-panel-border: rgba(255, 255, 255, 0.08);
+    --dw-panel-outline: rgba(255, 255, 255, 0.08);
+    /* 结构缝与 outline 同阶，避免侧栏/设置头比控制台井更淡 */
+    --dw-border-light: var(--dw-panel-outline);
     --dw-border-subtle: color-mix(in srgb, var(--dw-border) 80%, transparent);
     --dw-border-strong: color-mix(in srgb, #fff 18%, var(--dw-border));
-    /* Panel chrome: ~12% white — readable on dark without looking chalky */
-    --dw-panel-border: rgba(255, 255, 255, 0.12);
     --dw-surface: var(--dw-bg);
     --dw-surface-muted: var(--dw-bg-muted);
     --dw-surface-raised: var(--dw-bg-panel);
-    --dw-panel-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    --dw-panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
     --dw-text: #f0f0f3;
     --dw-text-primary: var(--dw-text);
     --dw-text-secondary: #d4d4d8;
     --dw-text-muted: #c4c7cc;
     --dw-text-dim: #a8adb6;
-    --dw-tool-hover: color-mix(in srgb, #fff 9%, transparent);
+    --dw-tool-hover: color-mix(in srgb, #fff 7%, transparent);
     --dw-tool-active: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg-rail));
-    --dw-tool-pill-active: #2a3038;
-    --dw-tab-bar-bg: #161a20;
-    --dw-tab-bar-border: #1e242c;
-    --dw-tab-active-bg: #222831;
-    --dw-tab-active-border: #3574f0;
+    --dw-tool-pill-active: color-mix(in srgb, #fff 10%, var(--dw-bg-rail));
+    --dw-tab-bar-bg: #1a1b1e;
+    --dw-tab-bar-border: rgba(255, 255, 255, 0.08);
+    --dw-tab-active-bg: #2b2d30;
+    --dw-tab-active-border: transparent;
     --dw-tab-active-text: #f4f4f7;
     --dw-tab-inactive-text: #c8c8d0;
-    --dw-tab-hover-bg: rgba(255, 255, 255, 0.1);
+    --dw-tab-hover-bg: rgba(255, 255, 255, 0.08);
     --dw-tab-close-hover: rgba(255, 255, 255, 0.12);
     --dw-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     --dw-menu-shadow: 0 12px 28px rgba(0, 0, 0, 0.45),
     0 0 0 1px rgba(255, 255, 255, 0.08);
     --dw-menu-hover: color-mix(in srgb, #fff 8%, transparent);
     --dw-menu-active: color-mix(in srgb, var(--dw-primary) 18%, transparent);
-    --dw-menu-border: color-mix(in srgb, var(--dw-border) 85%, transparent);
+    --dw-menu-border: var(--dw-panel-outline);
     --dw-composer-shell-shadow: 0 1px 2px rgba(0, 0, 0, 0.32),
     0 6px 16px rgba(0, 0, 0, 0.24);
     --dw-composer-focus-shadow: 0 0 0 1px color-mix(in srgb, var(--dw-primary) 28%, transparent),
@@ -523,8 +557,21 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
     --dw-btn-elev-shadow-hover: 0 4px 12px color-mix(in srgb, var(--dw-primary) 28%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
-    --dw-scrollbar-thumb: color-mix(in srgb, var(--dw-text-muted) 72%, #000);
-    --dw-scrollbar-thumb-hover: color-mix(in srgb, var(--dw-text-secondary) 88%, #000);
+    --dw-scrollbar-thumb: color-mix(in srgb, #fff 20%, transparent);
+    --dw-scrollbar-thumb-hover: color-mix(in srgb, #fff 28%, transparent);
+    --dw-overlay-bg: color-mix(in srgb, #000 48%, transparent);
+    --dw-overlay-bg-strong: color-mix(in srgb, #000 58%, transparent);
+
+    /* Window header (dark)：跟加重后的 chrome 同族 */
+    --dw-titlebar-neutral: #2b2d30;
+    --dw-titlebar-rail-neutral: #2b2d30;
+    --dw-titlebar-seam: var(--dw-panel-outline);
+    --dw-titlebar-fg: #adb1b9;
+    --dw-titlebar-fg-strong: #e9eaed;
+    --dw-titlebar-fg-muted: #9aa0a8;
+    --dw-titlebar-status: #57b98a;
+    --dw-titlebar-status-ring: rgba(87, 185, 138, 0.18);
+    --dw-titlebar-tint: color-mix(in srgb, var(--dw-titlebar-project) 18%, transparent);
 }
 
 .keyword {

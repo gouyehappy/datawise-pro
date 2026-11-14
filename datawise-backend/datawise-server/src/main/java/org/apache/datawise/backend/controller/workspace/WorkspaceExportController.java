@@ -12,8 +12,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/workspace")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
 public class WorkspaceExportController {
 
     private final WorkspaceService workspaceService;

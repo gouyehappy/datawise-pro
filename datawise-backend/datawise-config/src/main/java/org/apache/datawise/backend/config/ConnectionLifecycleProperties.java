@@ -9,8 +9,11 @@ public class ConnectionLifecycleProperties {
     /** 是否启用长时间无操作后自动断开（回收 Hikari 池与 schema 会话）。 */
     private boolean idleEvictEnabled = true;
 
-    /** 距上次真实使用超过该时长则回收连接池（毫秒）。 */
-    private long idleEvictMs = 900_000;
+    /**
+     * 距上次真实使用超过该时长则回收连接池（毫秒）。
+     * 默认 30 分钟：桌面场景开会/看文档时不至于频繁断连；健康探测 ping 不计入活跃。
+     */
+    private long idleEvictMs = 1_800_000;
 
     /** 空闲回收扫描间隔（毫秒）。 */
     private long idleEvictPollMs = 60_000;

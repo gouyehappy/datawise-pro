@@ -2,6 +2,7 @@ package org.apache.datawise.backend.controller.explorer;
 
 import org.apache.datawise.backend.common.ApiResponse;
 import org.apache.datawise.backend.database.explorer.CreateNamespaceService;
+import org.apache.datawise.backend.database.explorer.DialectOptionsService;
 import org.apache.datawise.backend.database.explorer.ExplorerChildLoadOutcome;
 import org.apache.datawise.backend.database.explorer.ExplorerConnectionAdminService;
 import org.apache.datawise.backend.database.explorer.ExplorerConnectionLifecycleService;
@@ -34,7 +35,9 @@ import org.apache.datawise.backend.domain.TreePayload;
 import org.apache.datawise.backend.domain.TreeNode;
 import org.apache.datawise.backend.domain.YarnClusterInfoDto;
 import org.apache.datawise.backend.security.ApiTokenScopes;
-import org.apache.datawise.backend.service.FeaturePermissionAccess;
+import org.apache.datawise.backend.security.ExplorerFeatureGate;
+import org.apache.datawise.backend.security.RequiresExplorerGate;
+import org.apache.datawise.backend.security.RequiresExplorerNodeDelete;
 import org.apache.datawise.backend.security.UserContext;
 import org.apache.datawise.backend.server.pack.EntitlementService;
 import org.junit.jupiter.api.AfterEach;
@@ -42,11 +45,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -71,7 +76,7 @@ class ExplorerControllerBaselineTest {
     private final ExplorerConnectionAdminService connectionAdminService = mock(ExplorerConnectionAdminService.class);
     private final ExplorerConnectionLifecycleService connectionLifecycleService = mock(ExplorerConnectionLifecycleService.class);
     private final CreateNamespaceService createNamespaceService = mock(CreateNamespaceService.class);
-    private final FeaturePermissionAccess featurePermissionAccess = mock(FeaturePermissionAccess.class);
+    private final DialectOptionsService dialectOptionsService = mock(DialectOptionsService.class);
     private final EntitlementService entitlementService = mock(EntitlementService.class);
 
     private final ExplorerController controller = new ExplorerController(
@@ -80,14 +85,14 @@ class ExplorerControllerBaselineTest {
             connectionAdminService,
             connectionLifecycleService,
             createNamespaceService,
-            featurePermissionAccess,
+            dialectOptionsService,
             entitlementService
     );
 
-    private final ExplorerRedisController redisController = new ExplorerRedisController(redisService, featurePermissionAccess);
-    private final ExplorerKafkaController kafkaController = new ExplorerKafkaController(kafkaService, featurePermissionAccess);
-    private final ExplorerYarnController yarnController = new ExplorerYarnController(yarnService, featurePermissionAccess);
-    private final ExplorerJenkinsController jenkinsController = new ExplorerJenkinsController(jenkinsService, featurePermissionAccess);
+    private final ExplorerRedisController redisController = new ExplorerRedisController(redisService);
+    private final ExplorerKafkaController kafkaController = new ExplorerKafkaController(kafkaService);
+    private final ExplorerYarnController yarnController = new ExplorerYarnController(yarnService);
+    private final ExplorerJenkinsController jenkinsController = new ExplorerJenkinsController(jenkinsService);
     private final ExplorerKubernetesController kubernetesController = new ExplorerKubernetesController(kubernetesService);
     private final ExplorerNacosController nacosController = new ExplorerNacosController(nacosService);
     private final ExplorerPolarisController polarisController = new ExplorerPolarisController(polarisService);
@@ -120,7 +125,7 @@ class ExplorerControllerBaselineTest {
     }
 
     @Test
-    void connectConnectionEnforcesPermissionAndConnectorEntitlement() {
+    void connectConnectionEnforcesConnectorEntitlement() {
         ConnectionConfig config = mock(ConnectionConfig.class);
         ConnectionTestResult expected = mock(ConnectionTestResult.class);
         when(schemaService.getConnection("conn-1")).thenReturn(config);
@@ -128,19 +133,47 @@ class ExplorerControllerBaselineTest {
         when(connectionLifecycleService.connect("conn-1")).thenReturn(expected);
 
         assertSame(expected, controller.connectConnection("conn-1").data());
-        verify(featurePermissionAccess).requireExplorerContextConnection();
         verify(entitlementService).requireConnector("mysql");
         verify(connectionLifecycleService).connect("conn-1");
     }
 
     @Test
-    void disconnectConnectionEnforcesPermissionAndReturnsOk() {
+    void disconnectConnectionReturnsOk() {
         ApiResponse<Void> response = controller.disconnectConnection("conn-1");
 
         assertEquals(0, response.code());
         assertNull(response.data());
-        verify(featurePermissionAccess).requireExplorerContextConnection();
         verify(connectionLifecycleService).disconnect("conn-1");
+    }
+
+    @Test
+    void explorerGatesAreDeclaredOnMutationEndpoints() throws Exception {
+        assertGate("fetchConnection", ExplorerFeatureGate.CONNECTION);
+        assertGate("connectConnection", ExplorerFeatureGate.CONNECTION);
+        assertGate("disconnectConnection", ExplorerFeatureGate.CONNECTION);
+        assertGate("createGroup", ExplorerFeatureGate.CATALOG_MUTATION);
+        assertGate("updateGroup", ExplorerFeatureGate.CATALOG_MUTATION);
+        assertGate("createDatabase", ExplorerFeatureGate.DANGEROUS);
+        assertGate("createConnection", ExplorerFeatureGate.CATALOG_MUTATION);
+        assertGate("importConnections", ExplorerFeatureGate.EXPORT);
+        assertGate("reorder", ExplorerFeatureGate.CATALOG_MUTATION);
+
+        Method deleteNode = ExplorerController.class.getDeclaredMethod("deleteNode", String.class);
+        assertNotNull(deleteNode.getAnnotation(RequiresExplorerNodeDelete.class));
+    }
+
+    private static void assertGate(String methodName, ExplorerFeatureGate expected) throws Exception {
+        Method method = null;
+        for (Method candidate : ExplorerController.class.getDeclaredMethods()) {
+            if (candidate.getName().equals(methodName)) {
+                method = candidate;
+                break;
+            }
+        }
+        assertNotNull(method, methodName);
+        RequiresExplorerGate gate = method.getAnnotation(RequiresExplorerGate.class);
+        assertNotNull(gate, methodName + " missing @RequiresExplorerGate");
+        assertEquals(expected, gate.value());
     }
 
     @Test
@@ -215,7 +248,6 @@ class ExplorerControllerBaselineTest {
         when(connectionAdminService.createGroup("New group", null)).thenReturn(expected);
 
         assertSame(expected, controller.createGroup(Map.of("label", "New group")).data());
-        verify(featurePermissionAccess).requireExplorerCatalogMutation();
     }
 
     @Test
@@ -228,18 +260,16 @@ class ExplorerControllerBaselineTest {
 
         assertEquals(0, response.code());
         assertEquals(List.of(node), response.data().tree());
-        verify(featurePermissionAccess).requireExplorerCatalogMutation();
     }
 
     @Test
-    void createDatabaseRequiresSqlAccessAndDangerousPermission() {
+    void createDatabaseRequiresSqlAccess() {
         UserContext.setApiToken(1L, "tok-1", Set.of(ApiTokenScopes.SQL));
         CreateDatabaseRequest request = mock(CreateDatabaseRequest.class);
         CreateNamespaceResult expected = mock(CreateNamespaceResult.class);
         when(createNamespaceService.createDatabase("conn-1", request)).thenReturn(expected);
 
         assertSame(expected, controller.createDatabase("conn-1", request).data());
-        verify(featurePermissionAccess).requireExplorerContextDangerous();
         verify(createNamespaceService).createDatabase("conn-1", request);
     }
 
@@ -254,7 +284,6 @@ class ExplorerControllerBaselineTest {
         when(connectionAdminService.createConnection(config, "g-1")).thenReturn(expected);
 
         assertSame(expected, controller.createConnection(request).data());
-        verify(featurePermissionAccess).requireExplorerCatalogMutation();
         verify(entitlementService).requireConnector("postgresql");
     }
 
@@ -270,7 +299,6 @@ class ExplorerControllerBaselineTest {
         when(connectionAdminService.importConnections(List.of(first, second))).thenReturn(expected);
 
         assertSame(expected, controller.importConnections(request).data());
-        verify(featurePermissionAccess).requireExplorerContextExport();
         verify(entitlementService).requireConnector("mysql");
         verify(entitlementService).requireConnector("oracle");
     }
@@ -313,6 +341,5 @@ class ExplorerControllerBaselineTest {
 
         assertEquals(0, response.code());
         assertEquals(List.of(node), response.data().tree());
-        verify(featurePermissionAccess).requireExplorerCatalogMutation();
     }
 }

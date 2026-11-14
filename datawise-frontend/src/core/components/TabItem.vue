@@ -52,5 +52,9 @@ defineEmits<{
       @cancel-rename="$emit('cancel-rename')"
       @request-rename="$emit('request-rename')"
       @pointer-drag-start="$emit('pointer-drag-start', $event)"
-  />
+  >
+    <template v-if="$slots.leading" #leading>
+      <slot name="leading"/>
+    </template>
+  </PackageTabItem>
 </template>

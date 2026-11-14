@@ -24,6 +24,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -59,7 +60,10 @@ class JdbcSchemaIntrospectorSqlServerTest {
         assertEquals("schema", schemas.get(0).getType());
         assertEquals("dbo", schemas.get(0).getLabel());
         assertEquals("sales", schemas.get(1).getLabel());
-        verify(statement).execute("USE [mydb]");
+        // Schema listing must not switch the pooled connection's database context: it reads the
+        // catalog-qualified system view instead of issuing USE [mydb].
+        verify(statement).executeQuery("SELECT name FROM [mydb].sys.schemas ORDER BY name");
+        verify(statement, never()).execute(org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test

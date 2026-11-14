@@ -59,11 +59,16 @@ import {
     createWorkspaceOpenDomain,
 } from '@/features/workspace/stores/workspace-open.domain'
 import {createWorkspaceOpenAppsDomain} from '@/features/workspace/stores/workspace-open-apps.domain'
+import {createWorkspaceFloatDomain} from '@/features/workspace/stores/workspace-float.domain'
 import {
     ensureCommunityWorkbenchIframeCapacity,
     forgetCommunityWorkbenchFocus,
     touchCommunityWorkbenchFocus,
 } from '@/features/workspace/services/workspace-community-iframe.policy'
+import {
+    forgetConsoleShellFocus,
+    touchConsoleShellFocus,
+} from '@/features/workspace/services/workspace-console-shell.policy'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useCommunityPluginCenterUiStore} from '@/features/community-plugin/stores/community-plugin-center-ui'
 import {beginCommunityWorkbenchPaint} from '@/features/community-plugin/lib/community-workbench-paint-gate'
@@ -82,24 +87,6 @@ import {
     stripViewModelDisplayName,
 } from '@/features/explorer/services/view-model-naming'
 import {setTabParam} from '@/features/workspace/services/workspace-tab-params'
-import {
-    clampTabFloatOpacity,
-    clampTabFloatToBounds,
-    layoutMinimizedFloatStrip,
-    layoutTabFloatsCascade,
-    layoutTabFloatsTile,
-    placeNewTabFloat,
-    TAB_FLOAT_DEFAULT_HEIGHT,
-    TAB_FLOAT_DEFAULT_WIDTH,
-    TAB_FLOAT_MIN_HEIGHT,
-    TAB_FLOAT_MIN_WIDTH,
-    TAB_FLOAT_OPACITY_DEFAULT,
-    type TabFloatArrangeMode,
-    type TabFloatSnapGuide,
-    type WorkspaceTabFloatMap,
-    type WorkspaceTabFloatRect,
-    type WorkspaceTabFloatState,
-} from '@/features/workspace/services/workspace-tab-float.service'
 
 export type {ConsoleQueryState, QueryResultItem} from '@/features/workspace/types'
 
@@ -107,22 +94,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const tabs = ref<WorkspaceTab[]>([])
     const tabGroups = ref<WorkspaceTabGroup[]>([])
     const activeTabId = ref<string | null>(null)
-    /** Floated tab windows inside the workspace body (no hard cap). */
-    const tabFloats = ref<WorkspaceTabFloatMap>({})
-    /** Edge-snap preview while dragging a float title bar. */
-    const tabFloatSnapGuide = ref<TabFloatSnapGuide | null>(null)
-    /** Shared opacity for all floating tab windows (0.55–1). */
-    const TAB_FLOAT_OPACITY_STORAGE_KEY = 'dw.workspace.tabFloatOpacity'
-    const tabFloatOpacity = ref(readStoredTabFloatOpacity())
-    let tabFloatZTop = 20
-
-    function readStoredTabFloatOpacity(): number {
-        try {
-            if (typeof localStorage === 'undefined') return TAB_FLOAT_OPACITY_DEFAULT
-            return clampTabFloatOpacity(Number(localStorage.getItem(TAB_FLOAT_OPACITY_STORAGE_KEY)))
-        } catch {
-            return TAB_FLOAT_OPACITY_DEFAULT
-        }
+    /** PERF-13: bump when tab content (sql/title/context) changes — session persist without deep watch. */
+    const sessionPersistTick = ref(0)
+    function bumpSessionPersistTick() {
+        sessionPersistTick.value += 1
     }
     const status = ref<StatusSnapshot>({
         message: t('common.ready'),
@@ -136,6 +111,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const consoleRunGenerationByTabId = ref<Record<string, number>>({})
     /** SSH 脚本 Tab 脏标记（组件内编辑态同步） */
     const sshScriptDirtyByTabId = ref<Record<string, boolean>>({})
+    /** PERF-17: console/local-text dirty cache for Tab strip (avoids sql string compares). */
+    const contentDirtyByTabId = ref<Record<string, boolean>>({})
     /** 表数据 Tab 假数据插入成功后递增，触发网格刷新 */
     const tableDataRefreshSeq = ref<Record<string, number>>({})
     /** Sticky tab 重新激活时递增，主机侧软刷新（文档 / 插件 / 连接表单等） */
@@ -144,12 +121,46 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const fakeDataDialogRequest = ref<{ tabId: string; nonce: number } | null>(null)
     /** 本地 SQL「打开并执行」：Console Tab 监听后触发 executeSql */
     const consoleAutoRunRequest = ref<{ tabId: string; nonce: number } | null>(null)
+    /** B2-1: 查询模式侧栏 AI → 唤起控制台 AI 输入 */
+    const consoleAiPromptRequest = ref<{ tabId: string; nonce: number } | null>(null)
 
     const activeTab = computed(() =>
         activeTabId.value ? tabs.value.find((t) => t.id === activeTabId.value) ?? null : null,
     )
 
     const hasOpenTabs = computed(() => tabs.value.length > 0)
+
+    let activateTabFn: (tabId: string) => void = () => undefined
+
+    const floatDomain = createWorkspaceFloatDomain({
+        tabs,
+        activeTabId,
+        activateTab: (tabId) => activateTabFn(tabId),
+        onCommunityWorkbenchFloated: touchCommunityWorkbenchFocus,
+    })
+
+    const {
+        tabFloats,
+        tabFloatSnapGuide,
+        tabFloatOpacity,
+        isTabFloated,
+        floatedTabIds,
+        getTabFloat,
+        raiseTabFloat,
+        patchTabFloat,
+        clearTabFloat,
+        resetAllTabFloats,
+        floatTab,
+        dockTab,
+        setTabFloatSnapGuide,
+        setTabFloatOpacity,
+        relayoutMinimizedFloats,
+        clampOpenTabFloatsToBounds,
+        toggleTabFloatMinimized,
+        toggleTabFloatMaximized,
+        arrangeTabFloats,
+        dockAllTabFloats,
+    } = floatDomain
 
     function activateTab(tabId: string) {
         const previousId = activeTabId.value
@@ -175,6 +186,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         if (tab?.type === 'community-workbench') {
             touchCommunityWorkbenchFocus(tabId)
         }
+        if (tab?.type === 'console') {
+            touchConsoleShellFocus(tabId)
+        }
         const connectionId = tab?.connectionId
         if (!connectionId) return
         const explorer = useExplorerStore()
@@ -183,251 +197,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         void explorerApi.touchConnection(connectionId).catch(() => undefined)
     }
 
-    function isTabFloated(tabId: string): boolean {
-        return Boolean(tabFloats.value[tabId])
-    }
-
-    function floatedTabIds(): string[] {
-        return Object.keys(tabFloats.value)
-    }
-
-    function getTabFloat(tabId: string): WorkspaceTabFloatState | null {
-        return tabFloats.value[tabId] ?? null
-    }
-
-    function raiseTabFloat(tabId: string) {
-        const current = tabFloats.value[tabId]
-        if (!current) return
-        tabFloatZTop += 1
-        tabFloats.value = {
-            ...tabFloats.value,
-            [tabId]: {...current, zIndex: tabFloatZTop},
-        }
-    }
-
-    function patchTabFloat(tabId: string, patch: Partial<WorkspaceTabFloatState>) {
-        const current = tabFloats.value[tabId]
-        if (!current) return
-        tabFloats.value = {
-            ...tabFloats.value,
-            [tabId]: {...current, ...patch},
-        }
-    }
-
-    function clearTabFloat(tabId: string) {
-        if (!tabFloats.value[tabId]) return
-        const next = {...tabFloats.value}
-        delete next[tabId]
-        tabFloats.value = next
-    }
-
-    /**
-     * Pop a tab into a floating window inside the workspace body.
-     * `bounds` is the workspace-body size used for placement / clamping.
-     */
-    function floatTab(
-        tabId: string,
-        bounds: {width: number; height: number},
-        preferred?: Partial<WorkspaceTabFloatRect> | null,
-    ) {
-        if (!tabs.value.some((tab) => tab.id === tabId)) return
-        if (tabFloats.value[tabId]) {
-            raiseTabFloat(tabId)
-            activeTabId.value = tabId
-            return
-        }
-        const rect = placeNewTabFloat(Object.keys(tabFloats.value).length, bounds, preferred)
-        tabFloatZTop += 1
-        tabFloats.value = {
-            ...tabFloats.value,
-            [tabId]: {
-                ...rect,
-                zIndex: tabFloatZTop,
-                minimized: false,
-                maximized: false,
-            },
-        }
-        activeTabId.value = tabId
-        const tab = tabs.value.find((item) => item.id === tabId)
-        if (tab?.type === 'community-workbench') {
-            touchCommunityWorkbenchFocus(tabId)
-        }
-    }
-
-    function dockTab(tabId: string) {
-        if (!tabFloats.value[tabId]) return
-        clearTabFloat(tabId)
-        activateTab(tabId)
-    }
-
-    function setTabFloatSnapGuide(guide: TabFloatSnapGuide | null) {
-        tabFloatSnapGuide.value = guide
-    }
-
-    function setTabFloatOpacity(value: number) {
-        tabFloatOpacity.value = clampTabFloatOpacity(value)
-        try {
-            if (typeof localStorage !== 'undefined') {
-                localStorage.setItem(TAB_FLOAT_OPACITY_STORAGE_KEY, String(tabFloatOpacity.value))
-            }
-        } catch {
-            // ignore quota / private mode
-        }
-    }
-
-    function relayoutMinimizedFloats(bounds: {width: number; height: number}) {
-        const minimizedIds = Object.keys(tabFloats.value).filter((id) => tabFloats.value[id]?.minimized)
-        if (!minimizedIds.length) return
-        const strip = layoutMinimizedFloatStrip(minimizedIds.length, bounds)
-        const next = {...tabFloats.value}
-        minimizedIds.forEach((id, index) => {
-            const cur = next[id]
-            const slot = strip[index]
-            if (!cur || !slot) return
-            next[id] = {
-                ...cur,
-                x: slot.x,
-                y: slot.y,
-                width: slot.width,
-                // Keep stored height for restore; chrome uses minimized height when rendering.
-                maximized: false,
-            }
-        })
-        tabFloats.value = next
-    }
-
-    /**
-     * Keep open (non-minimized) tab floats inside the workspace body after it resizes.
-     * Maximized floats re-fill the body; others keep size when possible and only shift/shrink.
-     */
-    function clampOpenTabFloatsToBounds(bounds: {width: number; height: number}) {
-        const ids = Object.keys(tabFloats.value)
-        if (!ids.length) return
-        const margin = 8
-        let changed = false
-        const next = {...tabFloats.value}
-        for (const id of ids) {
-            const cur = next[id]
-            if (!cur || cur.minimized) continue
-            const target = cur.maximized
-                ? {
-                    x: margin,
-                    y: margin,
-                    width: Math.max(TAB_FLOAT_MIN_WIDTH, bounds.width - margin * 2),
-                    height: Math.max(TAB_FLOAT_MIN_HEIGHT, bounds.height - margin * 2),
-                }
-                : cur
-            const clamped = clampTabFloatToBounds(target, bounds, margin)
-            if (
-                clamped.x !== cur.x
-                || clamped.y !== cur.y
-                || clamped.width !== cur.width
-                || clamped.height !== cur.height
-            ) {
-                next[id] = {...cur, ...clamped}
-                changed = true
-            }
-        }
-        if (changed) tabFloats.value = next
-    }
-
-    function toggleTabFloatMinimized(tabId: string, bounds?: {width: number; height: number}) {
-        const current = tabFloats.value[tabId]
-        if (!current) return
-        const nextMinimized = !current.minimized
-        if (nextMinimized) {
-            patchTabFloat(tabId, {
-                minimized: true,
-                maximized: false,
-                restoreRect: current.restoreRect ?? {
-                    x: current.x,
-                    y: current.y,
-                    width: current.width,
-                    height: current.height,
-                },
-            })
-            if (bounds) relayoutMinimizedFloats(bounds)
-        } else {
-            const restored = current.restoreRect
-            patchTabFloat(tabId, {
-                minimized: false,
-                ...(restored
-                    ? {x: restored.x, y: restored.y, width: restored.width, height: restored.height}
-                    : {}),
-                restoreRect: undefined,
-            })
-            if (bounds) relayoutMinimizedFloats(bounds)
-        }
-        raiseTabFloat(tabId)
-    }
-
-    function toggleTabFloatMaximized(tabId: string, bounds: {width: number; height: number}) {
-        const current = tabFloats.value[tabId]
-        if (!current) return
-        if (current.maximized) {
-            const restored = current.restoreRect ?? {
-                x: current.x,
-                y: current.y,
-                width: Math.min(TAB_FLOAT_DEFAULT_WIDTH, bounds.width - 32),
-                height: Math.min(TAB_FLOAT_DEFAULT_HEIGHT, bounds.height - 32),
-            }
-            patchTabFloat(tabId, {
-                ...restored,
-                maximized: false,
-                minimized: false,
-                restoreRect: undefined,
-            })
-        } else {
-            const margin = 8
-            patchTabFloat(tabId, {
-                restoreRect: {
-                    x: current.x,
-                    y: current.y,
-                    width: current.width,
-                    height: current.height,
-                },
-                x: margin,
-                y: margin,
-                width: Math.max(TAB_FLOAT_MIN_WIDTH, bounds.width - margin * 2),
-                height: Math.max(TAB_FLOAT_MIN_HEIGHT, bounds.height - margin * 2),
-                maximized: true,
-                minimized: false,
-            })
-        }
-        raiseTabFloat(tabId)
-    }
-
-    function arrangeTabFloats(mode: TabFloatArrangeMode, bounds: {width: number; height: number}) {
-        const ids = Object.keys(tabFloats.value).filter((id) => !tabFloats.value[id]?.minimized)
-        if (!ids.length) return
-        const layouts = mode === 'tile'
-            ? layoutTabFloatsTile(ids.length, bounds)
-            : layoutTabFloatsCascade(ids.length, bounds)
-        const next = {...tabFloats.value}
-        ids.forEach((id, index) => {
-            const cur = next[id]
-            const slot = layouts[index]
-            if (!cur || !slot) return
-            next[id] = {
-                ...cur,
-                ...slot,
-                maximized: false,
-                minimized: false,
-                restoreRect: undefined,
-            }
-        })
-        tabFloats.value = next
-        relayoutMinimizedFloats(bounds)
-    }
-
-    function dockAllTabFloats() {
-        const ids = Object.keys(tabFloats.value)
-        if (!ids.length) return
-        tabFloats.value = {}
-        tabFloatSnapGuide.value = null
-        const focus = ids.includes(activeTabId.value ?? '') ? activeTabId.value : ids[ids.length - 1]
-        if (focus) activateTab(focus)
-    }
+    activateTabFn = activateTab
 
     function resolveConnectionLabel(connectionId: string) {
         const explorer = useExplorerStore()
@@ -464,21 +234,27 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         tabs,
         status,
         sshScriptDirtyByTabId,
+        contentDirtyByTabId,
         tableDataRefreshSeq,
         tabActivateRefreshSeq,
         fakeDataDialogRequest,
         consoleAutoRunRequest,
+        consoleAiPromptRequest,
     })
 
     const {
         setStatus,
         setExecutionResult,
         isTabDirty,
+        syncContentDirtyFlag,
+        clearContentDirtyFlag,
         setSshScriptDirty,
         bumpTableDataRefresh,
         requestFakeDataDialog,
         requestConsoleAutoRun,
         clearConsoleAutoRun,
+        requestConsoleAiPrompt,
+        clearConsoleAiPrompt,
     } = chromeSignals
 
     const consoleDomain = createWorkspaceConsoleDomain({
@@ -551,6 +327,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                 closeTab: (tabId) => closeTabImpl(tabId),
             }),
         touchCommunityWorkbenchFocus,
+        touchConsoleShellFocus,
         guardAiNav: () => useEntitlementStore().guardAiNav(),
         guardGovernancePack: (feature) =>
             useEntitlementStore().guardPack('pack.governance', `platform.${feature}`),
@@ -577,13 +354,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     function clearTabLocalState(tabId: string) {
         consoleDomain.clearTabConsoleLocalState(tabId)
+        forgetConsoleShellFocus(tabId)
         clearTabFloat(tabId)
+        clearContentDirtyFlag(tabId)
     }
 
     function markConsoleTabSaved(tabId: string, sql?: string) {
         const tab = tabs.value.find((item) => item.id === tabId)
         if (!tab || tab.type !== 'console') return
         tab.savedSql = sql ?? tab.sql ?? ''
+        syncContentDirtyFlag(tab)
     }
 
     async function saveConsoleTab(tabId: string): Promise<boolean> {
@@ -664,6 +444,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                     useLocalFilesStore().scheduleGitStatusRefresh()
                 }
                 tab.savedContent = tab.sql ?? ''
+                syncContentDirtyFlag(tab)
                 setStatus(t('explorer.localFiles.saved', {name: localFileBaseName(path)}))
                 return true
             } catch {
@@ -878,9 +659,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     function restoreSession(
         ...args: Parameters<typeof restoreSessionBase>
     ) {
-        tabFloats.value = {}
-        tabFloatZTop = 20
-        return restoreSessionBase(...args)
+        resetAllTabFloats()
+        const result = restoreSessionBase(...args)
+        contentDirtyByTabId.value = {}
+        for (const tab of tabs.value) syncContentDirtyFlag(tab)
+        return result
     }
 
     async function renameConsoleTab(tabId: string, newLabel: string) {
@@ -1033,7 +816,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     function updateTabSql(tabId: string, sql: string) {
         const tab = tabs.value.find((item) => item.id === tabId)
-        if (tab && tab.sql !== sql) tab.sql = sql
+        if (tab && tab.sql !== sql) {
+            tab.sql = sql
+            bumpSessionPersistTick()
+            syncContentDirtyFlag(tab)
+        }
     }
 
     function updateConsoleSqlFile(options: {
@@ -1110,6 +897,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         tabs,
         tabGroups,
         activeTabId,
+        sessionPersistTick,
         activeTab,
         tabFloats,
         tabFloatSnapGuide,
@@ -1137,10 +925,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         tabActivateRefreshSeq,
         fakeDataDialogRequest,
         consoleAutoRunRequest,
+        consoleAiPromptRequest,
         bumpTableDataRefresh,
         requestFakeDataDialog,
         requestConsoleAutoRun,
         clearConsoleAutoRun,
+        requestConsoleAiPrompt,
+        clearConsoleAiPrompt,
         activateTab,
         openTab,
         openWithPlan,
@@ -1174,6 +965,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         closeConsoleTabsForSqlFile,
         closeTableTabs,
         isTabDirty,
+        syncContentDirtyFlag,
         canSaveDirtyTab,
         saveDirtyTab,
         setSshScriptDirty,

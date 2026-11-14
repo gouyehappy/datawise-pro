@@ -1,5 +1,5 @@
 import type {AiChatMessage} from '@/features/ai/types/messages'
-import type {AiChatSession} from '@/features/ai/types/session'
+import type {AiChatMode, AiChatSession, AiConversationBinding} from '@/features/ai/types/session'
 import {UserResource} from '@/features/auth/types/user-resource.types'
 import {
     canPersistLocalResource,
@@ -94,6 +94,26 @@ function normalizeSession(raw: unknown): AiChatSession | null {
     const selectedTargetIds = Array.isArray(raw.selectedTargetIds)
         ? [...new Set(raw.selectedTargetIds.filter((item): item is string => typeof item === 'string'))]
         : []
+    const mode: AiChatMode = raw.mode === 'ask' ? 'ask' : 'agent'
+    let binding: AiConversationBinding | undefined
+    if (isRecord(raw.binding) && typeof raw.binding.connectionId === 'string' && raw.binding.connectionId.trim()) {
+        const source = raw.binding.source
+        binding = {
+            connectionId: raw.binding.connectionId.trim(),
+            connectionName: typeof raw.binding.connectionName === 'string' ? raw.binding.connectionName : undefined,
+            database: typeof raw.binding.database === 'string' ? raw.binding.database : undefined,
+            schema: typeof raw.binding.schema === 'string' ? raw.binding.schema : undefined,
+            dialect: typeof raw.binding.dialect === 'string' ? raw.binding.dialect : undefined,
+            environment: typeof raw.binding.environment === 'string' ? raw.binding.environment : undefined,
+            source:
+                source === 'workbench_focus'
+                || source === 'tagged_scope'
+                || source === 'manual'
+                || source === 'editor_send'
+                    ? source
+                    : 'manual',
+        }
+    }
     return {
         id,
         title,
@@ -101,6 +121,8 @@ function normalizeSession(raw: unknown): AiChatSession | null {
         updatedAt,
         messages: messages.length ? messages : createPersistedWelcomeFallback(),
         selectedTargetIds,
+        mode,
+        binding,
     }
 }
 

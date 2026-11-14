@@ -9,7 +9,8 @@
  */
 
 .module-shell__main {
-    background-color: var(--dw-bg-muted);
+    /* 与 shell 底同族，避免 nav / 主区 / 卡片三套色 */
+    background-color: var(--dw-bg);
     background-image: none;
     --settings-page-max-width: clamp(800px, 86vw, 1000px);
 }
@@ -23,7 +24,7 @@
 .module-shell__main .panel-head {
     margin-bottom: clamp(18px, 2.2vmin, 24px);
     padding-bottom: clamp(14px, 1.6vmin, 18px);
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .module-shell__main .panel-head--row,
@@ -96,10 +97,10 @@
 .module-shell__main .setting-block {
     margin-bottom: var(--mp-gap-lg);
     padding: var(--dw-space-7) clamp(16px, 1.8vmin, 20px);
-    border: 1px solid var(--dw-panel-border);
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
     border-radius: var(--dw-panel-radius);
-    background: var(--dw-bg-panel);
-    box-shadow: var(--dw-panel-shadow);
+    background: color-mix(in srgb, var(--dw-bg-panel) 72%, var(--dw-bg));
+    box-shadow: none;
 }
 
 .module-shell__main .setting-block:last-child {
@@ -210,7 +211,7 @@
     padding: var(--dw-space-3) var(--dw-space-4);
     border-radius: var(--dw-control-radius-sm);
     background: color-mix(in srgb, var(--dw-text) 4%, var(--dw-bg-panel));
-    border: 1px solid color-mix(in srgb, var(--dw-border-light) 80%, transparent);
+    border: 1px solid color-mix(in srgb, var(--dw-panel-outline, var(--dw-border-light)) 80%, transparent);
     color: var(--dw-text-secondary);
     font-size: var(--dw-text-sm);
     line-height: 1.45;
@@ -478,7 +479,7 @@
 .module-shell__main .update-options {
     margin-top: clamp(10px, 1.2vmin, 12px);
     padding-top: clamp(8px, 1vmin, 10px);
-    border-top: 1px solid var(--dw-border-light);
+    border-top: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 /* ---- 路径 / 代码展示 ---- */
@@ -488,7 +489,7 @@
 .module-shell__main .scripts-dir-path {
     display: block;
     padding: var(--dw-pad-control-lg);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     border-radius: var(--dw-control-radius-sm);
     background: var(--dw-bg-muted);
     font-family: var(--dw-mono);
@@ -554,7 +555,7 @@
 
 .module-shell__main .workspace-root__sub {
     padding: 2px 8px;
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     border-radius: var(--dw-control-radius-sm);
     background: color-mix(in srgb, var(--dw-bg-muted) 55%, transparent);
     font-family: var(--dw-mono);
@@ -569,7 +570,7 @@
 .module-shell__main .workspace-recent {
     margin-top: clamp(14px, 1.6vmin, 18px);
     padding-top: clamp(12px, 1.4vmin, 16px);
-    border-top: 1px solid var(--dw-border-light);
+    border-top: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .module-shell__main .workspace-recent__title {
@@ -597,13 +598,13 @@
     align-items: center;
     gap: var(--dw-gap);
     padding: var(--dw-space-5);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     border-radius: var(--dw-control-radius);
     background: color-mix(in srgb, var(--dw-bg-muted) 35%, transparent);
 }
 
 .module-shell__main .workspace-recent__item.is-active {
-    border-color: color-mix(in srgb, var(--dw-primary) 35%, var(--dw-border-light));
+    border-color: color-mix(in srgb, var(--dw-primary) 35%, var(--dw-panel-outline, var(--dw-border-light)));
     background: color-mix(in srgb, var(--dw-primary) 6%, var(--dw-bg-muted));
 }
 

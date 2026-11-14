@@ -90,8 +90,8 @@ Windows installer details: [installer/windows/README.md](installer/windows/READM
 | `DATAWISE_API_BASE_URL` | Force API base |
 | `DATAWISE_INSTALL_ROOT` | Install root |
 | `DATAWISE_USER_DATA` | Override user-data directory |
-| `DATAWISE_CEF_ENABLE_GPU=1` | Enable GPU on Windows (off by default) |
-| `DATAWISE_CEF_DISABLE_GPU=1` | Force disable GPU |
+| `DATAWISE_CEF_ENABLE_GPU=1` | Force-enable GPU (wins over DISABLE) |
+| `DATAWISE_CEF_DISABLE_GPU=1` | Force disable GPU (default is on; disabling may cause Alt+Tab tree flicker on Windows) |
 | `DATAWISE_CEF_LOG=1` | Verbose CEF log |
 | `DATAWISE_CEF_DEVTOOLS=1` | Force DevTools (F12 / Ctrl+Shift+I; separate window on Win/Linux) |
 | `DATAWISE_CEF_DEVTOOLS=0` | Disable DevTools even in dev |

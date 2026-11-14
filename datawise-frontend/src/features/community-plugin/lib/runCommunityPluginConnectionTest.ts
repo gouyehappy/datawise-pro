@@ -7,6 +7,8 @@ import {readApiBaseUrl} from '@/shared/api/mode'
 import {backendDevBaseUrl} from '@/shared/config/runtime-ports'
 import {openAuthedWebSocket} from '@/shared/api/http/open-authed-websocket'
 import {findRememberedChallenge, rememberChallenge} from '@/features/community-plugin/lib/challengeTrust'
+import {askAppConfirm} from '@/core/services/app-confirm.service'
+import {t} from '@/i18n'
 
 /** Generic connection/challenge payload (host-key, MFA, …). */
 export type ConnectionChallenge = {
@@ -52,21 +54,30 @@ function openAuthedSocket(url: string): WebSocket {
   return openAuthedWebSocket(url)
 }
 
-function defaultChallengePrompt(challenge: ConnectionChallenge): Promise<ConnectionChallengeDecision> {
+async function defaultChallengePrompt(challenge: ConnectionChallenge): Promise<ConnectionChallengeDecision> {
     const kind = (challenge.kind || 'host-key').trim() || 'host-key'
+    const remote = `${challenge.host}:${challenge.port}`
     const lines = [
-        `Connection challenge (${kind}) for ${challenge.host}:${challenge.port}`,
+        t('communityPlugin.challenge.intro', {kind, remote}),
     ]
-    if (challenge.keyType) lines.push(`Type: ${challenge.keyType}`)
-    if (challenge.fingerprint) lines.push(`Fingerprint: ${challenge.fingerprint}`)
-    lines.push('', 'Accept and continue?', '(OK = accept & remember; Cancel = reject)')
-    const accept = typeof window !== 'undefined' ? window.confirm(lines.join('\n')) : false
-    return Promise.resolve({accept, remember: accept})
+    if (challenge.keyType) {
+        lines.push(`${t('communityPlugin.challenge.keyType')}: ${challenge.keyType}`)
+    }
+    if (challenge.fingerprint) {
+        lines.push(`${t('communityPlugin.challenge.fingerprint')}: ${challenge.fingerprint}`)
+    }
+    lines.push('', t('communityPlugin.challenge.verifyHint'))
+    const accept = await askAppConfirm({
+        title: t('communityPlugin.challenge.title'),
+        message: lines.join('\n'),
+        confirmVariant: 'danger',
+    })
+    return {accept, remember: accept}
 }
 
 /**
  * UI surfaces (e.g. the connection form) register a real dialog here; the
- * window.confirm fallback above stays for flows without a mounted dialog.
+ * askAppConfirm fallback above stays for flows without a mounted dialog host.
  */
 type CommunityChallengeHandler = (challenge: ConnectionChallenge) => Promise<ConnectionChallengeDecision>
 let challengeHandler: CommunityChallengeHandler | null = null

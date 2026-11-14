@@ -36,7 +36,8 @@ export function parseProjectFilesHintParentId(nodeId: string): string {
 }
 
 /**
- * True when rename-project-file should be hidden (hint nodes / virtual roots, not real files).
+ * True when rename/delete project-file actions should be hidden
+ * (hint nodes / virtual docs|scripts roots, not real sandbox paths).
  */
 export function shouldOmitRenameProjectFileMenuItem(
     node: Pick<TreeNode, 'id' | 'type'>,
@@ -51,13 +52,18 @@ export function shouldOmitRenameProjectFileMenuItem(
     return false
 }
 
-/** Drop rename-project-file from a context menu when the node is not a real project file. */
+/** Drop rename/delete project-file items when the node is not a real project path. */
 export function filterRenameProjectFileMenuItems(
     node: Pick<TreeNode, 'id' | 'type'>,
     items: ContextMenuItem[],
 ): ContextMenuItem[] {
     if (!shouldOmitRenameProjectFileMenuItem(node)) return items
-    return items.filter((item) => item.id !== 'rename-project-file')
+    return items.filter(
+        (item) =>
+            item.id !== 'rename-project-file'
+            && item.id !== 'delete-project-file'
+            && item.id !== 'move-project-file',
+    )
 }
 
 /** Prefer human-readable fields from community plugin invoke payloads. */

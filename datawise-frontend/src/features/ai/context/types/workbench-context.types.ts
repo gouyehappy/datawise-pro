@@ -1,3 +1,5 @@
+import type {TruncationMeta} from '@/shared/truncation/truncation-meta'
+
 /** Live UI focus snapshot — mirrors backend WorkbenchContextSnapshot. */
 export interface WorkbenchContextSnapshot {
     schemaVersion: 1
@@ -42,6 +44,8 @@ export interface WorkbenchContextActiveTab {
     bodyPreview?: string
     bodyTruncated?: boolean
     bodyLength?: number
+    /** T-TRUNC-1：与 bodyTruncated / bodyLength 镜像 */
+    bodyTruncation?: TruncationMeta
 }
 
 export interface WorkbenchContextOpenTab {

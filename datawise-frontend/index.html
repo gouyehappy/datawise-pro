@@ -1,26 +1,56 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8"/>
-    <!-- Baseline CSP: blocks plugins/object embeds.
-         Monaco Editor + Vite HMR still require 'unsafe-inline'/'unsafe-eval' and blob: workers
-         (Monaco loads workers via blob URLs and uses new Function for tokenization).
-         Removing unsafe-eval needs Monaco worker bundling + hashed inline boot script — tracked as residual.
-         frame-ancestors is omitted here: browsers ignore it on <meta> and only warn; set it via HTTP
-         headers on the desktop/static server if clickjacking protection is required. -->
-    <meta http-equiv="Content-Security-Policy" content="
-      default-src 'self' app:;
-      script-src 'self' 'unsafe-inline' 'unsafe-eval' app: blob:;
-      style-src 'self' 'unsafe-inline' app: data:;
-      img-src 'self' data: blob: app:;
-      font-src 'self' data: app:;
-      connect-src 'self' app: http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:;
-      worker-src 'self' blob: app:;
-      child-src 'self' blob: app:;
-      object-src 'none';
-      base-uri 'self';
-      form-action 'self';
-    "/>
+    <!-- Baseline CSP: injected before paint (no bare https:/wss:). Remote API origin is
+         read from localStorage (dw-cli-api-server) so cloud mode works without a wildcard.
+         Workers are Vite-bundled (monaco-desktop-workers); worker-src stays blob:/self.
+         'unsafe-eval' remains: Monaco tokenizer uses new Function; Vite HMR needs eval in DEV.
+         frame-ancestors is omitted on <meta>; set via HTTP headers if needed. -->
+    <script>
+      (function () {
+        var connect = [
+          "'self'",
+          'app:',
+          'http://127.0.0.1:*',
+          'http://localhost:*',
+          'ws://127.0.0.1:*',
+          'ws://localhost:*'
+        ]
+        try {
+          var raw = localStorage.getItem('dw-cli-api-server')
+          if (raw) {
+            var prefs = JSON.parse(raw)
+            if (prefs && prefs.mode === 'remote' && typeof prefs.remoteUrl === 'string') {
+              var url = String(prefs.remoteUrl).trim().replace(/\/$/, '')
+              if (url) {
+                var parsed = new URL(url)
+                if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                  connect.push(parsed.origin)
+                  connect.push((parsed.protocol === 'https:' ? 'wss://' : 'ws://') + parsed.host)
+                }
+              }
+            }
+          }
+        } catch (eCsp) {}
+        var meta = document.createElement('meta')
+        meta.httpEquiv = 'Content-Security-Policy'
+        meta.content = [
+          "default-src 'self' app:",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' app: blob:",
+          "style-src 'self' 'unsafe-inline' app: data:",
+          "img-src 'self' data: blob: app:",
+          "font-src 'self' data: app:",
+          'connect-src ' + connect.join(' '),
+          "worker-src 'self' blob: app:",
+          "child-src 'self' blob: app:",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'"
+        ].join('; ')
+        document.head.appendChild(meta)
+      })()
+    </script>
     <!-- 阻塞脚本：首帧只定一次 chrome（宿主 seed 优先）；后续 CSS 只用 --dw-boot-chrome，禁止「先默认再纠正」 -->
     <script>
       (function () {

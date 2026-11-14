@@ -104,12 +104,22 @@ const chartTypeLabel = computed(() => {
 
 function exportMarkdown() {
   exportAnalysisMarkdown(props.analysis)
-  toast.success(t('ai.analysis.exportMarkdownDone'))
+  toast.notify({
+    category: 'export',
+    titleKey: 'exportDone',
+    bodyKey: 'exportDone',
+    params: {name: t('ai.analysis.exportMarkdownDone')},
+  })
 }
 
 function exportHtml() {
   exportAnalysisHtml(props.analysis)
-  toast.success(t('ai.analysis.exportHtmlDone'))
+  toast.notify({
+    category: 'export',
+    titleKey: 'exportDone',
+    bodyKey: 'exportDone',
+    params: {name: t('ai.analysis.exportHtmlDone')},
+  })
 }
 
 async function createTicket() {
@@ -124,11 +134,19 @@ async function createTicket() {
     })
     const result = await platformApi.createInsightAction(request)
     if (result.ticketUrl) {
-      toast.success(
-          t('ai.analysis.createTicketDoneWithUrl', {eventId: result.eventId, url: result.ticketUrl}),
-      )
+      toast.notify({
+        category: 'workspace',
+        titleKey: 'operationDone',
+        bodyKey: 'operationDone',
+        params: {detail: t('ai.analysis.createTicketDoneWithUrl', {eventId: result.eventId, url: result.ticketUrl})},
+      })
     } else {
-      toast.success(t('ai.analysis.createTicketDone', {eventId: result.eventId}))
+      toast.notify({
+        category: 'workspace',
+        titleKey: 'operationDone',
+        bodyKey: 'operationDone',
+        params: {detail: t('ai.analysis.createTicketDone', {eventId: result.eventId})},
+      })
     }
   } catch (error) {
     toast.error(resolveCaughtApiErrorMessage(error, t, 'ai.generateFailedGeneric'))
@@ -168,9 +186,13 @@ async function saveAsCanvas() {
         connectionId: target.connectionId,
         database: target.database,
       })
-      toast.success(t('ai.analysis.saveAsCanvasOpened'))
     } else {
-      toast.success(t('ai.analysis.saveAsCanvasDone'))
+      toast.notify({
+        category: 'workspace',
+        titleKey: 'operationDone',
+        bodyKey: 'operationDone',
+        params: {detail: t('ai.analysis.saveAsCanvasDone')},
+      })
     }
   } catch (error) {
     toast.error(resolveCaughtApiErrorMessage(error, t, 'ai.generateFailedGeneric'))

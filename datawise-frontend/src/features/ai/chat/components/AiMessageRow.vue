@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed} from 'vue'
+import {computed, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import DbTypeIcon from '@/core/components/DbTypeIcon.vue'
 import {DB_TYPE_ICON_SIZE} from '@/features/connection/constants/db-type-icon-sizes'
@@ -7,10 +7,12 @@ import {TagChip, AiIcon} from '@/core/components'
 import {DwIcon} from '@/core/icons'
 import {renderSafeMarkdown} from '@/core/markdown/safe-markdown'
 import {
-  buildAssistantRenderBlocks,
+  buildAssistantRenderBlocksCached,
+  createAssistantRenderBlocksCache,
   extractDocumentFromContent,
   isAssistantSqlCodeBlock,
   parseMessageBlocks,
+  resetAssistantRenderBlocksCache,
 } from '@/features/ai/chat/services/ai-chat.service'
 import {stripOpenThinkTail} from '@/features/ai/chat/utils/assistant-thinking'
 import type {AiChatMessage} from '@/features/ai/types'
@@ -19,6 +21,10 @@ import AiWelcomeCard from '@/features/ai/shared/components/AiWelcomeCard.vue'
 import AiAnalysisPanel from '@/features/ai/analysis/components/AiAnalysisPanel.vue'
 import AiAnalysisProgress from '@/features/ai/analysis/components/AiAnalysisProgress.vue'
 import AiAnalysisSqlConfirm from '@/features/ai/analysis/components/AiAnalysisSqlConfirm.vue'
+import {
+  canArchiveConclusion,
+  canPinConclusion,
+} from '@/features/ai/artifact/services/ai-artifact.service'
 import type {AiSqlConfirmPending} from '@/features/ai/types/chat'
 
 const props = withDefaults(
@@ -56,21 +62,23 @@ const emit = defineEmits<{
   undoApplyToDocument: []
   confirmSql: []
   cancelSql: []
+  pinConclusion: []
+  archiveConclusion: []
 }>()
 
 const {t} = useI18n()
+
+/** 结论资产化：结果集可钉看板，带 SQL 的可归档查询库（P2-1） */
+const pinnable = computed(() => props.message.role === 'assistant' && canPinConclusion(props.message))
+const archivable = computed(() => props.message.role === 'assistant' && canArchiveConclusion(props.message))
+const showArtifactActions = computed(
+    () => !props.message.streaming && (pinnable.value || archivable.value),
+)
 
 const displayContent = computed(() =>
     props.message.role === 'assistant'
         ? stripOpenThinkTail(props.message.content)
         : props.message.content,
-)
-const contentBlocks = computed(() => parseMessageBlocks(displayContent.value))
-const assistantBlocks = computed(() =>
-    props.message.role === 'assistant' ? buildAssistantRenderBlocks(displayContent.value) : [],
-)
-const assistantMarkdownHtml = computed(() =>
-    props.message.role === 'assistant' ? renderSafeMarkdown(displayContent.value) : '',
 )
 /** Analysis shell from first pipeline frame through final report (same chrome). */
 const isAnalysisTurn = computed(
@@ -83,6 +91,33 @@ const isAnalysisTurn = computed(
             || props.message.thinkingSource === 'pipeline'
         ),
 )
+/** User bubbles only — skip parse work on assistant turns (PERF-02). */
+const contentBlocks = computed(() =>
+    props.message.role === 'user' ? parseMessageBlocks(displayContent.value) : [],
+)
+const assistantBlocksCache = createAssistantRenderBlocksCache()
+watch(
+    () => props.message.id,
+    () => resetAssistantRenderBlocksCache(assistantBlocksCache),
+)
+/** Chat assistant path; skip while analysis report uses full markdown HTML. */
+const assistantBlocks = computed(() => {
+  if (props.message.role !== 'assistant') return []
+  if (isAnalysisTurn.value && props.message.analysis) return []
+  return buildAssistantRenderBlocksCached(displayContent.value, assistantBlocksCache, {
+    streaming: !!props.message.streaming,
+  })
+})
+/** Analysis summary / plain failure only — not the streaming chat blocks path. */
+const assistantMarkdownHtml = computed(() => {
+  if (props.message.role !== 'assistant') return ''
+  if (!isAnalysisTurn.value) return ''
+  if (props.message.analysis) return renderSafeMarkdown(displayContent.value)
+  if (!props.message.streaming && !props.sqlConfirm && displayContent.value.trim()) {
+    return renderSafeMarkdown(displayContent.value)
+  }
+  return ''
+})
 const progressSteps = computed(
     () =>
         (props.liveAnalysisSteps?.length
@@ -157,9 +192,7 @@ const showDocumentActions = computed(
 
 const hasSummaryText = computed(() =>
     Boolean(assistantMarkdownHtml.value.trim())
-    || contentBlocks.value.some((block) =>
-        block.type === 'text' ? block.text.trim().length > 0 : block.type === 'list',
-    ),
+    || (Boolean(props.message.analysis) && displayContent.value.trim().length > 0),
 )
 
 /** Match CopilotDock: hide empty streaming shells until thinking/content arrives. */
@@ -394,7 +427,7 @@ function codeLabel(lang: string) {
                           type="button"
                           @click="emit('openInConsole', block.code)"
                       >
-                        {{ t('ai.openInConsole') }}
+                        {{ t('ai.insertToConsole') }}
                       </button>
                     </div>
                   </div>
@@ -421,7 +454,10 @@ function codeLabel(lang: string) {
               </div>
             </div>
 
-            <div v-if="(sqlSnippet && !hasSqlCodeBlock) || showDocumentActions" class="msg-actions">
+            <div
+                v-if="(sqlSnippet && !hasSqlCodeBlock) || showDocumentActions || showArtifactActions"
+                class="msg-actions"
+            >
               <button
                   v-if="sqlSnippet && !hasSqlCodeBlock"
                   class="open-btn ai-text-action"
@@ -447,6 +483,26 @@ function codeLabel(lang: string) {
                   @click="emit('undoApplyToDocument')"
               >
                 {{ t('ai.undoApplyToDocument') }}
+              </button>
+              <button
+                  v-if="pinnable"
+                  class="open-btn ai-text-action"
+                  type="button"
+                  :title="t('ai.artifact.pinHint')"
+                  @click="emit('pinConclusion')"
+              >
+                <DwIcon name="dashboard" size="xs" :stroke-width="1.6"/>
+                {{ t('ai.artifact.pin') }}
+              </button>
+              <button
+                  v-if="archivable"
+                  class="open-btn ai-text-action"
+                  type="button"
+                  :title="t('ai.artifact.archiveHint')"
+                  @click="emit('archiveConclusion')"
+              >
+                <DwIcon name="save" size="xs" :stroke-width="1.6"/>
+                {{ t('ai.artifact.archive') }}
               </button>
             </div>
           </template>

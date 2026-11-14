@@ -91,9 +91,10 @@ import org.apache.datawise.backend.domain.YarnNodesResultDto;
 import org.apache.datawise.backend.domain.YarnQueuesResultDto;
 import org.apache.datawise.backend.domain.TreeNode;
 import org.apache.datawise.backend.domain.TreePayload;
+import org.apache.datawise.backend.domain.UserFeaturePermission;
 import org.apache.datawise.backend.security.HeadlessSqlAuth;
+import org.apache.datawise.backend.security.RequiresFeature;
 import org.apache.datawise.backend.server.pack.EntitlementService;
-import org.apache.datawise.backend.service.FeaturePermissionAccess;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -113,17 +114,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/explorer")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_OPEN)
 public class ExplorerYarnController {
 
     private final ExplorerYarnService yarnService;
-    private final FeaturePermissionAccess featurePermissionAccess;
 
-    public ExplorerYarnController(
-            ExplorerYarnService yarnService,
-            FeaturePermissionAccess featurePermissionAccess
-    ) {
+    public ExplorerYarnController(ExplorerYarnService yarnService) {
         this.yarnService = yarnService;
-        this.featurePermissionAccess = featurePermissionAccess;
     }
 
         @GetMapping("/connections/{connectionId}/yarn/info")
@@ -163,41 +160,41 @@ public class ExplorerYarnController {
             return ApiResponse.ok(yarnService.listQueues(connectionId));
         }
     
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
         @PutMapping("/connections/{connectionId}/yarn/apps/{appId}/state")
         public ApiResponse<YarnMutationResultDto> killYarnApplication(
                 @PathVariable String connectionId,
                 @PathVariable String appId,
                 @RequestBody(required = false) YarnKillApplicationRequest request
         ) {
-            featurePermissionAccess.requireExplorerContextExport();
             return ApiResponse.ok(yarnService.killApplication(connectionId, appId, request));
         }
-    
+
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
         @PutMapping("/connections/{connectionId}/yarn/apps/{appId}/queue")
         public ApiResponse<YarnMutationResultDto> moveYarnApplicationQueue(
                 @PathVariable String connectionId,
                 @PathVariable String appId,
                 @RequestBody YarnMoveApplicationQueueRequest request
         ) {
-            featurePermissionAccess.requireExplorerContextExport();
             return ApiResponse.ok(yarnService.moveApplicationQueue(connectionId, appId, request));
         }
-    
+
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
         @PutMapping("/connections/{connectionId}/yarn/queues")
         public ApiResponse<YarnMutationResultDto> updateYarnQueue(
                 @PathVariable String connectionId,
                 @RequestBody YarnUpdateQueueRequest request
         ) {
-            featurePermissionAccess.requireExplorerContextExport();
             return ApiResponse.ok(yarnService.updateQueue(connectionId, request));
         }
-    
+
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
         @PostMapping("/connections/{connectionId}/yarn/queues/remove")
         public ApiResponse<YarnMutationResultDto> removeYarnQueue(
                 @PathVariable String connectionId,
                 @RequestBody YarnRemoveQueueRequest request
         ) {
-            featurePermissionAccess.requireExplorerContextExport();
             return ApiResponse.ok(yarnService.removeQueue(connectionId, request));
         }
 }

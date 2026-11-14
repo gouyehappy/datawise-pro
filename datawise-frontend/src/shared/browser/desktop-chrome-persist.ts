@@ -16,6 +16,7 @@ export type DesktopChromePatch = {
     uiTextScale?: string
     uiFontSizePx?: string | number
     uiDensity?: string
+    coloredToolbarIcons?: string | boolean
     locale?: string
     zoomLevel?: string | number
     editorFontSize?: string | number
@@ -44,5 +45,6 @@ export function persistDesktopThemePrefs(prefs: ThemePreferences): void {
         uiTextScale: prefs.uiTextScale ?? 'md',
         uiFontSizePx: prefs.uiTextScale === 'custom' ? prefs.uiFontSizePx : undefined,
         uiDensity: prefs.uiDensity ?? 'md',
+        coloredToolbarIcons: prefs.coloredToolbarIcons === true,
     })
 }

@@ -101,9 +101,6 @@ async function applyConfigMigration() {
     lastError.value = null
     try {
         configMigration.value = await settingsApi.applyConfigMigration()
-        layout.showSuccessToast(t('settings.systemMetrics.configMigration.applied', {
-            count: configMigration.value.migrated?.length ?? 0,
-        }))
     } catch (error) {
         lastError.value = resolveCaughtApiErrorMessage(error, t, 'dashboard.runtimeMetricsUnavailable')
     } finally {
@@ -147,7 +144,6 @@ onUnmounted(() => {
 function showRefreshToast() {
     // 失败已在面板 DwInlineAlert 就地展示，避免双通道
     if (lastError.value) return
-    layout.showSuccessToast(t('settings.systemMetrics.refreshed'))
 }
 </script>
 

@@ -12,7 +12,11 @@ export const useOnboardingStore = defineStore('onboarding', () => {
     const preset = ref<OnboardingTourPreset>('default')
     const runtimeSetupOpen = ref(false)
 
-    function showGuide(nextPreset: OnboardingTourPreset = 'default') {
+    /**
+     * 默认走 `first-insight` 最短提示（连库 → 跑查询）。
+     * 首日 boot 不再自动弹出；完整 9 步 / first-insight 均由「重新查看引导」显式打开。
+     */
+    function showGuide(nextPreset: OnboardingTourPreset = 'first-insight') {
         preset.value = nextPreset
         open.value = true
     }

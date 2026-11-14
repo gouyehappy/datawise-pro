@@ -296,6 +296,7 @@ export interface SchemaDriftTableDiff {
     missingOnTarget?: string[] | null
     extraOnTarget?: string[] | null
     typeMismatches?: string[] | null
+    attributeMismatches?: string[] | null
     suggestedAlterSql?: string | null
 }
 

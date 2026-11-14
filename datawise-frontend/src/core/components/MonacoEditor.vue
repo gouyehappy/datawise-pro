@@ -4,12 +4,13 @@
  * Appearance via `registerCodeEditorHost` → `configureCodeEditorHost`.
  * SQL format stays host-side (`formatText` → `@datawise/sql-editor`).
  */
-import {computed, ref} from 'vue'
+import {computed, onBeforeMount, ref} from 'vue'
 import type * as monaco from 'monaco-editor'
 import {DwMonacoEditor, type GitLineMark} from '@datawise/code'
 import {formatSql} from '@datawise/sql-editor/utils/format'
 import type {EditorThemeId} from '@/shared/config/editor-presets'
 import type {LocalGitLineMark} from '@/shared/editor/git-line-marks'
+import {ensureMonacoThemes} from '@/shared/config/monaco-editor-appearance'
 import '@/styles/editor-minimap.css'
 import '@datawise/sql-editor/styles/monaco-overlay-scrollbar.css'
 
@@ -53,6 +54,11 @@ defineEmits<{
 }>()
 
 const editorRef = ref<MonacoEditorExpose | null>(null)
+
+/** PERF-03: themes are no longer registered at AppShell boot — ensure before first paint. */
+onBeforeMount(() => {
+  void ensureMonacoThemes()
+})
 
 /** Preserve host default language `sql` (package default is plaintext). */
 const resolvedLanguage = computed(() => props.language ?? 'sql')

@@ -14,7 +14,7 @@ export default {
     dialogTitle: 'Sign in with account',
     dialogSubtitle: 'Unlock saved preferences and full permissions after sign-in',
     registerTitle: 'Create account',
-    registerSubtitle: 'Register a local account; creating an org requires allow-tenant-create',
+    registerSubtitle: 'Create a local account. Ask an admin if you need permission to create an organization.',
     accountLogin: 'Sign in with account',
     guestBadge: 'Guest',
     tenantCurrent: 'Current organization',
@@ -63,6 +63,7 @@ export default {
     oidcSuccess: 'Enterprise sign-in succeeded',
     oidcFailed: 'Enterprise sign-in failed: {error}',
     sessionExpired: 'Your session has expired. Please sign in again.',
+    sessionExpiringSoon: 'Your session will expire soon. Keep using the app to renew, and save your work.',
     unauthorized: 'Not signed in or session expired. Please sign in again.',
     serviceUnavailable: 'Sign in to use this feature',
     permissionDenied: 'Your account does not have permission for this action',
@@ -75,8 +76,8 @@ export default {
         SQL_EXECUTION_FAILED: 'SQL execution failed',
         SQL_QUERY_TIMEOUT: 'Query timed out; narrow the query or try again later',
         SQL_CONCURRENCY_LIMIT: 'Too many concurrent SQL queries. Please try again shortly.',
-        SQL_SESSION_GONE: 'The transaction session is gone or closed. Start a new transaction and retry.',
-        SQL_CURSOR_GONE: 'Result paging expired. Run the query again.',
+        SQL_SESSION_GONE: 'The transaction session is gone or closed. Start a new transaction and retry. On multi-replica deploys, confirm sticky load balancing.',
+        SQL_CURSOR_GONE: 'Result paging expired. Run the query again. On multi-replica deploys, confirm sticky so pages stay on the same node.',
         TABLE_DATA_OFFSET_LIMIT:
             'Document table paging depth exceeded. Narrow the view with a filter instead of deep scrolling.',
         SQL_PRODUCTION_APPROVAL_REQUIRED:

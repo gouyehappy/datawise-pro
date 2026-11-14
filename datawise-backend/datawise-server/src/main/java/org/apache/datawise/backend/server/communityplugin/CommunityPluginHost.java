@@ -18,38 +18,34 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Manages community plugin sidecar sessions and connection/filesystem RPCs.
  */
 @Service
-public class CommunityPluginHost {
+public class CommunityPluginHost implements CommunityPluginSidecarLifecycle {
 
     private final CommunityPluginInstaller installer;
     private final ConfigDirectoryService configDirectory;
     private final ObjectMapper objectMapper;
+    private final CommunityPluginPackageReplaceBarrier packageReplaceBarrier;
     private final ConcurrentHashMap<String, CommunityPluginSidecarSession> sessions = new ConcurrentHashMap<>();
-    /**
-     * Plugin ids whose package directory is being replaced. Activate is refused
-     * so an open workbench cannot respawn the sidecar and re-lock the Windows
-     * {@code .exe} mid-install.
-     */
-    private final Set<String> installingIds = ConcurrentHashMap.newKeySet();
 
     public CommunityPluginHost(
             CommunityPluginInstaller installer,
             ConfigDirectoryService configDirectory,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            CommunityPluginPackageReplaceBarrier packageReplaceBarrier
     ) {
         this.installer = installer;
         this.configDirectory = configDirectory;
         this.objectMapper = objectMapper;
+        this.packageReplaceBarrier = packageReplaceBarrier;
     }
 
     public CommunityPluginSidecarSession activate(String pluginId) {
-        if (installingIds.contains(pluginId)) {
+        if (packageReplaceBarrier.isInstalling(pluginId)) {
             throw new CommunityPluginException(
                     "Plugin '" + pluginId + "' is being installed or updated; retry after the install finishes");
         }
@@ -58,7 +54,7 @@ public class CommunityPluginHost {
             return existing;
         }
         synchronized (sessions) {
-            if (installingIds.contains(pluginId)) {
+            if (packageReplaceBarrier.isInstalling(pluginId)) {
                 throw new CommunityPluginException(
                         "Plugin '" + pluginId + "' is being installed or updated; retry after the install finishes");
             }
@@ -92,24 +88,22 @@ public class CommunityPluginHost {
         }
     }
 
+    @Override
+    public void stopSidecar(String pluginId) {
+        stop(pluginId);
+    }
+
     /**
      * Stops the sidecar and blocks {@link #activate(String)} until
      * {@link #endPackageReplace(String)} so Windows can release the exe lock
      * while the installer moves the version directory.
      */
     public void beginPackageReplace(String pluginId) {
-        if (pluginId == null || pluginId.isBlank()) {
-            return;
-        }
-        installingIds.add(pluginId);
-        stop(pluginId);
+        packageReplaceBarrier.begin(pluginId);
     }
 
     public void endPackageReplace(String pluginId) {
-        if (pluginId == null || pluginId.isBlank()) {
-            return;
-        }
-        installingIds.remove(pluginId);
+        packageReplaceBarrier.end(pluginId);
     }
 
     public void stopAll() {

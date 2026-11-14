@@ -54,7 +54,8 @@ datawise:
     # Wave C1: packaged desktop trusts marketplace manifest by default (dev profile stays off)
     require-manifest-integrity: true
   community-plugin:
-    # 本机桌面可装未签名开发包；UI「允许未签名」仍须一并打开
+    # 仅社区插件 .dwp（≠ datawise.entitlement.allow-unsigned / .dpk）。
+    # 本机桌面可装未签名开发包；UI「允许未签名」仍须一并打开。生产/cloud 保持 false。
     allow-unsigned: true
   query:
     # 单用户桌面：交互 SQL 不设进程内并发闸

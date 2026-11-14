@@ -25,7 +25,7 @@ class MigrationTaskHandlerTest {
 
     @Test
     void acksOnSuccess() throws Exception {
-        MigrationTaskHandler handler = new MigrationTaskHandler(migrationService);
+        MigrationTaskHandler handler = new MigrationTaskHandler(() -> migrationService);
         when(context.getTaskId()).thenReturn("job-1");
 
         handler.execute(context);
@@ -36,7 +36,7 @@ class MigrationTaskHandlerTest {
 
     @Test
     void acksOnPause() {
-        MigrationTaskHandler handler = new MigrationTaskHandler(migrationService);
+        MigrationTaskHandler handler = new MigrationTaskHandler(() -> migrationService);
         when(context.getTaskId()).thenReturn("job-1");
         doThrow(new MigrationPausedException("paused"))
                 .when(migrationService).executeRunningJob(eq("job-1"), any());
@@ -48,7 +48,7 @@ class MigrationTaskHandlerTest {
 
     @Test
     void doesNotAckOnFailure() {
-        MigrationTaskHandler handler = new MigrationTaskHandler(migrationService);
+        MigrationTaskHandler handler = new MigrationTaskHandler(() -> migrationService);
         when(context.getTaskId()).thenReturn("job-1");
         doThrow(new RuntimeException("boom")).when(migrationService).executeRunningJob(eq("job-1"), any());
 

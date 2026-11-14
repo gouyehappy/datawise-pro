@@ -4,6 +4,9 @@ import org.apache.datawise.backend.domain.ExecuteSqlResult;
 import org.apache.datawise.backend.domain.TableDataResult;
 import org.apache.datawise.backend.domain.TableRowMutateResult;
 import org.apache.datawise.backend.model.ConnectionEntity;
+import org.apache.datawise.backend.jdbc.execution.JdbcPreparedBatchWriter;
+import org.apache.datawise.backend.jdbc.execution.JdbcResultStreamer;
+import org.apache.datawise.backend.jdbc.stream.ResultStreamCallback;
 import org.apache.datawise.backend.jdbc.support.JdbcConnectionCallback;
 import org.apache.datawise.backend.jdbc.execution.JdbcQueryExecutor;
 import org.springframework.stereotype.Component;
@@ -129,6 +132,37 @@ public class ConnectorJdbcAccess {
         return jdbcQueryExecutor.executeBatchInsertOnConnection(connection, preparedInsertSql, columnKeys, rows);
     }
 
+    /**
+     * MetaForge A1：用 {@link JdbcPreparedBatchWriter} 按 {@code flushBatchSize} 分批 commit 写入
+     * （失败 clearBatch + rollback；无事务引擎则降级）。
+     *
+     * @return rows accepted by the writer
+     */
+    public int writePreparedBatchOnConnection(
+            Connection connection,
+            String preparedInsertSql,
+            List<String> columnKeys,
+            List<Map<String, Object>> rows,
+            int flushBatchSize
+    ) throws SQLException {
+        if (rows == null || rows.isEmpty()) {
+            return 0;
+        }
+        int written = 0;
+        try (JdbcPreparedBatchWriter writer = new JdbcPreparedBatchWriter(
+                connection,
+                preparedInsertSql,
+                columnKeys,
+                flushBatchSize
+        )) {
+            for (Map<String, Object> row : rows) {
+                writer.addRow(row);
+                written++;
+            }
+        }
+        return written;
+    }
+
     public <T> T withConnection(
                                 ConnectionEntity entity,
                                 String database,
@@ -148,6 +182,26 @@ public class ConnectorJdbcAccess {
                                       int maxRows,
                                       int offset) throws SQLException {
         return jdbcQueryExecutor.fetchTable(entity, tableName, database, maxRows, offset);
+    }
+
+    /**
+     * MetaForge A1：在已打开的连接上按行流式推送查询结果（可选 executionKey 挂取消登记）。
+     */
+    public long streamQueryOnConnection(
+            Connection connection,
+            String sql,
+            String dbType,
+            ResultStreamCallback callback,
+            String executionKey
+    ) throws SQLException {
+        return JdbcResultStreamer.streamQuery(
+                connection,
+                sql,
+                dbType,
+                callback,
+                executionKey,
+                session.executionTracker()
+        );
     }
 
     public String buildTableSelectSql(ConnectionEntity entity, String tableName, String database) {

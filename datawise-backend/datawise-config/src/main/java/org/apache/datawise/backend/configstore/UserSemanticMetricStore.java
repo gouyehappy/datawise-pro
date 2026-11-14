@@ -45,6 +45,11 @@ public class UserSemanticMetricStore {
         fileFor(userId).removeIf(entry -> id.equals(entry.getId()));
     }
 
+    /** Drop cached mirror so the next read reloads from disk (e.g. after profile import). */
+    public synchronized void invalidate(long userId) {
+        cache.remove(TenantScopedConfigSupport.cacheKey(userId));
+    }
+
     public Stream<SemanticMetricEntry> streamScoped(long userId, String connectionId, String database) {
         return listScoped(userId, connectionId, database).stream();
     }

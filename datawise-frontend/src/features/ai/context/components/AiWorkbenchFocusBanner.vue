@@ -15,61 +15,80 @@ const {t} = useI18n()
 </script>
 
 <template>
-  <div v-if="visible" class="focus-banner" role="status">
-    <span class="focus-banner__text">
+  <div v-if="visible" class="focus-hint" role="status">
+    <span class="focus-hint__text">
       {{ t('ai.workbenchFocus.banner', {label}) }}
     </span>
-    <div class="focus-banner__actions">
-      <button type="button" class="focus-banner__btn" @click="emit('apply')">
+    <div class="focus-hint__actions">
+      <button type="button" class="focus-hint__link" @click="emit('apply')">
         {{ t('ai.workbenchFocus.reapply') }}
       </button>
-      <button type="button" class="focus-banner__btn focus-banner__btn--ghost" @click="emit('dismiss')">
-        {{ t('common.close') }}
+      <button
+          type="button"
+          class="focus-hint__dismiss"
+          :aria-label="t('common.close')"
+          @click="emit('dismiss')"
+      >
+        ×
       </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.focus-banner {
+.focus-hint {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-shrink: 0;
-  padding: 8px 12px;
-  border-radius: var(--dw-radius-md, 8px);
-  border: 1px solid color-mix(in srgb, var(--dw-accent, #3b82f6) 35%, var(--dw-border, #333));
-  background: color-mix(in srgb, var(--dw-accent, #3b82f6) 12%, var(--dw-bg-panel, #1a1a1a));
-  font-size: var(--dw-text-sm);
+  padding: 4px 4px 4px 12px;
+  font-size: var(--dw-text-xs);
   line-height: 1.4;
+  color: var(--dw-text-muted);
 }
 
-.focus-banner__text {
+.focus-hint__text {
   min-width: 0;
-  color: var(--dw-text, #e8e8e8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.focus-banner__actions {
+.focus-hint__actions {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
 }
 
-.focus-banner__btn {
-  border: 1px solid var(--dw-border, #444);
-  border-radius: 6px;
-  padding: 4px 8px;
-  font-size: var(--dw-text-xs);
+.focus-hint__link {
+  border: 0;
+  background: transparent;
+  color: var(--dw-link, var(--dw-primary));
   cursor: pointer;
-  background: var(--dw-accent, #3b82f6);
-  color: #fff;
-  border-color: transparent;
+  font-size: inherit;
+  padding: 2px 6px;
 }
 
-.focus-banner__btn--ghost {
+.focus-hint__link:hover {
+  text-decoration: underline;
+}
+
+.focus-hint__dismiss {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
-  color: inherit;
-  border-color: var(--dw-border, #444);
+  color: var(--dw-text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.focus-hint__dismiss:hover {
+  background: color-mix(in srgb, var(--dw-text) 8%, transparent);
+  color: var(--dw-text);
 }
 </style>

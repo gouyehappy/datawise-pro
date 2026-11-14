@@ -86,15 +86,12 @@ async function shareSnapshot(mode: 'link' | 'embed' | 'markdown' = 'link') {
       await navigator.clipboard.writeText(
           buildShareEmbedSnippet(created.token, {title: props.widget.title}),
       )
-      toast.success(t('dashboard.savedChart.embedCopiedWithExpiry', {days: expiresInDays}))
     } else if (mode === 'markdown') {
       await navigator.clipboard.writeText(
           buildShareMarkdownEmbedSnippet(created.token, {title: props.widget.title}),
       )
-      toast.success(t('dashboard.savedChart.markdownEmbedCopiedWithExpiry', {days: expiresInDays}))
     } else {
       await navigator.clipboard.writeText(sharesApi.publicPageUrl(created.token))
-      toast.success(t('dashboard.savedChart.shareCopiedWithExpiry', {days: expiresInDays}))
     }
   } catch (error) {
     toast.error(
@@ -105,6 +102,16 @@ async function shareSnapshot(mode: 'link' | 'embed' | 'markdown' = 'link') {
     sharing.value = false
   }
 }
+/** 来源提示：AI 结论钉过来的卡片带血缘/责任人，鼠标悬停看全量 */
+const sourceHint = computed(() => {
+  const source = props.widget.source
+  if (!source) return ''
+  const parts = [
+    source.lineage ? t('dashboard.savedChart.sourceLineage', {lineage: source.lineage}) : '',
+    source.owner ? t('dashboard.savedChart.sourceOwner', {owner: source.owner}) : '',
+  ].filter(Boolean)
+  return parts.join(' · ')
+})
 </script>
 
 <template>
@@ -117,7 +124,12 @@ async function shareSnapshot(mode: 'link' | 'embed' | 'markdown' = 'link') {
     <header class="dash-card__head">
       <div class="dash-card__head-main">
         <h2 class="dash-card__title">{{ widget.title }}</h2>
-        <p class="dash-card__sub">{{ t('dashboard.savedChart.snapshotHint') }}</p>
+        <p
+            v-if="sourceHint"
+            class="dash-card__sub dash-card__sub--source"
+            :title="sourceHint"
+        >{{ sourceHint }}</p>
+        <p v-else class="dash-card__sub">{{ t('dashboard.savedChart.snapshotHint') }}</p>
       </div>
       <div class="dash-card__head-actions">
         <span class="dash-card__badge">{{ t(`queryResult.chart.types.${widget.config.chartType}`) }}</span>
@@ -229,7 +241,7 @@ async function shareSnapshot(mode: 'link' | 'embed' | 'markdown' = 'link') {
   align-items: center;
   justify-content: space-between;
   padding: var(--dw-space-3) var(--dw-space-5);
-  border-top: 1px solid var(--dw-border-light);
+  border-top: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .dash-card__meta {

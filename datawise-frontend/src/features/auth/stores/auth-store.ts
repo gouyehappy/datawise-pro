@@ -397,6 +397,14 @@ export const useAuthStore = defineStore('auth', () => {
     async function signOut(options?: {silent?: boolean}) {
         cancelDeferredConfigServerWrites()
         try {
+            const {clearAllWriteUnlocks} = await import(
+                '@/features/connection/services/write-unlock.api'
+            )
+            await clearAllWriteUnlocks()
+        } catch {
+            // unlock teardown best-effort
+        }
+        try {
             await authApi.signOut()
         } catch {
             // 后端不可达时仍清理本地会话

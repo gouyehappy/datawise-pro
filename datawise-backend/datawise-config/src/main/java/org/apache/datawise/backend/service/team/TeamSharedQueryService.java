@@ -1,5 +1,6 @@
 package org.apache.datawise.backend.service.team;
 
+import org.apache.datawise.backend.common.DatawiseErrorCodes;
 import org.apache.datawise.backend.common.support.IdGenerator;
 import org.apache.datawise.backend.common.support.TeamRoleSupport;
 import org.apache.datawise.backend.domain.AddTeamSharedQueryCommentRequest;
@@ -118,7 +119,7 @@ public class TeamSharedQueryService {
         if (request.expectedUpdatedAt() != null && !request.expectedUpdatedAt().isBlank()) {
             String currentUpdatedAt = TeamSupport.formatInstant(entity.getUpdatedAt());
             if (currentUpdatedAt == null || !request.expectedUpdatedAt().trim().equals(currentUpdatedAt)) {
-                throw new IllegalArgumentException("Shared query has been updated by others; pull latest first");
+                throw new IllegalArgumentException(DatawiseErrorCodes.SHARED_QUERY_CONFLICT);
             }
         }
         entity.setTitle(request.title().trim());

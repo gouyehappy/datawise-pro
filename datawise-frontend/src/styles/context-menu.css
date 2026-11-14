@@ -57,6 +57,7 @@
     transition: background 100ms ease, color 100ms ease;
 }
 
+/* IDEA：行悬停 = selection 条（与顶栏主菜单一致） */
 .dw-ctx-menu__item:hover:not(.is-disabled),
 .dw-ctx-menu__item.is-submenu-open:not(.is-disabled),
 .dw-ctx-menu__item[data-highlighted]:not([data-disabled]),

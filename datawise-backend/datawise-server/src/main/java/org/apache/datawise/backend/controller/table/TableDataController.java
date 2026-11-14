@@ -21,8 +21,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/tables")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_OPEN)
 public class TableDataController {
 
     private static final Logger log = LoggerFactory.getLogger(TableDataController.class);
@@ -64,6 +68,7 @@ public class TableDataController {
     }
 
     @PostMapping("/{tableName}/rows")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_DANGEROUS_SQL)
     public ApiResponse<TableRowMutateResult> insertTableRow(
             @PathVariable String tableName,
             @RequestBody TableRowMutateRequest request
@@ -96,6 +101,7 @@ public class TableDataController {
     }
 
     @PostMapping("/{tableName}/rows/delete")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_DANGEROUS_SQL)
     public ApiResponse<TableRowMutateResult> deleteTableRow(
             @PathVariable String tableName,
             @RequestBody TableRowMutateRequest request
@@ -133,6 +139,7 @@ public class TableDataController {
     }
 
     @PostMapping("/{tableName}/rows/update")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_DANGEROUS_SQL)
     public ApiResponse<TableRowMutateResult> updateTableRow(
             @PathVariable String tableName,
             @RequestBody TableRowUpdateRequest request
@@ -181,6 +188,7 @@ public class TableDataController {
     }
 
     @PostMapping("/{tableName}/data/audit/{auditId}/restore")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_DANGEROUS_SQL)
     public ApiResponse<TableRowMutateResult> restoreTableDataAudit(
             @PathVariable String tableName,
             @PathVariable String auditId,

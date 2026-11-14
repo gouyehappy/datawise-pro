@@ -60,7 +60,7 @@ public record SchemaNodeIdScope(String catalog, String schema, HydrationDepth de
                 "folder-functions-",
                 "folder-procedures-",
                 "folder-triggers-",
-                "folder-consoles-"
+                "folder-ai-"
         )) {
             Optional<SchemaNodeIdScope> folderScope = matchPrefixedScope(
                     nodeId, connectionId, folderPrefix, catalogRoots, HydrationDepth.SCHEMA_BRANCH

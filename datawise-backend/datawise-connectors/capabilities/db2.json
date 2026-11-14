@@ -1,0 +1,7 @@
+{
+  "dbType": "db2",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false
+  }
+}

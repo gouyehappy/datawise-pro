@@ -98,6 +98,30 @@ function shouldPreferRawDetail(code: string | null, raw: string): boolean {
     )
 }
 
+/** Developer / transport English that should not surface as primary product copy. */
+export function looksLikeDeveloperEnglish(raw: string): boolean {
+    const text = raw.trim()
+    if (!text || /[\u4e00-\u9fff]/.test(text)) return false
+    if (/^[A-Z][A-Z0-9_]{2,}(?::[\s\S]*)?$/.test(text)) return true
+    if (text.startsWith('HTTP API request failed') || /^HTTP \d{3}\b/.test(text)) return true
+    if (
+        /^(Forbidden|Unauthorized|Not Found|Bad Gateway|Service Unavailable|Internal Server Error|timed_out)\b/i.test(
+            text,
+        )
+    ) {
+        return true
+    }
+    if (
+        /\b(ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EHOSTUNREACH|WebSocket|NullPointerException|SQLException)\b/i.test(
+            text,
+        )
+    ) {
+        return true
+    }
+    if (/\bException\b|\bstack trace\b|\bat [\w.$]+\([\w.]+:\d+\)/i.test(text)) return true
+    return false
+}
+
 /**
  * 业务 catch 友好展示：优先稳定码本地化，否则回退到业务 fallback i18n。
  * 避免把 `PERMISSION_DENIED` / 英文开发态句直接弹给用户。
@@ -112,12 +136,8 @@ export function resolveCaughtApiErrorMessage(
     if (display && display !== raw) {
         return display
     }
-    // 仍是 ALL_CAPS 稳定码，或英文 HTTP 开发句 → 用 fallback
-    if (
-        /^[A-Z][A-Z0-9_]{2,}(?::[\s\S]*)?$/.test(raw)
-        || raw.startsWith('HTTP API request failed')
-        || /^HTTP \d{3}$/.test(raw)
-    ) {
+    // 仍是 ALL_CAPS 稳定码、英文 HTTP / 开发态句 → 用 fallback
+    if (looksLikeDeveloperEnglish(raw)) {
         const fallback = translate(fallbackKey)
         return fallback && fallback !== fallbackKey ? fallback : raw
     }
@@ -127,4 +147,18 @@ export function resolveCaughtApiErrorMessage(
     }
     const fallback = translate(fallbackKey)
     return fallback && fallback !== fallbackKey ? fallback : raw
+}
+
+/** Map a free-form backend/test message through the same productization rules. */
+export function resolveCaughtMessage(
+    message: string | null | undefined,
+    translate: (key: string) => string,
+    fallbackKey: string,
+): string {
+    const raw = (message ?? '').trim()
+    if (!raw) {
+        const fallback = translate(fallbackKey)
+        return fallback && fallback !== fallbackKey ? fallback : ''
+    }
+    return resolveCaughtApiErrorMessage(new Error(raw), translate, fallbackKey)
 }

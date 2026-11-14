@@ -3,10 +3,11 @@
  * 主内容区：根据 layout.activeModule 切换数据库三栏 / AI 工作台 / 其它模块页
  * Dock：仅重排 Explorer / Terminal / Shortcut / Workspace 位置，不改面板内部样式。
  */
-import {computed, defineAsyncComponent, watch} from 'vue'
+import {computed, defineAsyncComponent, ref, watch} from 'vue'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import DatabaseExplorer from '@/features/explorer/components/DatabaseExplorer.vue'
+import {PanelErrorBoundary} from '@/core/components'
 import ModuleWorkbench from '@/features/layout/components/ModuleWorkbench.vue'
 import WorkspaceArea from '@/features/workspace/components/WorkspaceArea.vue'
 import ShortcutRail from '@/features/layout/components/ShortcutRail.vue'
@@ -19,6 +20,7 @@ import {useDockPlacementStore} from '@/features/dock/stores/dock-placement-store
 import {resolveWorkbenchSlots} from '@/features/dock/services/resolve-workbench-slots'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {resolveWorkbenchModule} from '@/features/layout/module-registry'
+import {MODULE_PAGE_KEEPALIVE_MAX} from '@/features/layout/services/module-page-keepalive.policy'
 import {useSidePanelResizeBounds, EXPLORER_PANEL_RESIZE_MIN} from '@/core/composables/useSidePanelResizeBounds'
 
 const AiWorkbench = defineAsyncComponent(() =>
@@ -56,6 +58,19 @@ watch(explorerResizeMax, (max) => {
 const workbenchPage = computed(() => resolveWorkbenchModule(layout.activeModule))
 const isDatabaseShell = computed(() => layout.activeShellSlot === 'database')
 const isAiShell = computed(() => layout.activeShellSlot === 'ai')
+/** Settings / Dashboard / … — not database or AI shells. */
+const moduleShellActive = computed(
+    () => !isDatabaseShell.value && !isAiShell.value && Boolean(workbenchPage.value),
+)
+/** Keep the KeepAlive host after the first module visit so pages can warm-return (PERF-06). */
+const moduleKeepAliveHost = ref(false)
+watch(
+    moduleShellActive,
+    (active) => {
+      if (active) moduleKeepAliveHost.value = true
+    },
+    {immediate: true},
+)
 
 const slots = computed(() =>
     resolveWorkbenchSlots(dock.placement, {
@@ -73,10 +88,11 @@ const rightDockWidth = computed(() => {
 </script>
 
 <template>
-  <div class="main-content">
+      <div class="main-content">
     <div
         v-show="isDatabaseShell"
         class="module-workbench"
+        data-dock-workbench
         :aria-hidden="isDatabaseShell ? undefined : 'true'"
     >
       <ShortcutRail v-if="slots.shortcutLeft" edge="left" chrome="panel"/>
@@ -87,7 +103,9 @@ const rightDockWidth = computed(() => {
           :style="{ width: `${explorer.width}px` }"
           data-onboarding="explorer-panel"
       >
-        <DatabaseExplorer class="explorer-pane__panel"/>
+        <PanelErrorBoundary label="explorer" class="explorer-pane__panel">
+          <DatabaseExplorer class="explorer-pane__panel"/>
+        </PanelErrorBoundary>
         <ResizeHandle
             v-model="explorer.width"
             :min="explorerResizeMin"
@@ -132,7 +150,9 @@ const rightDockWidth = computed(() => {
               :max="explorerResizeMax"
               class="explorer-pane__resize panel-resize-handle--leading"
           />
+          <PanelErrorBoundary label="explorer" class="explorer-pane__panel">
           <DatabaseExplorer class="explorer-pane__panel"/>
+        </PanelErrorBoundary>
         </div>
         <div
             v-if="slots.terminalRight"
@@ -169,7 +189,9 @@ const rightDockWidth = computed(() => {
         :teleport="true"
         :floating="true"
     >
-      <DatabaseExplorer/>
+      <PanelErrorBoundary label="explorer">
+        <DatabaseExplorer/>
+      </PanelErrorBoundary>
     </FloatingPanelHost>
 
     <FloatingPanelHost
@@ -196,8 +218,24 @@ const rightDockWidth = computed(() => {
       <AiWorkbench/>
     </template>
 
-    <ModuleWorkbench v-else-if="!isDatabaseShell && workbenchPage">
-      <component :is="workbenchPage"/>
+    <!--
+      PERF-06: KeepAlive host stays mounted (v-show) after first module visit.
+      Leaving a module page deactivates the page vnode into the cache (max 2);
+      Terminal / shortcut chrome unmount via pageActive=false.
+    -->
+    <ModuleWorkbench
+        v-if="moduleKeepAliveHost"
+        v-show="moduleShellActive"
+        :page-active="moduleShellActive"
+        :aria-hidden="moduleShellActive ? undefined : 'true'"
+    >
+      <KeepAlive :max="MODULE_PAGE_KEEPALIVE_MAX">
+        <component
+            :is="workbenchPage"
+            v-if="moduleShellActive && workbenchPage"
+            :key="layout.activeModule"
+        />
+      </KeepAlive>
     </ModuleWorkbench>
   </div>
 </template>

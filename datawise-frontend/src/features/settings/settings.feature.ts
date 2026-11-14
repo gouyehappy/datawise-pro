@@ -15,6 +15,12 @@ export const settingsFeature = defineFeature({
                 groupKey: 'settings.nav.groups.preferences',
                 order: 20,
             },
+            {
+                id: 'configCloudSync',
+                labelKey: 'settings.nav.configCloudSync',
+                groupKey: 'settings.nav.groups.preferences',
+                order: 25,
+            },
             {id: 'layout', labelKey: 'settings.nav.layout', groupKey: 'settings.nav.groups.preferences', order: 30},
             {
                 id: 'shortcuts',

@@ -235,6 +235,11 @@ function onViewMenuSelect(id: string) {
   min-width: 0;
 }
 
+/* 资源树滚动视口：布局/绘制隔离（连接树与本地文件树共用此壳） */
+.explorer-body {
+  contain: layout paint;
+}
+
 /* Constrain tree width so connection names ellipsize and env badges stay pinned. */
 .explorer > .dw-overlay-scroll :deep(.dw-overlay-scroll__content) {
   min-width: 0;
@@ -249,8 +254,8 @@ function onViewMenuSelect(id: string) {
   justify-content: space-between;
   height: var(--dw-toolbar-height);
   padding: 0 var(--dw-space-5) 0 var(--dw-space-3);
-  border-bottom: 1px solid var(--dw-border-light);
-  background: linear-gradient(180deg, var(--dw-bg) 0%, var(--dw-bg-panel) 100%);
+  border-bottom: none;
+  background: transparent;
 }
 
 .header.dock-drag-zone {
@@ -262,11 +267,7 @@ function onViewMenuSelect(id: string) {
 }
 
 .header.dock-drag-zone:hover {
-  background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--dw-bg) 70%, var(--dw-primary) 8%) 0%,
-      var(--dw-bg-panel) 100%
-  );
+  background: color-mix(in srgb, var(--dw-text) 4%, transparent);
 }
 
 .header-title {

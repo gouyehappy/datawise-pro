@@ -65,31 +65,34 @@ export function extractMarkdownOutline(source: string): MarkdownOutlineItem[] {
     const out: MarkdownOutlineItem[] = []
 
     let i = 0
+    const maxIterations = lines.length * 2 + 8
+    let iterations = 0
     while (i < lines.length) {
+        iterations += 1
+        if (iterations > maxIterations) break
+        const cursor = i
         const line = lines[i]
         if (line.startsWith('```')) {
             i += 1
             while (i < lines.length && !lines[i].startsWith('```')) i += 1
             if (i < lines.length) i += 1
-            continue
-        }
-
-        const heading = HEADING_RE.exec(line)
-        if (heading) {
-            const level = heading[1].length
-            const text = plainHeadingText(heading[2])
-            if (text) {
-                out.push({
-                    level,
-                    text,
-                    line: i + 1,
-                    id: allocId(text),
-                })
+        } else {
+            const heading = HEADING_RE.exec(line)
+            if (heading) {
+                const level = heading[1].length
+                const text = plainHeadingText(heading[2])
+                if (text) {
+                    out.push({
+                        level,
+                        text,
+                        line: i + 1,
+                        id: allocId(text),
+                    })
+                }
             }
             i += 1
-            continue
         }
-        i += 1
+        if (i <= cursor) i = cursor + 1
     }
     return out
 }

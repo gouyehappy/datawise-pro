@@ -1,0 +1,10 @@
+{
+  "dbType": "sqlite3",
+  "extends": "jdbc-operate",
+  "formKind": "standard",
+  "features": {
+    "databaseCreate": false,
+    "transactionalDdl": true,
+    "tableImport": false
+  }
+}

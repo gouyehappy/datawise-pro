@@ -14,7 +14,7 @@ import {
     previewFakeDataForTab,
 } from '@/features/workspace/services/fake-data.actions'
 import {FAKE_DATA_DEFAULT_ROWS} from '@/features/workspace/services/fake-data.service'
-import {resolveCaughtApiErrorMessage} from '@/shared/api'
+import {resolveCaughtApiErrorMessage, resolveCaughtMessage} from '@/shared/api'
 
 export function useFakeDataDialog(onExecuted?: (tab: WorkspaceTab) => void | Promise<void>) {
     const {t} = useI18n()
@@ -59,7 +59,7 @@ export function useFakeDataDialog(onExecuted?: (tab: WorkspaceTab) => void | Pro
 
     async function openForTable(target: WorkspaceTab) {
         if (target.type !== 'table' || !target.tableName?.trim()) {
-            layout.showErrorToast(t('workspace.fakeData.failed'))
+            layout.showErrorToast(t('workspace.fakeData.loadSchemaFailed'))
             return
         }
         tab.value = target
@@ -82,7 +82,7 @@ export function useFakeDataDialog(onExecuted?: (tab: WorkspaceTab) => void | Pro
             previewSql.value = preview.insertSql
         } catch (error) {
             resetDialog()
-            const message = resolveCaughtApiErrorMessage(error, t, 'workspace.fakeData.failed')
+            const message = resolveCaughtApiErrorMessage(error, t, 'workspace.fakeData.loadSchemaFailed')
             layout.showErrorToast(t('workspace.fakeData.failedWithDetail', {message}))
         } finally {
             loading.value = false
@@ -130,12 +130,12 @@ export function useFakeDataDialog(onExecuted?: (tab: WorkspaceTab) => void | Pro
             })
             if (result.ok) {
                 resetDialog()
-                layout.showSuccessToast(result.message)
+                // 对话框关闭且表格刷新即可，不弹 toast。
                 await onExecuted?.(current)
                 return
             }
             if (result.silent) return
-            executeError.value = result.message || t('workspace.fakeData.failed')
+            executeError.value = resolveCaughtMessage(result.message, t, 'workspace.fakeData.failed')
         } catch (error) {
             const message = resolveCaughtApiErrorMessage(error, t, 'workspace.fakeData.failed')
             executeError.value = t('workspace.fakeData.failedWithDetail', {message})
@@ -158,7 +158,12 @@ export function useFakeDataDialog(onExecuted?: (tab: WorkspaceTab) => void | Pro
                 t,
             }).then((message) => {
                 resetDialog()
-                layout.showSuccessToast(message)
+                layout.notifyQuiet({
+                  category: 'export',
+                  titleKey: 'exportDone',
+                  bodyKey: 'exportDone',
+                  params: {name: message || t('workspace.fakeData.exported', {fileName: 'insert.sql'})},
+                })
             }).catch((error) => {
                 const message = resolveCaughtApiErrorMessage(error, t, 'workspace.fakeData.failed')
                 executeError.value = t('workspace.fakeData.failedWithDetail', {message})

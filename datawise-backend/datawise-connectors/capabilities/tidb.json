@@ -1,0 +1,7 @@
+{
+  "dbType": "tidb",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false
+  }
+}

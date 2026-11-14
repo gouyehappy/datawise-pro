@@ -16,7 +16,7 @@ import org.apache.datawise.backend.lineage.model.LineageWarning;
 import org.apache.datawise.backend.lineage.model.ParseStatus;
 import org.apache.datawise.backend.lineage.spi.SqlLineageParser;
 import org.apache.datawise.backend.lineage.spi.SqlLineageParserRegistry;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -34,9 +34,10 @@ public class FederatedLineageParser implements SqlLineageParser {
     private static final Pattern JOIN_REF = Pattern.compile("\\bJOIN\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern SELECT_ITEM_ALIAS = Pattern.compile("(?is)^(.+?)\\s+AS\\s+([\\w`\"]+)$");
 
-    private final SqlLineageParserRegistry parserRegistry;
+    /** Late lookup avoids constructor cycle with the registry's parser list (BE-P2-1). */
+    private final ObjectFactory<SqlLineageParserRegistry> parserRegistry;
 
-    public FederatedLineageParser(@Lazy SqlLineageParserRegistry parserRegistry) {
+    public FederatedLineageParser(ObjectFactory<SqlLineageParserRegistry> parserRegistry) {
         this.parserRegistry = parserRegistry;
     }
 
@@ -159,7 +160,7 @@ public class FederatedLineageParser implements SqlLineageParser {
                 request.visitedModels(),
                 request.resolution()
         );
-        LineageParseResult childResult = parserRegistry.parseWithFallback(childRequest);
+        LineageParseResult childResult = parserRegistry.getObject().parseWithFallback(childRequest);
         warnings.addAll(childResult.warnings());
         if (childResult.status() == ParseStatus.FAILED || childResult.columns().isEmpty()) {
             warnings.add(LineageWarning.of(

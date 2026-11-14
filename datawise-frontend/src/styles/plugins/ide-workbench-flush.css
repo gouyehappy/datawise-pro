@@ -1,0 +1,108 @@
+/**
+ * IDE 全局：与 classic 同结构，仅 token 不同。
+ * - --dw-panel-gap = 3px（classic 6 的一半）
+ * - --dw-panel-radius = 0（直角）
+ * 父级透明，缝里露出 chrome，避免「一整块」。
+ */
+
+html[data-ui-skin='ide'] {
+    --dw-panel-gap: 3px;
+    --dw-panel-radius: 0;
+    --dw-console-split-gap: 3px;
+    --dw-console-split-radius: 0;
+    --dw-inset-radius: 0;
+}
+
+/* —— 多栏 / 分卡壳：统一半缝 —— */
+html[data-ui-skin='ide'] :is(
+    .module-workbench,
+    .module-workbench__center,
+    .workbench-right-dock,
+    .dw-workbench,
+    .dw-workbench__center,
+    .dw-workbench-split,
+    .ai-workbench,
+    .ai-workbench > .workbench-center,
+    .conn-layout,
+    .schema-compare__body,
+    .relation-graph,
+    .result-pane--split:not(.result-pane--messages-only),
+    .dw-workbench-page--terminal .dw-workbench-page__body
+) {
+    gap: var(--dw-panel-gap) !important;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-split {
+    column-gap: var(--dw-panel-gap) !important;
+}
+
+html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--left,
+html[data-ui-skin='ide'] .dw-workbench-split > .dw-workbench-col--right {
+    gap: var(--dw-panel-gap) !important;
+}
+
+/* —— 面板直角 —— */
+html[data-ui-skin='ide'] :is(
+    .explorer.dw-surface,
+    .workspace.dw-surface,
+    .tool-window,
+    .terminal-window,
+    .terminal-pane,
+    .ai-side-explorer,
+    .ai-workspace,
+    .conn-editor,
+    .dw-workbench-card,
+    .schema-compare__body > .table-list,
+    .schema-compare__body > .table-detail,
+    .schema-compare__body > .ddl-panel,
+    .module-shell__nav,
+    .dw-workbench-page__head,
+    .connector-workbench__head
+) {
+    border-radius: 0 !important;
+}
+
+/* —— SQL 控制台：编辑 ↔ 结果 —— */
+html[data-ui-skin='ide'] .console-tab {
+    background: var(--dw-bg-chrome) !important;
+    --dw-console-split-gap: var(--dw-panel-gap);
+    --dw-console-split-radius: 0;
+}
+
+html[data-ui-skin='ide'] .console-tab .split {
+    --dw-console-split-gap: var(--dw-panel-gap);
+    --dw-console-split-radius: 0;
+}
+
+html[data-ui-skin='ide'] .console-tab .split__gap {
+    flex-basis: var(--dw-panel-gap) !important;
+    height: var(--dw-panel-gap) !important;
+    min-height: var(--dw-panel-gap) !important;
+    background: transparent !important;
+}
+
+html[data-ui-skin='ide'] .console-tab .result-collapsed-bar {
+    margin-top: var(--dw-panel-gap) !important;
+    border-radius: 0 !important;
+}
+
+html[data-ui-skin='ide'] .console-tab :is(
+    .editor-pane,
+    .result-pane,
+    .dw-console-toolbar
+) {
+    border-radius: 0 !important;
+}
+
+/* 社区插件 iframe 宿主：chrome 底，避免纯黑与树糊成一块 */
+html[data-ui-skin='ide'] :is(
+    .community-workbench-tab,
+    .community-workbench-host
+) {
+    background: var(--dw-bg-chrome) !important;
+}
+
+html[data-ui-skin='ide'] .community-workbench-host__frame {
+    border-radius: 0 !important;
+    background: var(--dw-bg-chrome) !important;
+}

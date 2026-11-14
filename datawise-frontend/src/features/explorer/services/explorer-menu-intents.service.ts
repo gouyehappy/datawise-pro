@@ -69,21 +69,16 @@ export type ConnectionLifecycleToast = {
 
 /**
  * Toast after connect / disconnect / reconnect.
- * Connect and reconnect only toast on success (failures rely on notify / store).
+ * 成功态由树节点 / 叠加层自证，不弹 toast；仅断开失败需要立刻提醒。
  */
 export function resolveConnectionLifecycleToast(
     action: ConnectionLifecycleMenuAction,
     ok: boolean,
 ): ConnectionLifecycleToast | null {
-    if (action === 'connect') {
-        return ok ? {key: 'explorer.connectionOpened', tone: 'success'} : null
+    if (action === 'disconnect' && !ok) {
+        return {key: 'explorer.connectionDisconnectFailed', tone: 'error'}
     }
-    if (action === 'disconnect') {
-        return ok
-            ? {key: 'explorer.connectionDisconnected', tone: 'success'}
-            : {key: 'explorer.connectionDisconnectFailed', tone: 'error'}
-    }
-    return ok ? {key: 'explorer.connectionReconnected', tone: 'success'} : null
+    return null
 }
 
 export type TableDangerAction = 'truncate' | 'delete'
@@ -99,15 +94,29 @@ export type ExplorerDeleteShortcutIntent =
     | {kind: 'delete-database'; permissionAction: 'delete-database'}
     | {kind: 'delete-table'; permissionAction: 'delete'}
     | {kind: 'delete-sql-file'; permissionAction: 'delete'}
+    | {kind: 'delete-project-file'; permissionAction: 'delete-project-file'}
     | {kind: 'delete-catalog'; permissionAction: 'delete'}
 
 /**
- * Pure delete-shortcut routing by node type.
+ * Pure delete-shortcut routing by node type / project sandbox id.
  * Permission / DDL checks remain in the composable.
  */
 export function resolveExplorerDeleteShortcutIntent(
-    nodeType: TreeNode['type'],
+    node: Pick<TreeNode, 'type' | 'id'> | TreeNode['type'],
 ): ExplorerDeleteShortcutIntent | null {
+    const nodeType = typeof node === 'string' ? node : node.type
+    const nodeId = typeof node === 'string' ? '' : node.id
+    if (
+        nodeId.startsWith('project-file:')
+        && (
+            nodeType === 'project-file'
+            || nodeType === 'sql_file'
+            || nodeType === 'project-docs'
+            || nodeType === 'project-scripts'
+        )
+    ) {
+        return {kind: 'delete-project-file', permissionAction: 'delete-project-file'}
+    }
     if (nodeType === 'database') {
         return {kind: 'delete-database', permissionAction: 'delete-database'}
     }

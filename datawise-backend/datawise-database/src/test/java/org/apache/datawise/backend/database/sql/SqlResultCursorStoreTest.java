@@ -16,7 +16,7 @@ class SqlResultCursorStoreTest {
 
     @Test
     void removeForUser_onlyRemovesOwnCursor() {
-        SqlResultCursorStore store = new SqlResultCursorStore();
+        MemorySqlResultCursorStore store = new MemorySqlResultCursorStore();
         String cursorId = store.create(1L, "conn-1", "shop", "select 1", "tab-1", 50, 0, List.of());
 
         store.removeForUser(2L, cursorId);
@@ -28,7 +28,7 @@ class SqlResultCursorStoreTest {
 
     @Test
     void requireRefreshesAccessTime() {
-        SqlResultCursorStore store = new SqlResultCursorStore();
+        MemorySqlResultCursorStore store = new MemorySqlResultCursorStore();
         String cursorId = store.create(
                 1L,
                 "conn-1",
@@ -48,7 +48,7 @@ class SqlResultCursorStoreTest {
 
     @Test
     void requireRejectsOtherUser() {
-        SqlResultCursorStore store = new SqlResultCursorStore();
+        MemorySqlResultCursorStore store = new MemorySqlResultCursorStore();
         String cursorId = store.create(1L, "conn-1", "shop", "select 1", "tab-1", 50, 0, List.of());
 
         assertThrows(SqlCursorGoneException.class, () -> store.require(2L, cursorId));
@@ -56,7 +56,7 @@ class SqlResultCursorStoreTest {
 
     @Test
     void evictExpiredScheduledRemovesStaleCursor() throws Exception {
-        SqlResultCursorStore store = new SqlResultCursorStore();
+        MemorySqlResultCursorStore store = new MemorySqlResultCursorStore();
         String cursorId = store.create(1L, "conn-1", "shop", "select 1", "tab-1", 50, 0, List.of());
         replaceLastAccessed(store, cursorId, System.currentTimeMillis() - (31L * 60L * 1000L));
 
@@ -67,7 +67,7 @@ class SqlResultCursorStoreTest {
 
     @Test
     void createEvictsOldestWhenAtCapacity() throws Exception {
-        SqlResultCursorStore store = new SqlResultCursorStore();
+        MemorySqlResultCursorStore store = new MemorySqlResultCursorStore();
         String oldestId = store.create(1L, "conn-1", "shop", "select 1", "tab-1", 50, 0, List.of());
         replaceLastAccessed(store, oldestId, 1L);
         for (int i = 0; i < 511; i++) {
@@ -80,9 +80,9 @@ class SqlResultCursorStoreTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static void replaceLastAccessed(SqlResultCursorStore store, String cursorId, long lastAccessedAtMs)
+    private static void replaceLastAccessed(MemorySqlResultCursorStore store, String cursorId, long lastAccessedAtMs)
             throws Exception {
-        Field entriesField = SqlResultCursorStore.class.getDeclaredField("entries");
+        Field entriesField = MemorySqlResultCursorStore.class.getDeclaredField("entries");
         entriesField.setAccessible(true);
         ConcurrentHashMap<String, SqlResultCursorStore.CursorEntry> entries =
                 (ConcurrentHashMap<String, SqlResultCursorStore.CursorEntry>) entriesField.get(store);

@@ -14,13 +14,13 @@
 // [插件变量, 宿主令牌, 令牌缺失时的回退值]。回退值与四插件 style.css 的
 // `:root` 暗色默认保持一致。
 const THEME_BRIDGE_VARS = [
-  ["--background", "--color-background", "#0c1015"],
+  ["--background", "--color-background", "#1a1b1e"],
   ["--foreground", "--color-foreground", "#f0f0f3"],
-  ["--muted", "--color-muted", "#121820"],
+  ["--muted", "--color-muted", "#222326"],
   ["--muted-foreground", "--color-muted-foreground", "#c4c7cc"],
-  ["--accent", "--color-accent", "#1f2936"],
+  ["--accent", "--color-accent", "#2a2b2e"],
   ["--accent-foreground", "--color-accent-foreground", "#f4f4f7"],
-  ["--border", "--color-border", "rgba(255, 255, 255, 0.12)"],
+  ["--border", "--color-border", "rgba(255, 255, 255, 0.08)"],
   ["--destructive", "--color-destructive", "#ef4444"],
   ["--primary", "--color-primary", "#3b82f6"],
   ["--primary-foreground", "--color-primary-foreground", "#fff"],

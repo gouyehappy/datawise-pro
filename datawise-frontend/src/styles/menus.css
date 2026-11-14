@@ -46,15 +46,9 @@
     transition: background 100ms ease, color 100ms ease;
 }
 
+/* IDEA：鼠标滑过与键盘焦点都用 selection 条，不用灰 hover 再叠一层 */
 .dw-dropdown-item:hover,
-.dw-menu-item:hover {
-    background: var(--dw-menu-hover);
-}
-
-.dw-dropdown-item:focus {
-    outline: none;
-}
-
+.dw-menu-item:hover,
 .dw-dropdown-item:focus-visible,
 .dw-menu-item:focus-visible,
 .dw-dropdown-item.is-active,
@@ -62,6 +56,10 @@
 .dw-menu-item[data-highlighted] {
     background: var(--dw-menu-active);
     color: var(--dw-text);
+    outline: none;
+}
+
+.dw-dropdown-item:focus {
     outline: none;
 }
 

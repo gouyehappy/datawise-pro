@@ -5,22 +5,23 @@ import org.apache.datawise.taskconcurrency.api.TaskExecutionContext;
 import org.apache.datawise.taskconcurrency.api.TaskHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.stereotype.Component;
 
 /**
  * Task-concurrency consumer for backup runs ({@code run-*}) and restore jobs ({@code rst-*}).
  * <p>
  * Always ACKs on completion (success or failure) so failed backups are not lease-reclaimed and retried.
+ * {@link ObjectFactory} breaks the constructor cycle with {@link BackupOrchestrator} (BE-P2-1).
  */
 @Component
 public class BackupTaskHandler implements TaskHandler {
 
     private static final Logger log = LoggerFactory.getLogger(BackupTaskHandler.class);
 
-    private final BackupOrchestrator orchestrator;
+    private final ObjectFactory<BackupOrchestrator> orchestrator;
 
-    public BackupTaskHandler(@Lazy BackupOrchestrator orchestrator) {
+    public BackupTaskHandler(ObjectFactory<BackupOrchestrator> orchestrator) {
         this.orchestrator = orchestrator;
     }
 
@@ -31,9 +32,9 @@ public class BackupTaskHandler implements TaskHandler {
         context.heartbeat();
         try {
             if (taskId != null && taskId.startsWith("rst-")) {
-                orchestrator.executeAdmittedRestore(taskId, context::heartbeat);
+                orchestrator.getObject().executeAdmittedRestore(taskId, context::heartbeat);
             } else {
-                orchestrator.executeAdmittedRun(taskId, context::heartbeat);
+                orchestrator.getObject().executeAdmittedRun(taskId, context::heartbeat);
             }
             log.info("backup.task.handler.done taskId={}", taskId);
         } catch (Exception ex) {

@@ -87,7 +87,7 @@ const resizeTitle = computed(() =>
   background: transparent;
   transition: background var(--dw-duration) var(--dw-ease);
 }
-.resize-handle--line { background: var(--dw-border-light); }
+.resize-handle--line { background: var(--dw-panel-outline, var(--dw-border-light)); }
 .resize-handle.horizontal { width: 4px; cursor: col-resize; }
 .resize-handle.vertical { height: 4px; cursor: row-resize; }
 .resize-handle:hover,

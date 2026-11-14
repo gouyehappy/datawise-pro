@@ -45,6 +45,9 @@ public final class AiAnalysisStreamEmitter {
                     .data(AiAnalysisErrorMapper.map(error).toMap()));
         } catch (IOException ex) {
             ExceptionLogging.recoverable(log, "SSE error event send failed (client disconnected?)", ex);
+        } catch (IllegalStateException ex) {
+            // Emitter already completed/timed out; nothing left to report to.
+            ExceptionLogging.recoverable(log, "SSE error event skipped (stream closed)", ex);
         }
     }
 
@@ -59,6 +62,12 @@ public final class AiAnalysisStreamEmitter {
     }
 
     private static void send(SseEmitter emitter, String eventName, Object data) {
+        // Step boundaries are where a cancelled stream gets to stop. The cancel hook interrupts
+        // the worker thread; without this check the graph would finish every remaining LLM call
+        // and SQL statement for a client that is no longer listening.
+        if (Thread.currentThread().isInterrupted()) {
+            throw new AiStreamCancelledException("AI analysis stream cancelled before " + eventName);
+        }
         try {
             emitter.send(SseEmitter.event().name(eventName).data(data));
         } catch (IOException ex) {

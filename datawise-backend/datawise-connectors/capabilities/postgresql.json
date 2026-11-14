@@ -1,0 +1,7 @@
+{
+  "dbType": "postgresql",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": true
+  }
+}

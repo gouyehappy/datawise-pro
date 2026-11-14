@@ -2,7 +2,7 @@
   "name": "datawise-vscode",
   "displayName": "DataWise",
   "description": "Open SQL from VS Code in the DataWise CLI desktop app",
-  "version": "4.1.7",
+  "version": "5.0.0",
   "publisher": "datawise-cli",
   "license": "Apache-2.0",
   "engines": {

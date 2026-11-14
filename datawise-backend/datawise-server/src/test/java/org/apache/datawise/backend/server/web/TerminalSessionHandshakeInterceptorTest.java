@@ -2,6 +2,7 @@ package org.apache.datawise.backend.server.web;
 
 import org.apache.datawise.backend.configstore.SessionStore;
 import org.apache.datawise.backend.model.SessionEntity;
+import org.apache.datawise.backend.service.FeaturePermissionAccess;
 import org.apache.datawise.backend.service.TeamService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -33,6 +36,8 @@ class TerminalSessionHandshakeInterceptorTest {
     @Mock
     private TeamService teamService;
     @Mock
+    private FeaturePermissionAccess featurePermissionAccess;
+    @Mock
     private WebSocketHandler webSocketHandler;
     @Mock
     private ServerHttpResponse response;
@@ -42,19 +47,45 @@ class TerminalSessionHandshakeInterceptorTest {
         TerminalWebSocketProperties properties = new TerminalWebSocketProperties();
         properties.setAllowedIps(java.util.List.of("127.0.0.1"));
         TerminalSessionHandshakeInterceptor interceptor =
-                new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService);
+                new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService, featurePermissionAccess);
 
         SessionEntity session = new SessionEntity();
         session.setUserId(9L);
         session.setGuest(false);
         when(sessionStore.authenticate("sess-1")).thenReturn(Optional.of(session));
+        doNothing().when(featurePermissionAccess).requireUtilTerminal();
 
         Map<String, Object> attributes = new HashMap<>();
         ServerHttpRequest request = servletRequest("sess-1", "127.0.0.1");
 
         assertTrue(interceptor.beforeHandshake(request, response, webSocketHandler, attributes));
         assertEquals(9L, attributes.get(TerminalSessionHandshakeInterceptor.ATTR_USER_ID));
+        verify(featurePermissionAccess).requireUtilTerminal();
         verifyNoInteractions(teamService);
+    }
+
+    @Test
+    void rejectsWhenUtilTerminalPermissionMissing() {
+        TerminalWebSocketProperties properties = new TerminalWebSocketProperties();
+        properties.setAllowedIps(java.util.List.of("127.0.0.1"));
+        TerminalSessionHandshakeInterceptor interceptor =
+                new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService, featurePermissionAccess);
+
+        SessionEntity session = new SessionEntity();
+        session.setUserId(9L);
+        session.setGuest(false);
+        when(sessionStore.authenticate("sess-1")).thenReturn(Optional.of(session));
+        doThrow(new IllegalArgumentException("Permission denied"))
+                .when(featurePermissionAccess).requireUtilTerminal();
+
+        Map<String, Object> attributes = new HashMap<>();
+        assertFalse(interceptor.beforeHandshake(
+                servletRequest("sess-1", "127.0.0.1"), response, webSocketHandler, attributes));
+        verify(teamService).recordTerminalAudit(
+                eq(9L),
+                eq("terminal.pty.denied"),
+                eq("reason=permission-denied; detail=Permission denied")
+        );
     }
 
     @Test
@@ -62,7 +93,7 @@ class TerminalSessionHandshakeInterceptorTest {
         TerminalWebSocketProperties properties = new TerminalWebSocketProperties();
         properties.setAllowedIps(java.util.List.of("10.0.0.0/8"));
         TerminalSessionHandshakeInterceptor interceptor =
-                new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService);
+                new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService, featurePermissionAccess);
 
         SessionEntity session = new SessionEntity();
         session.setUserId(4L);
@@ -78,6 +109,7 @@ class TerminalSessionHandshakeInterceptorTest {
                 eq("terminal.pty.denied"),
                 eq("reason=ip-not-allowed; clientIp=203.0.113.8")
         );
+        verifyNoInteractions(featurePermissionAccess);
     }
 
     @Test
@@ -85,7 +117,7 @@ class TerminalSessionHandshakeInterceptorTest {
         TerminalWebSocketProperties properties = new TerminalWebSocketProperties();
         properties.setAllowedIps(java.util.List.of("10.0.0.0/8"));
         TerminalSessionHandshakeInterceptor interceptor =
-                new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService);
+                new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService, featurePermissionAccess);
 
         SessionEntity session = new SessionEntity();
         session.setUserId(4L);
@@ -113,12 +145,13 @@ class TerminalSessionHandshakeInterceptorTest {
         properties.setAllowedIps(java.util.List.of("10.0.0.0/8"));
         properties.setTrustedProxyIps(java.util.List.of("127.0.0.1"));
         TerminalSessionHandshakeInterceptor interceptor =
-                new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService);
+                new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService, featurePermissionAccess);
 
         SessionEntity session = new SessionEntity();
         session.setUserId(11L);
         session.setGuest(false);
         when(sessionStore.authenticate("sess-4")).thenReturn(Optional.of(session));
+        doNothing().when(featurePermissionAccess).requireUtilTerminal();
 
         MockHttpServletRequest servlet = new MockHttpServletRequest();
         servlet.setQueryString("dwSession=sess-4");
@@ -136,7 +169,7 @@ class TerminalSessionHandshakeInterceptorTest {
     void rejectsGuestSessionForLocalPty() {
         TerminalWebSocketProperties properties = new TerminalWebSocketProperties();
         TerminalSessionHandshakeInterceptor interceptor =
-                new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService);
+                new TerminalSessionHandshakeInterceptor(sessionStore, properties, teamService, featurePermissionAccess);
 
         SessionEntity session = new SessionEntity();
         session.setUserId(2L);
@@ -148,6 +181,7 @@ class TerminalSessionHandshakeInterceptorTest {
 
         assertFalse(interceptor.beforeHandshake(request, response, webSocketHandler, attributes));
         verifyNoInteractions(teamService);
+        verifyNoInteractions(featurePermissionAccess);
     }
 
     private static ServerHttpRequest servletRequest(String sessionId, String remoteAddr) {

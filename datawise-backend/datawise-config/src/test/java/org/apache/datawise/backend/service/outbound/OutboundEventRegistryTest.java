@@ -1,5 +1,6 @@
 package org.apache.datawise.backend.service.outbound;
 
+import org.apache.datawise.backend.domain.OutboundEventCategory;
 import org.apache.datawise.backend.domain.OutboundEventType;
 import org.junit.jupiter.api.Test;
 
@@ -27,6 +28,26 @@ class OutboundEventRegistryTest {
                 .anyMatch(item -> OutboundEventType.TABLE_CREATED.equals(item.type())));
         assertTrue(registry.listDefinitions().stream()
                 .anyMatch(item -> OutboundEventType.TABLE_DELETED.equals(item.type())));
+        assertTrue(registry.listDefinitions().stream()
+                .anyMatch(item -> OutboundEventType.TABLE_ALTERED.equals(item.type())));
+    }
+
+    @Test
+    void listDefinitionsAssignsSceneCategories() {
+        var altered = registry.listDefinitions().stream()
+                .filter(item -> OutboundEventType.TABLE_ALTERED.equals(item.type()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(OutboundEventCategory.SCHEMA, altered.category());
+
+        var backup = registry.listDefinitions().stream()
+                .filter(item -> OutboundEventType.BACKUP_OK.equals(item.type()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(OutboundEventCategory.TASK, backup.category());
+
+        assertTrue(registry.listDefinitions().stream()
+                .allMatch(item -> item.category() != null && !item.category().isBlank()));
     }
 
     @Test

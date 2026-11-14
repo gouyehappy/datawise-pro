@@ -41,7 +41,8 @@ class AiSchemaContextServiceTest {
                 ddlLoader,
                 tableRelationService,
                 tableTagService,
-                semanticMetricStore
+                semanticMetricStore,
+                new AiSchemaCache()
         );
     }
 

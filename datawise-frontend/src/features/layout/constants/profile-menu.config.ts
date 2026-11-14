@@ -24,6 +24,12 @@ export interface ProfileMenuItemDef {
     badgeKey?: string
     profileLabelKey?: string
     titleBarLabelKey?: string
+    /**
+     * 汉堡主菜单层级：
+     * - primary：常驻主菜单（设置 / 个人资料）
+     * - secondary：收进顶栏右侧「更多」（引导 / 运行时 / 刷新树）
+     */
+    mainMenuTier?: 'primary' | 'secondary'
 }
 
 /** 头像菜单与顶栏应用菜单共用的账户/工具项（label 可按场景覆盖）。 */
@@ -35,6 +41,7 @@ export const SHARED_PROFILE_MENU_ITEMS: ProfileMenuItemDef[] = [
         icon: 'settings-basic',
         profileLabelKey: 'profile.menu.settings',
         titleBarLabelKey: 'app.titleBar.mainMenu.settings',
+        mainMenuTier: 'primary',
     },
     {
         id: 'profile',
@@ -43,6 +50,7 @@ export const SHARED_PROFILE_MENU_ITEMS: ProfileMenuItemDef[] = [
         icon: 'user',
         profileLabelKey: 'profile.menu.profile',
         titleBarLabelKey: 'app.titleBar.mainMenu.profile',
+        mainMenuTier: 'primary',
     },
     {
         id: 'onboarding',
@@ -51,6 +59,7 @@ export const SHARED_PROFILE_MENU_ITEMS: ProfileMenuItemDef[] = [
         icon: 'tour',
         profileLabelKey: 'profile.menu.onboarding',
         titleBarLabelKey: 'app.titleBar.mainMenu.onboarding',
+        mainMenuTier: 'secondary',
     },
     {
         id: 'runtime-setup',
@@ -59,6 +68,7 @@ export const SHARED_PROFILE_MENU_ITEMS: ProfileMenuItemDef[] = [
         icon: 'connectors',
         profileLabelKey: 'profile.menu.runtimeSetup',
         titleBarLabelKey: 'app.titleBar.mainMenu.runtimeSetup',
+        mainMenuTier: 'secondary',
     },
     {
         id: 'reload-explorer',
@@ -66,6 +76,7 @@ export const SHARED_PROFILE_MENU_ITEMS: ProfileMenuItemDef[] = [
         permission: FeaturePermission.UtilRefresh,
         icon: 'refresh',
         titleBarLabelKey: 'app.titleBar.mainMenu.reloadExplorer',
+        mainMenuTier: 'secondary',
     },
 ]
 

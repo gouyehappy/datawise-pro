@@ -7,6 +7,7 @@ import {API_PATHS} from '@/shared/api/http/paths'
 import {postJson} from '@/shared/api/http/request'
 import type {WorkspaceTab} from '@/core/types'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
+import {resolveCaughtApiErrorMessage} from '@/shared/api/http/api-error-message'
 
 const props = defineProps<{
   tab: WorkspaceTab
@@ -34,7 +35,7 @@ async function refresh() {
     )
     entries.value = result.entries || []
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = resolveCaughtApiErrorMessage(e, t, 'communityPlugin.filesystemLoadFailed')
   } finally {
     loading.value = false
   }
@@ -51,7 +52,7 @@ async function openEntry(entry: {uri: string; kind: string}) {
     })
     preview.value = result.dataBase64 ? atob(result.dataBase64) : ''
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = resolveCaughtApiErrorMessage(e, t, 'communityPlugin.filesystemLoadFailed')
   }
 }
 
@@ -66,7 +67,7 @@ async function savePreview() {
     })
     await refresh()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = resolveCaughtApiErrorMessage(e, t, 'communityPlugin.filesystemSaveFailed')
   }
 }
 

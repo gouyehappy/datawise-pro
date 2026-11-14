@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, nextTick, onMounted, watch} from 'vue'
 import {storeToRefs} from 'pinia'
 import {useI18n} from 'vue-i18n'

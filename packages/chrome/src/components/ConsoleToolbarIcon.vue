@@ -33,6 +33,7 @@ const dwName = computed(() => {
   <span
     class="dw-console-glyph"
     :class="{ 'dw-console-glyph--muted': muted }"
+    :data-console-icon="name || dwName || undefined"
   >
     <slot name="icon">
       <slot>
@@ -41,7 +42,7 @@ const dwName = computed(() => {
           :name="dwName"
           :active="active"
           :muted="muted"
-          :stroke-width="1.75"
+          :stroke-width="2"
           fit
         />
       </slot>

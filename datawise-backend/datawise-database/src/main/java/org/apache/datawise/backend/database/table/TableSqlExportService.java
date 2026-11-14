@@ -3,6 +3,8 @@ package org.apache.datawise.backend.database.table;
 import org.apache.datawise.backend.database.context.ConnectionExecutionContext;
 import org.apache.datawise.backend.domain.TableSqlExportResult;
 import org.apache.datawise.backend.model.ConnectionEntity;
+import org.apache.datawise.backend.storage.ObjectStorageException;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -14,15 +16,18 @@ public class TableSqlExportService {
     private final ConnectionExecutionContext connectionContext;
     private final TableSqlSectionBuilder sectionBuilder;
     private final TableCatalogTableLister tableLister;
+    private final ObjectProvider<TableSqlExportObjectStoragePublisher> objectStoragePublisher;
 
     public TableSqlExportService(
             ConnectionExecutionContext connectionContext,
             TableSqlSectionBuilder sectionBuilder,
-            TableCatalogTableLister tableLister
+            TableCatalogTableLister tableLister,
+            ObjectProvider<TableSqlExportObjectStoragePublisher> objectStoragePublisher
     ) {
         this.connectionContext = connectionContext;
         this.sectionBuilder = sectionBuilder;
         this.tableLister = tableLister;
+        this.objectStoragePublisher = objectStoragePublisher;
     }
 
     public TableSqlExportResult exportTable(
@@ -44,7 +49,8 @@ public class TableSqlExportService {
                 includeData,
                 maxRows
         );
-        return new TableSqlExportResult(sql, sanitizeFileName(tableName) + ".sql");
+        String fileName = sanitizeFileName(tableName) + ".sql";
+        return finish(sql, fileName, connectionId, context.database());
     }
 
     public TableSqlExportResult exportDatabase(
@@ -71,7 +77,27 @@ public class TableSqlExportService {
             ));
             sb.append("\n");
         }
-        return new TableSqlExportResult(sb.toString().trim() + "\n", sanitizeFileName(context.database()) + ".sql");
+        String fileName = sanitizeFileName(context.database()) + ".sql";
+        return finish(sb.toString().trim() + "\n", fileName, connectionId, context.database());
+    }
+
+    private TableSqlExportResult finish(String sql, String fileName, String connectionId, String database) {
+        TableSqlExportObjectStoragePublisher publisher = objectStoragePublisher.getIfAvailable();
+        if (publisher == null) {
+            return new TableSqlExportResult(sql, fileName);
+        }
+        try {
+            TableSqlExportObjectStoragePublisher.PublishResult published =
+                    publisher.publishIfEnabled(sql, fileName, connectionId, database);
+            return new TableSqlExportResult(
+                    sql,
+                    fileName,
+                    published.objectStorageKey(),
+                    published.objectStorageUri()
+            );
+        } catch (ObjectStorageException ex) {
+            throw new IllegalStateException("Failed to publish SQL export to object storage", ex);
+        }
     }
 
     private ExportContext resolveContext(String connectionId, String database) {

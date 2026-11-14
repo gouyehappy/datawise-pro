@@ -40,8 +40,8 @@ withDefaults(
 }
 
 .app-brand-logo--titlebar {
-  width: var(--dw-density-sm);
-  height: var(--dw-density-sm);
+  width: var(--dw-titlebar-widget-h);
+  height: var(--dw-titlebar-widget-h);
 }
 
 .app-brand-logo--sm {

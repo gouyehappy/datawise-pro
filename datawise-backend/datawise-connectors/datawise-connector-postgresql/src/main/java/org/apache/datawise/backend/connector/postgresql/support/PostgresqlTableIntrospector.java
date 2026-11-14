@@ -16,6 +16,8 @@ import org.apache.datawise.backend.metadata.spi.TableMetadataIntrospection;
 import org.apache.datawise.backend.model.ConnectionEntity;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -172,6 +174,124 @@ public class PostgresqlTableIntrospector implements TableMetadataIntrospection {
                         viewName
                 )
         );
+    }
+
+    @Override
+    public TableDdlResult loadTriggerDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String schema,
+            String triggerName
+    ) throws SQLException {
+        String sql = """
+                SELECT pg_get_triggerdef(t.oid, true)
+                FROM pg_trigger t
+                JOIN pg_class c ON c.oid = t.tgrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE NOT t.tgisinternal
+                  AND t.tgname = ?
+                  AND n.nspname = ?
+                """;
+        return loadSingleDdl(connection, sql, triggerName, schema, "Trigger");
+    }
+
+    @Override
+    public TableDdlResult loadFunctionDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String schema,
+            String functionName
+    ) throws SQLException {
+        return loadPostgresqlRoutineDdl(connection, schema, functionName, 'f', "Function");
+    }
+
+    @Override
+    public TableDdlResult loadProcedureDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String schema,
+            String procedureName
+    ) throws SQLException {
+        return loadPostgresqlRoutineDdl(connection, schema, procedureName, 'p', "Procedure");
+    }
+
+    @Override
+    public TableDdlResult loadSequenceDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String schema,
+            String sequenceName
+    ) throws SQLException {
+        String sql = """
+                SELECT format(
+                    'CREATE SEQUENCE %I.%I AS %s INCREMENT BY %s MINVALUE %s MAXVALUE %s START WITH %s CACHE %s%s',
+                    n.nspname,
+                    c.relname,
+                    format_type(s.seqtypid, NULL),
+                    s.seqincrement,
+                    s.seqmin,
+                    s.seqmax,
+                    s.seqstart,
+                    s.seqcache,
+                    CASE WHEN s.seqcycle THEN ' CYCLE' ELSE ' NO CYCLE' END
+                )
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_sequence s ON s.seqrelid = c.oid
+                WHERE c.relkind = 'S'
+                  AND c.relname = ?
+                  AND n.nspname = ?
+                """;
+        return loadSingleDdl(connection, sql, sequenceName, schema, "Sequence");
+    }
+
+    private TableDdlResult loadPostgresqlRoutineDdl(
+            Connection connection,
+            String schema,
+            String name,
+            char prokind,
+            String kindLabel
+    ) throws SQLException {
+        String sql = """
+                SELECT pg_get_functiondef(p.oid)
+                FROM pg_proc p
+                JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE p.proname = ?
+                  AND n.nspname = ?
+                  AND p.prokind = ?
+                """;
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, name);
+            ps.setString(2, schema);
+            ps.setString(3, String.valueOf(prokind));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException(kindLabel + " not found: " + schema + "." + name);
+                }
+                String ddl = rs.getString(1);
+                return new TableDdlResult(ddl != null ? ddl : "");
+            }
+        }
+    }
+
+    private static TableDdlResult loadSingleDdl(
+            Connection connection,
+            String sql,
+            String name,
+            String schema,
+            String kindLabel
+    ) throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, name);
+            ps.setString(2, schema);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException(kindLabel + " not found: " + schema + "." + name);
+                }
+                String ddl = rs.getString(1);
+                return new TableDdlResult(ddl != null ? ddl : "");
+            }
+        }
     }
 
     @Override

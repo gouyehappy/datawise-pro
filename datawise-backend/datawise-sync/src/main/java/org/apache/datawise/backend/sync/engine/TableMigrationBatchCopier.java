@@ -420,17 +420,29 @@ public class TableMigrationBatchCopier {
             List<String> orderByColumns,
             List<String> seekKey
     ) throws SQLException {
-        String pageSql = selectSql;
-        if (orderByColumns != null && !orderByColumns.isEmpty() && seekKey != null && !seekKey.isEmpty()) {
-            pageSql = MigrationOrderBySupport.appendKeysetSeek(selectSql, orderByColumns, seekKey);
+        final String pageSql = (orderByColumns != null && !orderByColumns.isEmpty() && seekKey != null && !seekKey.isEmpty())
+                ? MigrationOrderBySupport.appendKeysetSeek(selectSql, orderByColumns, seekKey)
+                : selectSql;
+        try {
+            return org.apache.datawise.backend.common.DeepOffsetGuard.run(() -> {
+                try {
+                    return connectorFacade.jdbc().executeSelectPageForMigrationOnConnection(
+                            connection,
+                            source.getDbType(),
+                            pageSql,
+                            batchSize,
+                            offset
+                    );
+                } catch (SQLException ex) {
+                    throw new IllegalStateException(ex);
+                }
+            });
+        } catch (IllegalStateException ex) {
+            if (ex.getCause() instanceof SQLException sql) {
+                throw sql;
+            }
+            throw ex;
         }
-        return connectorFacade.jdbc().executeSelectPageForMigrationOnConnection(
-                connection,
-                source.getDbType(),
-                pageSql,
-                batchSize,
-                offset
-        );
     }
 
     private CompletableFuture<ExecuteSqlResult> supplyPageFetch(
@@ -521,11 +533,12 @@ public class TableMigrationBatchCopier {
             if (preparedUpsert != null
                     && preparedUpsert.sql() != null
                     && !preparedUpsert.sql().isBlank()) {
-                connectorFacade.jdbc().executeBatchInsertOnConnection(
+                connectorFacade.jdbc().writePreparedBatchOnConnection(
                         targetConnection,
                         preparedUpsert.sql(),
                         preparedUpsert.columnKeys(),
-                        rows
+                        rows,
+                        migrationProperties.getDefaultBatchSize()
                 );
                 return;
             }
@@ -551,11 +564,12 @@ public class TableMigrationBatchCopier {
                 page.columns()
         );
         if (prepared != null && prepared.sql() != null && !prepared.sql().isBlank()) {
-            connectorFacade.jdbc().executeBatchInsertOnConnection(
+            connectorFacade.jdbc().writePreparedBatchOnConnection(
                     targetConnection,
                     prepared.sql(),
                     prepared.columnKeys(),
-                    rows
+                    rows,
+                    migrationProperties.getDefaultBatchSize()
             );
             return;
         }

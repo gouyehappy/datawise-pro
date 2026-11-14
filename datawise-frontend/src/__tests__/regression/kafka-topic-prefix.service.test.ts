@@ -4,7 +4,10 @@ import {
     deriveTopicPrefixPatterns,
     filterKafkaTopics,
     groupKafkaTopicsByPrefix,
+    kafkaTopicGroupHasMore,
+    KAFKA_TOPICS_VIRTUAL_PAGE,
     normalizeKafkaTopicPattern,
+    sliceKafkaTopicsVirtualPage,
 } from '@/features/explorer/services/kafka-topic-prefix.service'
 
 describe('kafka-topic-prefix.service', () => {
@@ -29,5 +32,13 @@ describe('kafka-topic-prefix.service', () => {
 
     it('filters topics locally', () => {
         assert.deepEqual(filterKafkaTopics(['a', 'abc'], 'ab'), ['abc'])
+    })
+
+    it('slices large topic groups for DOM virtual pages (PERF-04)', () => {
+        const topics = Array.from({length: KAFKA_TOPICS_VIRTUAL_PAGE + 25}, (_, i) => `t-${i}`)
+        assert.equal(sliceKafkaTopicsVirtualPage(topics, false).length, KAFKA_TOPICS_VIRTUAL_PAGE)
+        assert.equal(kafkaTopicGroupHasMore(topics, false), true)
+        assert.equal(sliceKafkaTopicsVirtualPage(topics, true).length, topics.length)
+        assert.equal(kafkaTopicGroupHasMore(topics, true), false)
     })
 })

@@ -107,15 +107,8 @@ export const usePluginStore = defineStore('plugin', () => {
         syncSqlSnippetPluginGates(catalog.value, pluginOverrides.value)
     }
 
-    function showToggleToast(id: string, enabled: boolean) {
-        const key = normalizePluginId(id)
-        const nameKey = `plugin.items.${key}.name`
-        const name = i18n.global.te(nameKey) ? i18n.global.t(nameKey) : key
-        toast.success(
-            enabled
-                ? i18n.global.t('plugin.toggleEnabled', {name})
-                : i18n.global.t('plugin.toggleDisabled', {name}),
-        )
+    function showToggleToast(_id: string, _enabled: boolean) {
+        // 开关态已在列表中可见，不再弹 toast。
     }
 
     function closeDisabledShortcutPanels(overrides: Record<string, boolean>) {
@@ -141,14 +134,10 @@ export const usePluginStore = defineStore('plugin', () => {
             layout.setModule('database')
         }
 
-        toast.success(i18n.global.t(`plugin.presets.${presetId}.applied`))
     }
 
     function setReferencePresetId(presetId: PluginPresetId) {
         appConfig.patchPlugins({referencePresetId: presetId})
-        toast.success(i18n.global.t('plugin.presets.referenceSet', {
-            preset: i18n.global.t(`plugin.presets.${presetId}.label`),
-        }))
     }
 
     function referencePresetId(): PluginPresetId {
@@ -176,10 +165,6 @@ export const usePluginStore = defineStore('plugin', () => {
             layout.setModule('database')
         }
 
-        toast.success(i18n.global.t('plugin.presets.alignReferenceApplied', {
-            preset: i18n.global.t(`plugin.presets.${presetId}.label`),
-            count: impact.totalChanges,
-        }))
         return impact.totalChanges
     }
 
@@ -347,7 +332,6 @@ export const usePluginStore = defineStore('plugin', () => {
         if (!resolvePluginEnabled('p-ai-workbench', catalog.value, {}) && layout.activeModule === 'ai') {
             layout.setModule('database')
         }
-        toast.success(i18n.global.t('plugin.config.resetSuccess'))
     }
 
     const catalogItems = computed(() => catalog.value)

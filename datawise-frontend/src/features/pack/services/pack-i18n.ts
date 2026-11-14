@@ -1,4 +1,5 @@
 import type {PackId} from '@/features/pack/types/pack.types'
+import type {CapabilityLayer} from '@/features/pack/services/pack-layer'
 
 /**
  * vue-i18n resolves message paths on `.`, but Pack / Suite ids contain dots
@@ -6,6 +7,15 @@ import type {PackId} from '@/features/pack/types/pack.types'
  */
 export function packLocaleSegment(id: string): string {
     return id.split('.').join('/')
+}
+
+/** B3-1: Core / Team / Insight / Extend human layer labels */
+export function packLayerNameKey(layer: CapabilityLayer): string {
+    return `pack.layers.${layer}.name`
+}
+
+export function packLayerBlurbKey(layer: CapabilityLayer): string {
+    return `pack.layers.${layer}.blurb`
 }
 
 export function packNameKey(packId: PackId | string): string {

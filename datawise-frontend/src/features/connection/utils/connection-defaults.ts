@@ -48,6 +48,7 @@ export function createDefaultConnection(
         driver: catalogItem?.defaultDriverMaven ?? DRIVER_PRESETS[dbType]?.jar,
         driverClass: catalogItem?.defaultDriverClass ?? DRIVER_PRESETS[dbType]?.driverClass,
         database: '',
+        writeGuard: false,
         sshEnabled: false,
         sshHost: '',
         sshPort: '22',

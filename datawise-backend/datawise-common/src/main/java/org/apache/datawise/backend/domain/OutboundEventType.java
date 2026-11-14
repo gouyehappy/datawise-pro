@@ -26,6 +26,8 @@ public final class OutboundEventType {
     public static final String CONNECTION_DELETED = "connection.deleted";
     public static final String TABLE_CREATED = "table.created";
     public static final String TABLE_DELETED = "table.deleted";
+    /** Successful ALTER TABLE (or equivalent) that was recorded in DDL history. */
+    public static final String TABLE_ALTERED = "table.altered";
     public static final String MIGRATION_JOB_FAILED = "migration.job.failed";
     public static final String MIGRATION_JOB_COMPLETED = "migration.job.completed";
     public static final String SQL_EXECUTION_FAILED = "sql.execution.failed";

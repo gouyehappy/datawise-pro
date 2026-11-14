@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
 import type {TableColumn, TableRow} from '@/core/types'
@@ -18,6 +18,8 @@ const props = defineProps<{
   sampleColumns: TableColumn[]
   errorMessage: string | null
   productionForced?: boolean
+  /** 预演判定的风险级别：高风险才需要人工确认 */
+  risk?: 'low' | 'high'
   productionApprovalRequired?: boolean
   sqlReviewFindings?: SqlReviewFinding[]
   sqlReviewBlocked?: boolean
@@ -54,6 +56,12 @@ const statusMessage = computed(() => {
   }
   return t('console.dangerousSql.confirmHint')
 })
+
+const riskLabel = computed(() =>
+    props.risk === 'low'
+        ? t('console.dangerousSql.riskLow')
+        : t('console.dangerousSql.riskHigh'),
+)
 
 const showSqlPreview = computed(() => Boolean(props.sql?.trim()))
 const showSuppress = computed(() =>
@@ -102,6 +110,11 @@ function cellText(row: TableRow, column: TableColumn): string {
     </p>
     <div class="dangerous-pending__body">
       <span class="dangerous-pending__badge">{{ kindLabel }}</span>
+      <span
+          class="dangerous-pending__risk"
+          :class="`dangerous-pending__risk--${risk ?? 'high'}`"
+          :title="t('console.dangerousSql.riskHint')"
+      >{{ riskLabel }}</span>
       <span v-if="preview?.tableName" class="dangerous-pending__table">
         {{ t('console.dangerousSql.table', {name: preview.tableName}) }}
       </span>
@@ -371,5 +384,25 @@ function cellText(row: TableRow, column: TableColumn): string {
   white-space: pre-wrap;
   max-height: 120px;
   overflow: auto;
+}
+.dangerous-pending__risk {
+  flex-shrink: 0;
+  padding: 1px var(--dw-space-2);
+  border-radius: var(--dw-radius-pill);
+  border: 1px solid transparent;
+  font-size: var(--dw-text-2xs);
+  font-weight: 600;
+}
+
+.dangerous-pending__risk--high {
+  border-color: color-mix(in srgb, var(--dw-danger) 38%, transparent);
+  background: color-mix(in srgb, var(--dw-danger) 12%, transparent);
+  color: var(--dw-danger);
+}
+
+.dangerous-pending__risk--low {
+  border-color: color-mix(in srgb, var(--dw-success) 38%, transparent);
+  background: color-mix(in srgb, var(--dw-success) 12%, transparent);
+  color: var(--dw-success-fg);
 }
 </style>

@@ -115,7 +115,7 @@
 .plugin-layout {
     display: grid;
     grid-template-columns: minmax(0, 268px) minmax(0, 1fr);
-    gap: var(--dw-space-6);
+    gap: var(--mp-shell-gap, var(--dw-space-6));
     align-items: start;
     min-width: 0;
 }
@@ -133,7 +133,7 @@
 .plugin-sidebar {
     display: flex;
     flex-direction: column;
-    gap: var(--dw-space-4);
+    gap: var(--mp-card-gap, var(--dw-space-4));
     position: sticky;
     top: 12px;
     min-width: 0;
@@ -141,7 +141,7 @@
 
 .plugin-panel {
     padding: var(--dw-space-4);
-    border: 1px solid var(--mp-shell-border);
+    border: none;
     border-radius: var(--mp-shell-radius);
     background: var(--mp-shell-surface);
     box-shadow: none;
@@ -348,18 +348,19 @@
     min-height: 100%;
     height: auto;
     padding: var(--dw-space-4);
-    border: 1px solid var(--mp-shell-border);
-    border-radius: var(--mp-shell-radius);
-    background: var(--mp-shell-tile);
+    border: 1px solid var(--dw-panel-outline, var(--mp-shell-border));
+    border-radius: var(--dw-panel-radius, var(--mp-shell-radius));
+    background: color-mix(in srgb, var(--mp-shell-tile) 68%, var(--dw-bg));
     box-shadow: none;
     overflow: visible;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .plugin-page .plugin-card.mp-feature-card:hover {
     transform: none;
-    border-color: color-mix(in srgb, var(--mp-tone) 28%, var(--mp-shell-border));
-    box-shadow: var(--dw-shadow-sm);
+    border-color: color-mix(in srgb, var(--mp-tone) 22%, var(--dw-panel-outline, var(--mp-shell-border)));
+    background: color-mix(in srgb, var(--mp-shell-tile) 82%, var(--dw-bg));
+    box-shadow: none;
 }
 
 .plugin-page .plugin-card.is-enabled::after {

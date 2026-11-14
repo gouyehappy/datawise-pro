@@ -1,7 +1,7 @@
 /** Package copy: @datawise/chrome attachOverlayScrollbar. Host file kept until cutover. */
 /**
- * Ô­µØ¹ÒÔØ×ÊÔ´Ê÷Í¬¿îµş¼Ó¹ö¶¯Ìõ¡£
- * ÊµÏÖ¼û `overlay-scrollbar-controller.ts`£»¶ÈÁ¿¼û `overlay-scrollbar-metrics.ts`¡£
+ * åŸåœ°æŒ‚è½½èµ„æºæ ‘åŒæ¬¾å åŠ æ»šåŠ¨æ¡ã€‚
+ * å®ç°è§ `overlay-scrollbar-controller.ts`ï¼›åº¦é‡è§ `overlay-scrollbar-metrics.ts`ã€‚
  */
 export {
     createOverlayScrollbarController,
@@ -12,7 +12,7 @@ export {
 
 import {createOverlayScrollbarController} from './overlay-scrollbar-controller'
 
-/** @returns dispose£»Î´¹ÒÔØÔò null */
+/** @returns disposeï¼›æœªæŒ‚è½½åˆ™ null */
 export function attachOverlayScrollbar(
     viewport: HTMLElement,
     options?: {hideAfterMs?: number},

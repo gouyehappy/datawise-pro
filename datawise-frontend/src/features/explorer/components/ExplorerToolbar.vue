@@ -17,6 +17,7 @@ import {EXPLORER_ICONS} from '@/features/explorer/constants/icons'
 import ExplorerAddMenu from './ExplorerAddMenu.vue'
 import ExportConnectionDialog from '@/features/explorer/components/ExportConnectionDialog.vue'
 import ImportConnectionDialog from '@/features/explorer/components/ImportConnectionDialog.vue'
+import ThirdPartyConnectionImportDialog from '@/features/explorer/components/ThirdPartyConnectionImportDialog.vue'
 import {
   runExplorerLocate,
   runExplorerRefresh,
@@ -25,7 +26,13 @@ import {
   runToggleSemanticLayer,
   runToggleTableComment,
 } from '@/features/explorer/services/explorer-toolbar.actions'
-import {profileImportConnectionCount, isConnectionProfilePackage} from '@/features/explorer/services/import-connection-file.service'
+import {profileImportConnectionCount} from '@/features/explorer/services/import-connection-file.service'
+import {planConnectionImportFile} from '@/features/explorer/services/plan-connection-import-file'
+import {
+  draftsToConnectionConfigs,
+  THIRD_PARTY_IMPORT_ACCEPT,
+  type ThirdPartyImportParseResult,
+} from '@/features/explorer/services/third-party-connection-import'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useFeaturePermission} from '@/features/auth/composables/useFeaturePermission'
@@ -35,7 +42,6 @@ import {FeaturePermission} from '@/features/auth/types/feature-permission.types'
 import {isProjectScopeAll, toggleProjectScopeAll} from '@/features/project/services/project-scope'
 import {useProjectStore} from '@/features/project/stores/project'
 import {resolveConnectionCatalogErrorMessage} from '@/features/connection/services/connection-catalog.service'
-import {parseConfigSnapshotPayload} from '@/features/settings/services/config-snapshot.service'
 import {
   commitExportSaveDestination,
   exportProfilePackage,
@@ -55,7 +61,7 @@ const showExplorerAdd = computed(() => canUseExplorerAddMenu(auth.isGuest))
 const icons = EXPLORER_ICONS
 /** 与连接树节点图标同级（TreeNodeIcon 18–20 / stroke 1.55） */
 const TOOLBAR_ICON_SIZE = 18
-const TOOLBAR_ICON_STROKE = 1.55
+const TOOLBAR_ICON_STROKE = 2
 
 const menuRef = ref<HTMLElement>()
 const settingsRef = ref<HTMLElement>()
@@ -73,6 +79,10 @@ const showImportDialog = ref(false)
 const importBusy = ref(false)
 const importFile = ref<File | null>(null)
 const importFileName = computed(() => importFile.value?.name || '')
+const showThirdPartyImportDialog = ref(false)
+const thirdPartyParse = ref<ThirdPartyImportParseResult | null>(null)
+const thirdPartyFileName = ref('')
+const thirdPartyBusy = ref(false)
 
 const emit = defineEmits<{
   'create-folder': []
@@ -120,7 +130,7 @@ function openImportConnections() {
   showMenu.value = false
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = '.dwprofile,.json,application/json,application/octet-stream'
+  input.accept = THIRD_PARTY_IMPORT_ACCEPT
   input.onchange = () => {
     const file = input.files?.[0]
     if (!file) return
@@ -130,16 +140,27 @@ function openImportConnections() {
 }
 
 async function handleImportFile(file: File) {
-  if (isConnectionProfilePackage(file)) {
-    importFile.value = file
-    showImportDialog.value = true
-    return
-  }
   try {
-    const parsed = parseConfigSnapshotPayload(await file.text())
-    const count = await explorer.importConnections(parsed.connections)
+    const plan = await planConnectionImportFile(file)
+    if (plan.kind === 'dwprofile') {
+      importFile.value = plan.file
+      showImportDialog.value = true
+      return
+    }
+    if (plan.kind === 'third-party') {
+      thirdPartyParse.value = plan.parse
+      thirdPartyFileName.value = plan.fileName
+      showThirdPartyImportDialog.value = true
+      return
+    }
+    const count = await explorer.importConnections(plan.connections)
     await explorer.refreshTree()
-    layout.showSuccessToast(t('explorer.importSuccess', {count}))
+    layout.notifyQuiet({
+      category: 'workspace',
+      titleKey: 'importDone',
+      bodyKey: 'importDone',
+      params: {detail: t('explorer.importSuccess', {count})},
+    })
   } catch (error) {
     layout.showErrorToast(
         resolveConnectionCatalogErrorMessage(error, t, 'save')
@@ -152,6 +173,44 @@ function onImportDialogOpenChange(open: boolean) {
   showImportDialog.value = open
   if (!open && !importBusy.value) {
     importFile.value = null
+  }
+}
+
+function onThirdPartyImportOpenChange(open: boolean) {
+  showThirdPartyImportDialog.value = open
+  if (!open && !thirdPartyBusy.value) {
+    thirdPartyParse.value = null
+    thirdPartyFileName.value = ''
+  }
+}
+
+async function confirmThirdPartyImport() {
+  const parse = thirdPartyParse.value
+  if (!parse?.drafts.length) {
+    layout.showErrorToast(t('explorer.thirdPartyImport.empty'))
+    return
+  }
+  thirdPartyBusy.value = true
+  try {
+    const configs = draftsToConnectionConfigs(parse.drafts)
+    const count = await explorer.importConnections(configs)
+    await explorer.refreshTree()
+    showThirdPartyImportDialog.value = false
+    thirdPartyParse.value = null
+    thirdPartyFileName.value = ''
+    layout.notifyQuiet({
+      category: 'workspace',
+      titleKey: 'importDone',
+      bodyKey: 'importDone',
+      params: {detail: t('explorer.importSuccess', {count})},
+    })
+  } catch (error) {
+    layout.showErrorToast(
+        resolveConnectionCatalogErrorMessage(error, t, 'save')
+        || t('explorer.importFailed'),
+    )
+  } finally {
+    thirdPartyBusy.value = false
   }
 }
 
@@ -190,7 +249,12 @@ async function confirmImportProfilePackage(payload: {passphrase: string}) {
       layout.showWarningToast(t('explorer.importConnectionEmpty'))
       return
     }
-    layout.showSuccessToast(t('explorer.importSuccess', {count}))
+    layout.notifyQuiet({
+      category: 'workspace',
+      titleKey: 'importDone',
+      bodyKey: 'importDone',
+      params: {detail: t('explorer.importSuccess', {count})},
+    })
   } catch (error) {
     layout.showErrorToast(
         resolveCaughtApiErrorMessage(error, t, 'explorer.importFailed'),
@@ -232,11 +296,16 @@ async function confirmExportProjectConnections(payload: {
       },
     })
     const savedPath = await commitExportSaveDestination(destination, blob, fileName)
-    layout.showSuccessToast(
-        savedPath
+    layout.notifyQuiet({
+      category: 'export',
+      titleKey: 'exportDone',
+      bodyKey: 'exportDone',
+      params: {
+        name: savedPath
             ? t('explorer.exportConnectionSaved', {path: savedPath})
             : t('explorer.exportConnectionSuccess'),
-    )
+      },
+    })
     showExportDialog.value = false
   } catch (error) {
     layout.showErrorToast(
@@ -266,11 +335,7 @@ function onSettingsMenuSelect(id: string) {
   if (id === 'toggle-all-projects') {
     showAllProjects.value = toggleProjectScopeAll()
     void runExplorerRefresh()
-    layout.showSuccessToast(
-      showAllProjects.value
-        ? t('explorer.showAllProjectsOn')
-        : t('explorer.showAllProjectsOff'),
-    )
+    // 树内容已变，菜单勾选态已更新，无需 toast。
   }
   settingsMenu.close()
 }
@@ -292,9 +357,17 @@ function shortcutLabel(actionId: ShortcutActionId): string {
   return formatShortcutLabel(actionId)
 }
 
+function clearSearch() {
+  explorer.searchQuery = ''
+  searchInputRef.value?.focus()
+}
+
 function onSearchKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
-    explorer.searchQuery = ''
+    if (explorer.searchQuery) {
+      clearSearch()
+      return
+    }
     searchInputRef.value?.blur()
   }
 }
@@ -375,15 +448,32 @@ onUnmounted(() => {
     />
 
     <div v-if="can(FeaturePermission.WorkbenchExplorerSearch)" class="search-wrap">
-      <label class="search" :class="{ 'search--active': explorer.searchQuery.trim().length > 0 }">
-        <DwIcon class="search-icon" :name="icons.search" size="sm"/>
+      <label
+          class="search"
+          :class="{ 'search--active': explorer.searchQuery.trim().length > 0 }"
+      >
+        <DwIcon class="search-icon" :name="icons.search" size="sm" :stroke-width="1.9"/>
         <input
             ref="searchInputRef"
             v-model="explorer.searchQuery"
             :placeholder="t('explorer.searchPlaceholder')"
+            :aria-label="t('explorer.searchPlaceholder')"
             @keydown="onSearchKeydown"
         />
-        <kbd v-if="shortcutLabel('explorer.search')" class="hint">{{ shortcutLabel('explorer.search') }}</kbd>
+        <button
+            v-if="explorer.searchQuery.trim().length > 0"
+            type="button"
+            class="search-clear"
+            :aria-label="t('explorer.clearSearch')"
+            @click.stop="clearSearch"
+        >
+          <DwIcon name="x" size="xs" :stroke-width="2"/>
+        </button>
+        <kbd
+            v-if="shortcutLabel('explorer.search')"
+            class="hint"
+            aria-hidden="true"
+        >{{ shortcutLabel('explorer.search') }}</kbd>
       </label>
     </div>
   </DwTreeToolbar>
@@ -402,15 +492,27 @@ onUnmounted(() => {
       @update:open="onImportDialogOpenChange"
       @confirm="confirmImportProfilePackage"
   />
+
+  <ThirdPartyConnectionImportDialog
+      :open="showThirdPartyImportDialog"
+      :file-name="thirdPartyFileName"
+      :parse="thirdPartyParse"
+      :busy="thirdPartyBusy"
+      @update:open="onThirdPartyImportOpenChange"
+      @confirm="confirmThirdPartyImport"
+  />
 </template>
 
 <style scoped>
 .toolbar {
   flex-wrap: nowrap;
-  gap: var(--dw-gap);
-  height: var(--dw-toolbar-height);
-  padding: 0 var(--dw-space-5) 0 var(--dw-space-3);
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  min-height: calc(var(--dw-toolbar-height) + 2px);
+  padding: 4px var(--dw-space-5) 8px var(--dw-space-3);
   min-width: 0;
+  border-bottom: none;
 }
 
 .actions {
@@ -453,26 +555,34 @@ onUnmounted(() => {
 .search {
   display: flex;
   align-items: center;
-  gap: var(--dw-gap-sm);
+  gap: 7px;
   width: 100%;
   min-width: 0;
-  height: var(--dw-btn-height-sm);
-  padding: 0 var(--dw-space-5);
+  height: 28px;
+  padding: 0 7px 0 8px;
   border: 1px solid transparent;
-  border-radius: var(--dw-radius-pill);
-  background: var(--dw-bg-muted);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--dw-bg-editor, var(--dw-bg)) 55%, var(--dw-bg-muted));
   color: var(--dw-text-muted);
-  transition: background var(--dw-duration-fast) var(--dw-ease), border-color 0.12s ease;
+  transition:
+      background 120ms ease,
+      border-color 120ms ease,
+      box-shadow 120ms ease;
+}
+
+.search:hover {
+  background: color-mix(in srgb, var(--dw-bg-editor, var(--dw-bg)) 35%, var(--dw-bg-muted));
+  border-color: color-mix(in srgb, var(--dw-border) 65%, transparent);
 }
 
 .search--active {
-  background: var(--dw-primary-softer);
-  border-color: var(--dw-primary-ring);
+  background: color-mix(in srgb, var(--dw-primary) 8%, var(--dw-bg-muted));
+  border-color: color-mix(in srgb, var(--dw-primary) 22%, transparent);
 }
 
 .search-icon {
   flex-shrink: 0;
-  opacity: 0.85;
+  opacity: 0.62;
 }
 
 .search input {
@@ -483,32 +593,67 @@ onUnmounted(() => {
   outline: none;
   background: transparent;
   color: var(--dw-text);
-  font-size: var(--dw-text-sm);
+  font-size: 12.5px;
+  line-height: 1.2;
 }
 
 .search input::placeholder {
-  color: var(--dw-text-muted);
+  color: color-mix(in srgb, var(--dw-text-muted) 92%, transparent);
 }
 
 .search:focus-within {
-  background: var(--dw-bg);
-  border-color: var(--dw-border);
+  background: color-mix(in srgb, var(--dw-bg-editor, var(--dw-bg)) 70%, var(--dw-bg-panel));
+  border-color: color-mix(in srgb, var(--dw-primary) 38%, var(--dw-border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dw-primary) 12%, transparent);
+  color: var(--dw-text);
 }
 
-.search--active:focus-within {
-  border-color: var(--dw-primary-border);
+.search:focus-within .search-icon {
+  opacity: 0.85;
+}
+
+.search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dw-text-muted);
+  cursor: pointer;
+}
+
+.search-clear:hover {
+  background: color-mix(in srgb, var(--dw-text) 8%, transparent);
+  color: var(--dw-text);
 }
 
 .hint {
   flex-shrink: 0;
-  padding: 1px var(--dw-space-2);
-  border: 1px solid var(--dw-border-light);
-  border-radius: var(--dw-control-radius-sm);
-  background: var(--dw-bg);
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--dw-border-light) 80%, transparent);
+  border-radius: 4px;
+  background: transparent;
   font-family: var(--dw-mono);
-  font-size: var(--dw-text-xs);
-  line-height: var(--dw-leading-snug);
+  font-size: 10px;
+  line-height: 14px;
   color: var(--dw-text-muted);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.search:hover .hint,
+.search:focus-within .hint {
+  opacity: 0.85;
+}
+
+.search--active .hint {
+  display: none;
 }
 
 @container explorer (max-width: 300px) {

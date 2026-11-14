@@ -18,7 +18,7 @@ class ConnectionLifecyclePropertiesTest {
     void defaultsEnableIdleEviction() {
         ConnectionLifecycleProperties properties = new ConnectionLifecycleProperties();
         assertTrue(properties.isIdleEvictEnabled());
-        assertEquals(900_000, properties.getIdleEvictMs());
+        assertEquals(1_800_000, properties.getIdleEvictMs());
         assertEquals(64, properties.getMaxActivePools());
     }
 

@@ -11,11 +11,14 @@ html[data-ui-skin='atelier'] {
     --dw-density-lg: clamp(38px, 4.2vmin, 44px);
     --dw-density-xl: clamp(52px, 5.8vmin, 60px);
 
-    --dw-shell-padding: clamp(10px, 1.2vmin, 14px);
-    --dw-panel-gap: clamp(10px, 1.2vmin, 14px);
+    /* 更大圆角与 gutter；工作台无硬框，靠色差 */
+    --dw-shell-padding: 8px;
+    --dw-panel-gap: 8px;
     --dw-panel-radius: var(--dw-radius-xl);
+    --dw-panel-outline: color-mix(in srgb, var(--dw-panel-border) 40%, transparent);
+    --dw-panel-shadow: none;
     --mp-card-gap: var(--dw-space-6);
-    --dw-splitter-size: 8px;
+    --dw-splitter-size: 6px;
 
     --dw-tool-stripe-width: 72px;
     --dw-tool-btn-pad: 10px;
@@ -27,6 +30,10 @@ html[data-ui-skin='atelier'] {
 
     --dw-titlebar-height: clamp(44px, 4.8vmin, 48px);
     --dw-titlebar-chip-radius: 10px;
+    /* 顶栏并入窗框；极淡项目色只作左侧氛围，不另开色带 */
+    --dw-titlebar-bg: var(--dw-bg-chrome);
+    --dw-titlebar-tint: color-mix(in srgb, var(--dw-titlebar-project) 6%, transparent);
+    --dw-titlebar-widget-h: var(--dw-density-sm);
 
     --dw-tab-height: var(--dw-density-md);
     --dw-tab-pill-height: var(--dw-density-xs);
@@ -64,7 +71,7 @@ html[data-ui-skin='atelier'] {
 /* —— Workbench tokens —— */
 html[data-ui-skin='atelier'] .dw-workbench-page {
     --dw-wb-head-bg: var(--dw-bg-panel);
-    --dw-wb-head-border: color-mix(in srgb, var(--dw-border-light) 75%, transparent);
+    --dw-wb-head-border: var(--dw-panel-outline);
     --dw-wb-head-shadow: 0 1px 0 color-mix(in srgb, var(--dw-text) 3%, transparent);
     --dw-wb-head-pad-y: var(--dw-space-5);
     --dw-wb-head-min-height: clamp(56px, 6.5vmin, 64px);
@@ -99,7 +106,7 @@ html[data-ui-skin='atelier'] .shell-main {
 
 html[data-ui-skin='atelier'] .desktop-titlebar {
     border-bottom: none;
-    box-shadow: 0 1px 0 color-mix(in srgb, var(--dw-text) 3%, transparent);
+    box-shadow: none;
 }
 
 html[data-ui-skin='atelier'] .desktop-titlebar__btn {
@@ -124,21 +131,102 @@ html[data-ui-skin='atelier'] .status-bar {
     border-top: none;
 }
 
+html[data-ui-skin='atelier'] .tool-stripe__group--bottom {
+    border-top-color: color-mix(in srgb, var(--dw-panel-border) 45%, transparent);
+}
+
+html[data-ui-skin='atelier'] :is(
+    .explorer.dw-surface,
+    .workspace.dw-surface,
+    .tool-window,
+    .terminal-window,
+    .terminal-pane,
+    .shortcut-panel
+) {
+    border: none;
+    border-radius: var(--dw-panel-radius);
+    box-shadow: none;
+}
+
+html[data-ui-skin='atelier'] .explorer.dw-surface {
+    background: var(--dw-bg-panel);
+}
+
+/* 暗色：菜单边 / 结构缝 / pill 与共享契约对齐 */
+html[data-ui-skin='atelier'][data-theme='dark'] {
+    --dw-menu-border: var(--dw-panel-outline);
+    --dw-border-light: var(--dw-panel-outline);
+    --dw-tool-pill-active: color-mix(in srgb, #fff 10%, var(--dw-bg-rail));
+}
+
+html[data-ui-skin='atelier'][data-theme='dark'] .shell-body {
+    background: var(--dw-bg-chrome);
+}
+
+html[data-ui-skin='atelier'][data-theme='dark'] .explorer.dw-surface {
+    background: var(--dw-bg-panel);
+}
+
+html[data-ui-skin='atelier'][data-theme='dark'] :is(
+    .workspace.dw-surface,
+    .terminal-window,
+    .terminal-pane,
+    .tool-window,
+    .editor-pane,
+    .dw-console-toolbar
+) {
+    background: var(--dw-bg-editor);
+}
+
+html[data-ui-skin='atelier'][data-theme='dark'] :is(.result-pane, .result-collapsed-bar) {
+    background: var(--dw-bg-muted);
+}
+
+html[data-ui-skin='atelier'][data-theme='dark'] .explorer .header,
+html[data-ui-skin='atelier'][data-theme='dark'] .explorer .toolbar {
+    border-bottom: 1px solid var(--dw-panel-outline);
+}
+
+html[data-ui-skin='atelier'] :is(
+    .workspace.dw-surface,
+    .tool-window,
+    .terminal-window,
+    .terminal-pane
+) {
+    background: var(--dw-bg-editor);
+}
+
+html[data-ui-skin='atelier'] .tool-window__head {
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+    padding-block: var(--dw-space-3);
+}
+
+html[data-ui-skin='atelier'] :is(.editor-pane, .dw-console-toolbar) {
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+    background: var(--dw-bg-editor);
+}
+
+html[data-ui-skin='atelier'] .result-pane {
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+    background: var(--dw-bg-muted);
+}
+
 html[data-ui-skin='atelier'] .status-bar__chip {
     border-radius: var(--dw-control-radius-sm);
 }
 
 html[data-ui-skin='atelier'] .terminal-pane {
     border-radius: var(--dw-wb-terminal-radius, var(--dw-radius-xl));
-    box-shadow: var(--dw-wb-terminal-shadow, none);
-    border-top: none;
+    box-shadow: none;
+    border: none;
 }
 
-/* —— Tabs: soft pills with more air —— */
+/* —— Tabs: soft pills with more air；色跟 --dw-tab-* —— */
 html[data-ui-skin='atelier'] .dw-tab-bar {
     padding: var(--dw-space-2) var(--dw-space-4);
     gap: var(--dw-tab-gap);
-    border-bottom-color: color-mix(in srgb, var(--dw-border-light) 80%, transparent);
+    border-bottom-color: var(--dw-tab-bar-border, var(--dw-panel-outline));
+    background: var(--dw-tab-bar-bg, var(--dw-bg-panel));
 }
 
 html[data-ui-skin='atelier'] .dw-tab-scroll {
@@ -153,15 +241,16 @@ html[data-ui-skin='atelier'] .dw-tab {
 }
 
 html[data-ui-skin='atelier'] .dw-tab:hover:not(.active) {
-    background: color-mix(in srgb, var(--dw-text) 4%, transparent);
+    background: var(--dw-tab-hover-bg);
+    color: var(--dw-text);
 }
 
 html[data-ui-skin='atelier'] .dw-tab.active,
 html[data-ui-skin='atelier'] .dw-tab.active:hover {
-    background: var(--dw-bg-panel);
-    border-color: color-mix(in srgb, var(--dw-border) 70%, transparent);
+    background: var(--dw-tab-active-bg);
+    border-color: var(--dw-tab-active-border, transparent);
     box-shadow: 0 1px 3px color-mix(in srgb, var(--dw-text) 6%, transparent);
-    color: var(--dw-text);
+    color: var(--dw-tab-active-text, var(--dw-text));
 }
 
 html[data-ui-skin='atelier'] .dw-tab__close {
@@ -193,24 +282,29 @@ html[data-ui-skin='atelier'] .dw-segment__btn {
 }
 
 /* —— Tool window / module / modal —— */
-html[data-ui-skin='atelier'] .tool-window__head {
-    border-bottom: 1px solid color-mix(in srgb, var(--dw-border-light) 85%, transparent);
-    padding-block: var(--dw-space-3);
-}
-
 html[data-ui-skin='atelier'] :is(.app-modal__panel, .app-drawer__panel, .dw-modal__panel) {
     border-radius: var(--dw-modal-radius);
     box-shadow: var(--dw-menu-shadow, 0 12px 40px color-mix(in srgb, var(--dw-text) 12%, transparent));
 }
 
+html[data-ui-skin='atelier'] .module-shell {
+    background: var(--dw-bg);
+}
+
 html[data-ui-skin='atelier'] .module-shell__nav {
-    border-right: 1px solid color-mix(in srgb, var(--dw-border-light) 85%, transparent);
-    background: color-mix(in srgb, var(--dw-bg-chrome) 82%, var(--dw-bg-panel));
+    border-right: 1px solid var(--dw-panel-outline);
+    background: var(--dw-bg-panel);
+    box-shadow: none;
+}
+
+html[data-ui-skin='atelier'] .module-shell__main {
+    background: var(--dw-bg);
 }
 
 html[data-ui-skin='atelier'] .module-shell__nav-item.is-active {
     border-radius: var(--dw-control-radius);
-    background: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg-panel));
+    background: color-mix(in srgb, var(--dw-primary) 10%, transparent);
+    box-shadow: inset 2px 0 0 var(--dw-primary);
 }
 
 /* —— Cards & browse chrome —— */

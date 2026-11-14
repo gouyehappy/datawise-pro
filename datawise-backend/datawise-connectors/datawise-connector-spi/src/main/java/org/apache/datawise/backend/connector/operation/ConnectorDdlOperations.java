@@ -27,9 +27,22 @@ public interface ConnectorDdlOperations {
                                            String database,
                                            String relationName,
                                            RelationKind kind) throws SQLException {
-        return kind == RelationKind.VIEW
-                ? loadViewDdl(connection, entity, database, relationName)
-                : loadDdl(connection, entity, database, relationName);
+        if (kind == RelationKind.VIEW) {
+            return loadViewDdl(connection, entity, database, relationName);
+        }
+        if (kind == RelationKind.TRIGGER) {
+            return loadTriggerDdl(connection, entity, database, relationName);
+        }
+        if (kind == RelationKind.FUNCTION) {
+            return loadFunctionDdl(connection, entity, database, relationName);
+        }
+        if (kind == RelationKind.PROCEDURE) {
+            return loadProcedureDdl(connection, entity, database, relationName);
+        }
+        if (kind == RelationKind.SEQUENCE) {
+            return loadSequenceDdl(connection, entity, database, relationName);
+        }
+        return loadDdl(connection, entity, database, relationName);
     }
 
     default TableDdlResult loadViewDdl(
@@ -38,6 +51,50 @@ public interface ConnectorDdlOperations {
                                        String database,
                                        String viewName) throws SQLException {
         return loadDdl(connection, entity, database, viewName);
+    }
+
+    default TableDdlResult loadTriggerDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String triggerName
+    ) throws SQLException {
+        return unsupportedRoutineDdl(entity, "Trigger", triggerName);
+    }
+
+    default TableDdlResult loadFunctionDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String functionName
+    ) throws SQLException {
+        return unsupportedRoutineDdl(entity, "Function", functionName);
+    }
+
+    default TableDdlResult loadProcedureDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String procedureName
+    ) throws SQLException {
+        return unsupportedRoutineDdl(entity, "Procedure", procedureName);
+    }
+
+    default TableDdlResult loadSequenceDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String sequenceName
+    ) throws SQLException {
+        return unsupportedRoutineDdl(entity, "Sequence", sequenceName);
+    }
+
+    private static TableDdlResult unsupportedRoutineDdl(ConnectionEntity entity, String kindLabel, String name) {
+        String dbType = entity != null && entity.getDbType() != null ? entity.getDbType() : "unknown";
+        return new TableDdlResult(
+                "-- " + kindLabel + " DDL is not implemented for dbType=" + dbType + "\n"
+                        + "-- " + kindLabel + ": " + name + "\n"
+        );
     }
 
     default String renderCreateTable(TableDefinition definition, DdlRenderOptions options) {

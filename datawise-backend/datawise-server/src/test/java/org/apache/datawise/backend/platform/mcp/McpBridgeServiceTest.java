@@ -5,13 +5,16 @@ import org.apache.datawise.backend.common.pack.AiAccessGate;
 import org.apache.datawise.backend.common.pack.AiTableTagFilter;
 import org.apache.datawise.backend.common.pack.AnalysisCanvasRerun;
 import org.apache.datawise.backend.common.pack.SemanticMetricQuery;
+import org.apache.datawise.backend.ai.schema.AiSchemaContextService;
 import org.apache.datawise.backend.database.drift.SchemaDriftService;
 import org.apache.datawise.backend.database.federated.FederatedSqlGenerator;
 import org.apache.datawise.backend.database.sql.SqlService;
+import org.apache.datawise.backend.database.table.TableDataService;
 import org.apache.datawise.backend.database.table.TableDetailService;
 import org.apache.datawise.backend.domain.ExecuteSqlRequest;
 import org.apache.datawise.backend.domain.UserFeaturePermission;
 import org.apache.datawise.backend.model.ConnectionEntity;
+import org.apache.datawise.backend.platform.mcp.audit.McpCallAuditService;
 import org.apache.datawise.backend.platform.mcp.confirm.ConfirmGateService;
 import org.apache.datawise.backend.platform.mcp.confirm.ConfirmTicket;
 import org.apache.datawise.backend.platform.sql.SqlReviewOrchestrator;
@@ -151,7 +154,13 @@ class McpBridgeServiceTest {
                 mock(WorkbenchContextStore.class),
                 confirmGate,
                 permissions,
-                guard
+                guard,
+                mock(McpAccessPolicyService.class),
+                mock(McpCallAuditService.class),
+                mock(TableDataService.class),
+                mock(AiSchemaContextService.class),
+                mock(org.apache.datawise.backend.ai.schema.AiTableRelationService.class),
+                mock(org.apache.datawise.backend.connector.facade.ConnectorFacade.class)
         );
         UserContext.set(9L, false, "session-1");
 
@@ -200,7 +209,13 @@ class McpBridgeServiceTest {
                 mock(WorkbenchContextStore.class),
                 mock(ConfirmGateService.class),
                 mock(FeaturePermissionAccess.class),
-                mock(ProductionWriteGuardService.class)
+                mock(ProductionWriteGuardService.class),
+                mock(McpAccessPolicyService.class),
+                mock(McpCallAuditService.class),
+                mock(TableDataService.class),
+                mock(AiSchemaContextService.class),
+                mock(org.apache.datawise.backend.ai.schema.AiTableRelationService.class),
+                mock(org.apache.datawise.backend.connector.facade.ConnectorFacade.class)
         );
         UserContext.setApiToken(1L, "tok-1", Set.of(ApiTokenScopes.SQL));
 
@@ -215,6 +230,8 @@ class McpBridgeServiceTest {
             TenantQuotaService tenantQuotaService,
             FeaturePermissionAccess featurePermissionAccess
     ) {
+        McpAccessPolicyService policyService = mock(McpAccessPolicyService.class);
+        when(policyService.current()).thenReturn(McpAccessPolicy.permissive("default"));
         return new McpBridgeService(
                 mock(ConnectionVisibilityService.class),
                 mock(TableDetailService.class),
@@ -230,7 +247,74 @@ class McpBridgeServiceTest {
                 mock(WorkbenchContextStore.class),
                 mock(ConfirmGateService.class),
                 featurePermissionAccess,
-                mock(ProductionWriteGuardService.class)
+                mock(ProductionWriteGuardService.class),
+                policyService,
+                new McpCallAuditService(),
+                mock(TableDataService.class),
+                mock(AiSchemaContextService.class),
+                mock(org.apache.datawise.backend.ai.schema.AiTableRelationService.class),
+                mock(org.apache.datawise.backend.connector.facade.ConnectorFacade.class)
         );
+    }
+
+    @Test
+    void invokeDeniesDangerousToolsUnderReadOnlyPolicy() {
+        McpAccessPolicyStore policyStore = mock(McpAccessPolicyStore.class);
+        when(policyStore.load(anyString())).thenReturn(Optional.of(McpAccessPolicy.readOnlyPolicy("default")));
+        McpAccessPolicyService policyService = new McpAccessPolicyService(policyStore);
+        McpBridgeService service = new McpBridgeService(
+                mock(ConnectionVisibilityService.class),
+                mock(TableDetailService.class),
+                mock(SqlService.class),
+                mock(SqlReviewOrchestrator.class),
+                mock(SchemaDriftService.class),
+                mock(AiTableTagFilter.class),
+                mock(SemanticMetricQuery.class),
+                mock(AnalysisCanvasRerun.class),
+                mock(FederatedSqlGenerator.class),
+                mock(AiAccessGate.class),
+                mock(TenantQuotaService.class),
+                mock(WorkbenchContextStore.class),
+                mock(ConfirmGateService.class),
+                mock(FeaturePermissionAccess.class),
+                mock(ProductionWriteGuardService.class),
+                policyService,
+                new McpCallAuditService(),
+                mock(TableDataService.class),
+                mock(AiSchemaContextService.class),
+                mock(org.apache.datawise.backend.ai.schema.AiTableRelationService.class),
+                mock(org.apache.datawise.backend.connector.facade.ConnectorFacade.class)
+        );
+        UserContext.set(1L, false, "session-1");
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.invoke(new McpBridgeService.McpInvokeRequest(
+                        "propose_open_console",
+                        Map.of("sql", "select 1")
+                ))
+        );
+        assertTrue(error.getMessage().toLowerCase().contains("read-only")
+                || error.getMessage().toLowerCase().contains("dangerous"));
+    }
+
+    @Test
+    void listToolsIncludesAnnotationsAndNewSchemaTools() {
+        McpBridgeService service = newService(
+                mock(SqlService.class),
+                mock(AiAccessGate.class),
+                mock(TenantQuotaService.class),
+                mock(FeaturePermissionAccess.class)
+        );
+        var tools = service.listTools();
+        assertTrue(tools.size() >= 21);
+        assertTrue(tools.stream().anyMatch(t -> "get_sample_data".equals(t.get("name"))));
+        assertTrue(tools.stream().anyMatch(t -> "explain_query".equals(t.get("name"))));
+        assertTrue(tools.stream().anyMatch(t -> "validate_sql".equals(t.get("name"))));
+        assertTrue(tools.stream().anyMatch(t -> "list_relations".equals(t.get("name"))));
+        assertTrue(tools.stream().anyMatch(t -> "query_status".equals(t.get("name"))));
+        assertTrue(tools.stream().anyMatch(t -> "cancel_query".equals(t.get("name"))));
+        assertTrue(tools.stream().anyMatch(t -> "get_access_policy".equals(t.get("name"))));
+        assertTrue(tools.stream().allMatch(t -> t.containsKey("readOnly") && t.containsKey("dangerous")));
     }
 }

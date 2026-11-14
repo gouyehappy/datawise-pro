@@ -1,0 +1,552 @@
+/**
+ * 仪表盘 / 扩展 / 插件 / 连接 / 开发 — 统一密度与分层表面。
+ * 只挂这些页面根；不改 DwCard 全局、不改 SQL 工作台。
+ *
+ * 表面三层：page(chrome) → section(区块壳) → card(内卡)
+ * 密度：统一小间隙 + 统一卡片内边距，避免有的空有的挤。
+ */
+
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) {
+    /* 圆角跟皮肤：classic 有值，ide=0 → 直角 */
+    --mp-shell-radius: var(--dw-panel-radius, 8px);
+    --mp-pad: 8px;
+    --mp-shell-gap: 4px;
+    --mp-gap: 4px;
+    --mp-gap-lg: 4px;
+    --mp-card-gap: 4px;
+
+    --hub-page-bg: var(--dw-bg-chrome);
+    --hub-section-bg: color-mix(in srgb, var(--dw-bg-muted) 78%, var(--dw-bg-chrome));
+    --hub-card-bg: color-mix(in srgb, var(--dw-bg-panel) 48%, var(--dw-bg-muted));
+    --hub-tile-bg: color-mix(in srgb, var(--dw-bg-muted) 48%, var(--dw-bg-chrome));
+    --hub-edge: var(--dw-panel-outline, var(--dw-panel-border, color-mix(in srgb, var(--dw-text) 8%, transparent)));
+    --hub-text-secondary: color-mix(in srgb, var(--dw-text) 82%, transparent);
+    --hub-text-muted: color-mix(in srgb, var(--dw-text) 64%, transparent);
+    --hub-card-pad: 10px 12px;
+    --hub-section-pad: 10px 12px;
+
+    --mp-shell-border: var(--hub-edge);
+    --mp-shell-surface: var(--hub-section-bg);
+    --mp-shell-tile: var(--hub-section-bg);
+    --pc-tile-gap: var(--mp-card-gap);
+    --cm-tile-gap: var(--mp-card-gap);
+
+    background: var(--hub-page-bg);
+    color: var(--dw-text);
+    padding: var(--mp-pad);
+}
+
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-page-wrap,
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-regions,
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-stack-2,
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-stack-3,
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-stack-4 {
+    gap: 4px !important;
+}
+
+/* 干掉 hero / 亮点等「自带 margin」叠在 regions gap 上 */
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) :is(.mp-hero, .mp-panel, .release-cards) {
+    margin: 0 !important;
+}
+
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-hero__inner {
+    gap: 8px !important;
+    padding: 10px 12px !important;
+}
+
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-region--journey,
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-region--status,
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) .mp-region--header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* —— 统一次级文案对比 —— */
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) :is(
+    .mp-status__label,
+    .mp-hero__subtitle,
+    .pack-suite__sub,
+    .pack-suite__tagline,
+    .pack-suite__meta,
+    .pack-suite__persona-hint,
+    .pack-suite__tips,
+    .pack-suite__pricing,
+    .pack-card__pitch,
+    .pack-store__section-title,
+    .pack-audit__sub,
+    .pack-audit__heartbeat,
+    .pack-audit__pack,
+    .pack-audit__foot,
+    .dash-card__sub,
+    .dash-action__hint,
+    .dash-sql__meta,
+    .dash-tab__meta,
+    .dash-conn__type,
+    .plugin-panel__sub,
+    .plugin-alert__text,
+    .plugin-dev-pane__desc,
+    .plugin-dev-pane__hint,
+    .plugin-dev-matrix-card__label,
+    .plugin-dev-matrix-group__title,
+    .connector-card__id,
+    .connector-card__meta,
+    .connector-card__version
+) {
+    color: var(--hub-text-secondary) !important;
+}
+
+/* —— 统一区块壳 —— */
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) :is(
+    .mp-journey,
+    .dash-card,
+    .dw-card.dash-card,
+    .pack-suite,
+    .pack-store__site-trial,
+    .pack-store__catalog,
+    .pack-audit,
+    .plugin-panel,
+    .plugin-alert,
+    .plugin-filter-dock,
+    .plugin-dev__panel,
+    .plugin-dev-preset-sync,
+    .release-cards
+) {
+    border: 1px solid var(--hub-edge) !important;
+    border-radius: var(--mp-shell-radius) !important;
+    background: var(--hub-section-bg) !important;
+    box-shadow: none !important;
+}
+
+/* —— 统一内卡 —— */
+:is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) :is(
+    .mp-status__item,
+    .dash-action,
+    .dash-sql,
+    .pack-suite__card,
+    .pack-card,
+    .pack-audit__row,
+    .plugin-card,
+    .plugin-preset-card,
+    .plugin-dev-matrix-card,
+    .connector-card,
+    .release-card
+) {
+    border: 1px solid var(--hub-edge) !important;
+    border-radius: var(--mp-shell-radius) !important;
+    background: var(--hub-card-bg) !important;
+    box-shadow: none !important;
+}
+
+/* —— 指标砖 —— */
+:is(.dashboard-page, .pack-store-page, .plugin-page, .connector-market-page, .plugin-dev-page) .mp-status {
+    gap: 4px !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    margin: 0 !important;
+}
+
+:is(.dashboard-page, .pack-store-page, .plugin-page, .connector-market-page, .plugin-dev-page) .mp-status__item {
+    flex: 1 1 0;
+    min-width: 5.5rem;
+    padding: 8px 10px;
+    background: var(--hub-tile-bg) !important;
+}
+
+:is(.dashboard-page, .pack-store-page, .plugin-page, .connector-market-page, .plugin-dev-page) .mp-journey {
+    padding: var(--hub-section-pad);
+}
+
+/* —— 仪表盘密度 —— */
+.dashboard-page .dash-layout,
+.dashboard-page .dash-col {
+    gap: 4px !important;
+}
+
+.dashboard-page .dash-card {
+    overflow: hidden;
+}
+
+.dashboard-page .dash-card__head {
+    padding: 8px 12px !important;
+    border-bottom-color: var(--hub-edge) !important;
+    background: transparent !important;
+}
+
+.dashboard-page .dash-card__body--actions,
+.dashboard-page .dash-card__body--feed {
+    gap: 6px !important;
+    padding: 8px 10px !important;
+}
+
+.dashboard-page .dash-action {
+    padding: 8px 10px !important;
+    gap: 10px !important;
+}
+
+.dashboard-page .dash-action__icon {
+    width: 28px !important;
+    height: 28px !important;
+}
+
+.dashboard-page .dash-action__hint,
+.dashboard-page .dash-sql__meta {
+    font-size: var(--dw-text-xs);
+}
+
+.dashboard-page .release-cards {
+    margin: 0 !important;
+    padding: 8px 10px !important;
+}
+
+.dashboard-page .release-cards__head {
+    margin-bottom: 6px !important;
+    gap: 8px !important;
+}
+
+.dashboard-page .release-cards__grid {
+    gap: 4px !important;
+}
+
+.dashboard-page .release-card {
+    padding: 8px 10px !important;
+}
+
+.dashboard-page .release-card p {
+    margin: 4px 0 6px !important;
+}
+
+/* —— 扩展商店密度 —— */
+.pack-store-page .pack-store {
+    gap: var(--mp-shell-gap);
+}
+
+.pack-store-page .pack-suite {
+    gap: 8px !important;
+    padding: var(--hub-section-pad) !important;
+}
+
+.pack-store-page .pack-suite__grid,
+.pack-store-page .pack-store__grid {
+    gap: var(--mp-card-gap) !important;
+}
+
+.pack-store-page .pack-suite__card {
+    min-height: 0 !important;
+    gap: 6px !important;
+    padding: var(--hub-card-pad) !important;
+}
+
+.pack-store-page .pack-store__catalog {
+    gap: 8px !important;
+    padding: var(--hub-section-pad) !important;
+}
+
+.pack-store-page .pack-store__filters,
+.pack-store-page .pack-store__layers {
+    border: 1px solid var(--hub-edge);
+    border-radius: var(--mp-shell-radius);
+    background: var(--hub-tile-bg);
+}
+
+.pack-store-page .pack-card {
+    min-height: 0 !important;
+    gap: 6px !important;
+    padding: var(--hub-card-pad) !important;
+}
+
+.pack-store-page .pack-card--featured {
+    min-height: 0 !important;
+}
+
+.pack-store-page .pack-store__section {
+    gap: 6px !important;
+}
+
+.pack-store-page .pack-store__section-title {
+    color: var(--hub-text-muted) !important;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: var(--dw-text-2xs) !important;
+}
+
+.pack-store-page .pack-audit {
+    margin-top: 6px !important;
+    padding: var(--hub-section-pad) !important;
+    border-top: none !important;
+    gap: 6px !important;
+}
+
+.pack-store-page .pack-audit__rows {
+    gap: 4px !important;
+}
+
+.pack-store-page .pack-audit__row {
+    padding: 6px 10px !important;
+}
+
+.pack-store-page .pack-audit__foot {
+    color: var(--hub-text-muted) !important;
+}
+
+/* —— 插件中心 —— */
+.plugin-page .plugin-layout,
+.plugin-page .plugin-sidebar,
+.plugin-page .plugin-alerts {
+    gap: var(--mp-shell-gap) !important;
+}
+
+.plugin-page .plugin-panel {
+    padding: var(--hub-section-pad) !important;
+}
+
+.plugin-page .plugin-card,
+.plugin-page .plugin-preset-card {
+    padding: var(--hub-card-pad) !important;
+    gap: 6px !important;
+}
+
+/* —— 连接市场 —— */
+.connector-market-page .connector-market--page,
+.connector-market-page .connector-market-library {
+    gap: var(--mp-shell-gap) !important;
+}
+
+.connector-market-page .connector-market-library {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+.connector-market-page .connector-market-split {
+    gap: 6px !important;
+}
+
+.connector-market-page .connector-market-split__list,
+.connector-market-page .connector-market-split__detail {
+    border: 1px solid var(--hub-edge) !important;
+    border-radius: var(--mp-shell-radius) !important;
+    background: var(--hub-section-bg) !important;
+}
+
+.connector-market-page .connector-market-split__list {
+    padding: 4px !important;
+}
+
+.connector-market-page .connector-market-board--list {
+    gap: 4px !important;
+}
+
+.connector-market-page .connector-market-split .connector-card--list,
+.connector-market-page .connector-market-split .connector-card--selectable {
+    border: 1px solid transparent !important;
+    border-radius: var(--mp-shell-radius) !important;
+    background: transparent !important;
+    min-height: 40px !important;
+    padding: 6px 8px !important;
+    gap: 6px !important;
+}
+
+.connector-market-page .connector-market-split .connector-card--selectable.is-selected {
+    border-color: color-mix(in srgb, var(--dw-primary) 35%, var(--hub-edge)) !important;
+    background: color-mix(in srgb, var(--dw-primary) 10%, var(--hub-card-bg)) !important;
+}
+
+.connector-market-page .connector-card:not(.connector-card--list) {
+    padding: var(--hub-card-pad) !important;
+    gap: 6px !important;
+}
+
+.connector-market-page .connector-market-pending-alert {
+    border: 1px solid var(--hub-edge) !important;
+    border-radius: var(--mp-shell-radius) !important;
+    padding: 8px 12px !important;
+}
+
+/* —— 开发工具 —— */
+.plugin-dev-page .plugin-dev {
+    gap: var(--mp-shell-gap) !important;
+}
+
+.plugin-dev-page .plugin-dev-pane {
+    padding: var(--hub-section-pad) !important;
+}
+
+.plugin-dev-page .plugin-dev-pane__head {
+    margin-bottom: 8px !important;
+    gap: 8px !important;
+}
+
+.plugin-dev-page .plugin-dev-preset-sync {
+    margin-bottom: 8px !important;
+    padding: var(--hub-section-pad) !important;
+    gap: 8px !important;
+}
+
+.plugin-dev-page .plugin-dev-matrix-group + .plugin-dev-matrix-group {
+    margin-top: 10px !important;
+}
+
+.plugin-dev-page .plugin-dev-matrix-group__title {
+    margin-bottom: 6px !important;
+    font-size: var(--dw-text-2xs) !important;
+}
+
+.plugin-dev-page .plugin-dev-matrix-cards {
+    gap: var(--mp-card-gap) !important;
+}
+
+.plugin-dev-page .plugin-dev-matrix-card {
+    padding: var(--hub-card-pad) !important;
+    gap: 6px !important;
+}
+
+.plugin-dev-page .plugin-dev-matrix-toolbar {
+    gap: 6px !important;
+    margin-bottom: 8px !important;
+}
+
+/* IDE hub：直角 + 缝约为共享规则一半（4 → 2） */
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) {
+    --dw-panel-radius: 0;
+    --mp-shell-radius: 0;
+    --mp-pad: 4px;
+    --mp-shell-gap: 2px;
+    --mp-gap: 2px;
+    --mp-gap-lg: 2px;
+    --mp-card-gap: 2px;
+}
+
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) :is(.mp-regions, .mp-page-wrap, .mp-stack-2, .mp-stack-3, .mp-stack-4) {
+    gap: 2px !important;
+}
+
+html[data-ui-skin='ide'] :is(
+    .dashboard-page,
+    .pack-store-page,
+    .plugin-page,
+    .connector-market-page,
+    .plugin-dev-page
+) :is(
+    .mp-journey,
+    .dash-card,
+    .dw-card.dash-card,
+    .pack-suite,
+    .pack-store__catalog,
+    .pack-audit,
+    .plugin-panel,
+    .plugin-card,
+    .plugin-dev__panel,
+    .plugin-dev-matrix-card,
+    .connector-card,
+    .connector-card--list,
+    .connector-card--selectable,
+    .release-cards,
+    .release-card,
+    .mp-status__item,
+    .dash-action,
+    .pack-suite__card,
+    .pack-card,
+    .pack-audit__row
+) {
+    border-radius: 0 !important;
+}

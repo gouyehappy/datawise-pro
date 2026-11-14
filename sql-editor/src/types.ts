@@ -202,6 +202,13 @@ export interface SqlEditorShortcutsSettings {
     folding?: boolean
     /** 光标在语句上时显示行内执行按钮，默认开启 */
     showRunGutterButton?: boolean
+    /**
+     * 列诊断：`auto` 超大文档关闭 live markers；`on`/`off` 强制。
+     * 默认 `auto`（T-ED-1）。
+     */
+    columnDiagnosticsMode?: 'auto' | 'on' | 'off'
+    /** Monaco Vim 键位（懒加载 monaco-vim），默认关闭 */
+    vimModeEnabled?: boolean
     /** 编辑器 UI 语言 */
     locale?: SqlEditorLocale
     /** 编辑器字号；未设置时跟随宿主 Monaco 配置 */

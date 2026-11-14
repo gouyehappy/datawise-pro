@@ -33,6 +33,8 @@ export default {
         openConnectorMarket: '打开连接器市场',
         openDataCatalog: '打开数据目录',
         openPluginSettings: '打开插件设置',
+        askAi: '向 AI 提问',
+        askAiHint: '直接打开 AI 提问框',
     },
     plugins: {
         focus: '插件：{name}',

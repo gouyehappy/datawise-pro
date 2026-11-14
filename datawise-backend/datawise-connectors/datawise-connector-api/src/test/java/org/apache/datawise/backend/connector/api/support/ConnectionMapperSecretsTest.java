@@ -40,6 +40,22 @@ class ConnectionMapperSecretsTest {
     }
 
     @Test
+    void publicDtoOmitsSecretMaterialButKeepsPresenceFlags() {
+        ConnectionEntity entity = new ConnectionEntity();
+        entity.setPassword("db-secret");
+        entity.setSshPassword("ssh-secret");
+        entity.setPluginSecrets("{\"totp_secret\":\"abc\"}");
+
+        ConnectionConfig config = ConnectionMapper.toPublicDto(entity);
+        assertEquals(Boolean.TRUE, config.getHasPassword());
+        assertEquals(Boolean.TRUE, config.getHasSshPassword());
+        assertEquals(Boolean.TRUE, config.getHasSecrets());
+        assertNull(config.getPassword());
+        assertNull(config.getSshPassword());
+        assertNull(config.getSecrets());
+    }
+
+    @Test
     void nullSecretsLeavesEntityUntouched() {
         ConnectionEntity entity = new ConnectionEntity();
         entity.setPluginSecrets("{\"keep\":true}");

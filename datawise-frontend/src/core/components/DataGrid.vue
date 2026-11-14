@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
 /**
  * Shim → `@/core/data-grid/components/DataGrid.vue` (host-only product SQL grid).
  * Prefer `@datawise/data-grid` `DwDataGrid` for new portable / catalog-style grids.

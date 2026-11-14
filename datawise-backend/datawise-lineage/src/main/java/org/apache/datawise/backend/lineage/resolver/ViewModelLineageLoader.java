@@ -10,7 +10,7 @@ import org.apache.datawise.backend.lineage.model.LineageWarning;
 import org.apache.datawise.backend.lineage.model.SourceKind;
 import org.apache.datawise.backend.lineage.model.SourceRef;
 import org.apache.datawise.backend.lineage.spi.SqlLineageParserRegistry;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -24,11 +24,12 @@ import java.util.Set;
 public class ViewModelLineageLoader {
 
     private final ViewModelReferenceResolver viewModelResolver;
-    private final SqlLineageParserRegistry parserRegistry;
+    /** Late lookup breaks Registry ↔ Loader ↔ Jsql constructor cycle (BE-P2-1). */
+    private final ObjectFactory<SqlLineageParserRegistry> parserRegistry;
 
     public ViewModelLineageLoader(
             ViewModelReferenceResolver viewModelResolver,
-            @Lazy SqlLineageParserRegistry parserRegistry
+            ObjectFactory<SqlLineageParserRegistry> parserRegistry
     ) {
         this.viewModelResolver = viewModelResolver;
         this.parserRegistry = parserRegistry;
@@ -80,7 +81,7 @@ public class ViewModelLineageLoader {
                 Set.copyOf(visited),
                 parentRequest.resolution()
         );
-        return Optional.of(parserRegistry.parseWithFallback(childRequest));
+        return Optional.of(parserRegistry.getObject().parseWithFallback(childRequest));
     }
 
     public List<ColumnLineage> loadOutputColumns(

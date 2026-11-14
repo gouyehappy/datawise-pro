@@ -699,5 +699,11 @@ export function createHttpExplorerApi(): ExplorerApi {
 
         fetchMysqlCharsets: async (connectionId) =>
             getJson(API_PATHS.explorer.mysqlCharsets(connectionId)),
+
+        fetchEngines: async (connectionId) =>
+            getJson(API_PATHS.explorer.engines(connectionId)),
+
+        fetchDataTypes: async (connectionId) =>
+            getJson(API_PATHS.explorer.dataTypes(connectionId)),
     }
 }

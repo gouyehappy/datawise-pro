@@ -10,7 +10,6 @@ import {AI_TABLE_TAGS_CHANGED_EVENT} from '@/features/ai/tag/services/ai-table-t
 import {fetchAiTableTagCatalog} from '@/features/ai/tag/services/ai-table-tag.service'
 import type {AiTableTagCatalogItem, AiTaggedScopeGroup} from '@/features/ai/tag/types/ai-table-tag.types'
 import type {AiDatabaseTarget} from '@/features/ai/shared/utils/database-targets'
-import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {isUnauthorizedApiError} from '@/features/auth/services/auth-session.service'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
@@ -18,7 +17,6 @@ import {t} from '@/i18n'
 
 export function useAiTaggedScope() {
     const explorer = useExplorerStore()
-    const appConfig = useAppConfigStore()
     const {tree} = storeToRefs(explorer)
     const catalog = ref<AiTableTagCatalogItem[]>([])
     const loading = ref(false)
@@ -51,13 +49,6 @@ export function useAiTaggedScope() {
     onUnmounted(() => {
         window.removeEventListener(AI_TABLE_TAGS_CHANGED_EVENT, reload)
     })
-
-    watch(
-        () => appConfig.aiPreferences.sideActivePanel,
-        (panel) => {
-            if (panel === 'scope') void reload()
-        },
-    )
 
     // Connection delete/recreate: refresh catalog so orphan tags disappear from Agent scope.
     watch(

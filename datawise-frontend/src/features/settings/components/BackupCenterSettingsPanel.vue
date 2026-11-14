@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, onMounted, onUnmounted, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {
@@ -338,7 +338,12 @@ async function backupWorkbenchNow() {
             type: 'workbench',
             includeSqlHistory: true,
         })
-        toast.success(t('backupCenter.runStarted', {id: run.id}))
+        toast.notify({
+          category: 'system',
+          titleKey: 'operationDone',
+          bodyKey: 'operationDone',
+          params: {detail: t('backupCenter.runStarted', {id: run.id})},
+        })
         activeTab.value = 'history'
         await refresh()
     } catch (error) {
@@ -376,10 +381,8 @@ async function savePolicy() {
         }
         if (editingId.value) {
             await backupApi.updatePolicy(editingId.value, {...payload, id: editingId.value})
-            toast.success(t('backupCenter.policyUpdated'))
         } else {
             await backupApi.createPolicy(payload)
-            toast.success(t('backupCenter.policySaved'))
         }
         closeEditor()
         await refresh()
@@ -395,7 +398,12 @@ async function runPolicy(id: string) {
     busyId.value = id
     try {
         const run = await backupApi.runPolicy(id)
-        toast.success(t('backupCenter.runStarted', {id: run.id}))
+        toast.notify({
+          category: 'system',
+          titleKey: 'operationDone',
+          bodyKey: 'operationDone',
+          params: {detail: t('backupCenter.runStarted', {id: run.id})},
+        })
         activeTab.value = 'history'
         await refresh()
     } catch (error) {
@@ -433,7 +441,6 @@ async function deletePolicy(policy: BackupPolicy) {
     try {
         await backupApi.deletePolicy(policy.id)
         if (editingId.value === policy.id) closeEditor()
-        toast.success(t('backupCenter.policyDeleted'))
         await refresh()
     } catch (error) {
         toast.error(resolveCaughtApiErrorMessage(error, t, 'backupCenter.policyDeleteFailed'))
@@ -473,7 +480,6 @@ async function deleteArtifact(artifact: BackupArtifactSummary) {
     try {
         await backupApi.deleteArtifact(artifact.artifactId)
         if (restoreArtifactId.value === artifact.artifactId) restoreArtifactId.value = ''
-        toast.success(t('backupCenter.artifactDeleted'))
         await refresh()
     } catch (error) {
         toast.error(resolveCaughtApiErrorMessage(error, t, 'backupCenter.artifactDeleteFailed'))
@@ -507,7 +513,12 @@ async function startRestore() {
     try {
         const started = await backupApi.startRestore(job)
         activeRestoreJob.value = started
-        toast.success(t('backupCenter.restoreStarted', {id: started.id}))
+        toast.notify({
+          category: 'system',
+          titleKey: 'operationDone',
+          bodyKey: 'operationDone',
+          params: {detail: t('backupCenter.restoreStarted', {id: started.id})},
+        })
         activeTab.value = 'history'
         await refresh()
     } catch (error) {

@@ -1,5 +1,7 @@
 package org.apache.datawise.backend.platform.workbenchcontext;
 
+import org.apache.datawise.backend.common.truncation.TruncationMeta;
+
 import java.util.List;
 import java.util.Map;
 
@@ -47,8 +49,22 @@ public record WorkbenchContextSnapshot(
             String database,
             String bodyPreview,
             Boolean bodyTruncated,
-            Integer bodyLength
+            Integer bodyLength,
+            /** T-TRUNC-1：与 bodyTruncated / bodyLength 镜像；旧客户端可省略 */
+            TruncationMeta bodyTruncation
     ) {
+        public ActiveTab(
+                String id,
+                String type,
+                String title,
+                String connectionId,
+                String database,
+                String bodyPreview,
+                Boolean bodyTruncated,
+                Integer bodyLength
+        ) {
+            this(id, type, title, connectionId, database, bodyPreview, bodyTruncated, bodyLength, null);
+        }
     }
 
     public record OpenTab(

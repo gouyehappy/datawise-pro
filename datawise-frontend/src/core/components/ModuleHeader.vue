@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Thin host wrapper ¡ª SoT `@datawise/chrome` ModuleHeader. */
+/** Thin host wrapper â€” SoT `@datawise/chrome` ModuleHeader. */
 import {ModuleHeader as PackageModuleHeader} from '@datawise/chrome'
 
 defineProps<{

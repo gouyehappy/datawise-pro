@@ -3,8 +3,11 @@ import {describe, it} from 'node:test'
 import {
     buildDeepLinkExample,
     buildDeepLinkUrl,
+    buildWebDeepLinkExampleQuery,
     extractDeepLinkFromArgv,
+    parseDeepLinkQuery,
     parseDeepLinkUrl,
+    stripDeepLinkQueryParams,
 } from '@/shared/deep-link/deep-link.service'
 
 describe('deep-link.service', () => {
@@ -68,6 +71,17 @@ describe('deep-link.service', () => {
         })
         assert.equal(url, 'datawise://open?connectionId=c1&database=db&sql=SELECT+1')
         assert.equal(buildDeepLinkExample().startsWith('datawise://open'), true)
+        const webExample = buildWebDeepLinkExampleQuery()
+        assert.equal(webExample.startsWith('?dwAction=open'), true)
+        assert.deepEqual(
+            parseDeepLinkQuery(new URLSearchParams(webExample.slice(1))),
+            {
+                action: 'open',
+                connectionId: 'your-connection-id',
+                database: 'mydb',
+                sql: 'SELECT 1',
+            },
+        )
         assert.equal(
             extractDeepLinkFromArgv(['app.exe', 'datawise://open?sql=1']),
             'datawise://open?sql=1',
@@ -76,5 +90,40 @@ describe('deep-link.service', () => {
             buildDeepLinkUrl({action: 'connection-new', dbType: 'mysql'}),
             'datawise://connection/new?dbType=mysql',
         )
+    })
+
+    it('parses and strips web query deep links', () => {
+        const openParams = new URLSearchParams(
+            'dwAction=open&connectionId=c1&database=db&sql=SELECT%201&other=keep',
+        )
+        assert.deepEqual(parseDeepLinkQuery(openParams), {
+            action: 'open',
+            connectionId: 'c1',
+            database: 'db',
+            sql: 'SELECT 1',
+        })
+        stripDeepLinkQueryParams(openParams)
+        assert.equal(openParams.get('other'), 'keep')
+        assert.equal(openParams.get('dwAction'), null)
+
+        assert.deepEqual(
+            parseDeepLinkQuery(new URLSearchParams('dwAction=connection-new&dbType=postgres')),
+            {action: 'connection-new', dbType: 'postgres'},
+        )
+        assert.deepEqual(parseDeepLinkQuery(new URLSearchParams('dwAction=ai')), {
+            action: 'ai',
+            connectionId: undefined,
+            database: undefined,
+        })
+        assert.deepEqual(
+            parseDeepLinkQuery(
+                new URLSearchParams([
+                    ['dw', 'datawise://open?connectionId=c2&sql=SELECT%202'],
+                ]),
+            ),
+            {action: 'open', connectionId: 'c2', database: undefined, sql: 'SELECT 2'},
+        )
+        assert.equal(parseDeepLinkQuery(new URLSearchParams('dwAction=open')), null)
+        assert.equal(parseDeepLinkQuery(new URLSearchParams('')), null)
     })
 })

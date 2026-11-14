@@ -1,6 +1,6 @@
 {
   "name": "@datawise/sql-editor",
-  "version": "4.1.7",
+  "version": "5.0.0",
   "description": "Embeddable SQL editor for Vue 3 + Monaco — grammar-driven completion, schema-aware hints, multi-dialect parser",
   "type": "module",
   "license": "MIT",
@@ -72,7 +72,7 @@
     "tsx": "^4.19.4",
     "typescript": "~5.7.2",
     "vite": "^7.3.1",
-    "vue": "^3.5.13",
+    "vue": "^3.5.45",
     "vue-tsc": "^2.2.8"
   },
   "scripts": {
@@ -88,6 +88,7 @@
     "gen:demo-gif": "node scripts/generate-demo-gif.mjs"
   },
   "dependencies": {
-    "dt-sql-parser": "^4.5.0"
+    "dt-sql-parser": "^4.5.0",
+    "monaco-vim": "^0.4.4"
   }
 }

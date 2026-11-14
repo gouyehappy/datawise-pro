@@ -144,11 +144,10 @@ async function resetOffsets(strategy: 'earliest' | 'latest') {
   resetConfirmLoading.value = true
   error.value = null
   try {
-    const result = await explorerApi.resetKafkaConsumerGroupOffsets(props.connectionId, groupId, {
+    await explorerApi.resetKafkaConsumerGroupOffsets(props.connectionId, groupId, {
       topic,
       strategy,
     })
-    layout.showSuccessToast(result.message || t('explorer.kafkaConsumerGroup.resetDone'))
     await loadMetrics()
   } catch (err) {
     error.value = resolveCaughtApiErrorMessage(err, t, 'explorer.kafkaConsumerGroup.resetFailed')

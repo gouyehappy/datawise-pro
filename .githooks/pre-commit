@@ -1,7 +1,11 @@
 #!/bin/sh
 # Block commits that stage sensitive paths or content (LAN IPs, internal brand, creds-in-URL).
 # Full check: node scripts/pre-commit-check.mjs
+# Optional machine-local rules: .githooks/pre-commit.local (gitignored)
 set -e
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT"
-exec node scripts/pre-commit-check.mjs
+node scripts/pre-commit-check.mjs
+if [ -f "$ROOT/.githooks/pre-commit.local" ]; then
+  sh "$ROOT/.githooks/pre-commit.local"
+fi

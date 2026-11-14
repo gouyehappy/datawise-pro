@@ -70,7 +70,7 @@ const tableMinWidth = computed(() =>
 .resizable-table-wrap {
   overflow: auto;
   min-width: 0;
-  border: 1px solid var(--dw-border-light);
+  border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
   border-radius: var(--dw-panel-radius);
   background: var(--dw-bg);
 }
@@ -85,7 +85,7 @@ const tableMinWidth = computed(() =>
 .resizable-table th,
 .resizable-table td {
   padding: var(--dw-space-3) var(--dw-space-5);
-  border-bottom: 1px solid var(--dw-border-light);
+  border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
   text-align: left;
   vertical-align: top;
   overflow: hidden;

@@ -6,8 +6,10 @@ import SettingsSelect from '@/core/components/SettingsSelect.vue'
 import SettingsSwitch from '@/core/components/SettingsSwitch.vue'
 import ConnectionFormField from '@/features/connection/components/ConnectionFormField.vue'
 import ConnectionMoreOptions from '@/features/connection/components/ConnectionMoreOptions.vue'
+import DescriptorConnectionFields from '@/features/connection/components/DescriptorConnectionFields.vue'
 import PluginConnectionFields from '@/features/connection/components/PluginConnectionFields.vue'
 import NacosNamespacePickerDialog from '@/features/connection/components/NacosNamespacePickerDialog.vue'
+import {resolveBuiltinConnectionFormFields} from '@/features/connection/forms/builtin-connection-form-fields'
 import {
   CONNECTION_AUTH_OPTIONS,
   CONNECTION_ENV_OPTIONS,
@@ -216,6 +218,51 @@ const esSkipTls = computed({
 
 const {t} = useI18n()
 
+const fieldErrors = ref<{host?: string; endpoint?: string}>({})
+
+function clearFieldErrors() {
+  fieldErrors.value = {}
+}
+
+/** Field-level validation for save/test; returns true when the form may proceed. */
+function validate(): boolean {
+  const next: {host?: string; endpoint?: string} = {}
+  if (props.dbType === 'plugin') {
+    fieldErrors.value = next
+    return true
+  }
+  if (httpEndpointKind.value) {
+    if (!httpEndpointDraft.value?.trim() && !form.value.host?.trim()) {
+      next.endpoint = t('connection.endpointRequired')
+    }
+  } else if (props.dbType === 'nacos') {
+    if (!nacosAddressDraft.value?.trim() && !form.value.host?.trim()) {
+      next.endpoint = t('connection.endpointRequired')
+    }
+  } else if (props.dbType === 'kafka') {
+    if (!kafkaBootstrap.value?.trim()) {
+      next.host = t('connection.hostRequired')
+    }
+  } else if (props.dbType !== 'kudu' && props.dbType !== 'yarn') {
+    if (!form.value.host?.trim()) {
+      next.host = t('connection.hostRequired')
+    }
+  }
+  fieldErrors.value = next
+  return Object.keys(next).length === 0
+}
+
+defineExpose({validate, clearFieldErrors})
+
+watch(
+  () => [form.value.host, httpEndpointDraft.value, nacosAddressDraft.value, kafkaBootstrap.value] as const,
+  () => {
+    if (fieldErrors.value.host || fieldErrors.value.endpoint) {
+      clearFieldErrors()
+    }
+  },
+)
+
 const nacosImplementation = computed({
   get: (): NacosImplementation => readNacosImplementation(form.value.advancedConfig),
   set: (value: NacosImplementation) => {
@@ -346,6 +393,9 @@ const k8sAuthOptions = computed(() => [
   {value: 'token', label: t('connection.authOptions.token')},
   {value: 'kubeconfig', label: t('connection.authOptions.kubeconfig')},
 ])
+
+/** MetaForge S1: JDBC/standard/redis/oracle/mongo packs; specialized types stay below. */
+const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(props.dbType))
 </script>
 
 <template>
@@ -377,11 +427,35 @@ const k8sAuthOptions = computed(() => [
     <ConnectionFormField :label="t('connection.storage')">
       <SettingsSelect v-model="form.storage" size="sm" :disabled="readOnly" :options="storageOptions"/>
     </ConnectionFormField>
+    <ConnectionFormField
+        :label="t('connection.writeGuard')"
+        :hint="t('connection.hints.writeGuard')"
+    >
+      <label class="connection-write-guard">
+        <input
+            type="checkbox"
+            :checked="!!form.writeGuard"
+            :disabled="readOnly"
+            @change="form.writeGuard = ($event.target as HTMLInputElement).checked"
+        />
+        <span>{{ t('connection.writeGuardEnable') }}</span>
+      </label>
+    </ConnectionFormField>
 
     <PluginConnectionFields
         v-if="dbType === 'plugin'"
         v-model:form="form"
         :read-only="readOnly"
+    />
+
+    <DescriptorConnectionFields
+        v-else-if="builtinFormFields"
+        v-model:form="form"
+        :fields="builtinFormFields"
+        :read-only="readOnly"
+        config-storage="lines"
+        :host-error="fieldErrors.host"
+        :endpoint-error="fieldErrors.endpoint"
     />
 
     <template v-else>
@@ -390,12 +464,14 @@ const k8sAuthOptions = computed(() => [
           wide
           :label="t('connection.kafkaBootstrap')"
           :hint="t('connection.hints.kafkaBootstrap')"
+          :error="fieldErrors.host"
       >
-        <DwInput
+            <DwInput
             v-model="kafkaBootstrap"
             variant="sm"
             :disabled="readOnly"
             :placeholder="t('connection.kafkaBootstrapPlaceholder')"
+            :aria-invalid="Boolean(fieldErrors.host)"
         />
       </ConnectionFormField>
       <ConnectionFormField :label="t('connection.kafkaSecurity')">
@@ -497,12 +573,14 @@ const k8sAuthOptions = computed(() => [
           wide
           :label="t('connection.nacosConsoleAddress')"
           :hint="t('connection.hints.nacosHost')"
+          :error="fieldErrors.endpoint"
       >
         <DwInput
             v-model="nacosAddressDraft"
             variant="sm"
             :disabled="readOnly"
             :placeholder="nacosAddressPlaceholder"
+            :aria-invalid="Boolean(fieldErrors.endpoint)"
             @focus="nacosAddressFocused = true"
             @blur="onNacosAddressBlur"
             @paste="onNacosAddressPaste"
@@ -534,12 +612,14 @@ const k8sAuthOptions = computed(() => [
           wide
           :label="endpointAddressLabel"
           :hint="endpointAddressHint"
+          :error="fieldErrors.endpoint"
       >
         <DwInput
             v-model="httpEndpointDraft"
             variant="sm"
             :disabled="readOnly"
             :placeholder="httpEndpointPlaceholder"
+            :aria-invalid="Boolean(fieldErrors.endpoint)"
             @focus="onHttpEndpointFocus"
             @blur="onHttpEndpointBlur"
             @paste="onHttpEndpointPaste"
@@ -550,12 +630,14 @@ const k8sAuthOptions = computed(() => [
     <ConnectionFormField
         :label="t('connection.host')"
         :hint="dbType === 'ssh' ? t('connection.hints.sshHost') : undefined"
+        :error="fieldErrors.host"
     >
       <DwInput
           v-model="form.host"
           variant="sm"
           :disabled="readOnly"
           placeholder="localhost"
+          :aria-invalid="Boolean(fieldErrors.host)"
       />
     </ConnectionFormField>
     <ConnectionFormField :label="t('connection.port')">

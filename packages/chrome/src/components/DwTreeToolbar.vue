@@ -40,7 +40,7 @@ const emit = defineEmits<{
   align-items: center;
   gap: var(--dw-gap-sm);
   padding: var(--dw-space-2) var(--dw-space-3);
-  border-bottom: 1px solid var(--dw-border-light);
+  border-bottom: none;
 }
 
 .dw-tree-toolbar__actions {

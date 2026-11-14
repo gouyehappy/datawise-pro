@@ -6,7 +6,7 @@
 
     <groupId>org.apache.datawise</groupId>
     <artifactId>datawise-frontend</artifactId>
-    <version>4.1.7</version>
+    <version>5.0.0</version>
     <description>DataWise 桌面数据源客户端 - JCEF + 内嵌后端</description>
     <packaging>pom</packaging>
 

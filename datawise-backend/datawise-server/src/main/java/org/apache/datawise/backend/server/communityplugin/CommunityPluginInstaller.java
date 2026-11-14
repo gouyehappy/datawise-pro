@@ -14,7 +14,6 @@ import org.apache.datawise.backend.domain.communityplugin.InstalledCommunityPlug
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -45,8 +44,8 @@ public class CommunityPluginInstaller {
     private final ObjectMapper objectMapper;
     private final String appVersion;
     private final CommunityPluginTrustStore trustStore;
-    /** Lazy to avoid Installer ↔ Host cycle; null in unit tests. */
-    private final CommunityPluginHost host;
+    /** Null in unit tests that do not exercise live sidecar stop. */
+    private final CommunityPluginPackageReplaceBarrier packageReplaceBarrier;
 
     /**
      * Spring constructor. The package-private overload exists only for tests;
@@ -57,9 +56,15 @@ public class CommunityPluginInstaller {
             ConfigDirectoryService configDirectory,
             ObjectMapper objectMapper,
             CommunityPluginTrustStore trustStore,
-            @Lazy CommunityPluginHost host
+            CommunityPluginPackageReplaceBarrier packageReplaceBarrier
     ) {
-        this(configDirectory, objectMapper, System.getProperty("datawise.version", "4.1.0"), trustStore, host);
+        this(
+                configDirectory,
+                objectMapper,
+                System.getProperty("datawise.version", "4.1.0"),
+                trustStore,
+                packageReplaceBarrier
+        );
     }
 
     /** Test helper — not a Spring bean constructor. */
@@ -81,13 +86,13 @@ public class CommunityPluginInstaller {
             ObjectMapper objectMapper,
             String appVersion,
             CommunityPluginTrustStore trustStore,
-            CommunityPluginHost host
+            CommunityPluginPackageReplaceBarrier packageReplaceBarrier
     ) {
         this.configDirectory = configDirectory;
         this.objectMapper = objectMapper;
         this.appVersion = appVersion != null ? appVersion : "4.1.0";
         this.trustStore = trustStore;
-        this.host = host;
+        this.packageReplaceBarrier = packageReplaceBarrier;
     }
 
     public Path rootDir() {
@@ -392,22 +397,22 @@ public class CommunityPluginInstaller {
     }
 
     private void beginPackageReplaceQuietly(String pluginId) {
-        if (host == null || pluginId == null || pluginId.isBlank()) {
+        if (packageReplaceBarrier == null || pluginId == null || pluginId.isBlank()) {
             return;
         }
         try {
-            host.beginPackageReplace(pluginId);
+            packageReplaceBarrier.begin(pluginId);
         } catch (RuntimeException e) {
             log.warn("Failed to stop community plugin '{}' before install: {}", pluginId, e.getMessage());
         }
     }
 
     private void endPackageReplaceQuietly(String pluginId) {
-        if (host == null || pluginId == null || pluginId.isBlank()) {
+        if (packageReplaceBarrier == null || pluginId == null || pluginId.isBlank()) {
             return;
         }
         try {
-            host.endPackageReplace(pluginId);
+            packageReplaceBarrier.end(pluginId);
         } catch (RuntimeException e) {
             log.warn("Failed to clear install barrier for community plugin '{}': {}", pluginId, e.getMessage());
         }

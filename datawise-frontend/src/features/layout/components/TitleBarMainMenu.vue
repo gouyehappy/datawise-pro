@@ -2,28 +2,12 @@
 import {computed, onUnmounted, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {EmptyState} from '@/core/components'
-import {DwIcon} from '@/core/icons'
+import {DwIcon, ensureDeferredDwIcons} from '@/core/icons'
+
+void ensureDeferredDwIcons()
 import {usePopoverEscape} from '@/core/composables/usePopoverEscape'
 import {useShortcutSettingsStore} from '@/features/settings/stores/shortcut-settings-store'
 import {formatBinding} from '@/core/shortcuts/shortcut.service'
-import {runExplorerRefresh} from '@/features/explorer/services/explorer-toolbar.actions'
-import {canOpenRuntimeLog, openRuntimeLog} from '@/features/layout/services/open-runtime-log.service'
-import {
-    canToggleDesktopDevTools,
-    toggleDesktopDevTools,
-} from '@/features/layout/services/desktop-devtools.service'
-import {
-    canPickSqlFile,
-    canRevealInExplorer,
-    pickAndOpenSqlFile,
-    revealPathInExplorer,
-} from '@/features/layout/services/desktop-file-open.service'
-import {
-    canDesktopZoom,
-    desktopZoomIn,
-    desktopZoomOut,
-    desktopZoomReset,
-} from '@/features/layout/services/desktop-zoom.service'
 import {useWorkspaceActions} from '@/features/layout/composables/useWorkspaceActions'
 import {
     useTitleBarAuthMenuItems,
@@ -51,7 +35,6 @@ const {
     recentWorkspaces,
     activeEntry,
     displayName,
-    resolvedPath,
     createWorkspace,
     openFolder,
     confirmSwitch,
@@ -109,12 +92,11 @@ const sectionVisible = computed(() => ({
     workspace: canSwitch.value && can(FeaturePermission.TitleBarWorkspace),
     preferences: preferenceMenuItems.value.length > 0,
     auth: authMenuItems.value.length > 0,
-    desktop: canToggleDesktopDevTools() || canOpenRuntimeLog() || canPickSqlFile() || canRevealInExplorer() || canDesktopZoom(),
     exit: true,
 }))
 
 const visibleSections = computed(() =>
-    (['workspace', 'preferences', 'auth', 'desktop', 'exit'] as const).filter((id) => sectionVisible.value[id]),
+    (['workspace', 'preferences', 'auth', 'exit'] as const).filter((id) => sectionVisible.value[id]),
 )
 
 function showSectionDivider(sectionId: (typeof visibleSections.value)[number]) {
@@ -126,11 +108,7 @@ function closeMenu() {
     emit('close')
 }
 
-function onReloadExplorer() {
-    void runExplorerRefresh().finally(() => closeMenu())
-}
-
-const preferenceMenuItems = useTitleBarPreferenceMenuItems(closeMenu, onReloadExplorer)
+const preferenceMenuItems = useTitleBarPreferenceMenuItems(closeMenu, () => {}, {tier: 'primary'})
 const authMenuItems = useTitleBarAuthMenuItems(closeMenu)
 
 async function exitApp() {
@@ -172,39 +150,6 @@ function onUseDefault() {
     closeMenu()
 }
 
-function onOpenRuntimeLog() {
-    void openRuntimeLog().finally(() => closeMenu())
-}
-
-function onToggleDevTools() {
-    void toggleDesktopDevTools().finally(() => closeMenu())
-}
-
-function onOpenSqlFile() {
-    void pickAndOpenSqlFile().finally(() => closeMenu())
-}
-
-function onRevealWorkspace() {
-    const path = resolvedPath.value || activeEntry()?.path
-    if (!path) {
-        closeMenu()
-        return
-    }
-    void revealPathInExplorer(path).finally(() => closeMenu())
-}
-
-function onZoomIn() {
-    void desktopZoomIn().finally(() => closeMenu())
-}
-
-function onZoomOut() {
-    void desktopZoomOut().finally(() => closeMenu())
-}
-
-function onZoomReset() {
-    void desktopZoomReset().finally(() => closeMenu())
-}
-
 defineExpose({
     containsNode(target: Node): boolean {
         return rootRef.value?.contains(target) ?? false
@@ -223,14 +168,14 @@ defineExpose({
     <section v-if="sectionVisible.workspace" class="titlebar-main-menu__section">
       <button type="button" class="titlebar-main-menu__item" @click="onCreateWorkspace">
         <span class="titlebar-main-menu__icon" aria-hidden="true">
-          <DwIcon name="plus" size="menu" :stroke-width="1.35"/>
+          <DwIcon name="plus" size="menu" :stroke-width="1.9"/>
         </span>
         <span class="titlebar-main-menu__label">{{ t('app.titleBar.mainMenu.newWorkspace') }}</span>
       </button>
 
       <button type="button" class="titlebar-main-menu__item" @click="onOpenFolder">
         <span class="titlebar-main-menu__icon" aria-hidden="true">
-          <DwIcon name="open" size="menu" :stroke-width="1.35"/>
+          <DwIcon name="open" size="menu" :stroke-width="1.9"/>
         </span>
         <span class="titlebar-main-menu__label">{{ t('app.titleBar.mainMenu.openFolder') }}</span>
       </button>
@@ -249,10 +194,10 @@ defineExpose({
             @click="recentOpen = !recentOpen"
         >
           <span class="titlebar-main-menu__icon" aria-hidden="true">
-            <DwIcon name="history" size="menu" :stroke-width="1.35"/>
+            <DwIcon name="history" size="menu" :stroke-width="1.9"/>
           </span>
           <span class="titlebar-main-menu__label">{{ t('app.titleBar.mainMenu.recentWorkspaces') }}</span>
-          <DwIcon class="titlebar-main-menu__arrow" name="chevron-right" size="xs" :stroke-width="1.3"/>
+          <DwIcon class="titlebar-main-menu__arrow" name="chevron-right" size="xs" :stroke-width="1.75"/>
         </button>
 
         <div
@@ -274,7 +219,7 @@ defineExpose({
                 @click="onSelectRecent(entry)"
             >
               <span class="titlebar-main-menu__icon" aria-hidden="true">
-                <DwIcon name="folder" size="menu" :stroke-width="1.35"/>
+                <DwIcon name="folder" size="menu" :stroke-width="1.9"/>
               </span>
               <span class="titlebar-main-menu__label">{{ displayName(entry) }}</span>
             </button>
@@ -286,7 +231,7 @@ defineExpose({
                 :disabled="recentRemoving"
                 @click="onRemoveRecent(entry, $event)"
             >
-              <DwIcon name="delete" size="xs" :stroke-width="1.55"/>
+              <DwIcon name="delete" size="xs" :stroke-width="1.9"/>
             </button>
           </div>
           <EmptyState
@@ -304,7 +249,7 @@ defineExpose({
               @click="onUseDefault"
           >
             <span class="titlebar-main-menu__icon" aria-hidden="true">
-              <DwIcon name="submit" size="menu" :stroke-width="1.35"/>
+              <DwIcon name="submit" size="menu" :stroke-width="1.9"/>
             </span>
             <span class="titlebar-main-menu__label">{{ t('app.titleBar.workspaceSwitcher.useDefault') }}</span>
           </button>
@@ -324,7 +269,7 @@ defineExpose({
           @click="item.onClick"
       >
         <span class="titlebar-main-menu__icon" aria-hidden="true">
-          <DwIcon :name="item.icon" size="menu" :stroke-width="item.icon === 'users' ? 1.25 : 1.35"/>
+          <DwIcon :name="item.icon" size="menu" :stroke-width="item.icon === 'users' ? 1.75 : 1.9"/>
         </span>
         <span class="titlebar-main-menu__label">{{ t(item.labelKey) }}</span>
         <kbd v-if="item.id === 'settings' && settingsShortcut" class="titlebar-main-menu__shortcut">{{ settingsShortcut }}</kbd>
@@ -344,97 +289,11 @@ defineExpose({
           @click="item.onClick"
       >
         <span class="titlebar-main-menu__icon" aria-hidden="true">
-          <DwIcon :name="item.icon" size="menu" :stroke-width="item.icon === 'users' ? 1.25 : 1.35"/>
+          <DwIcon :name="item.icon" size="menu" :stroke-width="item.icon === 'users' ? 1.75 : 1.9"/>
         </span>
         <span class="titlebar-main-menu__label">{{ t(item.labelKey) }}</span>
         <kbd v-if="item.id === 'lock-screen' && lockShortcut" class="titlebar-main-menu__shortcut">{{ lockShortcut }}</kbd>
         <span v-if="item.badgeKey" class="titlebar-main-menu__badge">{{ t(item.badgeKey) }}</span>
-      </button>
-    </section>
-
-    <div v-if="showSectionDivider('desktop')" class="titlebar-main-menu__divider"/>
-
-    <section v-if="sectionVisible.desktop" class="titlebar-main-menu__section">
-      <button
-          v-if="canPickSqlFile()"
-          type="button"
-          class="titlebar-main-menu__item"
-          @click="onOpenSqlFile"
-      >
-        <span class="titlebar-main-menu__icon" aria-hidden="true">
-          <DwIcon name="ddl" size="menu" :stroke-width="1.35"/>
-        </span>
-        <span class="titlebar-main-menu__label">{{ t('app.desktopHost.openSqlFile') }}</span>
-      </button>
-      <button
-          v-if="canRevealInExplorer()"
-          type="button"
-          class="titlebar-main-menu__item"
-          @click="onRevealWorkspace"
-      >
-        <span class="titlebar-main-menu__icon" aria-hidden="true">
-          <DwIcon name="open" size="menu" :stroke-width="1.35"/>
-        </span>
-        <span class="titlebar-main-menu__label">{{ t('app.desktopHost.revealWorkspace') }}</span>
-      </button>
-      <button
-          v-if="canDesktopZoom()"
-          type="button"
-          class="titlebar-main-menu__item"
-          @click="onZoomIn"
-      >
-        <span class="titlebar-main-menu__icon" aria-hidden="true">
-          <DwIcon name="zoom-in" size="menu" :stroke-width="1.35"/>
-        </span>
-        <span class="titlebar-main-menu__label">{{ t('app.desktopHost.zoomIn') }}</span>
-        <kbd class="titlebar-main-menu__shortcut">Ctrl+=</kbd>
-      </button>
-      <button
-          v-if="canDesktopZoom()"
-          type="button"
-          class="titlebar-main-menu__item"
-          @click="onZoomOut"
-      >
-        <span class="titlebar-main-menu__icon" aria-hidden="true">
-          <DwIcon name="zoom-out" size="menu" :stroke-width="1.35"/>
-        </span>
-        <span class="titlebar-main-menu__label">{{ t('app.desktopHost.zoomOut') }}</span>
-        <kbd class="titlebar-main-menu__shortcut">Ctrl+-</kbd>
-      </button>
-      <button
-          v-if="canDesktopZoom()"
-          type="button"
-          class="titlebar-main-menu__item"
-          @click="onZoomReset"
-      >
-        <span class="titlebar-main-menu__icon" aria-hidden="true">
-          <DwIcon name="zoom-reset" size="menu" :stroke-width="1.35"/>
-        </span>
-        <span class="titlebar-main-menu__label">{{ t('app.desktopHost.zoomReset') }}</span>
-        <kbd class="titlebar-main-menu__shortcut">Ctrl+0</kbd>
-      </button>
-      <button
-          v-if="canToggleDesktopDevTools()"
-          type="button"
-          class="titlebar-main-menu__item"
-          @click="onToggleDevTools"
-      >
-        <span class="titlebar-main-menu__icon" aria-hidden="true">
-          <DwIcon name="dev-tools" size="menu" :stroke-width="1.35"/>
-        </span>
-        <span class="titlebar-main-menu__label">{{ t('app.titleBar.menu.openDevTools') }}</span>
-        <kbd class="titlebar-main-menu__shortcut">F12</kbd>
-      </button>
-      <button
-          v-if="canOpenRuntimeLog()"
-          type="button"
-          class="titlebar-main-menu__item"
-          @click="onOpenRuntimeLog"
-      >
-        <span class="titlebar-main-menu__icon" aria-hidden="true">
-          <DwIcon name="editor" size="menu" :stroke-width="1.35"/>
-        </span>
-        <span class="titlebar-main-menu__label">{{ t('app.titleBar.menu.openRuntimeLog') }}</span>
       </button>
     </section>
 
@@ -501,8 +360,11 @@ defineExpose({
 }
 
 .titlebar-main-menu__item:hover,
-.titlebar-main-menu__item.is-open {
+.titlebar-main-menu__item.is-open,
+.titlebar-main-menu__item:focus-visible {
   background: var(--dw-menu-active);
+  color: var(--dw-text);
+  outline: none;
 }
 
 .titlebar-main-menu__item--accent .titlebar-main-menu__label {

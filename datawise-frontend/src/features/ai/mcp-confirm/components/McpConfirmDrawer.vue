@@ -2,6 +2,7 @@
 import {computed} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {EmptyState} from '@/core/components'
+import {usePopoverEscape} from '@/core/composables/usePopoverEscape'
 import ToolWindowShell from '@/features/layout/components/ToolWindowShell.vue'
 import {useMcpConfirmPoller} from '@/features/ai/mcp-confirm/composables/useMcpConfirmPoller'
 import {mcpConfirmRequiresProductionApproval} from '@/features/ai/mcp-confirm/services/mcp-confirm-governance.service'
@@ -38,12 +39,18 @@ function riskLabel(risk: string): string {
 function close() {
     drawerOpen.value = false
 }
+
+/** AUDIT-02: Escape + dialog semantics for the floating confirm host. */
+usePopoverEscape(drawerOpen, close)
 </script>
 
 <template>
   <ToolWindowShell
     v-if="drawerOpen"
     class="mcp-confirm-drawer"
+    role="dialog"
+    aria-modal="true"
+    :aria-label="t('mcpConfirm.title')"
     :title="t('mcpConfirm.title')"
     :subtitle="subtitle"
     :collapse-label="t('common.close')"

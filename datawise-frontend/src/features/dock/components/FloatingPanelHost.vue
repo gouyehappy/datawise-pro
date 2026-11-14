@@ -4,13 +4,17 @@
  * - teleport (default): `#dock-float-root` in AppShell (flattened so hosts share z-order)
  * - in-place (teleport=false): Workspace KeepAlive — toggle `floating` for center ↔ float
  */
-import {computed, onBeforeUnmount} from 'vue'
+import {computed, onBeforeUnmount, ref} from 'vue'
 import {useDockPlacementStore} from '@/features/dock/stores/dock-placement-store'
 import {usePanelHeaderDrag} from '@/features/dock/composables/usePanelHeaderDrag'
 import DockDragGrip from '@/features/dock/components/DockDragGrip.vue'
 import WorkspaceFloatChrome from '@/features/dock/components/WorkspaceFloatChrome.vue'
 import type {DockDragPanel, DockFloatRect} from '@/features/dock/types/dock.types'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
+import {
+    clearDockFloatLivePreview,
+    useDockFloatLivePreview,
+} from '@/features/dock/services/dock-float-live-preview'
 
 const props = withDefaults(
   defineProps<{
@@ -59,14 +63,22 @@ const defaults = computed(() => {
 const minWidth = computed(() => props.minWidth ?? defaults.value.minW)
 const minHeight = computed(() => props.minHeight ?? defaults.value.minH)
 const rect = computed(() => dock.floatRect(props.panel))
+const livePreview = useDockFloatLivePreview(props.panel)
+/** Local resize preview (header drag uses shared dock-float-live-preview). */
+const resizeLive = ref<Partial<DockFloatRect> | null>(null)
 
 const hostStyle = computed(() => {
   if (!isFloating.value) return undefined
+  const merged = {
+    ...rect.value,
+    ...livePreview.value,
+    ...resizeLive.value,
+  }
   return {
-    left: `${rect.value.x}px`,
-    top: `${rect.value.y}px`,
-    width: `${rect.value.width}px`,
-    height: `${rect.value.height}px`,
+    left: `${merged.x}px`,
+    top: `${merged.y}px`,
+    width: `${merged.width}px`,
+    height: `${merged.height}px`,
     zIndex: dock.floatZIndex(props.panel),
   }
 })
@@ -107,11 +119,18 @@ function onResize(event: PointerEvent) {
   let {width, height} = startRect
   if (activeEdge.includes('e')) width = Math.max(minWidth.value, startRect.width + dx)
   if (activeEdge.includes('s')) height = Math.max(minHeight.value, startRect.height + dy)
-  dock.patchFloat(props.panel, {width, height})
+  resizeLive.value = {width, height}
 }
 
 function endResize() {
-  if (activeEdge) appConfig.persistDockLayout()
+  if (activeEdge) {
+    const preview = resizeLive.value
+    if (preview) {
+      dock.patchFloat(props.panel, preview)
+    }
+    resizeLive.value = null
+    appConfig.persistDockLayout()
+  }
   activeEdge = null
   window.removeEventListener('pointermove', onResize)
   window.removeEventListener('pointerup', endResize)
@@ -119,6 +138,8 @@ function endResize() {
 
 onBeforeUnmount(() => {
   endResize()
+  clearDockFloatLivePreview(props.panel)
+  resizeLive.value = null
 })
 </script>
 
@@ -156,9 +177,11 @@ onBeforeUnmount(() => {
     <div
         v-else-if="dragSurface === 'grip'"
         data-dock-press
-        class="dock-float-host__press"
+        class="dock-float-host__press dock-drag-zone"
+        @pointerdown="onGripPointerDown"
     >
-      <DockDragGrip variant="bar" @pointerdown="onGripPointerDown"/>
+      <!-- Match explorer: edge ridges on the leading edge of the top chrome -->
+      <DockDragGrip :interactive="false"/>
     </div>
     <div class="dock-float-host__body">
       <slot/>
@@ -221,23 +244,29 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
   z-index: 5;
-  height: 22px;
+  width: 28px;
+  height: var(--dw-toolbar-height, 36px);
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: none;
-  background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--dw-bg-panel) 88%, transparent) 0%,
-      transparent 100%
-  );
+  pointer-events: auto;
+  cursor: grab;
+  border-radius: var(--dw-panel-radius) 0 0 0;
+  background: transparent;
+}
+
+.dock-float-host__press:active {
+  cursor: grabbing;
+}
+
+.dock-float-host__press:hover {
+  background: color-mix(in srgb, var(--dw-primary) 8%, transparent);
 }
 
 .dock-float-host__press :deep(.dock-drag-grip) {
-  pointer-events: auto;
   margin: 0;
+  pointer-events: none;
 }
 
 .dock-float-host__body {

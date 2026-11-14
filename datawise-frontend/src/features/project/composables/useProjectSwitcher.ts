@@ -88,7 +88,7 @@ export function useProjectSwitcher() {
 
     function projectInitials(project: ProjectDto | null | undefined): string {
         const name = project?.name?.trim() || '?'
-        // ASCII 词首；中文取前两字；短名原样大写
+        // ASCII：两词取首字母，一词取前两字符；CJK：单字徽标更干净（避免「默认」挤爆色块）
         const asciiWords = name.match(/[A-Za-z0-9]+/g)
         if (asciiWords && asciiWords.length >= 2) {
             return (asciiWords[0]![0]! + asciiWords[1]![0]!).toUpperCase()
@@ -96,10 +96,11 @@ export function useProjectSwitcher() {
         if (asciiWords && asciiWords.length === 1) {
             return asciiWords[0]!.slice(0, 2).toUpperCase()
         }
-        return name.slice(0, 2).toUpperCase()
+        return name.slice(0, 1)
     }
 
     function projectAccent(project: ProjectDto | null | undefined): {bg: string; fg: string} {
+        if (project?.isDefault) return COLOR_MAP.slate
         const explicit = project?.colorKey?.trim()
         const key = explicit && COLOR_MAP[explicit] ? explicit : hashColorKey(project?.id || project?.name || 'p')
         return COLOR_MAP[key] ?? COLOR_MAP.slate
@@ -139,12 +140,9 @@ export function useProjectSwitcher() {
             if (restored?.tabs.length) {
                 workspace.restoreSession(restored.tabs, restored.activeTabIndex, restored.tabGroups ?? [])
             }
-            await useExplorerStore().refreshTree()
-            layout.showSuccessToast?.(
-                t('app.titleBar.projectSwitcher.switched', {
-                    name: projectStore.activeProject?.name ?? projectId,
-                }),
-            )
+            // 切项目：丢掉旧树会话态，避免资源树仍显示上一项目的连接/展开子节点。
+            await useExplorerStore().refreshTree({mode: 'project-switch'})
+            // 顶栏项目名已变；频繁切换不写通知，避免抽屉被刷屏。
         } catch {
             layout.showErrorToast(t('app.titleBar.projectSwitcher.switchFailed'))
         }
@@ -181,10 +179,13 @@ export function useProjectSwitcher() {
                 recentEpoch.value += 1
             }
             workspace.closeAllClosable()
-            await useExplorerStore().refreshTree()
-            layout.showSuccessToast?.(
-                t('app.titleBar.projectSwitcher.created', {name: trimmed}),
-            )
+            await useExplorerStore().refreshTree({mode: 'project-switch'})
+            layout.notifyQuiet({
+                category: 'workspace',
+                titleKey: 'projectCreated',
+                bodyKey: 'projectCreated',
+                params: {name: trimmed},
+            })
         } catch {
             layout.showErrorToast(t('app.titleBar.projectSwitcher.createFailed'))
         } finally {
@@ -208,11 +209,14 @@ export function useProjectSwitcher() {
             if (wasActive) {
                 const workspace = useWorkspaceStore()
                 workspace.closeAllClosable()
-                await useExplorerStore().refreshTree()
+                await useExplorerStore().refreshTree({mode: 'project-switch'})
             }
-            layout.showSuccessToast?.(
-                t('app.titleBar.projectSwitcher.deleted', {name: project.name}),
-            )
+            layout.notifyQuiet({
+                category: 'workspace',
+                titleKey: 'projectDeleted',
+                bodyKey: 'projectDeleted',
+                params: {name: project.name},
+            })
         } catch (error) {
             const code = projectErrorCode(error)
             if (code === 'PROJECT_NOT_EMPTY') {

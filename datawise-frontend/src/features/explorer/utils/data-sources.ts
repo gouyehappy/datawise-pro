@@ -1,4 +1,6 @@
 import type {DataSourceOption, DbType, TreeNode} from '@/core/types'
+import type {DatasourceDefinition} from '@/shared/api/datasource.types'
+import {supportsSqlExecute} from '@/shared/capabilities/db-type-capabilities'
 import {formatConsoleInstanceValue} from '@/features/workspace/services/console-instance-display'
 import {extractConnectionsFromTree} from '@/features/explorer/utils/tree-targets'
 
@@ -10,6 +12,21 @@ export function extractDataSources(tree: TreeNode[]): DataSourceOption[] {
         dbType: conn.dbType,
         instances: conn.databases,
     }))
+}
+
+/** SQL 控制台可选：仅支持 SQL 执行的连接（排除 K8s / SSH / Docker 等工作台插件）。 */
+export function isConsoleCapableDataSource(
+    source: DataSourceOption,
+    catalog?: readonly DatasourceDefinition[],
+): boolean {
+    return supportsSqlExecute(source.dbType, catalog)
+}
+
+export function filterConsoleCapableDataSources(
+    sources: DataSourceOption[],
+    catalog?: readonly DatasourceDefinition[],
+): DataSourceOption[] {
+    return sources.filter((source) => isConsoleCapableDataSource(source, catalog))
 }
 
 export function findDataSource<T extends { id: string }>(sources: T[], id: string): T | undefined {

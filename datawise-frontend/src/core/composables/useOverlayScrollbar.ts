@@ -1,4 +1,4 @@
-/** Thin host re-export ¡ª SoT `@datawise/chrome`. */
+/** Thin host re-export â€” SoT `@datawise/chrome`. */
 export {
   useOverlayScrollbar,
   type OverlayScrollbarAxis,

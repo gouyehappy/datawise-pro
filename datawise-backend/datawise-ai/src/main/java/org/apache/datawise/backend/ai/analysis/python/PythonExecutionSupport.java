@@ -93,9 +93,8 @@ public final class PythonExecutionSupport {
             PreparedRun prepared,
             AiPythonProperties properties
     ) {
-        Map<String, String> env = properties.isSandboxEnabled()
-                ? new LinkedHashMap<>(PythonSandboxSupport.sandboxEnvironment())
-                : new LinkedHashMap<>(System.getenv());
+        // Never inherit the full host environment for AI Python — even if sandboxEnabled=false.
+        Map<String, String> env = new LinkedHashMap<>(PythonSandboxSupport.sandboxEnvironment());
         if (!prepared.packages().isEmpty()) {
             env.put(
                     "PYTHONPATH",

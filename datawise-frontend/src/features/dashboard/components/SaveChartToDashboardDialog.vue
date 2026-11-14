@@ -145,7 +145,7 @@ function save() {
 .saved-chart-preview {
   min-height: 260px;
   padding: var(--dw-space-4);
-  border: 1px solid var(--dw-border-light);
+  border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
   border-radius: var(--dw-control-radius);
   background: var(--dw-bg-panel);
 }

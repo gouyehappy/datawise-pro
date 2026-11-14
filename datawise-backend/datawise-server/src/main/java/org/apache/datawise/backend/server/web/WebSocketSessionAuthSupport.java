@@ -1,5 +1,7 @@
 package org.apache.datawise.backend.server.web;
 
+import io.micrometer.core.instrument.Metrics;
+import org.apache.datawise.backend.common.support.DatawiseMetricsCatalog;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
@@ -10,7 +12,8 @@ import java.util.List;
 
 /**
  * Resolves browser WebSocket auth: prefer {@code Sec-WebSocket-Protocol} (session id token).
- * Query {@code ?dwSession=} remains as a deprecated compatibility fallback and is logged when used.
+ * Query {@code ?dwSession=} remains as a deprecated compatibility fallback; usage is logged and
+ * counted ({@link DatawiseMetricsCatalog#WS_QUERY_SESSION_AUTH}).
  * <p>
  * Does <strong>not</strong> write {@code Sec-WebSocket-Protocol} on the response — echoing the
  * selected sub-protocol is solely {@link SessionAwareHandshakeHandler}'s job. Writing it here
@@ -43,6 +46,7 @@ public final class WebSocketSessionAuthSupport {
                     QUERY_SESSION,
                     request.getURI().getPath()
             );
+            Metrics.counter(DatawiseMetricsCatalog.WS_QUERY_SESSION_AUTH).increment();
         }
         return fromQuery;
     }

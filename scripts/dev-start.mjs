@@ -5,7 +5,7 @@
  *        node scripts/dev-start.mjs --compile  # 仅 --dual 时强制预编译 backend
  *        npm run dev   (仓库根目录)
  */
-import {spawn} from 'node:child_process'
+import {spawn, spawnSync} from 'node:child_process'
 import {createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs'
 import {dirname, join} from 'node:path'
 import {fileURLToPath} from 'node:url'
@@ -24,6 +24,27 @@ const ports = JSON.parse(
 
 function log(tag, message) {
     console.log(`[${tag}] ${message}`)
+}
+
+/**
+ * Each community plugin's package.mjs leaves a .dwp-staging tree behind; 13 of them had grown to
+ * ~174 MB in the working copy. Prune anything older than a day so a dev machine never accumulates
+ * them, without touching a staging dir another build is still using. Best effort: a failure here
+ * must never block startup.
+ */
+function pruneStalePluginStaging() {
+    try {
+        const result = spawnSync(
+            process.execPath,
+            [join(repoRoot, 'scripts/clean-dwp-staging.mjs'), '--hours', '24'],
+            {cwd: repoRoot, stdio: 'ignore'},
+        )
+        if (result.status === 0) {
+            log('dev-start', 'pruned stale .dwp-staging directories')
+        }
+    } catch {
+        // ignore — housekeeping only
+    }
 }
 
 async function waitForUrl(url, timeoutMs = 120_000) {
@@ -146,6 +167,7 @@ function startDesktop(dual) {
 }
 
 async function main() {
+    pruneStalePluginStaging()
     const dual = process.argv.includes('--dual')
     const forceCompile = process.argv.includes('--compile')
     const healthUrl = `http://127.0.0.1:${ports.dev.backend}/api/health`

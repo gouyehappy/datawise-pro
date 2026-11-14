@@ -214,10 +214,10 @@
     flex-direction: column;
     min-width: 0;
     min-height: 0;
-    border: 1px solid var(--dw-panel-border);
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
     border-radius: var(--dw-panel-radius);
-    background: var(--dw-bg-panel);
-    box-shadow: var(--dw-panel-shadow);
+    background: color-mix(in srgb, var(--dw-bg-panel) 78%, var(--dw-bg));
+    box-shadow: none;
     overflow: hidden;
 }
 
@@ -349,10 +349,10 @@
     flex-direction: column;
     min-height: 0;
     padding: clamp(10px, 1.2vmin, 16px);
-    border: 1px solid var(--dw-panel-border);
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
     border-radius: var(--dw-panel-radius);
-    background: var(--dw-bg-panel);
-    box-shadow: var(--dw-panel-shadow);
+    background: color-mix(in srgb, var(--dw-bg-panel) 78%, var(--dw-bg));
+    box-shadow: none;
 }
 
 .mp-card__title {
@@ -520,7 +520,8 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: var(--dw-bg-editor);
+    /* 与工作台同族：整页一张底，nav / main 只靠发丝缝分区 */
+    background: var(--dw-bg);
     font-size: var(--dw-text-sm);
     color: var(--dw-text);
 }
@@ -533,9 +534,9 @@
     max-width: 100%;
     flex-shrink: 0;
     padding: var(--mp-pad) clamp(8px, 1vmin, 12px);
-    border-right: 1px solid var(--dw-border-light);
+    border-right: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     background: var(--dw-bg-panel);
-    box-shadow: inset -1px 0 0 color-mix(in srgb, var(--dw-text) 3%, transparent);
+    box-shadow: none;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
@@ -697,6 +698,14 @@
     height: var(--dw-icon-size-lg);
 }
 
+html[data-icon-tones='on'] .module-shell__nav-item-icon {
+    color: inherit;
+}
+
+html[data-icon-tones='on'] .module-shell__nav-item.is-active .module-shell__nav-item-icon {
+    color: inherit;
+}
+
 .module-shell__nav-item-label {
     min-width: 0;
     overflow: hidden;
@@ -711,10 +720,10 @@
 }
 
 .module-shell__nav-item.is-active {
-    background: var(--dw-primary-softer);
+    background: color-mix(in srgb, var(--dw-primary) 12%, transparent);
     color: var(--dw-text);
     font-weight: 500;
-    box-shadow: inset 3px 0 0 var(--dw-primary);
+    box-shadow: inset 2px 0 0 var(--dw-primary);
 }
 
 .module-shell__nav-item.is-active .module-shell__nav-item-icon {

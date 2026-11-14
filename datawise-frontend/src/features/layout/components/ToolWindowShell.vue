@@ -100,6 +100,6 @@ const emit = defineEmits<{
 }
 
 .dock-drag-zone:hover {
-  background: color-mix(in srgb, var(--dw-bg) 28%, var(--dw-bg-panel));
+  background: color-mix(in srgb, var(--dw-text) 4%, transparent);
 }
 </style>

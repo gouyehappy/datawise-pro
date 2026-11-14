@@ -1,4 +1,5 @@
 import {nextTick, ref} from 'vue'
+import {useI18n} from 'vue-i18n'
 import type {DbType} from '@/core/types'
 import {
     buildAiWorkContext,
@@ -8,6 +9,9 @@ import {
 import {fetchWorkbenchContext} from '@/features/ai/context/services/workbench-context.api'
 import {formatAiErrorMessage} from '@/features/ai/shared/utils/ai-error'
 import {useAppToast} from '@/features/layout/composables/useAppToast'
+import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
+import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
+import {buildDegradedSqlErrorHint} from '@/features/workspace/services/console-ai-degraded.service'
 import type {AiPreferences} from '@/shared/config/app-config.types'
 import {sqlApi} from '@/api'
 import {replaceConsoleSqlStatement} from '@/features/workspace/services/console-sql-replace.service'
@@ -32,7 +36,10 @@ export interface UseAiSqlFixOptions {
 
 /** 执行失败 → AI 生成修复 SQL → diff 预览 → 应用（Epic D-02） */
 export function useAiSqlFix(options: UseAiSqlFixOptions) {
+    const {t} = useI18n()
     const toast = useAppToast()
+    const entitlement = useEntitlementStore()
+    const workspace = useWorkspaceStore()
     const fixDialogOpen = ref(false)
     const fixOriginal = ref('')
     const fixSuggested = ref('')
@@ -40,6 +47,14 @@ export function useAiSqlFix(options: UseAiSqlFixOptions) {
 
     async function requestFix(payload: AiSqlFixPayload) {
         if (fixing.value) return
+
+        if (!entitlement.guardConsoleAiLite('console.ai.fix')) {
+            const hintId = buildDegradedSqlErrorHint(payload.errorMessage)
+            const tip = t(`console.aiDegraded.${hintId ?? 'generic'}`)
+            workspace.setStatus(tip)
+            toast.show(tip, {variant: 'info'})
+            return
+        }
 
         let context = buildAiWorkContext({
             connectionId: options.getConnectionId(),

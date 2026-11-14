@@ -68,7 +68,7 @@ public class JdbcSessionStore implements SessionStore {
             deleteById(id);
             return Optional.empty();
         }
-        if (sessionPolicy.slidingRenewal()) {
+        if (sessionPolicy.shouldRenewNow(session.getExpiresAt())) {
             return Optional.of(renew(session));
         }
         return Optional.of(session);

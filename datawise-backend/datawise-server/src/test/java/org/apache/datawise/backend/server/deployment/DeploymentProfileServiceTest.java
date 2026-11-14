@@ -3,6 +3,7 @@ package org.apache.datawise.backend.server.deployment;
 import org.apache.datawise.backend.config.AuthSecurityProperties;
 import org.apache.datawise.backend.config.ConnectionProbeProperties;
 import org.apache.datawise.backend.config.DatawiseQueryProperties;
+import org.apache.datawise.backend.config.DeploymentAffinityProperties;
 import org.apache.datawise.backend.config.StorageProperties;
 import org.apache.datawise.backend.domain.DeploymentProfileDto;
 import org.apache.datawise.taskconcurrency.spring.TaskConcurrencySpringProperties;
@@ -48,6 +49,7 @@ class DeploymentProfileServiceTest {
                 new ConnectionProbeProperties(),
                 new DatawiseQueryProperties(),
                 new TaskConcurrencySpringProperties(),
+                new DeploymentAffinityProperties(),
                 false
         ).collect();
 
@@ -73,23 +75,34 @@ class DeploymentProfileServiceTest {
         env.setProperty("datawise.sse.bus-type", "jdbc");
         TaskConcurrencySpringProperties taskConcurrency = new TaskConcurrencySpringProperties();
         taskConcurrency.setStoreType(TaskConcurrencySpringProperties.StoreType.JDBC);
+        DatawiseQueryProperties query = new DatawiseQueryProperties();
+        query.setCursorStoreType("jdbc");
 
         DeploymentProfileDto profile = new DeploymentProfileService(
                 env,
                 storage,
                 new AuthSecurityProperties(),
                 new ConnectionProbeProperties(),
-                new DatawiseQueryProperties(),
+                query,
                 taskConcurrency,
+                new DeploymentAffinityProperties(),
                 true
         ).collect();
 
         assertTrue(profile.checks().stream().anyMatch(c ->
                 "sse.bus-type".equals(c.id()) && "ok".equals(c.status())));
         assertTrue(profile.checks().stream().anyMatch(c ->
+                "query.cursor-store-type".equals(c.id()) && "ok".equals(c.status())));
+        assertTrue(profile.checks().stream().anyMatch(c ->
                 "ai.analysis.checkpoint.storage".equals(c.id()) && "ok".equals(c.status())));
         assertTrue(profile.checks().stream().anyMatch(c ->
-                "runtime.process-local-affinity".equals(c.id()) && "info".equals(c.status())));
+                "ai.analysis.checkpoint.shared-volume".equals(c.id()) && "info".equals(c.status())));
+        assertTrue(profile.checks().stream().anyMatch(c ->
+                "runtime.process-local-affinity".equals(c.id())
+                        && "info".equals(c.status())
+                        && c.currentValue().contains("cursors=jdbc")));
+        assertTrue(profile.checks().stream().anyMatch(c ->
+                "deployment.affinity-mode".equals(c.id()) && "ok".equals(c.status())));
     }
 
     private static DeploymentProfileService service(Environment environment) {
@@ -100,6 +113,7 @@ class DeploymentProfileServiceTest {
                 new ConnectionProbeProperties(),
                 new DatawiseQueryProperties(),
                 new TaskConcurrencySpringProperties(),
+                new DeploymentAffinityProperties(),
                 false
         );
     }

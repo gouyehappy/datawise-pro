@@ -55,6 +55,12 @@ public class ConnectionEntity {
 
     private boolean sshEnabled = false;
 
+    /**
+     * Soft write guard for owners (T-SAFE-1): when true, owner is treated as READONLY for writes
+     * until a UI-only timed unlock window is active. Does not change team share grants.
+     */
+    private boolean writeGuard = false;
+
     private String sshHost;
 
     private String sshPort;
@@ -284,6 +290,14 @@ public class ConnectionEntity {
         this.sshEnabled = sshEnabled;
     }
 
+    public boolean isWriteGuard() {
+        return writeGuard;
+    }
+
+    public void setWriteGuard(boolean writeGuard) {
+        this.writeGuard = writeGuard;
+    }
+
     public String getSshHost() {
         return sshHost;
     }
@@ -402,5 +416,56 @@ public class ConnectionEntity {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    /** Shallow field copy for decrypt-on-use (cache retains ciphertext). */
+    public static ConnectionEntity copyOf(ConnectionEntity source) {
+        if (source == null) {
+            return null;
+        }
+        ConnectionEntity copy = new ConnectionEntity();
+        copy.id = source.id;
+        copy.userId = source.userId;
+        copy.tenantId = source.tenantId;
+        copy.groupId = source.groupId;
+        copy.projectId = source.projectId;
+        copy.sharedProjectIds = source.sharedProjectIds != null
+                ? new java.util.ArrayList<>(source.sharedProjectIds)
+                : new java.util.ArrayList<>();
+        copy.name = source.name;
+        copy.dbType = source.dbType;
+        copy.env = source.env;
+        copy.envCustom = source.envCustom;
+        copy.storage = source.storage;
+        copy.host = source.host;
+        copy.port = source.port;
+        copy.authType = source.authType;
+        copy.username = source.username;
+        copy.password = source.password;
+        copy.jdbcUrl = source.jdbcUrl;
+        copy.serviceType = source.serviceType;
+        copy.sid = source.sid;
+        copy.driver = source.driver;
+        copy.driverClass = source.driverClass;
+        copy.databaseName = source.databaseName;
+        copy.sshEnabled = source.sshEnabled;
+        copy.writeGuard = source.writeGuard;
+        copy.sshHost = source.sshHost;
+        copy.sshPort = source.sshPort;
+        copy.sshUser = source.sshUser;
+        copy.sshPassword = source.sshPassword;
+        copy.sshPrivateKey = source.sshPrivateKey;
+        copy.sshPassphrase = source.sshPassphrase;
+        copy.jumpPrivateKey = source.jumpPrivateKey;
+        copy.jumpPassphrase = source.jumpPassphrase;
+        copy.advancedConfig = source.advancedConfig;
+        copy.pluginSecrets = source.pluginSecrets;
+        copy.pluginId = source.pluginId;
+        copy.pluginConnectionProvider = source.pluginConnectionProvider;
+        copy.pluginConnectionType = source.pluginConnectionType;
+        copy.sortOrder = source.sortOrder;
+        copy.createdAt = source.createdAt;
+        copy.updatedAt = source.updatedAt;
+        return copy;
     }
 }

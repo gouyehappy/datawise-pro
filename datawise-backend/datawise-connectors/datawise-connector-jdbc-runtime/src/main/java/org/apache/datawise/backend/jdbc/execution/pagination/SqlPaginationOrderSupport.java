@@ -10,11 +10,15 @@ final class SqlPaginationOrderSupport {
     private SqlPaginationOrderSupport() {
     }
 
+    static boolean hasOrderBy(String sql) {
+        return sql != null && ORDER_BY.matcher(sql).find();
+    }
+
     static String ensureOrderBy(String sql, String orderClause) {
         if (orderClause == null || orderClause.isBlank()) {
             return sql;
         }
-        if (!ORDER_BY.matcher(sql).find()) {
+        if (!hasOrderBy(sql)) {
             return sql + orderClause;
         }
         return sql;

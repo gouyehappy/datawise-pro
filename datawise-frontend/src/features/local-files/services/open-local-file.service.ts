@@ -5,11 +5,16 @@ import {useLocalFilesStore} from '@/features/local-files/stores/local-files-stor
 import {canUseLocalFilesWorkspace, readLocalTextFile} from '@/features/local-files/services/local-files.service'
 import {
     canOpenLocalFileInEditor,
+    fileExtension,
     isLocalBinaryFileName,
     isLocalSqlFileName,
     localFileBaseName,
     localFileNodeId,
 } from '@/features/local-files/services/local-files-path'
+import {
+    isLocalDataPreviewFileName,
+    previewLocalDataFile,
+} from '@/features/local-files/services/local-data-preview.service'
 
 export async function openLocalWorkspaceFile(path: string): Promise<string | null> {
     const layout = useLayoutStore()
@@ -17,6 +22,12 @@ export async function openLocalWorkspaceFile(path: string): Promise<string | nul
     const localFiles = useLocalFilesStore()
     const trimmed = path.trim()
     if (!trimmed) return null
+
+    // Parquet (and other binary data files): table preview via community plugin.
+    if (fileExtension(trimmed) === '.parquet' || (isLocalBinaryFileName(trimmed) && isLocalDataPreviewFileName(trimmed))) {
+        const ok = await previewLocalDataFile(trimmed)
+        return ok ? trimmed : null
+    }
 
     if (isLocalBinaryFileName(trimmed) || !canOpenLocalFileInEditor(trimmed)) {
         layout.showErrorToast(t('explorer.localFiles.binaryFile'))

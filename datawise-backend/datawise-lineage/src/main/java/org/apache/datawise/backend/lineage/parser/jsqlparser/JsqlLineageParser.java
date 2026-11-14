@@ -13,7 +13,7 @@ import org.apache.datawise.backend.lineage.model.LineageWarning;
 import org.apache.datawise.backend.lineage.model.ParseStatus;
 import org.apache.datawise.backend.lineage.resolver.ViewModelLineageLoader;
 import org.apache.datawise.backend.lineage.spi.SqlLineageParser;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -43,9 +43,10 @@ public class JsqlLineageParser implements SqlLineageParser {
             DbType.GENERIC.id()
     );
 
-    private final ViewModelLineageLoader viewModelLineageLoader;
+    /** Late lookup breaks Registry ↔ Loader ↔ Jsql constructor cycle (BE-P2-1). */
+    private final ObjectFactory<ViewModelLineageLoader> viewModelLineageLoader;
 
-    public JsqlLineageParser(@Lazy ViewModelLineageLoader viewModelLineageLoader) {
+    public JsqlLineageParser(ObjectFactory<ViewModelLineageLoader> viewModelLineageLoader) {
         this.viewModelLineageLoader = viewModelLineageLoader;
     }
 
@@ -95,7 +96,7 @@ public class JsqlLineageParser implements SqlLineageParser {
             JsqlRecursiveSelectAnalyzer analyzer = new JsqlRecursiveSelectAnalyzer(
                     context,
                     request,
-                    viewModelLineageLoader
+                    viewModelLineageLoader.getObject()
             );
             List<ColumnLineage> columns = analyzer.analyze(select);
             ParseStatus status = warnings.isEmpty() ? ParseStatus.COMPLETE : ParseStatus.PARTIAL;

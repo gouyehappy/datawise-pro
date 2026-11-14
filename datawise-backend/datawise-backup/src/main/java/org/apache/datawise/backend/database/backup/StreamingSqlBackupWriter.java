@@ -1,40 +1,45 @@
 package org.apache.datawise.backend.database.backup;
 
+import org.apache.datawise.backend.common.DeepOffsetGuard;
 import org.apache.datawise.backend.connector.facade.ConnectorFacade;
-import org.apache.datawise.backend.database.table.TableDataService;
 import org.apache.datawise.backend.database.table.TableDetailService;
 import org.apache.datawise.backend.domain.TableDataResult;
 import org.apache.datawise.backend.domain.TableDdlResult;
+import org.apache.datawise.backend.jdbc.stream.ResultStreamCallback;
 import org.apache.datawise.backend.model.ConnectionEntity;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
  * Streams SQL backup for one table or a whole database.
- * Calls {@link TableDataService#fetch} with {@code maxRows=0} directly — never via
- * {@code TableSqlExportService} / {@code QueryLimitResolver}.
+ * Data rows go through {@link ConnectorFacade#jdbc()} {@code streamQueryOnConnection}
+ * (MetaForge A1) so peak memory stays bounded by the insert flush batch — never full-table
+ * {@code List} materialization via {@code TableDataService#fetch}.
  */
 @Component
 public class StreamingSqlBackupWriter {
 
+    static final int INSERT_FLUSH_ROWS = 200;
+
     private final TableDetailService tableDetailService;
-    private final TableDataService tableDataService;
     private final ConnectorFacade connectorFacade;
 
     public StreamingSqlBackupWriter(
             TableDetailService tableDetailService,
-            TableDataService tableDataService,
             ConnectorFacade connectorFacade
     ) {
         this.tableDetailService = tableDetailService;
-        this.tableDataService = tableDataService;
         this.connectorFacade = connectorFacade;
     }
 
@@ -140,28 +145,110 @@ public class StreamingSqlBackupWriter {
             return 0L;
         }
 
-        long rowCount = 0L;
-        String cursorId = null;
-        do {
-            if (cancelCheck.get()) {
-                throw new BackupCancelledException("cancelled during data export for " + tableName);
+        try {
+            return DeepOffsetGuard.run(() -> streamTableData(writer, entity, database, dbType, tableName, cancelCheck));
+        } catch (UncheckedIOException ex) {
+            throw ex.getCause();
+        } catch (BackupCancelledException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            if (ex.getCause() instanceof BackupCancelledException cancelled) {
+                throw cancelled;
             }
-            TableDataResult page = cursorId == null
-                    ? tableDataService.fetch(tableName, connectionId, database, 0)
-                    : tableDataService.fetch(tableName, connectionId, database, 0, cursorId);
-            if (page.rows() != null) {
-                rowCount += page.rows().size();
-            }
-            String inserts = connectorFacade.dml().buildInsertsFromTableData(dbType, database, tableName, page);
-            if (inserts != null && !inserts.isBlank()) {
-                writer.write('\n');
-                writer.write(inserts);
-            }
-            cursorId = Boolean.TRUE.equals(page.hasMore()) ? page.cursorId() : null;
-        } while (cursorId != null && !cursorId.isBlank());
+            throw ex;
+        }
+    }
 
-        writer.write('\n');
-        return rowCount;
+    private long streamTableData(
+            Writer writer,
+            ConnectionEntity entity,
+            String database,
+            String dbType,
+            String tableName,
+            Supplier<Boolean> cancelCheck
+    ) {
+        String selectSql = connectorFacade.jdbc().buildTableSelectSql(entity, tableName, database);
+        try {
+            return connectorFacade.jdbc().withConnection(entity, database, connection -> {
+                List<Map<String, Object>> columns = new ArrayList<>();
+                List<Map<String, Object>> batch = new ArrayList<>(INSERT_FLUSH_ROWS);
+                long[] rowCount = {0L};
+                try {
+                    connectorFacade.jdbc().streamQueryOnConnection(
+                            connection,
+                            selectSql,
+                            dbType,
+                            new ResultStreamCallback() {
+                                @Override
+                                public void onSchema(List<Map<String, Object>> schema) {
+                                    columns.clear();
+                                    if (schema != null) {
+                                        columns.addAll(schema);
+                                    }
+                                }
+
+                                @Override
+                                public boolean onRow(Map<String, Object> row) throws SQLException {
+                                    if (Boolean.TRUE.equals(cancelCheck.get())) {
+                                        throw new BackupCancelledException(
+                                                "cancelled during data export for " + tableName
+                                        );
+                                    }
+                                    batch.add(row);
+                                    rowCount[0]++;
+                                    if (batch.size() >= INSERT_FLUSH_ROWS) {
+                                        try {
+                                            flushInsertBatch(writer, dbType, database, tableName, columns, batch);
+                                        } catch (IOException ex) {
+                                            throw new UncheckedIOException(ex);
+                                        }
+                                        batch.clear();
+                                    }
+                                    return true;
+                                }
+                            },
+                            null
+                    );
+                    if (!batch.isEmpty()) {
+                        flushInsertBatch(writer, dbType, database, tableName, columns, batch);
+                    }
+                    writer.write('\n');
+                } catch (IOException ex) {
+                    throw new UncheckedIOException(ex);
+                }
+                return rowCount[0];
+            });
+        } catch (UncheckedIOException ex) {
+            throw ex;
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Backup stream failed for table " + tableName + ": " + ex.getMessage(), ex);
+        }
+    }
+
+    private void flushInsertBatch(
+            Writer writer,
+            String dbType,
+            String database,
+            String tableName,
+            List<Map<String, Object>> columns,
+            List<Map<String, Object>> rows
+    ) throws IOException {
+        if (rows.isEmpty() || columns.isEmpty()) {
+            return;
+        }
+        TableDataResult page = new TableDataResult(
+                List.copyOf(columns),
+                List.copyOf(rows),
+                null,
+                false,
+                null,
+                rows.size()
+        );
+        String inserts = connectorFacade.dml().buildInsertsFromTableData(dbType, database, tableName, page);
+        if (inserts != null && !inserts.isBlank()) {
+            writer.write('\n');
+            writer.write(inserts);
+        }
     }
 
     private static String nullToEmpty(String value) {

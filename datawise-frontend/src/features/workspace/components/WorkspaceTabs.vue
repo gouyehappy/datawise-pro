@@ -6,7 +6,7 @@ import TabAddButton from '@/core/components/TabAddButton.vue'
 import TabBar from '@/core/components/TabBar.vue'
 import TabItem from '@/core/components/TabItem.vue'
 import {UnsavedChangesDialog, PromptDialog} from '@/core/components'
-import {QueryResultPane, WorkspaceTabIcon} from '@/features/workspace/components'
+import WorkspaceTabIcon from '@/features/workspace/components/WorkspaceTabIcon.vue'
 import {useClosableTabMenu} from '@/core/composables/useClosableTabMenu'
 import {getWorkspaceTabMenu} from '@/features/workspace/constants/tab-context-menu'
 import {useLayoutStore} from '@/features/layout/stores/layout'
@@ -34,7 +34,11 @@ import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import type {WorkspaceTab} from '@/core/types'
 import {buildTabBarSegments, formatGroupDisplayTitle, stripGroupTitleCount} from '@/features/workspace/services/workspace-tab-layout.service'
 import {useWorkspaceTabDrag} from '@/features/workspace/composables/useWorkspaceTabDrag'
-import {clientPointToFloatOrigin} from '@/features/workspace/services/workspace-tab-float.service'
+import {
+  resolveUndockDropFromPointer,
+  TAB_FLOAT_DEFAULT_HEIGHT,
+  TAB_FLOAT_DEFAULT_WIDTH,
+} from '@/features/workspace/services/workspace-tab-float.service'
 import {isWorkspaceDirtyTabType} from '@/features/workspace/utils/workspace-tab-dirty'
 
 const props = withDefaults(
@@ -171,7 +175,6 @@ async function copyTabTitle(tabId: string) {
   if (!title) return
   try {
     await navigator.clipboard.writeText(title)
-    layout.showSuccessToast(t('workspace.tabTitleCopied', {name: title}))
   } catch {
     layout.showErrorToast(t('workspace.tabCopyFailed'))
   }
@@ -398,8 +401,17 @@ function floatTabAtPoint(tabId: string, clientX: number, clientY: number) {
     workspace.floatTab(tabId, bounds)
     return
   }
-  const preferred = clientPointToFloatOrigin(clientX, clientY, surface.getBoundingClientRect())
-  workspace.floatTab(tabId, bounds, preferred)
+  const surfaceRect = surface.getBoundingClientRect()
+  const freeSize = {
+    width: Math.min(TAB_FLOAT_DEFAULT_WIDTH, Math.max(320, bounds.width - 48)),
+    height: Math.min(TAB_FLOAT_DEFAULT_HEIGHT, Math.max(200, bounds.height - 48)),
+  }
+  const drop = resolveUndockDropFromPointer(clientX, clientY, surfaceRect, freeSize)
+  workspace.floatTab(tabId, bounds, {
+    ...drop.rect,
+    maximized: drop.kind === 'top',
+  })
+  workspace.setTabFloatSnapGuide(null)
 }
 
 function wouldEjectFromGroup(): boolean {
@@ -416,15 +428,56 @@ function wouldEjectFromGroup(): boolean {
   return false
 }
 
+/** IDEA-like: reorder uses the bar caret; ghost stays a quiet tab chip. Hint only for rare group ops. */
 const dragHint = computed(() => {
-  if (!tabDragActive.value) return ''
-  if (floatAway.value) return t('workspace.tabDragFloatWindow')
-  if (!overZone.value) return ''
+  if (!tabDragActive.value || floatAway.value) return ''
   if (overZone.value === 'on') return t('workspace.tabDragMergeGroup')
   if (wouldEjectFromGroup()) return t('workspace.tabDragEjectGroup')
-  if (overZone.value === 'before') return t('workspace.tabDragInsertBefore')
-  return t('workspace.tabDragInsertAfter')
+  return ''
 })
+
+const draggingTab = computed(() =>
+    workspace.tabs.find((tab) => tab.id === draggingId.value) ?? null,
+)
+
+/** IDEA-like undock: free window or L/R/top snap frames under the chip. */
+const undockDrop = computed(() => {
+  if (!tabDragActive.value || !floatAway.value) return null
+  const surface = document.querySelector('[data-workspace-float-surface]') as HTMLElement | null
+  if (!surface) return null
+  const surfaceRect = surface.getBoundingClientRect()
+  const bounds = resolveFloatBounds()
+  // Slightly compact preview while dragging — less heavy than the final default float.
+  const freeSize = {
+    width: Math.min(440, Math.max(300, Math.min(TAB_FLOAT_DEFAULT_WIDTH, bounds.width - 64))),
+    height: Math.min(280, Math.max(180, Math.min(TAB_FLOAT_DEFAULT_HEIGHT, bounds.height - 64))),
+  }
+  return {
+    surfaceRect,
+    drop: resolveUndockDropFromPointer(ghostX.value, ghostY.value, surfaceRect, freeSize),
+  }
+})
+
+const floatPreviewStyle = computed(() => {
+  const state = undockDrop.value
+  if (!state) return null
+  const {surfaceRect, drop} = state
+  return {
+    left: `${surfaceRect.left + drop.rect.x}px`,
+    top: `${surfaceRect.top + drop.rect.y}px`,
+    width: `${drop.rect.width}px`,
+    height: `${drop.rect.height}px`,
+  }
+})
+
+const floatPreviewKind = computed(() => undockDrop.value?.drop.kind ?? 'free')
+
+watch(
+    () => tabDragActive.value && floatAway.value,
+    (away) => {
+      if (!away) workspace.setTabFloatSnapGuide(null)
+    },
+)
 
 async function startRenameGroup(groupId: string) {
   if (groupToggleTimer != null) {
@@ -684,17 +737,48 @@ function isTabProduction(tab: WorkspaceTab) {
   </TabBar>
 
   <Teleport to="body">
+    <!-- IDEA undock: one composition — tab chip lives in the float chrome -->
     <div
-        v-if="tabDragActive"
+        v-if="floatPreviewStyle"
+        class="dw-tab-float-preview"
+        :class="{
+          'is-snap': floatPreviewKind !== 'free',
+          [`is-snap-${floatPreviewKind}`]: floatPreviewKind !== 'free',
+        }"
+        :style="floatPreviewStyle"
+        :aria-label="t('workspace.tabDragFloatWindow')"
+    >
+      <div class="dw-tab-float-preview__chrome">
+        <div class="dw-tab-float-preview__tab">
+          <WorkspaceTabIcon
+              v-if="draggingTab"
+              class="dw-tab-float-preview__tab-icon"
+              :type="draggingTab.type"
+              :plugin-id="draggingTab.pluginId"
+          />
+          <span class="dw-tab-float-preview__tab-title">{{ ghostTitle }}</span>
+        </div>
+      </div>
+      <div class="dw-tab-float-preview__body" aria-hidden="true">
+        <i/><i/><i/><i/><i/>
+      </div>
+    </div>
+    <!-- Strip reorder: quiet chip only -->
+    <div
+        v-else-if="tabDragActive"
         class="dw-tab-drag-ghost"
         :class="{
           'is-merge': overZone === 'on',
-          'is-insert': overZone === 'before' || overZone === 'after',
-          'is-eject': overZone === 'end',
-          'is-float': floatAway,
+          'is-eject': Boolean(dragHint) && overZone !== 'on',
         }"
-        :style="{ transform: `translate(${ghostX + 14}px, ${ghostY + 10}px)` }"
+        :style="{ transform: `translate(${ghostX}px, ${ghostY}px) translate(-28%, -40%)` }"
     >
+      <WorkspaceTabIcon
+          v-if="draggingTab"
+          class="dw-tab-drag-ghost__icon"
+          :type="draggingTab.type"
+          :plugin-id="draggingTab.pluginId"
+      />
       <span class="dw-tab-drag-ghost__title">{{ ghostTitle }}</span>
       <span v-if="dragHint" class="dw-tab-drag-ghost__hint">{{ dragHint }}</span>
     </div>

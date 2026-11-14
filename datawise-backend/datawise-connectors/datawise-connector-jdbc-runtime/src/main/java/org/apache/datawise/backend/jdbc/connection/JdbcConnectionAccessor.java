@@ -84,8 +84,48 @@ public class JdbcConnectionAccessor {
             JdbcConnectionCallback<T> callback
     ) throws SQLException {
         try (Connection connection = openConnection(entity)) {
-            applyCatalog(connection, entity.getDbType(), database);
-            return callback.apply(connection);
+            String previousCatalog = safeCatalog(connection);
+            String previousSchema = safeSchema(connection);
+            try {
+                applyCatalog(connection, entity.getDbType(), database);
+                return callback.apply(connection);
+            } finally {
+                // Restore pool-borrowed connection so USE/setCatalog does not leak across requests.
+                restoreScope(connection, entity.getDbType(), previousCatalog, previousSchema);
+            }
+        }
+    }
+
+    private static String safeCatalog(Connection connection) {
+        try {
+            return connection.getCatalog();
+        } catch (SQLException ignored) {
+            return null;
+        }
+    }
+
+    private static String safeSchema(Connection connection) {
+        try {
+            return connection.getSchema();
+        } catch (SQLException ignored) {
+            return null;
+        }
+    }
+
+    private static void restoreScope(
+            Connection connection,
+            String dbType,
+            String previousCatalog,
+            String previousSchema
+    ) {
+        try {
+            if (previousCatalog != null && !previousCatalog.isBlank()) {
+                DatabaseScopeSwitcher.apply(connection, dbType, previousCatalog);
+            } else if (previousSchema != null && !previousSchema.isBlank()) {
+                connection.setSchema(previousSchema);
+            }
+        } catch (SQLException ignored) {
+            // Best-effort restore; next borrow may still be polluted — prefer eviction on hard failure.
         }
     }
 

@@ -3,6 +3,9 @@ package org.apache.datawise.backend.platform.workbenchcontext;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import org.apache.datawise.backend.common.truncation.TextTruncation;
+import org.apache.datawise.backend.common.truncation.TruncationMeta;
+
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -83,7 +86,8 @@ public class WorkbenchContextStore {
                             tab.database(),
                             null,
                             tab.bodyTruncated(),
-                            tab.bodyLength()
+                            tab.bodyLength(),
+                            tab.bodyTruncation()
                     ),
                     snap.openTabs(),
                     snap.selection(),
@@ -145,7 +149,19 @@ public class WorkbenchContextStore {
 
         WorkbenchContextSnapshot.ActiveTab active = incoming.activeTab();
         if (active != null) {
-            TruncatedBody body = truncate(active.bodyPreview(), bodyMax);
+            TextTruncation.TruncatedText body = TextTruncation.truncateChars(
+                    active.bodyPreview(), bodyMax, "preview");
+            boolean truncated = body.meta().truncated() || Boolean.TRUE.equals(active.bodyTruncated());
+            int originalLength = active.bodyLength() != null
+                    ? active.bodyLength()
+                    : body.meta().originalLength().intValue();
+            TruncationMeta bodyTruncation = TruncationMeta.of(
+                    truncated,
+                    originalLength,
+                    bodyMax,
+                    "chars",
+                    "preview"
+            );
             active = new WorkbenchContextSnapshot.ActiveTab(
                     active.id(),
                     active.type(),
@@ -153,8 +169,9 @@ public class WorkbenchContextStore {
                     active.connectionId(),
                     active.database(),
                     body.text(),
-                    body.truncated() || Boolean.TRUE.equals(active.bodyTruncated()),
-                    active.bodyLength() != null ? active.bodyLength() : body.originalLength()
+                    truncated,
+                    originalLength,
+                    bodyTruncation
             );
         }
 
@@ -166,7 +183,8 @@ public class WorkbenchContextStore {
                 ? java.util.List.<WorkbenchContextSnapshot.PluginFocus>of()
                 : incoming.pluginFocus().stream()
                 .map(p -> {
-                    TruncatedBody tail = truncate(p.tailPreview(), pluginMax);
+                    TextTruncation.TruncatedText tail = TextTruncation.truncateChars(
+                            p.tailPreview(), pluginMax, "preview");
                     String summary = p.summary();
                     if (summary != null && summary.length() > 200) {
                         summary = summary.substring(0, 200);
@@ -206,23 +224,6 @@ public class WorkbenchContextStore {
         );
     }
 
-    private static TruncatedBody truncate(String text, int maxChars) {
-        if (text == null) {
-            return new TruncatedBody(null, false, 0);
-        }
-        int len = text.length();
-        if (maxChars <= 0) {
-            return new TruncatedBody(null, len > 0, len);
-        }
-        if (len <= maxChars) {
-            return new TruncatedBody(text, false, len);
-        }
-        return new TruncatedBody(text.substring(0, maxChars), true, len);
-    }
-
     private record Entry(WorkbenchContextSnapshot snapshot, long lastTouchMs) {
-    }
-
-    private record TruncatedBody(String text, boolean truncated, int originalLength) {
     }
 }

@@ -1,3 +1,6 @@
+import {askAppConfirm} from '@/core/services/app-confirm.service'
+import {t} from '@/i18n'
+
 /** Whether draft differs from the last loaded/saved baseline while editing. */
 export function isConfigContentDirty(
     editing: boolean,
@@ -10,14 +13,20 @@ export function isConfigContentDirty(
 
 /**
  * Confirm discarding unsaved edits. Returns true when navigation/edit exit may proceed.
- * @param confirmFn injectable for tests (defaults to `window.confirm`)
+ * @param confirmFn injectable for tests (defaults to app ConfirmDialog via askAppConfirm)
  */
-export function confirmDiscardConfigEdits(
+export async function confirmDiscardConfigEdits(
     dirty: boolean,
     message: string,
-    confirmFn: (msg: string) => boolean = (msg) =>
-        typeof window !== 'undefined' ? window.confirm(msg) : true,
-): boolean {
+    confirmFn?: (msg: string) => boolean | Promise<boolean>,
+): Promise<boolean> {
     if (!dirty) return true
-    return confirmFn(message)
+    if (confirmFn) {
+        return confirmFn(message)
+    }
+    return askAppConfirm({
+        title: t('common.confirm'),
+        message,
+        confirmVariant: 'danger',
+    })
 }

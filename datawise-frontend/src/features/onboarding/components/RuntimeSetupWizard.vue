@@ -16,15 +16,10 @@ import {
     installConnectorsWithDrivers,
 } from '@/features/settings/services/install-connectors-with-drivers.service'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
-import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
-import {packNameKey, packPitchKey} from '@/features/pack/services/pack-i18n'
-import type {PackId} from '@/features/pack/types/pack.types'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 
-type WizardStep = 'welcome' | 'select' | 'packs' | 'progress' | 'done'
-
-/** Optional capability packs offered during first-run setup (D-05). */
-const OPTIONAL_SETUP_PACKS: PackId[] = ['pack.ai', 'pack.governance', 'pack.lineage']
+/** A0: welcome → select → progress → done（Pack 试用后置到 done 弱入口） */
+type WizardStep = 'welcome' | 'select' | 'progress' | 'done'
 
 const props = defineProps<{open: boolean}>()
 const emit = defineEmits<{
@@ -35,7 +30,6 @@ const emit = defineEmits<{
 
 const {t} = useI18n()
 const auth = useAuthStore()
-const entitlement = useEntitlementStore()
 const layout = useLayoutStore()
 
 const step = ref<WizardStep>('welcome')
@@ -43,13 +37,10 @@ const loadingCatalog = ref(false)
 const installing = ref(false)
 const catalogError = ref<string | null>(null)
 const installError = ref<string | null>(null)
-const packsError = ref<string | null>(null)
-const enablingPacks = ref(false)
 const progressMessage = ref('')
 const progressPercent = ref(0)
 const entries = ref<ConnectorMarketEntry[]>([])
 const selected = ref<Set<string>>(new Set())
-const selectedPacks = ref<Set<PackId>>(new Set())
 const installSummary = ref({connectors: 0, drivers: 0, driverFailures: 0})
 
 const canManageConnectors = computed(() => auth.isAdmin && !auth.isGuest)
@@ -75,23 +66,9 @@ const allListedInstalled = computed(
     () => entries.value.length > 0 && entries.value.every((entry) => entry.available),
 )
 
-const packOptions = computed(() =>
-    OPTIONAL_SETUP_PACKS.map((id) => ({
-        id,
-        name: t(packNameKey(id)),
-        pitch: t(packPitchKey(id)),
-        usable: entitlement.isPackUsable(id),
-    })),
-)
-
-const pendingPackTrials = computed(() =>
-    [...selectedPacks.value].filter((id) => !entitlement.isPackUsable(id)),
-)
-
 const dialogTitle = computed(() => {
     if (step.value === 'welcome') return t('onboarding.runtimeSetup.welcomeTitle')
     if (step.value === 'select') return t('onboarding.runtimeSetup.selectTitle')
-    if (step.value === 'packs') return t('onboarding.runtimeSetup.packsTitle')
     if (step.value === 'progress') return t('onboarding.runtimeSetup.progressTitle')
     return t('onboarding.runtimeSetup.doneTitle')
 })
@@ -108,7 +85,6 @@ function close() {
 
 function onModalClose() {
     if (step.value === 'progress' && installing.value) return
-    if (step.value === 'packs' && enablingPacks.value) return
     skipAndClose()
 }
 
@@ -130,7 +106,7 @@ function openAdminLogin() {
     auth.openLoginDialog({overWizards: true})
 }
 
-function openPackStore() {
+function openPackStoreLater() {
     finishAndClose()
     layout.setModule('packStore')
 }
@@ -140,19 +116,15 @@ function retryFromError() {
     step.value = 'select'
 }
 
+function goToDone() {
+    step.value = 'done'
+}
+
 function toggleId(id: string) {
     const next = new Set(selected.value)
     if (next.has(id)) next.delete(id)
     else next.add(id)
     selected.value = next
-}
-
-function togglePack(id: PackId) {
-    if (entitlement.isPackUsable(id)) return
-    const next = new Set(selectedPacks.value)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    selectedPacks.value = next
 }
 
 function selectCore() {
@@ -196,6 +168,7 @@ async function loadCatalog() {
                 if (aPending !== bPending) return aPending - bPending
                 return a.label.localeCompare(b.label)
             })
+        // A0-2: default selection = CORE only
         const defaults = new Set(
             entries.value
                 .filter((entry) => isCore(entry.id) && needsInstall(entry))
@@ -211,21 +184,13 @@ async function loadCatalog() {
     }
 }
 
-function goToPacksStep() {
-    packsError.value = null
-    selectedPacks.value = new Set(
-        OPTIONAL_SETUP_PACKS.filter((id) => !entitlement.isPackUsable(id)).slice(0, 1),
-    )
-    step.value = 'packs'
-}
-
 async function onPrimarySelectAction() {
     if (nothingToInstall.value) {
-        goToPacksStep()
+        goToDone()
         return
     }
     if (!canManageConnectors.value) {
-        goToPacksStep()
+        goToDone()
         return
     }
     await startInstall()
@@ -238,7 +203,7 @@ async function startInstall() {
     }
     const ids = pendingInstallIds.value
     if (!ids.length) {
-        goToPacksStep()
+        goToDone()
         return
     }
     step.value = 'progress'
@@ -270,32 +235,12 @@ async function startInstall() {
         }
         progressPercent.value = 100
         progressMessage.value = t('onboarding.runtimeSetup.progressDone')
-        goToPacksStep()
+        goToDone()
     } catch (err) {
         installError.value = resolveCaughtApiErrorMessage(err, t, 'onboarding.runtimeSetup.progressFailed')
         progressMessage.value = t('onboarding.runtimeSetup.progressFailed')
     } finally {
         installing.value = false
-    }
-}
-
-async function onPacksContinue() {
-    const ids = pendingPackTrials.value
-    if (!ids.length) {
-        step.value = 'done'
-        return
-    }
-    enablingPacks.value = true
-    packsError.value = null
-    try {
-        for (const packId of ids) {
-            await entitlement.startTrial(packId)
-        }
-        step.value = 'done'
-    } catch (err) {
-        packsError.value = resolveCaughtApiErrorMessage(err, t, 'onboarding.runtimeSetup.packsFailed')
-    } finally {
-        enablingPacks.value = false
     }
 }
 
@@ -306,14 +251,11 @@ watch(
         step.value = 'welcome'
         installError.value = null
         catalogError.value = null
-        packsError.value = null
         progressPercent.value = 0
         progressMessage.value = ''
         installSummary.value = {connectors: 0, drivers: 0, driverFailures: 0}
         selected.value = new Set()
-        selectedPacks.value = new Set()
         entries.value = []
-        void entitlement.load().catch(() => undefined)
     },
 )
 
@@ -332,7 +274,7 @@ watch(step, (next) => {
       :subtitle="t('onboarding.runtimeSetup.subtitle')"
       width="560px"
       max-height="80vh"
-      :close-on-escape="step !== 'progress' && !enablingPacks"
+      :close-on-escape="step !== 'progress'"
       @close="onModalClose"
   >
     <div class="runtime-setup">
@@ -405,44 +347,6 @@ watch(step, (next) => {
         </ul>
       </template>
 
-      <template v-else-if="step === 'packs'">
-        <p class="runtime-setup__body">{{ t('onboarding.runtimeSetup.packsBody') }}</p>
-        <DwInlineAlert v-if="packsError" variant="error" density="banner">
-          {{ packsError }}
-        </DwInlineAlert>
-        <ul class="runtime-setup__list" role="list">
-          <li
-              v-for="pack in packOptions"
-              :key="pack.id"
-              class="runtime-setup__item"
-              :class="{'is-installed': pack.usable}"
-          >
-            <DwCheckbox
-                class="runtime-setup__label"
-                :model-value="pack.usable || selectedPacks.has(pack.id)"
-                :disabled="pack.usable"
-                @update:model-value="() => togglePack(pack.id)"
-            >
-              <span class="runtime-setup__pack">
-                <span class="runtime-setup__name">
-                  {{ pack.name }}
-                  <span v-if="pack.usable" class="runtime-setup__tag runtime-setup__tag--ok">
-                    {{ t('onboarding.runtimeSetup.packsActiveTag') }}
-                  </span>
-                  <span v-else class="runtime-setup__tag">
-                    {{ t('onboarding.runtimeSetup.packsTrialTag') }}
-                  </span>
-                </span>
-                <span class="runtime-setup__muted">{{ pack.pitch }}</span>
-              </span>
-            </DwCheckbox>
-          </li>
-        </ul>
-        <button class="runtime-setup__link" type="button" @click="openPackStore">
-          {{ t('onboarding.runtimeSetup.packsOpenStore') }}
-        </button>
-      </template>
-
       <template v-else-if="step === 'progress'">
         <p class="runtime-setup__body">{{ progressMessage }}</p>
         <div class="runtime-setup__bar" role="progressbar" :aria-valuenow="progressPercent" aria-valuemin="0" aria-valuemax="100">
@@ -470,6 +374,9 @@ watch(step, (next) => {
           >
             {{ t('onboarding.runtimeSetup.doneDriverWarnings', {count: installSummary.driverFailures}) }}
           </DwInlineAlert>
+          <button class="runtime-setup__link" type="button" @click="openPackStoreLater">
+            {{ t('onboarding.runtimeSetup.donePacksLater') }}
+          </button>
         </div>
       </template>
     </div>
@@ -478,15 +385,14 @@ watch(step, (next) => {
       <DwButton
           v-if="step === 'select' && !nothingToInstall && canManageConnectors"
           variant="ghost"
-          @click="goToPacksStep"
+          @click="goToDone"
       >
         {{ t('onboarding.runtimeSetup.skip') }}
       </DwButton>
       <DwButton
-          v-else-if="step === 'welcome' || step === 'packs'"
+          v-else-if="step === 'welcome'"
           variant="ghost"
-          :disabled="enablingPacks"
-          @click="step === 'packs' ? (step = 'done') : skipAndClose()"
+          @click="skipAndClose"
       >
         {{ t('onboarding.runtimeSetup.skip') }}
       </DwButton>
@@ -495,14 +401,6 @@ watch(step, (next) => {
           variant="secondary"
           :disabled="installing"
           @click="step = 'welcome'"
-      >
-        {{ t('onboarding.back') }}
-      </DwButton>
-      <DwButton
-          v-else-if="step === 'packs'"
-          variant="secondary"
-          :disabled="enablingPacks"
-          @click="step = 'select'"
       >
         {{ t('onboarding.back') }}
       </DwButton>
@@ -519,20 +417,11 @@ watch(step, (next) => {
       >
         {{ primarySelectLabel }}
       </DwButton>
-      <DwButton
-          v-else-if="step === 'packs'"
-          :disabled="enablingPacks"
-          @click="onPacksContinue"
-      >
-        {{ pendingPackTrials.length
-          ? t('onboarding.runtimeSetup.packsStartTrials')
-          : t('onboarding.runtimeSetup.continueReady') }}
-      </DwButton>
       <template v-else-if="step === 'progress' && installError">
         <DwButton variant="secondary" @click="retryFromError">
           {{ t('onboarding.runtimeSetup.retry') }}
         </DwButton>
-        <DwButton variant="ghost" @click="goToPacksStep">
+        <DwButton variant="ghost" @click="goToDone">
           {{ t('onboarding.runtimeSetup.skip') }}
         </DwButton>
       </template>
@@ -618,13 +507,6 @@ watch(step, (next) => {
   align-items: center;
   gap: 8px;
   font-size: var(--dw-text-sm);
-}
-
-.runtime-setup__pack {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
 }
 
 .runtime-setup__tag {

@@ -6,7 +6,13 @@ import {DwButton, StatusPill} from '@/core/components'
 import type {PackCatalogItem} from '@/features/pack/types/pack.types'
 import {PACK_AI_OFFLINE_ID} from '@/features/pack/types/pack.types'
 import type {StatusVariant} from '@/core/utils/status-variant'
-import {packHighlightKey, packNameKey, packPitchKey} from '@/features/pack/services/pack-i18n'
+import {
+  packHighlightKey,
+  packLayerNameKey,
+  packNameKey,
+  packPitchKey,
+} from '@/features/pack/services/pack-i18n'
+import {resolvePackLayer} from '@/features/pack/services/pack-layer'
 
 const props = defineProps<{
   pack: PackCatalogItem
@@ -22,6 +28,10 @@ const {t} = useI18n()
 const name = computed(() => t(packNameKey(props.pack.id)))
 const pitch = computed(() => t(packPitchKey(props.pack.id)))
 const highlight = computed(() => t(packHighlightKey(props.pack.id)))
+const layer = computed(() => resolvePackLayer(props.pack.id))
+const layerLabel = computed(() =>
+    layer.value ? t(packLayerNameKey(layer.value)) : '',
+)
 
 const stateLabel = computed(() => t(`pack.state.${props.pack.state}`))
 
@@ -81,6 +91,7 @@ function onPrimary() {
       <StatusPill :variant="pillVariant">{{ stateLabel }}</StatusPill>
     </header>
 
+    <p v-if="layerLabel" class="pack-card__layer">{{ layerLabel }}</p>
     <h3 class="pack-card__title">{{ name }}</h3>
     <p class="pack-card__pitch">{{ pitch }}</p>
     <p class="pack-card__highlight">{{ highlight }}</p>

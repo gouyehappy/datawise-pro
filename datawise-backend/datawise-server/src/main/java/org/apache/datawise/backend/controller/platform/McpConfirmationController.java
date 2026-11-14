@@ -14,9 +14,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/platform/mcp/confirmations")
 @Profile("!without-ai")
+@RequiresFeature(UserFeaturePermission.NAV_AI)
 public class McpConfirmationController {
 
     private final ConfirmGateService confirmGateService;

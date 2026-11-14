@@ -27,7 +27,6 @@ export async function runExplorerLocateActiveTab(): Promise<boolean> {
         workspace.updateTabContext(tab.id, {explorerNodeId: node.id})
     }
 
-    layout.showSuccessToast(t('explorer.locateDone', {name: node.label}))
     return true
 }
 
@@ -41,7 +40,6 @@ export async function runExplorerLocateSelected(): Promise<boolean> {
         return false
     }
 
-    layout.showSuccessToast(t('explorer.locateDone', {name: node.label}))
     return true
 }
 
@@ -91,7 +89,6 @@ export async function runExplorerLocate(): Promise<boolean> {
             layout.showErrorToast(t('explorer.localFiles.locateFailed'))
             return false
         }
-        layout.showSuccessToast(t('explorer.locateDone', {name: path.replace(/^.*[/\\]/, '')}))
         return true
     }
 

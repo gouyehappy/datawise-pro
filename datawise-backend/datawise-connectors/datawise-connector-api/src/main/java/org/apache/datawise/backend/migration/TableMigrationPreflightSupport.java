@@ -21,6 +21,8 @@ public final class TableMigrationPreflightSupport {
     public static final String ISSUE_TARGET_MISSING = "targetTableMissing";
     public static final String ISSUE_COLUMNS_MISSING = "columnsMissingOnTarget";
     public static final String ISSUE_EXTRA_COLUMNS = "extraColumnsOnTarget";
+    public static final String ISSUE_TYPE_MISMATCH = "columnTypeMismatch";
+    public static final String ISSUE_ATTRIBUTE_MISMATCH = "columnAttributeMismatch";
 
     private static final Pattern WATERMARK_NAME = Pattern.compile(
             "(?i)(updated?_?at|update_?time|modify_?time|gmt_?modified|last_?modified|changed_?at"
@@ -31,7 +33,19 @@ public final class TableMigrationPreflightSupport {
 
     public record ColumnCompareResult(
             List<String> missingOnTarget,
-            List<String> extraOnTarget) {
+            List<String> extraOnTarget,
+            List<String> typeMismatches,
+            List<String> attributeMismatches) {
+        public ColumnCompareResult(List<String> missingOnTarget, List<String> extraOnTarget) {
+            this(missingOnTarget, extraOnTarget, List.of(), List.of());
+        }
+
+        public ColumnCompareResult(
+                List<String> missingOnTarget,
+                List<String> extraOnTarget,
+                List<String> typeMismatches) {
+            this(missingOnTarget, extraOnTarget, typeMismatches, List.of());
+        }
     }
 
     public record StatusResult(
@@ -44,6 +58,8 @@ public final class TableMigrationPreflightSupport {
                                                      List<TableColumnDetail> targetColumns) {
         Map<String, String> sourceNames = normalizeColumnNames(sourceColumns);
         Map<String, String> targetNames = normalizeColumnNames(targetColumns);
+        Map<String, TableColumnDetail> sourceByName = indexColumns(sourceColumns);
+        Map<String, TableColumnDetail> targetByName = indexColumns(targetColumns);
 
         List<String> missing = sourceNames.keySet().stream()
                 .filter(name -> !targetNames.containsKey(name))
@@ -57,7 +73,21 @@ public final class TableMigrationPreflightSupport {
                 .sorted(String.CASE_INSENSITIVE_ORDER)
                 .toList();
 
-        return new ColumnCompareResult(missing, extra);
+        List<String> typeMismatches = sourceNames.keySet().stream()
+                .filter(targetNames::containsKey)
+                .map(name -> describeTypeMismatch(sourceByName.get(name), targetByName.get(name)))
+                .filter(label -> label != null && !label.isBlank())
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+
+        List<String> attributeMismatches = sourceNames.keySet().stream()
+                .filter(targetNames::containsKey)
+                .map(name -> describeAttributeMismatch(sourceByName.get(name), targetByName.get(name)))
+                .filter(label -> label != null && !label.isBlank())
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+
+        return new ColumnCompareResult(missing, extra, typeMismatches, attributeMismatches);
     }
 
     /** 源表主键列名（按列顺序，大小写保留）。 */
@@ -114,6 +144,26 @@ public final class TableMigrationPreflightSupport {
                                              boolean targetExists,
                                              List<String> missingOnTarget,
                                              List<String> extraOnTarget) {
+        return resolveStatus(sourceExists, targetExists, missingOnTarget, extraOnTarget, List.of());
+    }
+
+    public static StatusResult resolveStatus(
+                                             boolean sourceExists,
+                                             boolean targetExists,
+                                             List<String> missingOnTarget,
+                                             List<String> extraOnTarget,
+                                             List<String> typeMismatches) {
+        return resolveStatus(
+                sourceExists, targetExists, missingOnTarget, extraOnTarget, typeMismatches, List.of());
+    }
+
+    public static StatusResult resolveStatus(
+                                             boolean sourceExists,
+                                             boolean targetExists,
+                                             List<String> missingOnTarget,
+                                             List<String> extraOnTarget,
+                                             List<String> typeMismatches,
+                                             List<String> attributeMismatches) {
         List<String> issues = new ArrayList<>();
         if (!sourceExists) {
             issues.add(ISSUE_SOURCE_MISSING);
@@ -129,6 +179,14 @@ public final class TableMigrationPreflightSupport {
         }
         if (extraOnTarget != null && !extraOnTarget.isEmpty()) {
             issues.add(ISSUE_EXTRA_COLUMNS);
+        }
+        if (typeMismatches != null && !typeMismatches.isEmpty()) {
+            issues.add(ISSUE_TYPE_MISMATCH);
+        }
+        if (attributeMismatches != null && !attributeMismatches.isEmpty()) {
+            issues.add(ISSUE_ATTRIBUTE_MISMATCH);
+        }
+        if (!issues.isEmpty()) {
             return new StatusResult(STATUS_WARN, List.copyOf(issues));
         }
         return new StatusResult(STATUS_READY, List.of());
@@ -169,6 +227,111 @@ public final class TableMigrationPreflightSupport {
             normalized.putIfAbsent(column.name().trim().toLowerCase(Locale.ROOT), column.name().trim());
         }
         return normalized;
+    }
+
+    private static Map<String, TableColumnDetail> indexColumns(List<TableColumnDetail> columns) {
+        if (columns == null || columns.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, TableColumnDetail> indexed = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (TableColumnDetail column : columns) {
+            if (column == null || column.name() == null || column.name().isBlank()) {
+                continue;
+            }
+            indexed.putIfAbsent(column.name().trim().toLowerCase(Locale.ROOT), column);
+        }
+        return indexed;
+    }
+
+    /**
+     * Human-readable mismatch label for API / UI, e.g. {@code name: varchar(32) -> varchar(64)}.
+     * Returns null when types (and nullability) match.
+     */
+    static String describeTypeMismatch(TableColumnDetail source, TableColumnDetail target) {
+        if (source == null || target == null || source.name() == null || source.name().isBlank()) {
+            return null;
+        }
+        String sourceType = normalizeType(source.dataType());
+        String targetType = normalizeType(target.dataType());
+        boolean typeDiff = !sourceType.equals(targetType);
+        boolean nullDiff = source.nullable() != target.nullable();
+        if (!typeDiff && !nullDiff) {
+            return null;
+        }
+        StringBuilder label = new StringBuilder(source.name().trim()).append(": ");
+        label.append(displayType(source));
+        label.append(" -> ");
+        label.append(displayType(target));
+        return label.toString();
+    }
+
+    /** Column name extracted from a {@link #describeTypeMismatch} / attribute label. */
+    public static String typeMismatchColumnName(String label) {
+        if (label == null || label.isBlank()) {
+            return null;
+        }
+        int colon = label.indexOf(':');
+        if (colon <= 0) {
+            return label.trim();
+        }
+        return label.substring(0, colon).trim();
+    }
+
+    /**
+     * Label for comment / default differences, e.g.
+     * {@code name: comment 'a' -> 'b'; default 1 -> 2}. Returns null when attributes match.
+     */
+    static String describeAttributeMismatch(TableColumnDetail source, TableColumnDetail target) {
+        if (source == null || target == null || source.name() == null || source.name().isBlank()) {
+            return null;
+        }
+        boolean commentDiff = !normalizeAttr(source.comment()).equals(normalizeAttr(target.comment()));
+        boolean defaultDiff = !normalizeAttr(source.defaultValue()).equals(normalizeAttr(target.defaultValue()));
+        if (!commentDiff && !defaultDiff) {
+            return null;
+        }
+        StringBuilder label = new StringBuilder(source.name().trim()).append(':');
+        if (commentDiff) {
+            label.append(" comment ")
+                    .append(displayAttr(source.comment()))
+                    .append(" -> ")
+                    .append(displayAttr(target.comment()));
+        }
+        if (defaultDiff) {
+            if (commentDiff) {
+                label.append(';');
+            }
+            label.append(" default ")
+                    .append(displayAttr(source.defaultValue()))
+                    .append(" -> ")
+                    .append(displayAttr(target.defaultValue()));
+        }
+        return label.toString();
+    }
+
+    private static String normalizeAttr(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static String displayAttr(String value) {
+        if (value == null || value.isBlank()) {
+            return "(none)";
+        }
+        return "'" + value.trim().replace("'", "''") + "'";
+    }
+
+    private static String normalizeType(String dataType) {
+        if (dataType == null || dataType.isBlank()) {
+            return "";
+        }
+        return dataType.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    private static String displayType(TableColumnDetail column) {
+        String type = column.dataType() != null && !column.dataType().isBlank()
+                ? column.dataType().trim()
+                : "?";
+        return type + (column.nullable() ? " NULL" : " NOT NULL");
     }
 
     private static boolean isPrimaryKeyColumn(TableColumnDetail column) {

@@ -66,7 +66,12 @@ async function onExport() {
       domains: {...exportDomains},
     })
     downloadBlob(blob, fileName)
-    toast.success(t('settings.configPortability.exportSuccess'))
+    toast.notify({
+      category: 'export',
+      titleKey: 'exportDone',
+      bodyKey: 'exportDone',
+      params: {name: t('settings.configPortability.exportSuccess')},
+    })
     exportPassphrase.value = ''
     exportConfirm.value = ''
   } catch (err) {
@@ -101,7 +106,6 @@ async function onPreflight() {
     } else if (!preflight.value.schemaCompatible) {
       toast.error(t('settings.configPortability.schemaUnsupported'))
     } else {
-      toast.success(t('settings.configPortability.preflightOk'))
     }
   } catch (err) {
     toast.error(
@@ -131,7 +135,6 @@ async function onImport() {
       syncSqlEditorLayersFromServer(),
       shortcutPanel.load(),
     ])
-    toast.success(t('settings.configPortability.importSuccess'))
     if (result.restartRecommended) {
       toast.warning(t('settings.configPortability.restartRecommended'))
     }

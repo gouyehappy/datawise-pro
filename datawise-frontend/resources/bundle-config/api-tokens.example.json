@@ -9,10 +9,18 @@
   },
   {
     "id": "example-sql",
-    "name": "CI sql exec (example)",
+    "name": "CI sql read-only (example)",
     "userId": 1,
     "tokenHash": "$2a$10$replace.with.bcrypt.hash.of.your.token",
     "scopes": ["sql"],
+    "createdAt": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "example-sql-write",
+    "name": "CI sql DDL/DML (example)",
+    "userId": 1,
+    "tokenHash": "$2a$10$replace.with.bcrypt.hash.of.your.token",
+    "scopes": ["sql:write"],
     "createdAt": "2026-01-01T00:00:00Z"
   },
   {

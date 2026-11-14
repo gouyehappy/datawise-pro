@@ -3,7 +3,7 @@
   "version": "5.0.0",
   "private": false,
   "type": "module",
-  "description": "DataWise theme runtime �� pure CSS var / data-attribute application + Host Adapter inject keys",
+  "description": "DataWise theme runtime — pure CSS var / data-attribute application + Host Adapter inject keys",
   "license": "MIT",
   "files": [
     "src",

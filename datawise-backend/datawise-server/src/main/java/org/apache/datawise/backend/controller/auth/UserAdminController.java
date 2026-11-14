@@ -18,8 +18,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/admin")
+@RequiresFeature(UserFeaturePermission.SETTINGS_USER_PERMISSIONS)
 public class UserAdminController {
 
     private final UserAdminService userAdminService;

@@ -47,7 +47,7 @@
     display: inline-flex;
     align-items: center;
     padding: clamp(2px, 0.3vmin, 3px) clamp(7px, 0.8vmin, 8px);
-    border: 1px solid color-mix(in srgb, var(--dw-primary) 24%, var(--dw-border-light));
+    border: 1px solid color-mix(in srgb, var(--dw-primary) 24%, var(--dw-panel-outline, var(--dw-border-light)));
     border-radius: var(--dw-radius-pill);
     background: color-mix(in srgb, var(--dw-primary) 8%, var(--dw-bg-muted));
     font-family: var(--dw-mono);
@@ -66,7 +66,7 @@
 
 .module-shell__main .deep-link-param {
     padding: var(--dw-pad-control-lg);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     border-radius: var(--dw-panel-radius);
     background: var(--dw-bg-muted);
 }
@@ -95,13 +95,13 @@
 }
 
 .module-shell__main .deep-link-param__badge--required {
-    border: 1px solid color-mix(in srgb, var(--dw-primary) 28%, var(--dw-border-light));
+    border: 1px solid color-mix(in srgb, var(--dw-primary) 28%, var(--dw-panel-outline, var(--dw-border-light)));
     background: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg-editor));
     color: var(--dw-primary);
 }
 
 .module-shell__main .deep-link-param__badge--optional {
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     background: var(--dw-bg-editor);
     color: var(--dw-text-muted);
 }
@@ -129,7 +129,7 @@
     align-items: flex-start;
     gap: var(--dw-gap);
     padding: var(--dw-space-5) clamp(8px, 1vmin, 10px) clamp(8px, 1vmin, 10px) clamp(10px, 1.2vmin, 12px);
-    border: 1px solid color-mix(in srgb, var(--dw-primary) 18%, var(--dw-border-light));
+    border: 1px solid color-mix(in srgb, var(--dw-primary) 18%, var(--dw-panel-outline, var(--dw-border-light)));
     border-radius: var(--dw-panel-radius);
     background: var(--dw-bg-muted);
 }
@@ -176,7 +176,7 @@
     gap: var(--dw-gap);
     margin: 0;
     padding-top: clamp(10px, 1.2vmin, 12px);
-    border-top: 1px solid var(--dw-border-light);
+    border-top: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     font-size: var(--dw-text-xs);
     color: var(--dw-text-muted);
     line-height: var(--dw-leading-relaxed);

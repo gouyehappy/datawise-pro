@@ -7,8 +7,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/workspace")
+@RequiresFeature(UserFeaturePermission.SETTINGS_LAYOUT)
 public class WorkspaceSettingsController {
 
     private final WorkspaceScriptsRootService workspaceScriptsRootService;

@@ -80,7 +80,7 @@ public class FileConnectionStore implements ConnectionStore {
 
     @Override
     public List<ConnectionGroupEntity> findAllGroups() {
-        return sortedGroups(persistence.loadDecryptedCatalog());
+        return sortedGroups(persistence.loadCachedCatalog());
     }
 
     @Override
@@ -90,7 +90,7 @@ public class FileConnectionStore implements ConnectionStore {
 
     @Override
     public List<ConnectionGroupEntity> findRootGroups() {
-        return persistence.loadDecryptedCatalog().groups().stream()
+        return persistence.loadCachedCatalog().groups().stream()
                 .filter(group -> group.getParentId() == null)
                 .sorted(Comparator.comparingInt(ConnectionGroupEntity::getSortOrder))
                 .toList();
@@ -98,7 +98,7 @@ public class FileConnectionStore implements ConnectionStore {
 
     @Override
     public List<ConnectionGroupEntity> findChildGroups(String parentId) {
-        return persistence.loadDecryptedCatalog().groups().stream()
+        return persistence.loadCachedCatalog().groups().stream()
                 .filter(group -> parentId.equals(group.getParentId()))
                 .sorted(Comparator.comparingInt(ConnectionGroupEntity::getSortOrder))
                 .toList();

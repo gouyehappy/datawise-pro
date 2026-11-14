@@ -217,7 +217,6 @@ async function copyText(text: string, toastKey: 'copyValue' | 'copyKey' = 'copyV
   if (!text) return
   try {
     await navigator.clipboard.writeText(text)
-    layout.showSuccessToast(t(`explorer.kafkaMessages.${toastKey}Done`))
   } catch {
     // ignore clipboard failures
   }
@@ -251,11 +250,10 @@ async function saveRetention() {
   configsSaving.value = true
   error.value = null
   try {
-    const result = await explorerApi.updateKafkaTopicConfigs(props.connectionId, props.topic, {
+    await explorerApi.updateKafkaTopicConfigs(props.connectionId, props.topic, {
       retentionMs,
       retentionBytes,
     })
-    layout.showSuccessToast(result.message || t('explorer.kafkaPolicies.saved'))
     configs.value = await explorerApi.fetchKafkaTopicConfigs(props.connectionId, props.topic)
     syncRetentionInputs(configs.value)
   } catch (err) {
@@ -275,8 +273,7 @@ async function increasePartitions() {
   partitionsSaving.value = true
   error.value = null
   try {
-    const result = await explorerApi.increaseKafkaTopicPartitions(props.connectionId, props.topic, next)
-    layout.showSuccessToast(result.message || t('explorer.kafkaTopicAdmin.partitionsIncreased'))
+    await explorerApi.increaseKafkaTopicPartitions(props.connectionId, props.topic, next)
     await loadData()
   } catch (err) {
     error.value = resolveCaughtApiErrorMessage(err, t, 'explorer.kafkaTopicAdmin.partitionsFailed')

@@ -41,6 +41,14 @@ public class UserFederatedViewStore {
         fileFor(userId).removeIf(entry -> id.equals(entry.getId()));
     }
 
+    public synchronized void replaceAll(long userId, List<FederatedViewEntry> next) {
+        fileFor(userId).replaceAll(next != null ? next : List.of());
+    }
+
+    public synchronized void invalidate(long userId) {
+        cache.remove(TenantScopedConfigSupport.cacheKey(userId));
+    }
+
     private JsonListFile<FederatedViewEntry> fileFor(long userId) {
         return cache.computeIfAbsent(TenantScopedConfigSupport.cacheKey(userId), ignored -> new JsonListFile<>(
                 configDirectory,

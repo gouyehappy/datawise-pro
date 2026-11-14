@@ -186,6 +186,7 @@ export function createHttpSqlApi(): SqlApi {
             postJson(API_PATHS.sql.cancelExecution, {
                 sessionKey: request.sessionKey.trim(),
                 mode: request.mode ?? 'query',
+                ...(request.queryId ? {queryId: request.queryId.trim()} : {}),
             }),
 
         closeCursor: (cursorId) =>

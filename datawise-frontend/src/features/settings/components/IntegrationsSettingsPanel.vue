@@ -67,14 +67,26 @@ function eventTypeLabel(type: string) {
   const localizedSchemaLabel = schemaLabel
     ? (locale.value.startsWith('zh') ? schemaLabel.displayNameZh : schemaLabel.displayNameEn)
     : ''
-  if (localizedSchemaLabel) return localizedSchemaLabel
+  if (localizedSchemaLabel) {
+    return schemaLabel?.category
+      ? `[${schemaLabel.category}] ${localizedSchemaLabel}`
+      : localizedSchemaLabel
+  }
   const key = `settings.integrations.events.${type.replace(/\./g, '_')}`
   const label = t(key)
   return label === key ? type : label
 }
 
 const eventDefinitions = ref<OutboundEventDefinition[]>([])
-const eventOptions = computed(() => eventDefinitions.value.map((item) => item.type))
+const eventOptions = computed(() =>
+  [...eventDefinitions.value]
+    .sort((a, b) => {
+      const cat = (a.category || '').localeCompare(b.category || '')
+      if (cat !== 0) return cat
+      return a.type.localeCompare(b.type)
+    })
+    .map((item) => item.type),
+)
 
 // ─── List tab ─────────────────────────────────────────────────────────────────
 
@@ -605,7 +617,6 @@ async function saveHook() {
       eventTypes: subscriptions.filter((item) => item.enabled !== false).map((item) => item.eventType),
       subscriptions,
     })
-    toast.success(t('settings.integrations.webhookSaved'))
     if (result.confirmationSkipped) {
       lastFeedback.value = {message: t('settings.integrations.confirmationSkippedIssue'), ok: true}
       toast.warning(t('settings.integrations.confirmationSkippedIssue'))
@@ -613,8 +624,8 @@ async function saveHook() {
       const message = formatConfirmationFeedback(result.confirmationResult)
       const ok = Boolean(result.confirmationResult?.ok)
       lastFeedback.value = {message, ok}
-      if (ok) toast.success(message)
-      else toast.warning(message)
+      // 成功态看面板内 lastFeedback；失败仍 toast 提醒。
+      if (!ok) toast.warning(message)
     }
     await reloadHooks(result.webhook.id)
     openEditHook(result.webhook.id)
@@ -635,7 +646,6 @@ async function removeHook(id: string) {
   if (!confirmed) return
   try {
     await platformApi.deleteOutboundWebhook(id)
-    toast.success(t('settings.integrations.webhookDeleted'))
     await reloadHooks()
     if (rootView.value === 'webhook-edit') {
       if (hooks.value.length && selectedHookId.value) openEditHook(selectedHookId.value)
@@ -661,8 +671,7 @@ async function testHook(id: string) {
       message = t('settings.integrations.testFailed', {msg: result.message}) + detail
     }
     lastFeedback.value = {message, ok: result.ok}
-    if (result.ok) toast.success(message)
-    else toast.error(message)
+    if (!result.ok) toast.error(message)
   } catch (error) {
     const message = apiErrorMessage(error, 'settings.integrations.saveFailed')
     lastFeedback.value = {message, ok: false}
@@ -706,7 +715,6 @@ async function saveOidc() {
     oidc.roleClaimMapText = formatClaimMap(saved.roleClaimMap)
     oidc.syncRolesFromClaim = Boolean(saved.syncRolesFromClaim)
     oidc.deprovisionMissingRoleClaim = Boolean(saved.deprovisionMissingRoleClaim)
-    toast.success(t('settings.integrations.oidcSaved'))
   } catch (error) {
     toast.error(apiErrorMessage(error, 'settings.integrations.saveFailed'))
   } finally {

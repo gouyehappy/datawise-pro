@@ -12,6 +12,8 @@ class AiAnalysisPipelineTest {
         assertEquals(AiAnalysisSteps.INTENT, AiAnalysisSteps.PIPELINE_ORDER.get(0));
         assertEquals(AiAnalysisSteps.STEP_ROUTE, AiAnalysisSteps.PIPELINE_ORDER.get(1));
         assertEquals(AiAnalysisSteps.REPORT, AiAnalysisSteps.PIPELINE_ORDER.get(13));
-        assertEquals(AiAnalysisSteps.CONFIGURABLE.size(), 7);
+        assertEquals(AiAnalysisSteps.CONFIGURABLE.size(), 6);
+        assertEquals(true, AiAnalysisSteps.REQUIRED.contains(AiAnalysisSteps.SQL_VALIDATE));
+        assertEquals(false, AiAnalysisSteps.CONFIGURABLE.contains(AiAnalysisSteps.SQL_VALIDATE));
     }
 }

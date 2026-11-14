@@ -101,7 +101,6 @@ async function copySql() {
     if (!sql) return
     try {
         await navigator.clipboard.writeText(sql)
-        layout.showSuccessToast(t('explorer.createNamespace.sqlCopied'))
     } catch {
         layout.showErrorToast(t('explorer.createNamespace.copyFailed'))
     }
@@ -127,7 +126,6 @@ async function save() {
             })
         }
         await explorer.reloadConnectionCatalog(connectionId)
-        layout.showSuccessToast(t('explorer.createNamespace.success', {name: trimmed}))
         workspace.closeTab(props.tab.id)
     } catch (error) {
         formError.value = resolveCreateNamespaceErrorMessage(error, t)

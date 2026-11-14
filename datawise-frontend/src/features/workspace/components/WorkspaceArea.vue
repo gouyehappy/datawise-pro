@@ -8,6 +8,8 @@ import type {WorkspaceTab} from '@/core/types'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {isWorkspaceSessionStickyType} from '@/features/workspace/services/workspace-keepalive.policy'
+import {selectConsoleShellPersistIds} from '@/features/workspace/services/workspace-console-shell.policy'
+import {workspaceDockedTabSyncKey} from '@/features/workspace/services/workspace-docked-tab-sync.policy'
 import {resolveWorkspaceTab} from '../tab-registry'
 import {usesConnectionReconnectOverlay} from '@/features/explorer/services/explorer-connection-state.service'
 import WorkspaceTabs from './WorkspaceTabs.vue'
@@ -47,9 +49,9 @@ function syncLastDockedTab() {
 }
 
 watch(
-    () => [workspace.activeTabId, workspace.tabs, workspace.tabFloats] as const,
+    () => workspaceDockedTabSyncKey(workspace.activeTabId, workspace.tabs, workspace.tabFloats),
     () => syncLastDockedTab(),
-    {immediate: true, deep: true},
+    {immediate: true},
 )
 
 const mainTab = computed(() => {
@@ -80,10 +82,31 @@ const mainForeground = computed(() => {
   return true
 })
 
+/** Protected consoles always stay shelled (active / main / floated). */
+const consoleShellProtectIds = computed(() => {
+  const protect = new Set<string>()
+  const activeId = workspace.activeTabId
+  if (activeId) protect.add(activeId)
+  if (mainTab.value?.id) protect.add(mainTab.value.id)
+  for (const tab of workspace.tabs) {
+    if (tab.type === 'console' && workspace.isTabFloated(tab.id)) protect.add(tab.id)
+  }
+  return protect
+})
+
+const consoleShellPersistIds = computed(() =>
+  selectConsoleShellPersistIds({
+    tabs: workspace.tabs,
+    protectIds: consoleShellProtectIds.value,
+  }),
+)
+
 function shouldShellPersist(tab: WorkspaceTab): boolean {
   if (workspace.isTabFloated(tab.id)) return true
   if (mainTab.value?.id === tab.id) return true
   if (tab.type === 'community-workbench' && tab.pluginId) return true
+  // SQL consoles: sticky with LRU cap (PERF-01); not unlimited Monaco mounts.
+  if (tab.type === 'console') return consoleShellPersistIds.value.has(tab.id)
   if (isWorkspaceSessionStickyType(tab.type)) return true
   return false
 }

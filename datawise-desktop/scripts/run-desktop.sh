@@ -20,9 +20,31 @@ else
   echo "             Run: node scripts/ensure-and-run.mjs"
 fi
 
-JAR=target/datawise-desktop-4.1.7.jar
-if [[ ! -f "$JAR" ]]; then
-  echo "Missing $JAR. Run: mvn -q package" >&2
+# Resolve jar from pom version, then newest datawise-desktop-*.jar (no hardcoded X.Y.Z).
+VERSION=$(sed -n 's/.*<version>\([^<]*\)<\/version>.*/\1/p' pom.xml | head -n 1 | tr -d '[:space:]')
+JAR=""
+if [[ -n "$VERSION" && -f "target/datawise-desktop-${VERSION}.jar" ]]; then
+  JAR="target/datawise-desktop-${VERSION}.jar"
+else
+  shopt -s nullglob
+  candidates=(target/datawise-desktop-*.jar)
+  shopt -u nullglob
+  newest=""
+  newest_mtime=0
+  for c in "${candidates[@]}"; do
+    [[ "$c" == *-sources.jar ]] && continue
+    mtime=$(stat -c %Y "$c" 2>/dev/null || stat -f %m "$c" 2>/dev/null || echo 0)
+    if (( mtime >= newest_mtime )); then
+      newest_mtime=$mtime
+      newest=$c
+    fi
+  done
+  JAR=$newest
+fi
+
+if [[ -z "$JAR" || ! -f "$JAR" ]]; then
+  echo "Missing target/datawise-desktop-*.jar. Run: mvn -q package" >&2
   exit 1
 fi
+echo "[run-desktop] jar=$JAR"
 exec "$JAVA_BIN" -Djava.awt.headless=false -cp "$JAR:target/lib/*" org.apache.datawise.desktop.DatawiseDesktopApp "$@"

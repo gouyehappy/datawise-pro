@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
+import {computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
+import {useDebouncedRef} from '@/core/utils/debounced-ref'
 import {useI18n} from 'vue-i18n'
 import type {WorkspaceTab} from '@/core/types'
 import IconButton from '@/core/components/IconButton.vue'
 import MonacoEditor from '@/core/components/MonacoEditor.vue'
-import {ConfirmDialog, DwConsoleToolbar, EmptyState, UnsavedChangesDialog} from '@/core/components'
+import {DwConsoleToolbar, EmptyState} from '@/core/components'
 import ResizeHandle from '@/core/components/ResizeHandle.vue'
 import {usePersistedSplitWidth} from '@/core/composables/usePersistedSplitWidth'
-import {DwIcon} from '@/core/icons'
+import {DwIcon, ensureDeferredDwIcons} from '@/core/icons'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
@@ -36,15 +37,29 @@ import {
   localFileParentPath,
   normalizeLocalPathKey,
 } from '@/features/local-files/services/local-files-path'
+import {isProjectFileUri} from '@/features/project/services/project-files-api'
 import '@/features/local-files/styles/local-files-git-gutter.css'
 import {isHttpUrl, openUrl} from '@/shared/browser/open-url'
+
+/** Defer overlays/reka-ui until a dialog actually opens — avoids tab-open hang / frozen shell. */
+const ConfirmDialog = defineAsyncComponent(() => import('@/core/components/ConfirmDialog.vue'))
+const UnsavedChangesDialog = defineAsyncComponent(
+  () => import('@/core/components/UnsavedChangesDialog.vue'),
+)
+
+void ensureDeferredDwIcons()
 
 type MarkdownViewMode = 'edit' | 'split' | 'preview'
 type MonacoEditorExpose = InstanceType<typeof MonacoEditor>
 
-const props = defineProps<{
-  tab: WorkspaceTab
-}>()
+const props = withDefaults(
+    defineProps<{
+      tab: WorkspaceTab
+      /** PERF-18/19: skip preview work while shelled in background. */
+      paneActive?: boolean
+    }>(),
+    {paneActive: true},
+)
 
 const {t} = useI18n()
 const workspace = useWorkspaceStore()
@@ -76,6 +91,9 @@ const content = computed({
     workspace.updateTabSql(props.tab.id, value)
   },
 })
+/** PERF-19: preview/outline lag the live editor buffer. */
+const contentForPreview = computed(() => content.value)
+const debouncedPreviewContent = useDebouncedRef(contentForPreview, 160)
 
 const language = computed(() => {
   const ext = fileExtension(filePath.value || props.tab.title)
@@ -202,7 +220,7 @@ function toggleMarkdownToc() {
 }
 
 const markdownOutline = computed(() =>
-  isMarkdown.value ? extractMarkdownOutline(content.value) : [],
+  isMarkdown.value ? extractMarkdownOutline(debouncedPreviewContent.value) : [],
 )
 const markdownTocNodes = computed(() => buildMarkdownOutlineTree(markdownOutline.value))
 const showTocPane = computed(() => isMarkdown.value && showMarkdownToc.value)
@@ -288,7 +306,7 @@ async function reloadPreviewAssets() {
   const token = ++assetLoadToken
   assetsLoading.value = true
   try {
-    const map = await loadLocalMarkdownAssetDataUrls(filePath.value, content.value)
+    const map = await loadLocalMarkdownAssetDataUrls(filePath.value, debouncedPreviewContent.value)
     if (token !== assetLoadToken) return
     assetDataUrls.value = map
   } finally {
@@ -305,9 +323,9 @@ function scheduleReloadPreviewAssets() {
 }
 
 watch(
-    [showPreview, filePath, () => content.value],
-    ([preview]) => {
-      if (!preview) {
+    [showPreview, filePath, debouncedPreviewContent, () => props.paneActive],
+    ([preview, , , active]) => {
+      if (!preview || active === false) {
         assetDataUrls.value = {}
         assetsLoading.value = false
         return
@@ -319,24 +337,30 @@ watch(
 
 const previewHtml = computed(() => {
   if (!showPreview.value) return ''
+  if (props.paneActive === false) return ''
   const baseDir = filePath.value ? localFileParentPath(filePath.value) : null
   const assets = assetDataUrls.value
-  return renderLocalMarkdown(content.value, {
-    resolveUrl: (url) => {
-      const trimmed = url.trim()
-      if (!trimmed) return trimmed
-      if (/^(https?:|mailto:|data:|#)/i.test(trimmed)) return trimmed
-      if (assets[trimmed]) return assets[trimmed]
-      if (!baseDir) return trimmed
-      const rel = trimmed.replace(/^\.\//, '')
-      if (assets[rel]) return assets[rel]
-      if (assets[`./${rel}`]) return assets[`./${rel}`]
-      const abs = joinLocalPath(baseDir, rel)
-      if (assets[abs]) return assets[abs]
-      if (assets[normalizeLocalPathKey(abs)]) return assets[normalizeLocalPathKey(abs)]
-      return assets[trimmed] || ''
-    },
-  })
+  try {
+    return renderLocalMarkdown(debouncedPreviewContent.value, {
+      resolveUrl: (url) => {
+        const trimmed = url.trim()
+        if (!trimmed) return trimmed
+        if (/^(https?:|mailto:|data:|#)/i.test(trimmed)) return trimmed
+        if (assets[trimmed]) return assets[trimmed]
+        if (!baseDir) return trimmed
+        const rel = trimmed.replace(/^\.\//, '')
+        if (assets[rel]) return assets[rel]
+        if (assets[`./${rel}`]) return assets[`./${rel}`]
+        const abs = joinLocalPath(baseDir, rel)
+        if (assets[abs]) return assets[abs]
+        if (assets[normalizeLocalPathKey(abs)]) return assets[normalizeLocalPathKey(abs)]
+        return assets[trimmed] || ''
+      },
+    })
+  } catch {
+    // Renderer must never take down the workspace shell; show a safe fallback.
+    return '<p class="lf-md__p">Markdown preview failed to render.</p>'
+  }
 })
 
 const fileIcon = computed(() =>
@@ -451,7 +475,6 @@ function formatJson() {
   if (!isJson.value) return
   try {
     content.value = formatLocalJson(content.value)
-    layout.showSuccessToast(t('explorer.localFiles.jsonFormatted'))
   } catch {
     layout.showErrorToast(t('explorer.localFiles.jsonFormatFailed'))
   }
@@ -509,7 +532,8 @@ function countContentLines(text: string): number {
 
 async function refreshGitLineMarks() {
   const path = filePath.value
-  if (!path) {
+  if (!path || isProjectFileUri(path)) {
+    // Project sandbox URIs are not desktop FS paths — skip git bridge.
     gitLineMarks.value = []
     return
   }
@@ -527,7 +551,6 @@ async function copyPath() {
   if (!filePath.value) return
   try {
     await copyTextToClipboard(filePath.value)
-    layout.showSuccessToast(t('explorer.localFiles.copyPathDone'))
   } catch {
     layout.showErrorToast(t('explorer.localFiles.copyPathFailed'))
   }
@@ -547,7 +570,6 @@ async function copyRelativePath() {
   }
   try {
     await copyTextToClipboard(relative)
-    layout.showSuccessToast(t('explorer.localFiles.copyRelativePathDone'))
   } catch {
     layout.showErrorToast(t('explorer.localFiles.copyPathFailed'))
   }
@@ -838,6 +860,7 @@ export default {
     </div>
 
     <ConfirmDialog
+        v-if="deleteConfirm.open.value"
         :open="deleteConfirm.open.value"
         :title="deleteConfirm.title.value"
         :message="deleteConfirm.message.value"
@@ -848,6 +871,7 @@ export default {
         @confirm="deleteConfirm.onConfirm"
     />
     <UnsavedChangesDialog
+        v-if="unsavedCloseOpen"
         :open="unsavedCloseOpen"
         :title="unsavedCloseTitle"
         :message="unsavedCloseMessage"

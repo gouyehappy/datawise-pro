@@ -40,6 +40,7 @@ public class JdbcConnectionPoolManager {
     private final ConcurrentMap<String, PoolEntry> pools = new ConcurrentHashMap<>();
 
     private static final class PoolEntry {
+
         private final ManagedJdbcPool pool;
         private final long createdAtMs;
 
@@ -50,12 +51,11 @@ public class JdbcConnectionPoolManager {
     }
 
     public JdbcConnectionPoolManager(
-            JdbcDriverLoader jdbcDriverLoader,
-            JdbcDriverDefaultsProvider defaultsProvider,
-            JdbcConnectionTargetResolver targetResolver,
-            ObjectProvider<MeterRegistry> meterRegistryProvider,
-            JdbcPoolProperties poolProperties
-    ) {
+                                     JdbcDriverLoader jdbcDriverLoader,
+                                     JdbcDriverDefaultsProvider defaultsProvider,
+                                     JdbcConnectionTargetResolver targetResolver,
+                                     ObjectProvider<MeterRegistry> meterRegistryProvider,
+                                     JdbcPoolProperties poolProperties) {
         this.jdbcDriverLoader = jdbcDriverLoader;
         this.defaultsProvider = defaultsProvider;
         this.targetResolver = targetResolver;
@@ -101,8 +101,7 @@ public class JdbcConnectionPoolManager {
             ExceptionLogging.error(
                     log,
                     "JDBC pool getConnection failed connectionId=" + entity.getId(),
-                    ex
-            );
+                    ex);
             throw ex;
         } catch (RuntimeException ex) {
             pools.remove(entity.getId());
@@ -110,8 +109,7 @@ public class JdbcConnectionPoolManager {
             ExceptionLogging.error(
                     log,
                     "JDBC pool open failed connectionId=" + entity.getId(),
-                    sqlEx
-            );
+                    sqlEx);
             throw sqlEx;
         }
     }
@@ -151,16 +149,14 @@ public class JdbcConnectionPoolManager {
                         defaultsProvider,
                         targetResolver,
                         meterRegistry,
-                        poolProperties
-                );
+                        poolProperties);
                 return new PoolEntry(created);
             } catch (SQLException ex) {
                 ExceptionLogging.error(
                         log,
                         "JDBC pool create failed connectionId=" + entity.getId()
                                 + " dbType=" + entity.getDbType(),
-                        ex
-                );
+                        ex);
                 throw new PoolCreationException(ex);
             }
         });
@@ -173,7 +169,9 @@ public class JdbcConnectionPoolManager {
     private Connection borrowConnection(ConnectionEntity entity, ManagedJdbcPool pool) throws SQLException {
         for (int attempt = 0; attempt < 2; attempt++) {
             try {
-                return pool.dataSource().getConnection();
+                // Guarded so a metadata lookup that switches database cannot leak that context
+                // back into the pool (see JdbcConnectionScopeGuard).
+                return JdbcConnectionScopeGuard.wrap(pool.dataSource().getConnection(), entity.getDbType());
             } catch (SQLException ex) {
                 if (attempt == 0 && JdbcConnectionErrors.isTransientConnectionFailure(ex)) {
                     PoolEntry removed = pools.remove(entity.getId());
@@ -182,8 +180,7 @@ public class JdbcConnectionPoolManager {
                     }
                     log.warn(
                             "Evicted JDBC pool after transient getConnection failure connectionId={}",
-                            entity.getId()
-                    );
+                            entity.getId());
                     pool = resolvePool(entity, JdbcConnectionFingerprint.of(entity));
                     continue;
                 }
@@ -192,8 +189,7 @@ public class JdbcConnectionPoolManager {
         }
         throw new SQLException(JdbcConnectionErrors.toUserMessage(
                 entity,
-                new SQLException("Failed to obtain JDBC connection after retry")
-        ));
+                new SQLException("Failed to obtain JDBC connection after retry")));
     }
 
     private Connection openDirectConnection(ConnectionEntity entity) throws SQLException {
@@ -203,15 +199,13 @@ public class JdbcConnectionPoolManager {
                 entity,
                 properties,
                 poolProperties.getConnectionTimeoutMs(),
-                Math.max(poolProperties.getConnectionTimeoutMs() * 6L, 60_000L)
-        );
+                Math.max(poolProperties.getConnectionTimeoutMs() * 6L, 60_000L));
         JdbcPoolDriverResolver.ResolvedDriver driver = JdbcPoolDriverResolver.resolve(entity, defaultsProvider);
         if (driver != null) {
             try {
                 JdbcDriverLoader.LoadedDriver loaded = jdbcDriverLoader.ensureDriver(
                         driver.mavenCoordinates(),
-                        driver.driverClass()
-                );
+                        driver.driverClass());
                 Connection connection = loaded.driver().connect(url, properties);
                 if (connection == null) {
                     throw new SQLException("Driver rejected URL: " + url);
@@ -246,6 +240,7 @@ public class JdbcConnectionPoolManager {
     }
 
     private static final class PoolCreationException extends RuntimeException {
+
         private final SQLException sqlException;
 
         private PoolCreationException(SQLException sqlException) {

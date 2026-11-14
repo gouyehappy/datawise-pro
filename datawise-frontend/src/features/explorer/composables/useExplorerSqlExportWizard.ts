@@ -84,14 +84,8 @@ export function useExplorerSqlExportWizard(deps: ExplorerSqlExportWizardDeps) {
             }
             showSqlExportWizard.value = false
             if (outcome === 'downloaded') {
+                // startExport → 通知抽屉；复制结果已 silent。
                 layout.startExport(result.fileName)
-                layout.showSuccessToast(
-                    t(resolveSqlExportWizardMessageKey(variant, 'success'), {
-                        name: result.fileName,
-                    }),
-                )
-            } else {
-                layout.showSuccessToast(t(resolveSqlExportWizardMessageKey(variant, 'copied')))
             }
         } catch {
             sqlExportWizardActionError.value = t(resolveSqlExportWizardMessageKey(variant, 'failed'))

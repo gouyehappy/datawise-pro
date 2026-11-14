@@ -15,9 +15,27 @@ public class ProfileExportRequest {
      * (owned or shared into it).
      */
     private String projectId;
+    /**
+     * When {@code true} or unset: passphrase-seal secrets (machine migration).
+     * When {@code false}: strip secrets and set {@code secretMode=omitted} (cloud sync default).
+     */
+    private Boolean includeSecrets;
 
     public String getPassphrase() {
         return passphrase;
+    }
+
+    public Boolean getIncludeSecrets() {
+        return includeSecrets;
+    }
+
+    public void setIncludeSecrets(Boolean includeSecrets) {
+        this.includeSecrets = includeSecrets;
+    }
+
+    /** Unset defaults to sealed export for Config transfer backward compatibility. */
+    public boolean resolvesIncludeSecrets() {
+        return includeSecrets == null || Boolean.TRUE.equals(includeSecrets);
     }
 
     public void setPassphrase(String passphrase) {

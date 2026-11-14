@@ -108,8 +108,7 @@ async function clearGonePodSelection(podLabel: string) {
 }
 
 function onLogCopied(ok: boolean) {
-  if (ok) layout.showSuccessToast(t('common.logViewer.copied'))
-  else layout.showErrorToast(t('common.logViewer.copyFailed'))
+  if (!ok) layout.showErrorToast(t('common.logViewer.copyFailed'))
 }
 
 async function loadNamespaces() {

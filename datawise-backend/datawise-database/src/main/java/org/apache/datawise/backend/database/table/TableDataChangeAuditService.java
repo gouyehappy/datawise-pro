@@ -6,7 +6,7 @@ import org.apache.datawise.backend.domain.TablePropertiesResult;
 import org.apache.datawise.backend.domain.TableRowMutateResult;
 import org.apache.datawise.backend.database.context.ConnectionExecutionContext;
 import org.apache.datawise.backend.model.ConnectionEntity;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -22,13 +22,14 @@ public class TableDataChangeAuditService {
 
     private final TableDataChangeAuditStore store;
     private final TableDataRowLookup rowLookup;
-    private final TableDataMutationService mutationService;
+    /** Late lookup breaks Audit ↔ Mutation constructor cycle (BE-P2-1). */
+    private final ObjectProvider<TableDataMutationService> mutationService;
     private final ConnectionExecutionContext connectionContext;
 
     public TableDataChangeAuditService(
             TableDataChangeAuditStore store,
             TableDataRowLookup rowLookup,
-            @Lazy TableDataMutationService mutationService,
+            ObjectProvider<TableDataMutationService> mutationService,
             ConnectionExecutionContext connectionContext
     ) {
         this.store = store;
@@ -76,13 +77,14 @@ public class TableDataChangeAuditService {
         if (entry.reverted()) {
             throw new IllegalStateException("Audit entry already restored: " + auditId);
         }
+        TableDataMutationService mutations = mutationService.getObject();
         TableRowMutateResult result = TableDataMutationService.runWithoutAudit(() -> switch (entry.operation()) {
             case TableDataChangeAuditEntry.OP_INSERT ->
-                    mutationService.deleteRow(tableName, connectionId, database, requirePrimaryKey(entry));
+                    mutations.deleteRow(tableName, connectionId, database, requirePrimaryKey(entry));
             case TableDataChangeAuditEntry.OP_DELETE ->
-                    mutationService.insertRow(tableName, connectionId, database, copyMap(entry.beforeRow()));
+                    mutations.insertRow(tableName, connectionId, database, copyMap(entry.beforeRow()));
             case TableDataChangeAuditEntry.OP_UPDATE ->
-                    mutationService.updateRow(
+                    mutations.updateRow(
                             tableName,
                             connectionId,
                             database,

@@ -85,7 +85,7 @@ export function isSshBridgeErrorCode(value: string | null | undefined): value is
     return !!value && value in SSH_BRIDGE_I18N_KEYS
 }
 
-/** Map bridge codes to localized copy; leave backend / unknown strings as-is. */
+/** Map bridge codes / common transport English to localized copy. */
 export function localizeSshTerminalError(
     raw: string | null | undefined,
     translate: (key: string) => string,
@@ -95,6 +95,16 @@ export function localizeSshTerminalError(
     if (!trimmed) return translate(fallbackKey)
     if (isSshBridgeErrorCode(trimmed)) {
         return translate(SSH_BRIDGE_I18N_KEYS[trimmed])
+    }
+    const lower = trimmed.toLowerCase()
+    if (lower === 'forbidden' || lower === 'access denied' || lower === 'not authenticated') {
+        return translate(SSH_BRIDGE_I18N_KEYS.SSH_ACCESS_DENIED)
+    }
+    if (lower.includes('websocket connection failed') || lower.includes('websocket error')) {
+        return translate(SSH_BRIDGE_I18N_KEYS.SSH_WS_CONNECT_FAILED)
+    }
+    if (lower.includes('websocket closed')) {
+        return translate(SSH_BRIDGE_I18N_KEYS.SSH_WS_CLOSED)
     }
     return trimmed
 }

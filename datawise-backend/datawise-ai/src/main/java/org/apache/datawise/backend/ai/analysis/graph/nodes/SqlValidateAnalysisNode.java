@@ -4,7 +4,6 @@ import com.alibaba.cloud.ai.graph.OverAllState;
 import org.apache.datawise.backend.ai.analysis.AiAnalysisSteps;
 import org.apache.datawise.backend.ai.analysis.graph.state.AiAnalysisGraphKeys;
 import org.apache.datawise.backend.ai.analysis.graph.state.AiAnalysisGraphStateCoercion;
-import org.apache.datawise.backend.ai.analysis.graph.support.AnalysisStepGate;
 import org.apache.datawise.backend.ai.analysis.graph.support.AnalysisStepRunner;
 import org.apache.datawise.backend.ai.config.AiAnalysisProperties;
 import org.apache.datawise.backend.ai.support.AiSqlSafetyChecker;
@@ -23,27 +22,14 @@ import java.util.Map;
 public class SqlValidateAnalysisNode {
 
     private final AiAnalysisProperties analysisProperties;
-    private final AnalysisStepGate stepGate;
 
-    public SqlValidateAnalysisNode(AiAnalysisProperties analysisProperties, AnalysisStepGate stepGate) {
+    public SqlValidateAnalysisNode(AiAnalysisProperties analysisProperties) {
         this.analysisProperties = analysisProperties;
-        this.stepGate = stepGate;
     }
 
     public Map<String, Object> execute(OverAllState state) {
         String sql = state.value(AiAnalysisGraphKeys.SQL, "");
-        var skipped = stepGate.skipUnlessEnabled(
-                AiAnalysisSteps.SQL_VALIDATE,
-                state,
-                Map.of(
-                        AiAnalysisGraphKeys.SAFE_SQL, sql,
-                        AiAnalysisGraphKeys.VALIDATION_OK, true,
-                        AiAnalysisGraphKeys.VALIDATION_ERROR, ""
-                )
-        );
-        if (skipped.isPresent()) {
-            return skipped.get();
-        }
+        // sql_validate is REQUIRED — never skip via client disabledAnalysisSteps / step_route.
         AiSqlSchemaContext schema = AiAnalysisGraphStateCoercion.schema(state);
         long stepStart = AnalysisStepRunner.start();
 

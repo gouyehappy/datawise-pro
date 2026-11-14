@@ -1,7 +1,9 @@
 import type {Command} from 'commander'
 import {DatawiseClient} from '../client.js'
 import {resolveConfig} from '../config.js'
+import {classifyStructureDeployAtomicity} from '../dialect-atomicity.js'
 import {formatMigrationReport, migrationExitCode} from '../format.js'
+import {resolveConnectionRef} from '../connection-resolve.js'
 import type {TableMigrationBatchRequest, TableMigrationBatchTableRequest} from '../types.js'
 
 export interface MigrateRunOptions {
@@ -63,8 +65,26 @@ export function registerMigrateRunCommand(migrate: Command): void {
             const config = resolveConfig(command)
             const request = buildMigrationRequest(options)
             const client = new DatawiseClient(config)
+            const connections = await client.listSqlConnections()
+            const target = resolveConnectionRef(options.target, connections)
+            const includesDdl = Boolean(options.createMissing)
+            const structureDeployAtomicity = classifyStructureDeployAtomicity({
+                dbType: target.dbType,
+                includesDdl,
+            })
             const report = await client.migrateBatch(request)
-            process.stdout.write(formatMigrationReport(report, !!options.json))
+            const enriched = {
+                ...report,
+                structureDeployAtomicity,
+                structureDeployIncludesDdl: includesDdl,
+                targetDbType: target.dbType ?? null,
+                structureDeployHint: includesDdl
+                    ? structureDeployAtomicity === 'guaranteed_rollback'
+                        ? 'CREATE TABLE path can roll back on transactional-DDL dialects'
+                        : 'CREATE TABLE path may partially apply on non-transactional-DDL dialects (e.g. MySQL)'
+                    : 'No structure DDL in this batch (data copy only)',
+            }
+            process.stdout.write(formatMigrationReport(enriched, !!options.json))
             process.exit(migrationExitCode(report.overallStatus))
         })
 }

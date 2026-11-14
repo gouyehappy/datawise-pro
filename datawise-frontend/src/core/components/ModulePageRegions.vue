@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Thin host wrapper ¡ª SoT `@datawise/chrome` ModulePageRegions. */
+/** Thin host wrapper â€” SoT `@datawise/chrome` ModulePageRegions. */
 import {ModulePageRegions as PackageModulePageRegions} from '@datawise/chrome'
 
 defineProps<{

@@ -1,0 +1,5 @@
+{
+  "dbType": "mongodb",
+  "extends": "specialized-browse",
+  "formKind": "mongo"
+}

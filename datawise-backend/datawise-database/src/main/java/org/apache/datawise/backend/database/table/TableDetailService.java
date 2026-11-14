@@ -13,6 +13,7 @@ import org.apache.datawise.backend.domain.TableRelationsResult;
 import org.apache.datawise.backend.model.ConnectionEntity;
 import org.apache.datawise.backend.jdbc.error.JdbcConnectionErrors;
 import org.apache.datawise.backend.connector.facade.ConnectorFacade;
+import org.apache.datawise.backend.service.ConnectionAccessService;
 import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
@@ -23,13 +24,16 @@ public class TableDetailService {
 
     private final ConnectionExecutionContext connectionContext;
     private final ConnectorFacade connectorFacade;
+    private final ConnectionAccessService connectionAccessService;
 
     public TableDetailService(
             ConnectionExecutionContext connectionContext,
-            ConnectorFacade connectorFacade
+            ConnectorFacade connectorFacade,
+            ConnectionAccessService connectionAccessService
     ) {
         this.connectionContext = connectionContext;
         this.connectorFacade = connectorFacade;
+        this.connectionAccessService = connectionAccessService;
     }
 
     public TablePropertiesResult loadProperties(String tableName, String connectionId, String database) {
@@ -132,7 +136,7 @@ public class TableDetailService {
             RelationKind kind
     ) {
         ConnectionExecutionContext.ResolvedConnectionWithConnector resolved =
-                requireResolvedConnection(connectionId, database);
+                requireResolvedForDdl(connectionId, database);
         if (ConnectorCapabilityGuard.hasDocumentRead(resolved.connector())) {
             return new TableDdlResult(
                     "-- Document store collections do not have SQL DDL.\n"
@@ -148,11 +152,32 @@ public class TableDetailService {
             String connectionId,
             String database
     ) {
-        return connectionContext.requireAvailableWithConnectorForCurrentUser(
+        ConnectionExecutionContext.ResolvedConnectionWithConnector resolved =
+                connectionContext.requireAvailableWithConnectorForCurrentUser(
+                        connectionId,
+                        database,
+                        "Connection not found: " + connectionId
+                );
+        connectionAccessService.requireEngineFeature(
+                connectionContext.requireUserId(),
                 connectionId,
-                database,
-                "Connection not found: " + connectionId
+                "metadataBrowse"
         );
+        return resolved;
+    }
+
+    private ConnectionExecutionContext.ResolvedConnectionWithConnector requireResolvedForDdl(
+            String connectionId,
+            String database
+    ) {
+        ConnectionExecutionContext.ResolvedConnectionWithConnector resolved =
+                requireResolvedConnection(connectionId, database);
+        connectionAccessService.requireEngineFeature(
+                connectionContext.requireUserId(),
+                connectionId,
+                "objectSource"
+        );
+        return resolved;
     }
 
     private <T> T withConnection(

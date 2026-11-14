@@ -204,7 +204,6 @@ async function copyAiUsage() {
   if (!usage) return
   try {
     await navigator.clipboard.writeText(formatTenantAiUsageJson(usage))
-    toast.success(t('settings.tenants.aiUsageCopied'))
   } catch (error) {
     toast.error(apiErrorMessage(error, 'settings.tenants.aiUsageExportFailed'))
   }
@@ -215,7 +214,12 @@ function downloadAiUsage() {
   if (!usage) return
   try {
     downloadTenantAiUsageExport(usage, 'csv')
-    toast.success(t('settings.tenants.aiUsageDownloaded'))
+    toast.notify({
+      category: 'export',
+      titleKey: 'exportDone',
+      bodyKey: 'exportDone',
+      params: {name: t('settings.tenants.aiUsageDownloaded')},
+    })
   } catch (error) {
     toast.error(apiErrorMessage(error, 'settings.tenants.aiUsageExportFailed'))
   }
@@ -232,7 +236,6 @@ async function createTenant() {
       name: form.name.trim(),
       slug: form.slug.trim() || undefined,
     })
-    toast.success(t('settings.tenants.created'))
     form.name = ''
     form.slug = ''
     createOpen.value = false
@@ -257,7 +260,6 @@ async function setStatus(tenantId: string, status: string) {
   }
   try {
     await tenantsApi.updateStatus(tenantId, status)
-    toast.success(t('settings.tenants.statusUpdated'))
     await reload()
   } catch (error) {
     toast.error(apiErrorMessage(error, 'settings.tenants.saveFailed'))
@@ -275,7 +277,6 @@ async function inviteMember() {
       userId: Number(invite.userId),
       roleKeys: [invite.roleKey],
     })
-    toast.success(t('settings.tenants.memberInvited'))
     invite.userId = ''
     invite.roleKey = 'developer'
     await reloadMembers()
@@ -293,7 +294,6 @@ async function changeMemberRole(member: TenantMember, roleKey: string) {
       userId: member.userId,
       roleKeys: [roleKey],
     })
-    toast.success(t('settings.tenants.memberRoleUpdated'))
     await reloadMembers()
   } catch (error) {
     toast.error(apiErrorMessage(error, 'settings.tenants.saveFailed'))
@@ -310,7 +310,6 @@ async function removeMember(member: TenantMember) {
   if (!confirmed) return
   try {
     await tenantsApi.removeMember(selectedTenantId.value, member.userId)
-    toast.success(t('settings.tenants.memberRemoved'))
     await reloadMembers()
   } catch (error) {
     toast.error(apiErrorMessage(error, 'settings.tenants.saveFailed'))

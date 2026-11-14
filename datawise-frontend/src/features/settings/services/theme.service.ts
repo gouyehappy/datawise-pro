@@ -64,6 +64,8 @@ export function isThemeBootApplied(prefs: ThemePreferences, mode?: ThemeMode): b
     }
     const uiDensity = prefs.uiDensity ?? DEFAULT_THEME_PREFERENCES.uiDensity
     if (root.getAttribute('data-ui-density') !== uiDensity) return false
+    const iconTones = prefs.coloredToolbarIcons === true ? 'on' : 'off'
+    if (root.getAttribute('data-icon-tones') !== iconTones) return false
     return true
 }
 
@@ -117,6 +119,7 @@ export function applyThemePreferences(
     const uiFont = prefs.uiFont ?? DEFAULT_THEME_PREFERENCES.uiFont
     const uiTextScale = prefs.uiTextScale ?? DEFAULT_THEME_PREFERENCES.uiTextScale
     const uiDensity = prefs.uiDensity ?? DEFAULT_THEME_PREFERENCES.uiDensity
+    const iconTones = prefs.coloredToolbarIcons === true ? 'on' : 'off'
     const bodyPx = resolveBodyFontSizePx(prefs)
     const textScaleFactor = resolveUiTextScaleFactorFromPrefs(prefs)
     clearManagedThemeVars(root)
@@ -126,6 +129,7 @@ export function applyThemePreferences(
     root.setAttribute('data-ui-font', uiFont)
     root.setAttribute('data-ui-text-scale', uiTextScale)
     root.setAttribute('data-ui-density', uiDensity)
+    root.setAttribute('data-icon-tones', iconTones)
     if (uiTextScale === 'custom') {
         root.setAttribute('data-ui-font-size-px', String(bodyPx))
     } else {
@@ -147,28 +151,22 @@ export function applyThemePreferences(
     for (const [name, value] of Object.entries(vars)) {
         root.style.setProperty(name, value)
     }
-    let chromeBg = vars['--dw-bg-chrome']
-    const hostChrome =
-        typeof window !== 'undefined'
-            ? (window as Window & {__DW_HOST_CHROME__?: string}).__DW_HOST_CHROME__
-            : undefined
-    // First paint: keep host chrome when already seeded (avoid recompute flash).
-    if (!options?.force && typeof hostChrome === 'string' && hostChrome) {
-        chromeBg = hostChrome
-        vars['--dw-bg-chrome'] = chromeBg
-        root.style.setProperty('--dw-bg-chrome', chromeBg)
-    }
+    /*
+     * Always paint chrome from current prefs.
+     * Stale __DW_HOST_CHROME__ (e.g. legacy near-black #090c10) used to stick across
+     * palette migrations and made rails look disconnected from the new sheet.
+     */
+    const chromeBg = vars['--dw-bg-chrome']
     if (chromeBg) {
         root.style.setProperty('--dw-boot-chrome', chromeBg)
+        root.style.setProperty('--dw-bg-chrome', chromeBg)
         root.style.backgroundColor = chromeBg
         if (document.body) {
             document.body.style.backgroundColor = chromeBg
         }
         const w = window as Window & {__DW_BOOT_CHROME__?: string; __DW_HOST_CHROME__?: string}
         w.__DW_BOOT_CHROME__ = chromeBg
-        if (options?.force) {
-            w.__DW_HOST_CHROME__ = chromeBg
-        }
+        w.__DW_HOST_CHROME__ = chromeBg
     }
     root.setAttribute('data-dw-theme-boot', '1')
 }

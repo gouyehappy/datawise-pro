@@ -31,8 +31,9 @@ export function resolveCatalogReorderPosition(
     const height = Math.max(rowHeight, 1)
     const ratio = (clientY - rowTop) / height
     if (targetType === 'group') {
-        if (ratio < 0.28) return 'before'
-        if (ratio > 0.72) return 'after'
+        // Wider before/after bands so the insert line is easier to hit when reordering
+        if (ratio < 0.38) return 'before'
+        if (ratio > 0.62) return 'after'
         return 'inside'
     }
     return ratio < 0.5 ? 'before' : 'after'

@@ -24,6 +24,7 @@ import {
     normalizeSqlEditorAiLayer,
     resolveSqlEditorAiSettings
 } from '@sql-editor/ai/settings'
+import {normalizeSqlColumnDiagnosticsMode} from '@sql-editor/constants/large-document'
 
 const SLOT_SET = new Set<string>([
     'statement_start',
@@ -135,6 +136,12 @@ export function normalizeSqlEditorShortcutsLayer(
     if (typeof layer.showRunGutterButton === 'boolean') {
         next.showRunGutterButton = layer.showRunGutterButton
     }
+    if (layer.columnDiagnosticsMode !== undefined) {
+        next.columnDiagnosticsMode = normalizeSqlColumnDiagnosticsMode(layer.columnDiagnosticsMode)
+    }
+    if (typeof layer.vimModeEnabled === 'boolean') {
+        next.vimModeEnabled = layer.vimModeEnabled
+    }
     if (layer.locale) next.locale = normalizeSqlEditorLocale(layer.locale)
     const fontSize = clampSqlEditorFontSize(layer.fontSize)
     if (fontSize !== undefined) next.fontSize = fontSize
@@ -184,6 +191,8 @@ export function normalizeSqlEditorShortcutsSettings(
         showColumnCommentInSuggest: raw?.showColumnCommentInSuggest === true,
         folding: raw?.folding !== false,
         showRunGutterButton: raw?.showRunGutterButton !== false,
+        columnDiagnosticsMode: normalizeSqlColumnDiagnosticsMode(raw?.columnDiagnosticsMode),
+        vimModeEnabled: raw?.vimModeEnabled === true,
         locale: normalizeSqlEditorLocale(raw?.locale ?? DEFAULT_SQL_EDITOR_LOCALE),
         fontSize: clampSqlEditorFontSize(raw?.fontSize) ?? SQL_EDITOR_FONT_SIZE_DEFAULT,
         theme: normalizeSqlEditorThemeId(raw?.theme) ?? DEFAULT_SQL_EDITOR_THEME,

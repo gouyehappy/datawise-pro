@@ -1,0 +1,7 @@
+{
+  "dbType": "kingbase",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": true
+  }
+}

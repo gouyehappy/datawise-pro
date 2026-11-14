@@ -5,7 +5,7 @@ export default {
     clearRead: '清除已读',
     clearAll: '清空全部',
     empty: '暂无通知',
-    emptyHint: '导出完成、版本更新等重要消息会出现在这里',
+    emptyHint: '导出 / 导入、安装变更、迁移与审批等重要消息会出现在这里',
     delete: '删除',
     markRead: '标记已读',
     collapse: '收起',
@@ -37,6 +37,50 @@ export default {
         exportDone: {
             title: '导出完成',
             body: '{name} 已成功导出到本地。',
+        },
+        migrationDone: {
+            title: '迁移完成',
+            body: '{summary}',
+        },
+        projectSwitched: {
+            title: '已切换项目',
+            body: '当前项目为「{name}」。',
+        },
+        projectCreated: {
+            title: '已创建项目',
+            body: '项目「{name}」已创建并打开。',
+        },
+        projectDeleted: {
+            title: '已删除项目',
+            body: '项目「{name}」已删除。',
+        },
+        configSnapshotExported: {
+            title: '配置已导出',
+            body: '{detail}',
+        },
+        configSnapshotImported: {
+            title: '配置已导入',
+            body: '{detail}',
+        },
+        updateAvailable: {
+            title: '发现新版本',
+            body: '可更新到 {version}，打开「关于」查看详情。',
+        },
+        importDone: {
+            title: '导入完成',
+            body: '{detail}',
+        },
+        installDone: {
+            title: '安装 / 驱动变更',
+            body: '{detail}',
+        },
+        approvalDone: {
+            title: '审批',
+            body: '{detail}',
+        },
+        operationDone: {
+            title: '操作完成',
+            body: '{detail}',
         },
         aiReady: {
             title: 'AI Agent 已就绪',

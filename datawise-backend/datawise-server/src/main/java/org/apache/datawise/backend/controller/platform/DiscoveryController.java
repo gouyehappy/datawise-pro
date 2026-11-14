@@ -10,8 +10,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/discovery")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_SEARCH)
 public class DiscoveryController {
 
     private final DiscoverySearchService discoverySearchService;

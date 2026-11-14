@@ -52,6 +52,30 @@
       ".pdf", ".mp4", ".webm"
     ]
   },
+  "encoding": {
+    "requireUtf8": true,
+    "forbidBom": true,
+    "forbidReplacementChar": true,
+    "textExtensions": [
+      ".vue", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".jsx",
+      ".css", ".scss", ".less",
+      ".html", ".htm", ".md", ".mdc",
+      ".json", ".yml", ".yaml", ".toml",
+      ".xml", ".properties", ".svg",
+      ".java", ".kt", ".kts",
+      ".editorconfig", ".gitattributes"
+    ],
+    "bomAllowedExtensions": [".ps1"],
+    "skipPathPatterns": [
+      "(^|/)node_modules(/|$)",
+      "(^|/)dist(/|$)",
+      "(^|/)target(/|$)",
+      "(^|/)out(/|$)",
+      "(^|/)ui/assets(/|$)",
+      "(^|/)config/community-plugins(/|$)",
+      "(^|/)\\.vibe(/|$)"
+    ]
+  },
   "apiAlignment": {
     "clientPathPattern": "datawise-frontend/src/shared/api/http/paths\\.ts$",
     "serverPathPattern": "datawise-backend/datawise-server/src/main/java/.*Controller\\.java$"

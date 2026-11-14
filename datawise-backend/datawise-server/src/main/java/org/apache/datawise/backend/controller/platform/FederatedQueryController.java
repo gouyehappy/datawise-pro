@@ -15,7 +15,9 @@ import org.apache.datawise.backend.domain.GenerateFederatedSqlResult;
 import org.apache.datawise.backend.domain.SaveFederatedViewRequest;
 import org.apache.datawise.backend.common.pack.AiAccessGate;
 import org.apache.datawise.backend.domain.AiMeterCapabilities;
+import org.apache.datawise.backend.domain.UserFeaturePermission;
 import org.apache.datawise.backend.security.HeadlessSqlAuth;
+import org.apache.datawise.backend.security.RequiresFeature;
 import org.apache.datawise.backend.service.tenant.TenantQuotaService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -31,6 +33,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/platform/federated-views")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_RUN)
 public class FederatedQueryController {
 
     private final FederatedQueryService federatedQueryService;

@@ -3,7 +3,7 @@
   "version": "5.0.0",
   "private": false,
   "type": "module",
-  "description": "DataWise IDE chrome �� workbench shells, browse toolbar, split pane",
+  "description": "DataWise IDE chrome — workbench shells, browse toolbar, split pane",
   "license": "MIT",
   "files": [
     "src",

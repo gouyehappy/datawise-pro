@@ -11,11 +11,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 /**
  * Inbound hooks for external orchestrators and outbound DAG/job status polling.
  */
 @RestController
 @RequestMapping("/api/platform/orchestration")
+@RequiresFeature(UserFeaturePermission.SETTINGS_DATA_AGENT)
 public class OrchestrationController {
 
     private final ScheduledTaskService scheduledTaskService;

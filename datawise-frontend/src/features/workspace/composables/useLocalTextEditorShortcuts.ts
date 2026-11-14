@@ -114,7 +114,6 @@ export function useLocalTextEditorShortcuts(handlers: LocalTextEditorShortcutHan
         try {
             await localFiles.remove(path, false)
             closeWorkspaceTabsForLocalPath(path, false)
-            layout.showSuccessToast(t('explorer.localFiles.deleted', {name: handlers.fileName.value}))
         } catch {
             layout.showErrorToast(t('explorer.localFiles.deleteFailed'))
         }

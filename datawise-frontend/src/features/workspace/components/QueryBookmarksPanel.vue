@@ -220,7 +220,12 @@ function exportForGitCi(item: QueryBookmarkItem, event: Event) {
         return
     }
     exportQueryBookmarkForGitCi(item)
-    layout.showSuccessToast(t('platform.queryLibrary.exportSuccess'))
+    layout.notifyQuiet({
+      category: 'export',
+      titleKey: 'exportDone',
+      bodyKey: 'exportDone',
+      params: {name: t('platform.queryLibrary.exportSuccess')},
+    })
 }
 
 function goToTeam() {

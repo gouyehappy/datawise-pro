@@ -3,7 +3,7 @@
   "version": "5.0.0",
   "private": false,
   "type": "module",
-  "description": "DataWise overlays �� modal, toast, confirm, context-menu, prompt (no Pinia)",
+  "description": "DataWise overlays — modal, toast, confirm, context-menu, prompt (no Pinia)",
   "license": "MIT",
   "files": [
     "src",

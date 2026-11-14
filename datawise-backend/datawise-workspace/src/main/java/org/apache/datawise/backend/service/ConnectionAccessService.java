@@ -1,6 +1,7 @@
 package org.apache.datawise.backend.service;
 
 import org.apache.datawise.backend.common.ConnectionAccessDeniedException;
+import org.apache.datawise.backend.common.ConnectionCapabilityMatrix;
 import org.apache.datawise.backend.configstore.ConnectionStore;
 import org.apache.datawise.backend.configstore.TeamStore;
 import org.apache.datawise.backend.model.ConnectionEntity;
@@ -20,10 +21,15 @@ public class ConnectionAccessService {
 
     private final TeamStore teamStore;
     private final ConnectionStore connectionStore;
+    private final WriteUnlockService writeUnlockService;
 
-    public ConnectionAccessService(TeamStore teamStore, ConnectionStore connectionStore) {
+    public ConnectionAccessService(
+            TeamStore teamStore,
+            ConnectionStore connectionStore,
+            WriteUnlockService writeUnlockService) {
         this.teamStore = teamStore;
         this.connectionStore = connectionStore;
+        this.writeUnlockService = writeUnlockService;
     }
 
     public ConnectionAccessLevel resolveAccess(Long userId, String connectionId) {
@@ -41,13 +47,20 @@ public class ConnectionAccessService {
             fromTeam = fromTeam == null ? level : fromTeam.restrict(level);
         }
 
-        ConnectionAccessLevel fromOwnership = connectionStore.findConnectionById(connectionId)
-                .map(connection -> defaultAccessForConnection(userId, connection))
-                .orElse(null);
+        ConnectionEntity ownedConnection = connectionStore.findConnectionById(connectionId).orElse(null);
+        ConnectionAccessLevel fromOwnership = ownedConnection != null
+                ? defaultAccessForConnection(userId, ownedConnection)
+                : null;
 
         // Owners keep full DDL on their own connections even when the same id is shared
-        // into a team with a tighter member/viewer policy.
+        // into a team with a tighter member/viewer policy — unless writeGuard is on and
+        // there is no UI unlock window (T-SAFE-1). API tokens never see unlock elevation.
         if (fromOwnership == ConnectionAccessLevel.DDL) {
+            if (ownedConnection != null
+                    && ownedConnection.isWriteGuard()
+                    && !writeUnlockService.isUnlockedForCurrentUiSession(userId, connectionId)) {
+                return ConnectionAccessLevel.READONLY;
+            }
             return ConnectionAccessLevel.DDL;
         }
         if (fromTeam != null) {
@@ -72,6 +85,7 @@ public class ConnectionAccessService {
         if (!actual.allowsDml()) {
             deny(userId, connectionId, "DML", actual, "requireDmlAccess");
         }
+        requireEngineFeature(userId, connectionId, "tableDataEdit");
     }
 
     public void requireDdlAccess(Long userId, String connectionId) {
@@ -79,11 +93,46 @@ public class ConnectionAccessService {
         if (!actual.allowsDdl()) {
             deny(userId, connectionId, "DDL", actual, "requireDdlAccess");
         }
+        requireEngineFeature(userId, connectionId, "tableStructureEdit");
+    }
+
+    /**
+     * T-CAP-1 / MetaForge S1: refuse when the product capability matrix says the engine
+     * cannot do {@code feature}. Unknown dbTypes (no matrix profile) are fail-open so
+     * experimental connectors are not locked out before they are registered.
+     */
+    public void requireEngineFeature(Long userId, String connectionId, String feature) {
+        if (feature == null || feature.isBlank()) {
+            return;
+        }
+        ConnectionEntity connection = connectionStore.findConnectionById(connectionId).orElse(null);
+        if (connection == null || connection.getDbType() == null || connection.getDbType().isBlank()) {
+            return;
+        }
+        if (ConnectionCapabilityMatrix.get().profile(connection.getDbType()).isEmpty()) {
+            return;
+        }
+        if (!ConnectionCapabilityMatrix.get().supports(connection.getDbType(), feature)) {
+            deny(userId, connectionId, feature, ConnectionAccessLevel.READONLY, "capability:" + feature);
+        }
     }
 
     /** Legacy name: full DDL access required (migrations, etc.). */
     public void requireWriteAccess(Long userId, String connectionId) {
         requireDdlAccess(userId, connectionId);
+    }
+
+    /**
+     * Catalog metadata writes (reorder / rename / delete / move) need the owner's DDL-level
+     * grant but must not consult the engine capability matrix: {@code tableStructureEdit=false}
+     * for mongo/redis/kafka/ssh-style connections would otherwise block arranging the tree.
+     * Engine capabilities stay enforced on the real SQL/DDL paths via {@link #requireDdlAccess}.
+     */
+    public void requireCatalogWriteAccess(Long userId, String connectionId) {
+        ConnectionAccessLevel actual = resolveAccess(userId, connectionId);
+        if (!actual.allowsDdl()) {
+            deny(userId, connectionId, "DDL", actual, "requireCatalogWriteAccess");
+        }
     }
 
     public void requireSqlWriteAccess(Long userId, String connectionId, String sql) {
@@ -95,11 +144,13 @@ public class ConnectionAccessService {
             if (!level.allowsDdl()) {
                 deny(userId, connectionId, "DDL", level, "requireSqlWriteAccess:ddl");
             }
+            requireEngineFeature(userId, connectionId, "tableStructureEdit");
             return;
         }
         if (!level.allowsDml()) {
             deny(userId, connectionId, "DML", level, "requireSqlWriteAccess:dml");
         }
+        requireEngineFeature(userId, connectionId, "tableDataEdit");
     }
 
     private static void deny(

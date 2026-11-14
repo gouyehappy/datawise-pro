@@ -59,7 +59,9 @@ public class MigrationCompatibilityChecker {
                 sourceExists,
                 targetExists,
                 compare.missingOnTarget(),
-                compare.extraOnTarget()
+                compare.extraOnTarget(),
+                compare.typeMismatches(),
+                compare.attributeMismatches()
         );
 
         Long sourceRows = sourceExists

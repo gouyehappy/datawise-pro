@@ -1,0 +1,5 @@
+{
+  "dbType": "kafka",
+  "extends": "specialized-browse",
+  "formKind": "mq"
+}

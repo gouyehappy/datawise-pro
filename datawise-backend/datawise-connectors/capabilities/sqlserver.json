@@ -1,0 +1,7 @@
+{
+  "dbType": "sqlserver",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false
+  }
+}

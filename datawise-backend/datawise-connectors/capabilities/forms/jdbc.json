@@ -1,0 +1,58 @@
+{
+  "id": "jdbc",
+  "description": "Standard JDBC / sqlite relational connection fields (MetaForge S1). Labels are vue-i18n keys.",
+  "fields": [
+    {
+      "key": "host",
+      "label": "connection.host",
+      "type": "text",
+      "binding": "host",
+      "required": true,
+      "placeholder": "localhost"
+    },
+    {
+      "key": "port",
+      "label": "connection.port",
+      "type": "number",
+      "binding": "port"
+    },
+    {
+      "key": "database",
+      "label": "connection.database",
+      "type": "text",
+      "binding": "database",
+      "description": "connection.hints.database"
+    },
+    {
+      "key": "url",
+      "label": "connection.url",
+      "type": "text",
+      "binding": "url",
+      "readonly": true
+    },
+    {
+      "key": "auth",
+      "label": "connection.auth",
+      "type": "select",
+      "binding": "auth",
+      "options": [
+        {"value": "User&Password", "label": "User&Password"},
+        {"value": "NONE", "label": "NONE"}
+      ]
+    },
+    {
+      "key": "user",
+      "label": "connection.username",
+      "type": "text",
+      "binding": "user",
+      "visible_when": {"field": "auth", "one_of": ["User&Password"]}
+    },
+    {
+      "key": "password",
+      "label": "connection.password",
+      "type": "password",
+      "binding": "password",
+      "visible_when": {"field": "auth", "one_of": ["User&Password"]}
+    }
+  ]
+}

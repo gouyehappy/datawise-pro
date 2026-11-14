@@ -93,7 +93,7 @@ async function exportLogs(format: 'csv' | 'json') {
             includeFullSql: includeFullSql.value,
             fileName,
         })
-        layout.showSuccessToast(t('team.audit.exportDone', {fileName}))
+        layout.startExport(fileName)
         return
     } catch (error) {
         if (!logs.value.length) {
@@ -115,7 +115,7 @@ async function exportLogs(format: 'csv' | 'json') {
             'application/json;charset=utf-8',
         )
     }
-    layout.showSuccessToast(t('team.audit.exportDone', {fileName}))
+    layout.startExport(fileName)
 }
 
 function formatDate(value: string) {

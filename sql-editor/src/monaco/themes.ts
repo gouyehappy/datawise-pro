@@ -52,14 +52,15 @@ const THEMES: Record<string, monaco.editor.IStandaloneThemeData> = {
             {token: 'function', foreground: '61afef'},
         ],
         colors: {
-            'editor.background': '#282c34',
+            /* 与宿主 --dw-bg-editor 同阶；行高亮略抬 */
+            'editor.background': '#1a1b1e',
             'editor.foreground': '#abb2bf',
             'editorLineNumber.foreground': '#5c6370',
-            'editor.lineHighlightBackground': '#2c313a',
+            'editor.lineHighlightBackground': '#222326',
             'editor.selectionBackground': '#3d6a9ecc',
             'editor.inactiveSelectionBackground': '#3d6a9e66',
             'editor.selectionHighlightBackground': '#3d6a9e55',
-            'editorGutter.background': '#282c34',
+            'editorGutter.background': '#1a1b1e',
             ...DARK_MINIMAP,
             ...DARK_SUGGEST,
         },

@@ -16,7 +16,9 @@
             "host.workbench",
             "host.filesystem",
             "host.events"
-          ]
+          ],
+          "packageSha256": "d551f5d992d2f69b7a87e0de0610f5b8f0bf2f9fb80d9ef063d8b74ce578cab9",
+          "packageSizeBytes": 2117944
         }
       ]
     },
@@ -144,10 +146,10 @@
         {
           "id": "io.datawise.community.jenkins",
           "name": "Jenkins Ops",
-          "version": "0.3.26",
+          "version": "0.3.27",
           "publisher": "datawise-community",
           "description": "Jenkins ops console: health overview, pinned jobs, queue triage, build follow, artifacts, and agent status.",
-          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-jenkins-v0.3.26/io.datawise.community.jenkins-0.3.26-signed.dwp",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-jenkins-v0.3.27/io.datawise.community.jenkins-0.3.27-signed.dwp",
           "signingKeyId": "datawise-community",
           "permissions": [
             "host.workbench",
@@ -232,6 +234,20 @@
           "publisher": "datawise-community",
           "description": "PolarIS ops workbench: namespaces, config create/update/delete/clone, and service discovery.",
           "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-polaris-ops-v0.3.12/io.datawise.community.polaris-ops-0.3.12-windows-x86_64-signed.dwp",
+          "signingKeyId": "datawise-community",
+          "permissions": [
+            "host.workbench",
+            "host.events",
+            "host.clipboard"
+          ]
+        },
+        {
+          "id": "io.datawise.community.process-ops",
+          "name": "Process Ops",
+          "version": "0.1.0",
+          "publisher": "datawise-community",
+          "description": "Multi-host process and resource workbench: localhost by default, add remote SSH Linux hosts, inspect CPU/memory/disk, manage processes and systemd units, run diagnostics.",
+          "packageUrl": "https://github.com/gouyehappy/datawise-cli/releases/download/community-plugin-process-ops-v0.1.0/io.datawise.community.process-ops-0.1.0-windows-x86_64-signed.dwp",
           "signingKeyId": "datawise-community",
           "permissions": [
             "host.workbench",

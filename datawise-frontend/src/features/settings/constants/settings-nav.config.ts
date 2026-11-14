@@ -4,6 +4,7 @@ import {
     FeaturePermission,
     type FeaturePermissionKey,
 } from '@/features/auth/types/feature-permission.types'
+import type {WorkbenchMode} from '@/shared/config/workbench-mode'
 
 export const SETTINGS_SECTION_PERMISSION_MAP: Partial<Record<SettingsSection, FeaturePermissionKey>> = {
     basic: FeaturePermission.SettingsBasic,
@@ -28,6 +29,7 @@ export const SETTINGS_SECTION_PERMISSION_MAP: Partial<Record<SettingsSection, Fe
     secrets: FeaturePermission.SettingsIntegrations,
     backupCenter: FeaturePermission.SettingsBackupCenter,
     configPortability: FeaturePermission.SettingsBasic,
+    configCloudSync: FeaturePermission.SettingsBasic,
     userPermissions: FeaturePermission.SettingsUserPermissions,
     tenants: FeaturePermission.SettingsTenants,
     projects: FeaturePermission.SettingsProjects,
@@ -47,6 +49,13 @@ export interface SettingsNavItem {
 export interface SettingsNavGroup {
     labelKey: string
     items: SettingsNavItem[]
+    /** B3-2: first visit collapses “advanced” groups (AI / org security). */
+    defaultCollapsed?: boolean
+    /**
+     * When the workbench focus matches, expand this group (never force-collapse
+     * after the user toggled). Complements defaultCollapsed on first visit.
+     */
+    preferredOpenInModes?: readonly WorkbenchMode[]
 }
 
 /**
@@ -69,16 +78,29 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     {
         labelKey: 'settings.nav.groups.ai',
         items: [], // ai.feature.ts
+        defaultCollapsed: true,
+        preferredOpenInModes: ['analyze'],
     },
     {
         labelKey: 'settings.nav.groups.security',
         items: [], // settings.feature.ts
+        defaultCollapsed: true,
+        preferredOpenInModes: ['govern'],
     },
     {
         labelKey: 'settings.nav.groups.account',
         items: [], // settings.feature.ts
     },
 ]
+
+/** First-visit / focus soft-default: collapse advanced unless preferred for mode. */
+export function shouldCollapseSettingsGroup(
+    group: Pick<SettingsNavGroup, 'defaultCollapsed' | 'preferredOpenInModes'>,
+    mode: WorkbenchMode,
+): boolean {
+    if (group.preferredOpenInModes?.includes(mode)) return false
+    return Boolean(group.defaultCollapsed)
+}
 
 export function flattenSettingsNavItems(options?: {includeAdminOnly?: boolean}): SettingsNavItem[] {
     const includeAdminOnly = options?.includeAdminOnly ?? true

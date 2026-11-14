@@ -91,6 +91,19 @@ function git(cmd) {
   }
 }
 
+function gitBuffer(cmd) {
+  try {
+    return execSync(`git ${cmd}`, {
+      cwd: ROOT,
+      encoding: 'buffer',
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+  } catch {
+    return null
+  }
+}
+
 function run(cmd, cwd) {
   info(cmd)
   execSync(cmd, { cwd: path.isAbsolute(cwd) ? cwd : path.join(ROOT, cwd), stdio: 'inherit', shell: true })
@@ -156,6 +169,91 @@ function readStagedOrWorktree(filePath) {
   } catch {
     return ''
   }
+}
+
+function isEncodingSkippedPath(filePath, cfg) {
+  const n = norm(filePath)
+  for (const pat of cfg.encoding?.skipPathPatterns ?? []) {
+    if (new RegExp(pat).test(n)) return true
+  }
+  return false
+}
+
+function isEncodingTextFile(filePath, cfg) {
+  const n = norm(filePath).toLowerCase()
+  const exts = cfg.encoding?.textExtensions ?? []
+  if (exts.some((ext) => n.endsWith(String(ext).toLowerCase()))) return true
+  const base = path.posix.basename(n)
+  return base === '.editorconfig' || base === '.gitattributes'
+}
+
+function readStagedBytes(filePath) {
+  const n = norm(filePath)
+  const buf = gitBuffer(`show :${n}`)
+  if (buf && buf.length) return buf
+  const abs = path.join(ROOT, n)
+  if (!existsSync(abs)) return null
+  try {
+    return readFileSync(abs)
+  } catch {
+    return null
+  }
+}
+
+function checkUtf8Encoding(files, cfg) {
+  section('1c. 源文件编码 UTF-8')
+  if (cfg.encoding?.requireUtf8 === false) {
+    ok('未启用 UTF-8 编码检查')
+    return
+  }
+
+  const forbidBom = cfg.encoding?.forbidBom !== false
+  const forbidReplacement = cfg.encoding?.forbidReplacementChar !== false
+  const bomAllowed = new Set(
+    (cfg.encoding?.bomAllowedExtensions ?? ['.ps1']).map((e) => String(e).toLowerCase()),
+  )
+  const targets = files.filter(
+    (f) => isEncodingTextFile(f, cfg) && !isEncodingSkippedPath(f, cfg) && !isBinarySkipped(f, cfg),
+  )
+  if (!targets.length) {
+    ok('无可扫描的文本源文件')
+    return
+  }
+
+  let hitCount = 0
+  const decoder = new TextDecoder('utf-8', { fatal: true })
+  for (const f of targets) {
+    const buf = readStagedBytes(f)
+    if (!buf || !buf.length) continue
+    const lower = norm(f).toLowerCase()
+    const ext = path.posix.extname(lower)
+    const hasBom = buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf
+    if (forbidBom && hasBom && !bomAllowed.has(ext)) {
+      hitCount += 1
+      fail(`${f}: 禁止 UTF-8 BOM（请存为 UTF-8 无 BOM）`)
+      continue
+    }
+    const body = hasBom ? buf.subarray(3) : buf
+    let text
+    try {
+      text = decoder.decode(body)
+    } catch {
+      hitCount += 1
+      fail(`${f}: 不是合法 UTF-8（可能是 GBK/混编码）`)
+      continue
+    }
+    if (forbidReplacement && text.includes('\uFFFD')) {
+      hitCount += 1
+      fail(`${f}: 含 U+FFFD 替换符（乱码残留）`)
+    }
+  }
+
+  if (hitCount) {
+    bumpError()
+    info('约定：UTF-8 无 BOM + LF；见 .editorconfig / .gitattributes / .cursor/rules/source-encoding-utf8.mdc')
+    return
+  }
+  ok(`暂存区 ${targets.length} 个文本源文件均为 UTF-8`)
 }
 
 function checkSensitiveContent(files, cfg) {
@@ -451,6 +549,7 @@ function main() {
   const scanFiles = staged.length ? staged : files
   checkSensitive(scanFiles, cfg)
   checkSensitiveContent(scanFiles, cfg)
+  checkUtf8Encoding(scanFiles, cfg)
   checkApiAlignment(files, cfg)
   checkConnector(files, cfg)
   checkBugFixArchitecture(files, staged, cfg)

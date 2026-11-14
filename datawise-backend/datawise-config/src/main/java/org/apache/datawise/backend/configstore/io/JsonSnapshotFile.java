@@ -16,7 +16,8 @@ public final class JsonSnapshotFile<T> {
     private final String filename;
     private final Class<T> type;
     private final T emptyValue;
-    private T value;
+    /** Volatile so readers observe replaces without holding the write lock. */
+    private volatile T value;
 
     public JsonSnapshotFile(
                             ConfigDirectoryService configDirectory,
@@ -32,7 +33,7 @@ public final class JsonSnapshotFile<T> {
         reload();
     }
 
-    public void reload() {
+    public synchronized void reload() {
         value = ConfigFileSupport.readObject(
                 resolvePath(),
                 objectMapper,

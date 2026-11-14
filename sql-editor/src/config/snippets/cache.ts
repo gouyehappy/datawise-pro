@@ -116,6 +116,17 @@ export function getSqlEditorShowRunGutterButton(): boolean {
     return activeSettings.showRunGutterButton !== false
 }
 
+/** 列诊断模式（默认 auto：超大文档关 live markers） */
+export function getSqlEditorColumnDiagnosticsMode(): 'auto' | 'on' | 'off' {
+    const mode = activeSettings.columnDiagnosticsMode
+    return mode === 'on' || mode === 'off' ? mode : 'auto'
+}
+
+/** 是否启用 Monaco Vim */
+export function getSqlEditorVimModeEnabled(): boolean {
+    return activeSettings.vimModeEnabled === true
+}
+
 /** 个人层覆盖的字号；未设置时返回 undefined，由宿主 Monaco 配置决定 */
 export function getSqlEditorFontSize(): number | undefined {
     return activeSettings.fontSize

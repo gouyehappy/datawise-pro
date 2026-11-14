@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Thin host wrapper ¡ª SoT `@datawise/chrome` ModulePageHeader. */
+/** Thin host wrapper â€” SoT `@datawise/chrome` ModulePageHeader. */
 import {ModulePageHeader as PackageModulePageHeader} from '@datawise/chrome'
 
 withDefaults(

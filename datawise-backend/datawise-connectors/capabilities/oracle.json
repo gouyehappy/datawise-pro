@@ -1,0 +1,7 @@
+{
+  "dbType": "oracle",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false
+  }
+}

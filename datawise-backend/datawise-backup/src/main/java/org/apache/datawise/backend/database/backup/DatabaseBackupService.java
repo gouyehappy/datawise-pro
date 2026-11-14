@@ -1,6 +1,7 @@
 package org.apache.datawise.backend.database.backup;
 
 import org.apache.datawise.backend.backup.BackupArtifactStore;
+import org.apache.datawise.backend.backup.BackupObjectStorageMirror;
 import org.apache.datawise.backend.backup.BackupPathSanitizer;
 import org.apache.datawise.backend.backup.WorkbenchBackupService;
 import org.apache.datawise.backend.backup.ZipArchiveSupport;
@@ -13,8 +14,10 @@ import org.apache.datawise.backend.backup.model.BackupTableStat;
 import org.apache.datawise.backend.config.BackupProperties;
 import org.apache.datawise.backend.database.context.ConnectionExecutionContext;
 import org.apache.datawise.backend.database.table.TableCatalogTableLister;
+import org.apache.datawise.backend.domain.TenantIds;
 import org.apache.datawise.backend.model.ConnectionEntity;
 import org.apache.datawise.backend.security.UserContext;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -46,6 +49,7 @@ public class DatabaseBackupService {
     private final BackupArtifactStore artifactStore;
     private final BackupProperties backupProperties;
     private final ExecutorService backupTableTaskExecutor;
+    private final ObjectProvider<BackupObjectStorageMirror> objectStorageMirror;
 
     public DatabaseBackupService(
             ConnectionExecutionContext connectionContext,
@@ -53,7 +57,8 @@ public class DatabaseBackupService {
             StreamingSqlBackupWriter streamingWriter,
             BackupArtifactStore artifactStore,
             BackupProperties backupProperties,
-            @Qualifier("backupTableTaskExecutor") ExecutorService backupTableTaskExecutor
+            @Qualifier("backupTableTaskExecutor") ExecutorService backupTableTaskExecutor,
+            ObjectProvider<BackupObjectStorageMirror> objectStorageMirror
     ) {
         this.connectionContext = connectionContext;
         this.tableLister = tableLister;
@@ -61,6 +66,7 @@ public class DatabaseBackupService {
         this.artifactStore = artifactStore;
         this.backupProperties = backupProperties;
         this.backupTableTaskExecutor = backupTableTaskExecutor;
+        this.objectStorageMirror = objectStorageMirror;
     }
 
     public DatabaseBackupResult backup(
@@ -213,6 +219,18 @@ public class DatabaseBackupService {
                 warnings
         );
         artifactStore.writeManifest(artifactDir, manifest);
+        BackupObjectStorageMirror mirror = objectStorageMirror.getIfAvailable();
+        if (mirror != null) {
+            mirror.mirrorArtifactIfEnabled(
+                    artifactDir,
+                    "database/"
+                            + TenantIds.normalizeOrDefault(tenantId)
+                            + "/"
+                            + connectionId
+                            + "/"
+                            + run.getId()
+            );
+        }
         progressCallback.accept(new BackupProgress("tables", tables.size(), tables.size()));
         return new DatabaseBackupResult(artifactDir, manifest, stats);
     }

@@ -16,6 +16,7 @@ import type {SettingsSection, ShortcutPanel} from '@/core/types'
 import {currentLocale, hydrateLocaleFromEnvelope, setLocale, type AppLocale} from '@/i18n'
 import {hydrateThemePreferencesFromEnvelope} from '@/shared/config/theme-preferences-storage'
 import {hydrateEditorSettingsFromEnvelope} from '@/shared/config/editor-settings-storage'
+import type {WorkbenchMode} from '@/shared/config/workbench-mode'
 import type {SideRailItemId} from '@/features/layout/constants/side-rail-nav'
 import {SIDE_RAIL_NAV_DEFS} from '@/features/layout/constants/side-rail-nav'
 import {SHORTCUT_RAIL_NAV_DEFS} from '@/features/layout/constants/shortcut-rail'
@@ -25,6 +26,7 @@ import {
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
+import {workspaceSessionStructureKey} from '@/features/workspace/services/workspace-session-persist.policy'
 import {useShortcutSettingsStore} from '@/features/settings/stores/shortcut-settings-store'
 import {useSqlEditorShortcutsStore} from '@/features/settings/stores/sql-editor-shortcuts-store'
 import {useEditorSettingsStore} from '@/features/settings/stores/editor-settings'
@@ -105,11 +107,10 @@ import {
 import type {OpenHttpLinksIn} from '@/shared/config/app-config.types'
 import {
     canAccessFeature,
-    settingsSectionFeatureKey,
+    canOpenSettingsSection as canOpenSettingsSectionGate,
     shortcutFeatureKey,
     sideRailFeatureKey,
 } from '@/features/auth/services/feature-permission.service'
-import {FeaturePermission} from '@/features/auth/types/feature-permission.types'
 import {
     hydrateSqlEditorStorageFromAppConfigBody,
     syncSqlEditorLayersFromServer,
@@ -425,6 +426,7 @@ export const useAppConfigStore = defineStore('app-config', () => {
                 uiTextScale: theme.uiTextScale,
                 uiFontSizePx: theme.uiFontSizePx,
                 uiDensity: theme.uiDensity,
+                coloredToolbarIcons: theme.coloredToolbarIcons === true,
             },
             editor: {...editor.settings},
             layout: snapshotLayoutPreferences(),
@@ -825,10 +827,19 @@ export const useAppConfigStore = defineStore('app-config', () => {
     )
     // 根分组展开只经 persistExplorerExpandedSoon 落盘；勿 watch treeVersion（启动恢复会误写 app.xml）。
     // workspace session：退出必刷；运行中 debounce，避免进程被杀时丢 tabs。
+    // PERF-13: shallow structure key + sessionPersistTick (sql edits) — no deep tab walk.
     watch(
-        () => [workspace.tabs, workspace.activeTabId, workspace.tabGroups] as const,
+        () =>
+            [
+                workspaceSessionStructureKey(
+                    workspace.activeTabId,
+                    workspace.tabs,
+                    workspace.tabGroups,
+                    Object.keys(workspace.tabFloats),
+                ),
+                workspace.sessionPersistTick,
+            ] as const,
         () => scheduleWorkspaceSessionPersist(),
-        {deep: true},
     )
     watch(() => theme.appearance, () => persistSoon())
     watch(() => theme.backgroundTone, () => persistSoon())
@@ -839,6 +850,7 @@ export const useAppConfigStore = defineStore('app-config', () => {
     watch(() => theme.uiTextScale, () => persistSoon())
     watch(() => theme.uiFontSizePx, () => persistSoon())
     watch(() => theme.uiDensity, () => persistSoon())
+    watch(() => theme.coloredToolbarIcons, () => persistSoon())
     watch(() => editor.settings, () => persistSoon(), {deep: true})
     watch(currentLocale, () => persistSoon())
     watch(() => layout.profileName, () => scheduleProfilePersist())
@@ -968,8 +980,7 @@ export const useAppConfigStore = defineStore('app-config', () => {
     })
 
     function canOpenSettingsSection(section: SettingsSection): boolean {
-        if (!canAccessFeature(FeaturePermission.NavSettings)) return false
-        return canAccessFeature(settingsSectionFeatureKey(section))
+        return canOpenSettingsSectionGate(section)
     }
 
     function setSideRailVisible(id: SideRailItemId, visible: boolean) {
@@ -1005,6 +1016,28 @@ export const useAppConfigStore = defineStore('app-config', () => {
     function setShowExplorerPanel(visible: boolean) {
         const next = snapshotLayout()
         next.showExplorerPanel = visible
+        applyLayoutState(next)
+    }
+
+    const workbenchMode = computed(() => preferences.value.workbenchMode ?? 'query')
+
+    /**
+     * Persist workbench mode only — no layout re-apply / setModule.
+     * Used by layout soft-align to avoid re-entrancy during applyLayoutEffects.
+     */
+    function softSetWorkbenchMode(mode: WorkbenchMode) {
+        if ((preferences.value.workbenchMode ?? 'query') === mode) return
+        const next = snapshotLayout()
+        next.workbenchMode = mode
+        config.value = {...config.value, layout: next}
+        if (!syncing) {
+            schedulePersistAppConfig(config.value)
+        }
+    }
+
+    function setWorkbenchMode(mode: WorkbenchMode) {
+        const next = snapshotLayout()
+        next.workbenchMode = mode
         applyLayoutState(next)
     }
 
@@ -1202,6 +1235,9 @@ export const useAppConfigStore = defineStore('app-config', () => {
         workbenchLlmProfile,
         defaultEmbeddingProfile,
         showExplorerPanel: computed(() => preferences.value.showExplorerPanel !== false),
+        workbenchMode,
+        softSetWorkbenchMode,
+        setWorkbenchMode,
         showSideRailStrip,
         showShortcutRailStrip,
         hasShortcutRailItems,

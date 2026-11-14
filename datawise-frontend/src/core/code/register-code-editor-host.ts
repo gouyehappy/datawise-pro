@@ -5,7 +5,6 @@ import {
 } from '@datawise/code'
 import {DW_CLIPBOARD} from '@datawise/theme'
 import {readClipboardText, writeClipboardText} from '@/shared/browser/app-clipboard'
-import {ensureMonacoThemes} from '@/shared/config/monaco-editor-appearance'
 import {useEditorSettingsState} from '@/shared/config/editor-settings-state'
 
 let registered = false
@@ -29,11 +28,13 @@ function editorSettingsPort(): Partial<EditorSettingsPort> {
  * Wire `@datawise/code` to host editor prefs + clipboard inject.
  * Locale stays on `registerUiI18nHost` (`DW_UI_I18N` aliases) — do not re-provide here.
  * Call once from AppShell setup (mirrors `registerDataGridHost`).
+ *
+ * PERF-03: do not call ensureMonacoThemes here — that static path pulled monaco into
+ * the shell graph. Themes register on first SQL editor / Monaco host mount (warmup).
  */
 export function registerCodeEditorHost(): void {
   if (!registered) {
     registered = true
-    ensureMonacoThemes()
     configureCodeEditorHost(() => editorSettingsPort())
   }
 

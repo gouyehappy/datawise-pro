@@ -27,8 +27,12 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/projects")
+@RequiresFeature(UserFeaturePermission.TITLE_BAR_WORKSPACE)
 public class ProjectController {
 
     private final ProjectService projectService;
@@ -62,6 +66,7 @@ public class ProjectController {
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_DANGEROUS)
     public ApiResponse<ProjectDto> importPackage(
             @RequestParam("file") MultipartFile file,
             @RequestParam(name = "name", required = false) String name
@@ -84,6 +89,7 @@ public class ProjectController {
     }
 
     @DeleteMapping("/{projectId}")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_DANGEROUS)
     public ApiResponse<Void> delete(
             @PathVariable String projectId,
             @RequestParam(name = "mode", defaultValue = "empty-only") String mode,

@@ -81,5 +81,12 @@ describe('buildWorkbenchContextSnapshot', () => {
         expect(snap.activeTab?.bodyPreview?.length).toBe(WORKBENCH_CONTEXT_BODY_MAX)
         expect(snap.activeTab?.bodyTruncated).toBe(true)
         expect(snap.activeTab?.bodyLength).toBe(sql.length)
+        expect(snap.activeTab?.bodyTruncation).toEqual({
+            truncated: true,
+            originalLength: sql.length,
+            limit: WORKBENCH_CONTEXT_BODY_MAX,
+            unit: 'chars',
+            reason: 'preview',
+        })
     })
 })

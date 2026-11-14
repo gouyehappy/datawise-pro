@@ -35,7 +35,9 @@ public final class SqlExecutionSupport {
                 result.cursorId(),
                 result.hasMore(),
                 result.pageOffset(),
-                result.pageSize()
+                result.pageSize(),
+                result.resultSets(),
+                result.queryId()
         );
     }
 
@@ -57,7 +59,9 @@ public final class SqlExecutionSupport {
                 cursorId,
                 hasMore,
                 pageOffset,
-                pageSize
+                pageSize,
+                page.resultSets(),
+                page.queryId()
         );
     }
 }

@@ -40,6 +40,7 @@ export const useThemeStore = defineStore('theme', () => {
     const uiTextScale = ref<UiTextScaleId>(storedTheme.uiTextScale)
     const uiFontSizePx = ref<number>(storedTheme.uiFontSizePx ?? UI_FONT_SIZE_PX_MD)
     const uiDensity = ref<UiDensityId>(storedTheme.uiDensity)
+    const coloredToolbarIcons = ref<boolean>(storedTheme.coloredToolbarIcons === true)
     const systemPrefersDark = ref(getSystemPrefersDark())
 
     const resolvedMode = computed<ThemeMode>(() =>
@@ -57,6 +58,8 @@ export const useThemeStore = defineStore('theme', () => {
             uiTextScale: uiTextScale.value,
             uiFontSizePx: uiFontSizePx.value,
             uiDensity: uiDensity.value,
+            coloredToolbarIcons: coloredToolbarIcons.value,
+            iconToneV2: true,
         }
     }
 
@@ -150,6 +153,11 @@ export const useThemeStore = defineStore('theme', () => {
         syncPreferences()
     }
 
+    function setColoredToolbarIcons(enabled: boolean) {
+        coloredToolbarIcons.value = enabled
+        syncPreferences()
+    }
+
     function toggleMode() {
         setAppearance(resolvedMode.value === 'light' ? 'dark' : 'light')
     }
@@ -165,6 +173,7 @@ export const useThemeStore = defineStore('theme', () => {
         uiTextScale.value = next.uiTextScale
         uiFontSizePx.value = next.uiFontSizePx ?? UI_FONT_SIZE_PX_MD
         uiDensity.value = next.uiDensity
+        coloredToolbarIcons.value = next.coloredToolbarIcons === true
         syncPreferences()
     }
 
@@ -178,6 +187,7 @@ export const useThemeStore = defineStore('theme', () => {
         uiTextScale,
         uiFontSizePx,
         uiDensity,
+        coloredToolbarIcons,
         resolvedMode,
         setAppearance,
         setMode,
@@ -189,6 +199,7 @@ export const useThemeStore = defineStore('theme', () => {
         setUiTextScale,
         setUiFontSizePx,
         setUiDensity,
+        setColoredToolbarIcons,
         toggleMode,
         importPreferences,
     }

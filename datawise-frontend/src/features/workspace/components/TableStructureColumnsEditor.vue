@@ -162,7 +162,6 @@ async function copyAllNames() {
   if (!names.length) return
   try {
     await navigator.clipboard.writeText(names.join('\n'))
-    layout.showSuccessToast(t('workspace.tableDetail.structureEditor.copyAllNamesDone'))
   } catch {
     layout.showErrorToast(t('workspace.tableDetail.structureEditor.copyAllNamesFailed'))
   }
@@ -222,7 +221,6 @@ async function applyChanges() {
       return
     }
     confirmOpen.value = false
-    layout.showSuccessToast(t('workspace.tableDetail.structureEditor.success'))
     emit('applied')
   } catch (error) {
     const message = resolveCaughtApiErrorMessage(

@@ -23,6 +23,20 @@ import {resolveActiveTeamId} from '@/features/team/services/team-shared-explorer
 export const useTeamStore = defineStore('team', () => {
     const teams = ref<TeamSummary[]>([])
     const activeTeamId = ref<string | null>(null)
+    /** B2-3: TeamView watches and switches tab (e.g. audit for pending approvals). */
+    const requestedTab = ref<'members' | 'invites' | 'audit' | 'sharing' | 'aiSessions' | 'sharedQueries' | null>(null)
+
+    function requestTeamTab(
+        tab: 'members' | 'invites' | 'audit' | 'sharing' | 'aiSessions' | 'sharedQueries',
+    ) {
+        requestedTab.value = tab
+    }
+
+    function consumeRequestedTab() {
+        const tab = requestedTab.value
+        requestedTab.value = null
+        return tab
+    }
     const ready = ref(false)
     const joinRequests = ref<TeamJoinRequest[]>([])
     const membersByTeamId = ref<Record<string, TeamMember[]>>({})
@@ -283,6 +297,9 @@ export const useTeamStore = defineStore('team', () => {
     return {
         teams,
         activeTeamId,
+        requestedTab,
+        requestTeamTab,
+        consumeRequestedTab,
         ready,
         joinRequests,
         membersByTeamId,

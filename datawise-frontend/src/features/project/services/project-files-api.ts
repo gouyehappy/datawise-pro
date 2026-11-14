@@ -1,5 +1,5 @@
 import {API_PATHS} from '@/shared/api/http/paths'
-import {getJson, postJson, putJson} from '@/shared/api/http/request'
+import {getJson, postJson, putJson, type HttpRequestOptions} from '@/shared/api/http/request'
 
 export type ProjectFileRoot = 'docs' | 'scripts'
 
@@ -69,8 +69,17 @@ export function resolveProjectFileNodeIdFromUri(uri: string | null | undefined):
 export const projectFilesApi = {
     list: (projectId: string, root: ProjectFileRoot, path = '') =>
         getJson<ProjectFileEntryDto[]>(API_PATHS.projects.files(projectId), {root, path}),
-    read: (projectId: string, root: ProjectFileRoot, path: string) =>
-        getJson<ProjectFileContentDto>(API_PATHS.projects.fileContent(projectId), {root, path}),
+    read: (
+        projectId: string,
+        root: ProjectFileRoot,
+        path: string,
+        options?: HttpRequestOptions,
+    ) =>
+        getJson<ProjectFileContentDto>(
+            API_PATHS.projects.fileContent(projectId),
+            {root, path},
+            options,
+        ),
     write: (projectId: string, body: ProjectFileContentDto) =>
         putJson<ProjectFileContentDto>(API_PATHS.projects.fileContent(projectId), body),
     mkdir: (projectId: string, root: ProjectFileRoot, path: string) =>
@@ -79,4 +88,6 @@ export const projectFilesApi = {
         projectId: string,
         body: {root: ProjectFileRoot; fromPath: string; toPath: string},
     ) => postJson<ProjectFileEntryDto>(API_PATHS.projects.rename(projectId), body),
+    delete: (projectId: string, body: {root: ProjectFileRoot; path: string}) =>
+        postJson<null>(API_PATHS.projects.delete(projectId), body),
 }

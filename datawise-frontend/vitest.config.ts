@@ -12,13 +12,30 @@ const monacoEditorRoot = dirname(require.resolve('monaco-editor/package.json'))
 export default defineConfig({
     plugins: [vue()],
     resolve: {
+        // Force a single Vue / reka-ui runtime. Split installs (repo root vs datawise-frontend)
+        // make reka-ui DialogRoot call renderSlot with a null currentRenderingInstance
+        // → TypeError: Cannot read properties of null (reading 'ce'), info=render function.
         alias: {
             '@': resolve(__dirname, 'src'),
             '@datawise/sql-editor': resolve(__dirname, '../sql-editor/src'),
             '@sql-editor': resolve(__dirname, '../sql-editor/src'),
             'monaco-editor': monacoEditorRoot,
+            vue: resolve(__dirname, 'node_modules/vue'),
+            '@vue/runtime-core': resolve(__dirname, 'node_modules/@vue/runtime-core'),
+            '@vue/runtime-dom': resolve(__dirname, 'node_modules/@vue/runtime-dom'),
+            '@vue/reactivity': resolve(__dirname, 'node_modules/@vue/reactivity'),
+            '@vue/shared': resolve(__dirname, 'node_modules/@vue/shared'),
+            'reka-ui': resolve(__dirname, 'node_modules/reka-ui'),
         },
-        dedupe: ['monaco-editor'],
+        dedupe: [
+            'monaco-editor',
+            'vue',
+            '@vue/runtime-core',
+            '@vue/runtime-dom',
+            '@vue/reactivity',
+            '@vue/shared',
+            'reka-ui',
+        ],
     },
     test: {
         environment: 'happy-dom',

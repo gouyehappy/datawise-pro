@@ -71,6 +71,115 @@ public class SqlServerTableIntrospector implements TableMetadataIntrospection {
         return loadRelationDdl(connection, entity, database, viewName, true);
     }
 
+    @Override
+    public TableDdlResult loadTriggerDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String triggerName
+    ) throws SQLException {
+        return loadModuleDdl(connection, entity, database, triggerName, "Trigger", "TR");
+    }
+
+    @Override
+    public TableDdlResult loadFunctionDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String functionName
+    ) throws SQLException {
+        return loadModuleDdl(connection, entity, database, functionName, "Function", "FN", "IF", "TF", "FS", "FT");
+    }
+
+    @Override
+    public TableDdlResult loadProcedureDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String procedureName
+    ) throws SQLException {
+        return loadModuleDdl(connection, entity, database, procedureName, "Procedure", "P", "PC");
+    }
+
+    @Override
+    public TableDdlResult loadSequenceDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String sequenceName
+    ) throws SQLException {
+        SqlServerMetadataScope scope = SqlServerCatalogSupport.resolveRelationScope(
+                connection,
+                database,
+                TableMetadataSupport.resolveCatalog(connection, entity, database),
+                sequenceName,
+                false
+        );
+        String ddl = loadSequenceDefinition(connection, scope, sequenceName);
+        if (ddl == null || ddl.isBlank()) {
+            throw new IllegalArgumentException("Sequence not found: " + sequenceName);
+        }
+        return new TableDdlResult(ddl);
+    }
+
+    private String loadSequenceDefinition(
+            Connection connection,
+            SqlServerMetadataScope scope,
+            String sequenceName
+    ) throws SQLException {
+        StringBuilder sql = new StringBuilder("""
+                SELECT
+                    'CREATE SEQUENCE ' + QUOTENAME(SCHEMA_NAME(s.schema_id)) + '.' + QUOTENAME(s.name)
+                    + ' AS ' + TYPE_NAME(s.system_type_id)
+                    + ' START WITH ' + CONVERT(varchar(50), s.start_value)
+                    + ' INCREMENT BY ' + CONVERT(varchar(50), s.increment)
+                    + ' MINVALUE ' + CONVERT(varchar(50), s.minimum_value)
+                    + ' MAXVALUE ' + CONVERT(varchar(50), s.maximum_value)
+                    + ' CACHE ' + CONVERT(varchar(50), CASE WHEN s.is_cached = 1 THEN ISNULL(s.cache_size, 0) ELSE 0 END)
+                    + CASE WHEN s.is_cycling = 1 THEN ' CYCLE' ELSE ' NO CYCLE' END
+                    AS ddl_text
+                FROM sys.sequences s
+                WHERE s.name = ?
+                """);
+        if (scope.schema() != null && !scope.schema().isBlank()) {
+            sql.append(" AND SCHEMA_NAME(s.schema_id) = ?");
+        }
+        try (PreparedStatement ps = connection.prepareStatement(sql.toString())) {
+            ps.setString(1, sequenceName);
+            if (scope.schema() != null && !scope.schema().isBlank()) {
+                ps.setString(2, scope.schema());
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                return rs.getString("ddl_text");
+            }
+        }
+    }
+
+    private TableDdlResult loadModuleDdl(
+            Connection connection,
+            ConnectionEntity entity,
+            String database,
+            String objectName,
+            String kindLabel,
+            String... objectTypes
+    ) throws SQLException {
+        SqlServerMetadataScope scope = SqlServerCatalogSupport.resolveRelationScope(
+                connection,
+                database,
+                TableMetadataSupport.resolveCatalog(connection, entity, database),
+                objectName,
+                false
+        );
+        String definition = loadModuleDefinition(connection, scope, objectName, objectTypes);
+        if (definition == null || definition.isBlank()) {
+            throw new IllegalArgumentException(kindLabel + " not found: " + objectName);
+        }
+        return new TableDdlResult(definition);
+    }
+
     private TableDdlResult loadRelationDdl(
             Connection connection,
             ConnectionEntity entity,
@@ -327,6 +436,64 @@ public class SqlServerTableIntrospector implements TableMetadataIntrospection {
                 return definition != null && !definition.isBlank() ? definition.trim() : null;
             }
         }
+    }
+
+    private String loadModuleDefinition(
+            Connection connection,
+            SqlServerMetadataScope scope,
+            String objectName,
+            String... objectTypes
+    ) throws SQLException {
+        if (objectTypes == null || objectTypes.length == 0) {
+            return null;
+        }
+        StringBuilder inList = new StringBuilder();
+        for (int i = 0; i < objectTypes.length; i++) {
+            if (i > 0) {
+                inList.append(',');
+            }
+            inList.append('?');
+        }
+        String preferredSchema = scope.schema();
+        String sql;
+        if (preferredSchema != null && !preferredSchema.isBlank()) {
+            sql = """
+                    SELECT m.definition
+                    FROM sys.objects o
+                    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                    LEFT JOIN sys.sql_modules m ON m.object_id = o.object_id
+                    WHERE s.name = ? AND o.name = ? AND RTRIM(o.type) IN (%s)
+                    """.formatted(inList);
+        } else {
+            sql = """
+                    SELECT TOP 1 m.definition
+                    FROM sys.objects o
+                    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                    LEFT JOIN sys.sql_modules m ON m.object_id = o.object_id
+                    WHERE o.name = ? AND RTRIM(o.type) IN (%s)
+                    ORDER BY CASE WHEN s.name = 'dbo' THEN 0 ELSE 1 END, s.name
+                    """.formatted(inList);
+        }
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            int param = 1;
+            if (preferredSchema != null && !preferredSchema.isBlank()) {
+                ps.setString(param++, preferredSchema);
+            }
+            ps.setString(param++, objectName);
+            for (String type : objectTypes) {
+                ps.setString(param++, type);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                String definition = rs.getString(1);
+                if (definition != null && !definition.isBlank()) {
+                    return definition.trim();
+                }
+            }
+        }
+        return loadObjectDefinitionFunction(connection, scope.qualifyObject(objectName));
     }
 
     private ObjectMetadata loadObjectMetadataByObjectId(

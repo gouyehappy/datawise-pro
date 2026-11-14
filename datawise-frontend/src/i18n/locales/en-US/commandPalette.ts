@@ -33,6 +33,8 @@ export default {
         openConnectorMarket: 'Open connector marketplace',
         openDataCatalog: 'Open data catalog',
         openPluginSettings: 'Open plugin settings',
+        askAi: 'Ask AI',
+        askAiHint: 'Jump straight to the AI prompt',
     },
     plugins: {
         focus: 'Plugin: {name}',

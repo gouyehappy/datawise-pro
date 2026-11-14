@@ -12,6 +12,8 @@ export const tableDetailApi = {
         api.tableDetail.fetchSchemaRelations(options),
     fetchSchemaTables: (options?: TableDetailFetchOptions) =>
         api.tableDetail.fetchSchemaTables(options),
+    fetchDdlHistory: (options: { connectionId: string; database?: string; limit?: number }) =>
+        api.tableDetail.fetchDdlHistory(options),
     exportTableSql: (tableName: string, options?: TableSqlExportOptions) =>
         api.tableDetail.exportTableSql(tableName, options),
     exportDatabaseSql: (options: TableSqlExportOptions) =>

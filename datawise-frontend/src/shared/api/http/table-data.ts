@@ -12,10 +12,56 @@ import type {
 import {getJson, postJson} from '@/shared/api/http/request'
 import {API_PATHS} from '@/shared/api/http/paths'
 
-function mapTableData(wire: TableDataResultDto): TableDataResult {
+function asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+    return value as Record<string, unknown>
+}
+
+function optionalString(value: unknown): string | undefined {
+    if (value == null) return undefined
+    return String(value)
+}
+
+/** Explicit wire → domain mapping so vue-tsc catches column field renames (C9). */
+function mapColumn(wire: unknown): TableColumn {
+    const row = asRecord(wire) ?? {}
     return {
-        columns: (wire.columns ?? []) as unknown as TableColumn[],
-        rows: (wire.rows ?? []) as unknown as TableRow[],
+        name: String(row.name ?? ''),
+        key: optionalString(row.key),
+        type: optionalString(row.type),
+    }
+}
+
+function mapCellValue(value: unknown): TableRow[string] {
+    if (value === undefined || value === null) return null
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        return value
+    }
+    if (Array.isArray(value)) {
+        return value as unknown[]
+    }
+    if (typeof value === 'object') {
+        return value as Record<string, unknown>
+    }
+    return String(value)
+}
+
+function mapRow(wire: unknown): TableRow {
+    const row = asRecord(wire)
+    if (!row) return {}
+    const out: TableRow = {}
+    for (const [key, value] of Object.entries(row)) {
+        out[key] = mapCellValue(value)
+    }
+    return out
+}
+
+function mapTableData(wire: TableDataResultDto): TableDataResult {
+    const columns = Array.isArray(wire.columns) ? wire.columns.map(mapColumn) : []
+    const rows = Array.isArray(wire.rows) ? wire.rows.map(mapRow) : []
+    return {
+        columns,
+        rows,
         cursorId: wire.cursorId,
         hasMore: wire.hasMore,
         pageOffset: wire.pageOffset,
@@ -23,14 +69,30 @@ function mapTableData(wire: TableDataResultDto): TableDataResult {
     }
 }
 
+function mapAuditRow(wire: unknown): Record<string, string | number | boolean | null> | undefined {
+    const row = asRecord(wire)
+    if (!row) return undefined
+    const out: Record<string, string | number | boolean | null> = {}
+    for (const [key, value] of Object.entries(row)) {
+        if (value === undefined || value === null) {
+            out[key] = null
+        } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+            out[key] = value
+        } else {
+            out[key] = String(value)
+        }
+    }
+    return out
+}
+
 function mapAuditEntry(wire: TableDataChangeAuditEntryDto): TableDataChangeAuditEntry {
     return {
         id: String(wire.id ?? ''),
         createdAtMs: Number(wire.createdAtMs ?? 0),
         operation: String(wire.operation ?? '') as TableDataChangeAuditEntry['operation'],
-        beforeRow: (wire.beforeRow ?? undefined) as TableDataChangeAuditEntry['beforeRow'],
-        afterRow: (wire.afterRow ?? undefined) as TableDataChangeAuditEntry['afterRow'],
-        primaryKey: (wire.primaryKey ?? undefined) as TableDataChangeAuditEntry['primaryKey'],
+        beforeRow: wire.beforeRow != null ? mapAuditRow(wire.beforeRow) : undefined,
+        afterRow: wire.afterRow != null ? mapAuditRow(wire.afterRow) : undefined,
+        primaryKey: wire.primaryKey != null ? mapAuditRow(wire.primaryKey) : undefined,
         reverted: Boolean(wire.reverted),
         restoredFromId: wire.restoredFromId ?? null,
     }

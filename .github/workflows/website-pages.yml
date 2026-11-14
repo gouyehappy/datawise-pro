@@ -9,7 +9,7 @@ on:
     paths:
       - 'website/**'
       - 'docs/user-manual/**'
-      - 'docs/image/**'
+      - '../../docs/screenshot/**'
       - '.github/workflows/website-pages.yml'
   workflow_dispatch:
 

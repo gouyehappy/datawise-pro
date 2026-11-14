@@ -87,6 +87,11 @@ async function ensureLocaleLoaded(locale: AppLocale): Promise<void> {
 
 /** Apply UI locale; loads the locale chunk on first use when not already present. */
 export function setLocale(locale: AppLocale) {
+    if (locale === 'zh-CN') {
+        void import('@/styles/ensure-noto-sans-sc').then(({ensureNotoSansScFont}) => {
+            void ensureNotoSansScFont()
+        })
+    }
     void ensureLocaleLoaded(locale).then(() => {
         currentLocale.value = locale
         i18n.global.locale.value = locale

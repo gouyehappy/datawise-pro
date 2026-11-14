@@ -44,9 +44,9 @@ const {t} = useI18n()
   min-height: var(--dw-grid-toolbar-control-h, var(--dw-btn-height-sm));
   padding: var(--dw-space-1);
   gap: var(--dw-space-1);
-  border: 1px solid color-mix(in srgb, var(--dw-border-light) 85%, transparent);
+  border: 1px solid transparent;
   border-radius: var(--dw-btn-radius);
-  background: color-mix(in srgb, var(--dw-bg) 88%, var(--dw-bg-muted));
+  background: color-mix(in srgb, var(--dw-bg) 70%, var(--dw-bg-muted));
 }
 
 .query-result-view-toggle :deep(.dw-segment__btn--label) {

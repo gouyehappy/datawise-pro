@@ -15,6 +15,7 @@ import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.client.ClientHttpResponse;
@@ -401,9 +402,11 @@ public class AiLlmGateway {
             String phase,
             AtomicReference<String> rawBody
     ) {
+        // Disable Spring AI's nested RetryTemplate (defaults up to ~10 attempts); retries live in AiLlmCallPolicy.
         ChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
                 .defaultOptions(options)
+                .retryTemplate(RetryTemplate.builder().maxAttempts(1).build())
                 .build();
 
         ChatResponse response = chatModel.call(new Prompt(

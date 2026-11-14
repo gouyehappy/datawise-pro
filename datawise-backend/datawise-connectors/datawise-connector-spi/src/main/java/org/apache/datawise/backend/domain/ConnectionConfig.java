@@ -1,6 +1,7 @@
 package org.apache.datawise.backend.domain;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ConnectionConfig {
@@ -15,7 +16,9 @@ public class ConnectionConfig {
     private String port;
     private String auth;
     private String user;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
+    private Boolean hasPassword;
     private String url;
     private String database;
     private String sid;
@@ -23,17 +26,31 @@ public class ConnectionConfig {
     private String driver;
     private String driverClass;
     private Boolean sshEnabled;
+    /** Soft write guard for owners — see ConnectionEntity.writeGuard. */
+    private Boolean writeGuard;
     private String sshHost;
     private String sshPort;
     private String sshUser;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String sshPassword;
+    private Boolean hasSshPassword;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String sshPrivateKey;
+    private Boolean hasSshPrivateKey;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String sshPassphrase;
+    private Boolean hasSshPassphrase;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String jumpPrivateKey;
+    private Boolean hasJumpPrivateKey;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String jumpPassphrase;
+    private Boolean hasJumpPassphrase;
     private String advancedConfig;
     /** Community plugin secret-bound values as JSON ({@code {"key":"value"}}); encrypted at rest. */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String secrets;
+    private Boolean hasSecrets;
     /** Community plugin id when {@code dbType=plugin}. */
     private String pluginId;
     /** Contribution id of the connection-provider. */
@@ -73,6 +90,14 @@ public class ConnectionConfig {
         this.sshEnabled = sshEnabled;
     }
 
+    public Boolean getWriteGuard() {
+        return writeGuard;
+    }
+
+    public void setWriteGuard(Boolean writeGuard) {
+        this.writeGuard = writeGuard;
+    }
+
     public String getSshHost() {
         return sshHost;
     }
@@ -103,6 +128,17 @@ public class ConnectionConfig {
 
     public void setSshPassword(String sshPassword) {
         this.sshPassword = sshPassword;
+        if (sshPassword != null && !sshPassword.isBlank()) {
+            this.hasSshPassword = true;
+        }
+    }
+
+    public Boolean getHasSshPassword() {
+        return hasSshPassword;
+    }
+
+    public void setHasSshPassword(Boolean hasSshPassword) {
+        this.hasSshPassword = hasSshPassword;
     }
 
     public String getSshPrivateKey() {
@@ -111,6 +147,17 @@ public class ConnectionConfig {
 
     public void setSshPrivateKey(String sshPrivateKey) {
         this.sshPrivateKey = sshPrivateKey;
+        if (sshPrivateKey != null && !sshPrivateKey.isBlank()) {
+            this.hasSshPrivateKey = true;
+        }
+    }
+
+    public Boolean getHasSshPrivateKey() {
+        return hasSshPrivateKey;
+    }
+
+    public void setHasSshPrivateKey(Boolean hasSshPrivateKey) {
+        this.hasSshPrivateKey = hasSshPrivateKey;
     }
 
     public String getSshPassphrase() {
@@ -119,6 +166,17 @@ public class ConnectionConfig {
 
     public void setSshPassphrase(String sshPassphrase) {
         this.sshPassphrase = sshPassphrase;
+        if (sshPassphrase != null && !sshPassphrase.isBlank()) {
+            this.hasSshPassphrase = true;
+        }
+    }
+
+    public Boolean getHasSshPassphrase() {
+        return hasSshPassphrase;
+    }
+
+    public void setHasSshPassphrase(Boolean hasSshPassphrase) {
+        this.hasSshPassphrase = hasSshPassphrase;
     }
 
     public String getJumpPrivateKey() {
@@ -127,6 +185,17 @@ public class ConnectionConfig {
 
     public void setJumpPrivateKey(String jumpPrivateKey) {
         this.jumpPrivateKey = jumpPrivateKey;
+        if (jumpPrivateKey != null && !jumpPrivateKey.isBlank()) {
+            this.hasJumpPrivateKey = true;
+        }
+    }
+
+    public Boolean getHasJumpPrivateKey() {
+        return hasJumpPrivateKey;
+    }
+
+    public void setHasJumpPrivateKey(Boolean hasJumpPrivateKey) {
+        this.hasJumpPrivateKey = hasJumpPrivateKey;
     }
 
     public String getJumpPassphrase() {
@@ -135,6 +204,17 @@ public class ConnectionConfig {
 
     public void setJumpPassphrase(String jumpPassphrase) {
         this.jumpPassphrase = jumpPassphrase;
+        if (jumpPassphrase != null && !jumpPassphrase.isBlank()) {
+            this.hasJumpPassphrase = true;
+        }
+    }
+
+    public Boolean getHasJumpPassphrase() {
+        return hasJumpPassphrase;
+    }
+
+    public void setHasJumpPassphrase(Boolean hasJumpPassphrase) {
+        this.hasJumpPassphrase = hasJumpPassphrase;
     }
 
     public String getAdvancedConfig() {
@@ -151,6 +231,17 @@ public class ConnectionConfig {
 
     public void setSecrets(String secrets) {
         this.secrets = secrets;
+        if (secrets != null && !secrets.isBlank()) {
+            this.hasSecrets = true;
+        }
+    }
+
+    public Boolean getHasSecrets() {
+        return hasSecrets;
+    }
+
+    public void setHasSecrets(Boolean hasSecrets) {
+        this.hasSecrets = hasSecrets;
     }
 
     public String getSid() {
@@ -247,6 +338,17 @@ public class ConnectionConfig {
 
     public void setPassword(String password) {
         this.password = password;
+        if (password != null && !password.isBlank()) {
+            this.hasPassword = true;
+        }
+    }
+
+    public Boolean getHasPassword() {
+        return hasPassword;
+    }
+
+    public void setHasPassword(Boolean hasPassword) {
+        this.hasPassword = hasPassword;
     }
 
     public String getUrl() {

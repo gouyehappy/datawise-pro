@@ -5,7 +5,10 @@
  */
 export {default as PromptDialog} from './PromptDialog.vue'
 export {default as ConfirmDialog} from './ConfirmDialog.vue'
+export {default as AppConfirmHost} from './AppConfirmHost.vue'
+export {default as PanelErrorBoundary} from './PanelErrorBoundary.vue'
 export {default as UnsavedChangesDialog} from './UnsavedChangesDialog.vue'
+export {askAppConfirm, setAppConfirmHandler} from '@/core/services/app-confirm.service'
 export {default as AppModal} from './AppModal.vue'
 export {default as AppPalette} from './AppPalette.vue'
 export {default as AppDrawer} from './AppDrawer.vue'

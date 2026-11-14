@@ -7,15 +7,18 @@ import {findPackDefinition} from '@/features/pack/catalog/pack-catalog'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useModalFeedback} from '@/core/composables/useModalFeedback'
-import {ApiError} from '@/shared/api'
+import {resolveCaughtApiErrorMessage} from '@/shared/api'
 import {
   packCapabilityKey,
+  packLayerBlurbKey,
+  packLayerNameKey,
   packNameKey,
   packPaywallContextKey,
   packPitchKey,
   suiteNameKey,
   suiteTaglineKey,
 } from '@/features/pack/services/pack-i18n'
+import {resolvePaywallLayer} from '@/features/pack/services/pack-layer'
 import {isStandardEdition} from '@/features/pack/services/is-standard-edition'
 import {
   findSuiteDefinition,
@@ -62,6 +65,10 @@ const contextHint = computed(() => {
   }
   const known = [
     'nav.ai',
+    'console.ai',
+    'console.ai.fix',
+    'console.ai.explain',
+    'console.ai.lite',
     'ai.quota',
     'ai.sqlSuccess',
     'settings.ai',
@@ -117,7 +124,27 @@ const showAiSample = computed(() => {
   return ctx === 'nav.ai' || ctx === 'ai.quota' || ctx === 'ai.sqlSuccess' || ctx == null
 })
 
-const title = computed(() => t('pack.paywall.lockedTitle', {name: headlineName.value}))
+const paywallLayer = computed(() =>
+    resolvePaywallLayer({packId: packId.value, suiteId: suiteId.value}),
+)
+
+const layerName = computed(() =>
+    paywallLayer.value ? t(packLayerNameKey(paywallLayer.value)) : '',
+)
+
+const layerBlurb = computed(() =>
+    paywallLayer.value ? t(packLayerBlurbKey(paywallLayer.value)) : '',
+)
+
+const title = computed(() => {
+  if (layerName.value && headlineName.value) {
+    return t('pack.paywall.lockedLayerTitle', {
+      layer: layerName.value,
+      name: headlineName.value,
+    })
+  }
+  return t('pack.paywall.lockedTitle', {name: headlineName.value})
+})
 
 const benefitItems = computed(() => {
   if (suiteDef.value) {
@@ -161,7 +188,6 @@ function goStore() {
 
 function notifyStandardBuildIfNeeded() {
   if (!isStandardEdition()) return
-  layout.showSuccessToast(t('pack.paywall.standardBuildTrialToast'))
 }
 
 async function onTrial() {
@@ -208,11 +234,7 @@ async function onActivate() {
 }
 
 function resolveErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.message || t('pack.paywall.actionFailed')
-  }
-  if (error instanceof Error && error.message) return error.message
-  return t('pack.paywall.actionFailed')
+  return resolveCaughtApiErrorMessage(error, t, 'pack.paywall.actionFailed')
 }
 </script>
 
@@ -266,7 +288,13 @@ function resolveErrorMessage(error: unknown): string {
         <div class="pack-paywall__icon" aria-hidden="true">
           <DwIcon name="zap" size="xl" :stroke-width="1.7"/>
         </div>
-        <p class="pack-paywall__pitch">{{ pitch }}</p>
+        <div class="pack-paywall__hero-copy">
+          <p v-if="layerName" class="pack-paywall__layer">
+            {{ t('pack.paywall.layerEyebrow', {layer: layerName}) }}
+          </p>
+          <p v-if="layerBlurb" class="pack-paywall__layer-blurb">{{ layerBlurb }}</p>
+          <p class="pack-paywall__pitch">{{ pitch }}</p>
+        </div>
       </div>
 
       <section v-if="showAiSample" class="pack-paywall__sample" aria-label="AI success sample">
@@ -378,6 +406,29 @@ function resolveErrorMessage(error: unknown): string {
   flex-shrink: 0;
   color: var(--dw-primary);
   background: color-mix(in srgb, var(--dw-primary) 14%, transparent);
+}
+
+.pack-paywall__hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-space-2);
+  min-width: 0;
+}
+
+.pack-paywall__layer {
+  margin: 0;
+  font-size: var(--dw-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dw-primary);
+}
+
+.pack-paywall__layer-blurb {
+  margin: 0;
+  font-size: var(--dw-text-xs);
+  line-height: var(--dw-leading);
+  color: var(--dw-text-muted);
 }
 
 .pack-paywall__pitch {

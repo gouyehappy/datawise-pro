@@ -38,6 +38,72 @@ export function buildAssistantRenderBlocks(content: string): AssistantRenderBloc
     return blocks
 }
 
+/** End offset of the last fully closed ```fence``` (0 when none). */
+export function findLastClosedFenceEnd(content: string): number {
+    let lastEnd = 0
+    const re = /```[\s\S]*?```/g
+    let match: RegExpExecArray | null
+    while ((match = re.exec(content)) !== null) {
+        lastEnd = match.index + match[0].length
+    }
+    return lastEnd
+}
+
+export type AssistantRenderBlocksCache = {
+    sealedSource: string
+    sealedBlocks: AssistantRenderBlock[]
+}
+
+export function createAssistantRenderBlocksCache(): AssistantRenderBlocksCache {
+    return {sealedSource: '', sealedBlocks: []}
+}
+
+export function resetAssistantRenderBlocksCache(cache: AssistantRenderBlocksCache): void {
+    cache.sealedSource = ''
+    cache.sealedBlocks = []
+}
+
+/**
+ * Streaming-friendly block builder (PERF-02): keep markdown of closed fences sealed,
+ * only re-parse the growing tail after the last complete fence.
+ */
+export function buildAssistantRenderBlocksCached(
+    content: string,
+    cache: AssistantRenderBlocksCache,
+    options?: {streaming?: boolean},
+): AssistantRenderBlock[] {
+    if (!options?.streaming) {
+        resetAssistantRenderBlocksCache(cache)
+        return buildAssistantRenderBlocks(content)
+    }
+
+    if (cache.sealedSource && !content.startsWith(cache.sealedSource)) {
+        resetAssistantRenderBlocksCache(cache)
+    }
+
+    const sealEnd = findLastClosedFenceEnd(content)
+    const sealedPart = content.slice(0, sealEnd)
+    const tail = content.slice(sealEnd)
+
+    if (sealedPart !== cache.sealedSource) {
+        if (sealedPart.startsWith(cache.sealedSource) && cache.sealedSource.length > 0) {
+            const added = sealedPart.slice(cache.sealedSource.length)
+            if (added) {
+                cache.sealedBlocks = [...cache.sealedBlocks, ...buildAssistantRenderBlocks(added)]
+            }
+            cache.sealedSource = sealedPart
+        } else {
+            cache.sealedBlocks = sealedPart ? buildAssistantRenderBlocks(sealedPart) : []
+            cache.sealedSource = sealedPart
+        }
+    }
+
+    const tailBlocks = tail ? buildAssistantRenderBlocks(tail) : []
+    if (!cache.sealedBlocks.length) return tailBlocks
+    if (!tailBlocks.length) return cache.sealedBlocks
+    return [...cache.sealedBlocks, ...tailBlocks]
+}
+
 function looksLikeSql(code: string, lang: string): boolean {
     if (lang === 'sql' || lang === 'mysql' || lang === 'postgresql' || lang === 'pgsql') return true
     return /^(?:--|WITH|SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|EXPLAIN|SHOW|DESCRIBE|USE)\b/i.test(

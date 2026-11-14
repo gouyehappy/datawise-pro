@@ -13,6 +13,7 @@ type ChromeFile = {
     uiTextScale?: string
     uiFontSizePx?: number
     uiDensity?: string
+    coloredToolbarIcons?: string | boolean
     resolvedMode?: string
     chromeBg?: string
     primaryHex?: string
@@ -96,7 +97,7 @@ export function desktopHostThemeSeedPlugin(): Plugin {
                     ? chrome.appearance
                     : 'system'
             const chromeBg = chrome.chromeBg
-                || (mode === 'dark' ? '#090c10' : '#dce4ee')
+                || (mode === 'dark' ? '#2b2d30' : '#dce4ee')
             const primaryHex =
                 (typeof chrome.primaryHex === 'string' && chrome.primaryHex.startsWith('#')
                     ? chrome.primaryHex
@@ -120,13 +121,20 @@ export function desktopHostThemeSeedPlugin(): Plugin {
                     ? chrome.uiDensity
                     : null
             const uiDensityLiteral = hostUiDensity == null ? 'null' : JSON.stringify(hostUiDensity)
+            const hostColoredIcons =
+                chrome.coloredToolbarIcons === false || chrome.coloredToolbarIcons === 'false'
+                    ? false
+                    : chrome.coloredToolbarIcons === true || chrome.coloredToolbarIcons === 'true'
+                      ? true
+                      : null
+            const coloredIconsLiteral = hostColoredIcons == null ? 'null' : String(hostColoredIcons)
 
             const hostUiFontCustom =
                 typeof chrome.uiFontCustom === 'string' ? chrome.uiFontCustom.replace(/['";{}\\]/g, '').trim().slice(0, 64) : ''
             const hostUiFontSizePx =
                 typeof chrome.uiFontSizePx === 'number' && chrome.uiFontSizePx > 0 ? chrome.uiFontSizePx : null
             const inject = `<script id="dw-vite-host-theme-seed">(function(){try{
-var seeded={appearance:${JSON.stringify(storedAppearance)},background:${JSON.stringify(background)},primary:${JSON.stringify(chrome.primary || 'blue')},uiSkin:${skinLiteral},uiFont:${uiFontLiteral},uiFontCustom:${JSON.stringify(hostUiFontCustom)},uiTextScale:${uiTextScaleLiteral},uiFontSizePx:${hostUiFontSizePx == null ? 'null' : hostUiFontSizePx},uiDensity:${uiDensityLiteral}};
+var seeded={appearance:${JSON.stringify(storedAppearance)},background:${JSON.stringify(background)},primary:${JSON.stringify(chrome.primary || 'blue')},uiSkin:${skinLiteral},uiFont:${uiFontLiteral},uiFontCustom:${JSON.stringify(hostUiFontCustom)},uiTextScale:${uiTextScaleLiteral},uiFontSizePx:${hostUiFontSizePx == null ? 'null' : hostUiFontSizePx},uiDensity:${uiDensityLiteral},coloredToolbarIcons:${coloredIconsLiteral}};
 try{
   var prev=JSON.parse(localStorage.getItem('dw-cli-theme-prefs')||'{}');
   if(!seeded.uiSkin){seeded.uiSkin=(prev&&prev.uiSkin==='ide')?'ide':'classic';}
@@ -144,12 +152,18 @@ try{
     var pd=prev&&prev.uiDensity;
     seeded.uiDensity=(pd==='sm'||pd==='md'||pd==='lg')?pd:'md';
   }
+  if(seeded.coloredToolbarIcons==null){
+    seeded.coloredToolbarIcons=prev&&prev.iconToneV2===true&&prev.coloredToolbarIcons===true;
+  }
+  seeded.iconToneV2=true;
 }catch(e2){
   if(!seeded.uiSkin)seeded.uiSkin='classic';
   if(!seeded.uiFont)seeded.uiFont='noto';
   if(!seeded.uiFontCustom)seeded.uiFontCustom='';
   if(!seeded.uiTextScale)seeded.uiTextScale='md';
   if(!seeded.uiDensity)seeded.uiDensity='md';
+  if(seeded.coloredToolbarIcons==null)seeded.coloredToolbarIcons=false;
+  seeded.iconToneV2=true;
 }
 localStorage.setItem('dw-cli-theme-prefs',JSON.stringify(seeded));
 var chrome=${JSON.stringify(chromeBg)};
@@ -166,6 +180,7 @@ root.setAttribute('data-ui-skin',seeded.uiSkin);
 root.setAttribute('data-ui-font',seeded.uiFont);
 root.setAttribute('data-ui-text-scale',seeded.uiTextScale);
 root.setAttribute('data-ui-density',seeded.uiDensity);
+root.setAttribute('data-icon-tones',seeded.coloredToolbarIcons===true?'on':'off');
 root.style.colorScheme=mode;
 root.style.setProperty('--dw-boot-chrome',chrome);
 root.style.setProperty('--dw-bg-chrome',chrome);
@@ -228,6 +243,7 @@ function readMachineChrome(): ChromeFile {
         uiFont: ui.uiFont || ui.themeUiFont,
         uiTextScale: ui.uiTextScale || ui.themeUiTextScale,
         uiDensity: ui.uiDensity || ui.themeUiDensity,
+        coloredToolbarIcons: ui.coloredToolbarIcons,
     }
 }
 

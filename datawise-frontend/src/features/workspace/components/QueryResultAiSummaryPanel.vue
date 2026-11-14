@@ -40,7 +40,6 @@ async function onCopy() {
   if (!props.text.trim()) return
   await navigator.clipboard.writeText(props.text)
   copied.value = true
-  layout.showSuccessToast(props.copiedToast ?? t('queryResult.aiSummaryCopied'))
 }
 </script>
 

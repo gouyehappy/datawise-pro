@@ -9,7 +9,8 @@ import java.util.ServiceLoader;
 
 /**
  * Discovers {@link SqlFlowLineageEngine} implementations.
- * Order: built-in AST → ServiceLoader providers → GSP bridge → unavailable stub.
+ * Order: built-in AST → ServiceLoader providers → unavailable stub.
+ * GSP is opt-in via {@link #gspEngine()} only (not on the default chain until licensed JAR exists).
  */
 public final class SqlFlowEngines {
 
@@ -25,6 +26,7 @@ public final class SqlFlowEngines {
         return new AstSqlFlowLineageEngine();
     }
 
+    /** Explicit GSP bridge; not registered in {@link #discoverEngines()} while jar is missing / unimplemented. */
     public static SqlFlowLineageEngine gspEngine() {
         return new org.apache.datawise.sqlflow.engine.gsp.GspSqlFlowLineageEngine();
     }
@@ -33,7 +35,6 @@ public final class SqlFlowEngines {
         List<SqlFlowLineageEngine> engines = new ArrayList<>();
         engines.add(astEngine());
         ServiceLoader.load(SqlFlowLineageEngine.class).forEach(engines::add);
-        engines.add(gspEngine());
         engines.add(UnavailableSqlFlowLineageEngine.INSTANCE);
         return List.copyOf(engines);
     }

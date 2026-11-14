@@ -121,6 +121,23 @@
     return window.datawisePlugin.invoke(method, Object.assign({ connectionId }, params))
   }
 
+  async function applyPreviewIntent(intent) {
+    if (!intent || intent.action !== 'preview-local-file' || !intent.uri) return
+    const path = String(intent.uri)
+    metaEl.textContent = 'Registering preview…'
+    try {
+      const r = await invoke('duckdb/register', { path })
+      const view = r.viewName || 'preview'
+      sqlEl.value = 'SELECT * FROM "' + view + '" LIMIT 100;'
+      metaEl.textContent = 'Preview · ' + view
+      await refreshTables()
+      renderResult(await invoke('duckdb/query', { sql: sqlEl.value, maxRows: 200 }))
+    } catch (e) {
+      metaEl.textContent = String(e && e.message ? e.message : e)
+      gridEl.innerHTML = '<div class="err">' + esc(e && e.message ? e.message : e) + '</div>'
+    }
+  }
+
   async function boot() {
     if (!ready()) return
     try {
@@ -129,6 +146,8 @@
       statusEl.textContent = 'Ready · ' + (connectionId || 'anon')
       setReady(true)
       await refreshTables()
+      const intent = ctx && ctx.intent
+      await applyPreviewIntent(intent)
     } catch (e) {
       statusEl.textContent = String(e && e.message ? e.message : e)
     }

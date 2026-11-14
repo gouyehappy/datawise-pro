@@ -114,13 +114,21 @@ export function ensureAiFolderInScopeChildren(scopeNode: TreeNode, connectionId:
             child.type === 'folder'
             && ['workspaces', 'tables', 'models'].includes(child.label.toLowerCase()),
     )
+    // Align with SchemaNodeIds.slug: ASCII lower + non-alnum → _; used when no sibling folder id exists.
+    const scopeSlug = (() => {
+        const trimmed = scopeNode.label.trim()
+        if (!trimmed) return 'unknown'
+        const ascii = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+        if (ascii.length >= 2) return ascii.length > 48 ? ascii.slice(0, 48) : ascii
+        return 'unknown'
+    })()
     const aiId = referenceFolder
         ? referenceFolder.id
             .replace(/folder-ws/i, 'folder-ai')
             .replace(/folder-tables/i, 'folder-ai')
             .replace(/folder-models/i, 'folder-ai')
             .replace(/folder-semantics/i, 'folder-ai')
-        : `folder-ai-${connectionId}-${scopeNode.label}`
+        : `folder-ai-${connectionId}-${scopeSlug}`
 
     scopeNode.children = orderExplorerCatalogFolders([
         ...children,

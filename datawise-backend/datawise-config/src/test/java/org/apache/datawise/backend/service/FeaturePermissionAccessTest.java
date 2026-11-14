@@ -104,11 +104,73 @@ class FeaturePermissionAccessTest {
     }
 
     @Test
-    void requirePermission_skipsApiTokenAuth() {
+    void requirePermission_deniesDangerousForReadOnlySqlScope() {
         UserContext.clear();
         UserContext.setApiToken(2L, "token-1", java.util.Set.of("sql"));
 
-        assertDoesNotThrow(() -> access.requireExplorerContextDangerous());
+        assertThrows(IllegalArgumentException.class, access::requireExplorerContextDangerous);
+    }
+
+    @Test
+    void requirePermission_sqlWriteStillNeedsUserDangerousGrant() {
+        UserContext.clear();
+        UserContext.setApiToken(2L, "token-1", java.util.Set.of("sql:write"));
+        // Bound user is workbench guest — no dangerous SQL — intersection must deny.
+        when(userStore.findById(2L)).thenReturn(Optional.of(guestUser()));
+
+        assertThrows(IllegalArgumentException.class, access::requireExplorerContextDangerous);
+    }
+
+    @Test
+    void requirePermission_allowsDangerousWhenScopeAndUserBothGrant() {
+        UserContext.clear();
+        UserContext.setApiToken(2L, "token-1", java.util.Set.of("sql:write"));
+        when(userStore.findById(2L)).thenReturn(Optional.of(fullPermissionUser(2L)));
+
+        assertDoesNotThrow(access::requireExplorerContextDangerous);
+    }
+
+    @Test
+    void requireSqlExecute_readOnlyTokenCannotRunUpdate() {
+        UserContext.clear();
+        UserContext.setApiToken(2L, "token-1", java.util.Set.of("sql"));
+        when(userStore.findById(2L)).thenReturn(Optional.of(guestUser()));
+
+        assertDoesNotThrow(() -> access.requireSqlExecute("SELECT 1"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> access.requireSqlExecute("UPDATE users SET name = 'x'"));
+    }
+
+    @Test
+    void requireSqlExecute_writeTokenCanRunUpdateWhenUserAllows() {
+        UserContext.clear();
+        UserContext.setApiToken(2L, "token-1", java.util.Set.of("sql:write"));
+        when(userStore.findById(2L)).thenReturn(Optional.of(fullPermissionUser(2L)));
+
+        assertDoesNotThrow(() -> access.requireSqlExecute("UPDATE users SET name = 'x'"));
+    }
+
+    @Test
+    void requirePermission_deniesApiTokenWithoutMatchingScope() {
+        UserContext.clear();
+        UserContext.setApiToken(2L, "token-1", java.util.Set.of());
+
+        assertThrows(IllegalArgumentException.class, access::requireExplorerContextDangerous);
+    }
+
+    @Test
+    void requireUtilTerminal_requiresTerminalScopeForApiToken() {
+        UserContext.clear();
+        UserContext.setApiToken(2L, "token-1", java.util.Set.of("sql"));
+        when(userStore.findById(2L)).thenReturn(Optional.of(fullPermissionUser(2L)));
+
+        assertThrows(IllegalArgumentException.class, access::requireUtilTerminal);
+
+        UserContext.clear();
+        UserContext.setApiToken(2L, "token-1", java.util.Set.of("terminal"));
+        when(userStore.findById(2L)).thenReturn(Optional.of(fullPermissionUser(2L)));
+        assertDoesNotThrow(access::requireUtilTerminal);
     }
 
     @Test
@@ -126,6 +188,16 @@ class FeaturePermissionAccessTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> access.requireRedisCommand("DEL mykey"));
+    }
+
+    @Test
+    void requireRedisCommand_renameRequiresDangerousPermission() {
+        UserEntity guest = guestUser();
+        when(userStore.findById(2L)).thenReturn(Optional.of(guest));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> access.requireRedisCommand("RENAME a b"));
     }
 
     @Test
@@ -174,5 +246,13 @@ class FeaturePermissionAccessTest {
         guest.setGuest(true);
         guest.setFeaturePermissions(UserFeaturePermission.workbenchPreset());
         return guest;
+    }
+
+    private static UserEntity fullPermissionUser(long id) {
+        UserEntity user = new UserEntity();
+        user.setId(id);
+        user.setGuest(false);
+        user.setFeaturePermissions(UserFeaturePermission.fullPreset());
+        return user;
     }
 }

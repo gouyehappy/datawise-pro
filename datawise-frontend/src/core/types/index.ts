@@ -91,6 +91,7 @@ export type SettingsSection =
     | 'projects'
     | 'backupCenter'
     | 'configPortability'
+    | 'configCloudSync'
 
 /** 右侧快捷栏面板，对应 Chat2DB Shortcut Bar */
 export type ShortcutPanel = 'info' | 'history' | 'monitor' | 'console' | 'export' | 'migration'
@@ -179,6 +180,8 @@ export interface ConnectionConfig {
     dbType: DbType
     env: string
     envCustom?: string
+    /** Soft write guard for owners (T-SAFE-1); unlock via UI timed window. */
+    writeGuard?: boolean
     storage: string
     host: string
     port: string
@@ -423,6 +426,7 @@ export type ContextMenuIcon =
     | 'list-plus'
     | 'list-minus'
     | 'filter'
+    | 'locate'
     | 'ai'
     | 'bot'
     | 'dices'

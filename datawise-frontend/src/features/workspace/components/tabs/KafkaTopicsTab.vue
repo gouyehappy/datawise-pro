@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {DwSplitPane} from '@/core/components'
@@ -6,12 +6,14 @@ import {DwIcon} from '@/core/icons'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import ConnectorWorkbenchFrame from '@/features/workspace/components/shared/ConnectorWorkbenchFrame.vue'
+import CapabilityProbeBanner from '@/features/workspace/components/shared/CapabilityProbeBanner.vue'
 import '@/features/workspace/components/shared/connector-browse-panel.css'
 import KafkaTopicsBrowser from '@/features/workspace/components/kafka/KafkaTopicsBrowser.vue'
 import KafkaMessagesPanel from '@/features/workspace/components/kafka/KafkaMessagesPanel.vue'
 import KafkaProducerPanel from '@/features/workspace/components/kafka/KafkaProducerPanel.vue'
 import KafkaConsumerGroupPanel from '@/features/workspace/components/kafka/KafkaConsumerGroupPanel.vue'
 import KafkaBrokerPanel from '@/features/workspace/components/kafka/KafkaBrokerPanel.vue'
+import {useCapabilityProbe} from '@/features/workspace/composables/useCapabilityProbe'
 import type {WorkspaceTab} from '@/core/types'
 
 const props = defineProps<{ tab: WorkspaceTab }>()
@@ -37,6 +39,16 @@ const policiesRef = ref<InstanceType<typeof KafkaMessagesPanel> | null>(null)
 const producerCollapsed = ref(false)
 
 const connectionId = computed(() => props.tab.connectionId ?? '')
+const dbType = computed(() => {
+  const node = connectionId.value ? explorer.findNode(connectionId.value) : null
+  return String(node?.dbType || props.tab.dbType || 'kafka')
+})
+const {probe, probing, surfaceOk, isLive, refresh: refreshProbe} = useCapabilityProbe({
+  connectionId,
+  dbType,
+})
+/** 集群不可达时隐藏；mutate=unknown 仍展示（不因未知 ACL 误伤）。 */
+const showProducer = computed(() => surfaceOk.value && isLive('mutate'))
 
 const connectionLabel = computed(() => {
   if (!connectionId.value) return t('explorer.kafkaConsole.noConnection')
@@ -60,6 +72,7 @@ function onUseInProducer(payload: { key: string; value: string; partition: numbe
 }
 
 function refresh() {
+  void refreshProbe()
   if (view.value === 'groups') {
     groupsRef.value?.refresh()
     return
@@ -111,8 +124,10 @@ watch(connectionId, () => {
       </button>
     </template>
 
+    <CapabilityProbeBanner :probe="probe" :probing="probing"/>
+
     <DwSplitPane
-        v-show="view === 'topics'"
+        v-show="view === 'topics' && surfaceOk"
         class="connector-workbench__panel connector-workbench-pane kafka-home__split"
         storage-key="dw.split.kafka-topics"
         :default-width="300"
@@ -194,7 +209,7 @@ watch(connectionId, () => {
           />
 
           <section
-              v-if="detailView === 'messages'"
+              v-if="detailView === 'messages' && showProducer"
               class="kafka-home__producer"
               :class="{ 'is-collapsed': producerCollapsed }"
           >
@@ -221,7 +236,7 @@ watch(connectionId, () => {
       </template>
     </DwSplitPane>
 
-    <div v-show="view === 'groups'" class="connector-workbench__panel kafka-home__panel">
+    <div v-show="view === 'groups' && surfaceOk" class="connector-workbench__panel kafka-home__panel">
       <KafkaConsumerGroupPanel
           ref="groupsRef"
           :connection-id="connectionId"
@@ -229,7 +244,7 @@ watch(connectionId, () => {
       />
     </div>
 
-    <div v-show="view === 'broker'" class="connector-workbench__panel kafka-home__panel">
+    <div v-show="view === 'broker' && surfaceOk" class="connector-workbench__panel kafka-home__panel">
       <KafkaBrokerPanel ref="brokerRef" :connection-id="connectionId"/>
     </div>
   </ConnectorWorkbenchFrame>

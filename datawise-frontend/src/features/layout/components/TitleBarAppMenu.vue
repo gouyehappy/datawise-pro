@@ -3,7 +3,6 @@ import {nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {storeToRefs} from 'pinia'
 import {usePopoverEscape} from '@/core/composables/usePopoverEscape'
-import {DwIcon} from '@/core/icons'
 import TitleBarMainMenu from '@/features/layout/components/TitleBarMainMenu.vue'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 
@@ -79,7 +78,7 @@ function onDocumentClick(event: MouseEvent) {
         :aria-expanded="showProfileMenu"
         @click="toggle"
     >
-      <DwIcon class="titlebar-app-menu__icon" name="layout" size="menu" :stroke-width="1.35"/>
+      <span class="titlebar-app-menu__bars" aria-hidden="true"><i/><i/><i/></span>
     </button>
 
     <Teleport to="body">
@@ -109,27 +108,41 @@ function onDocumentClick(event: MouseEvent) {
   align-items: center;
   justify-content: center;
   width: 28px;
-  height: var(--dw-density-sm);
+  height: var(--dw-titlebar-widget-h);
   border: none;
   border-radius: var(--dw-titlebar-chip-radius);
   background: transparent;
-  color: var(--dw-text-secondary);
+  color: var(--dw-titlebar-fg);
   cursor: pointer;
   transition: background 100ms ease, color 100ms ease;
 }
 
 .titlebar-app-menu__btn:hover {
   background: var(--dw-titlebar-chip-hover);
-  color: var(--dw-text);
+  color: var(--dw-titlebar-fg-strong);
 }
 
 .titlebar-app-menu__btn.is-active {
   background: var(--dw-titlebar-chip-active);
-  color: var(--dw-text);
+  color: var(--dw-titlebar-fg-strong);
 }
 
-.titlebar-app-menu__icon {
+/* IDEA 主菜单：三条等长横线，固定整数像素避免缩放发虚 */
+.titlebar-app-menu__bars {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
   width: 16px;
   height: 16px;
+}
+
+.titlebar-app-menu__bars i {
+  display: block;
+  width: 14px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: currentColor;
 }
 </style>

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.datawise.backend.configstore.ConfigDirectoryService;
 import org.apache.datawise.backend.configstore.ConfigPaths;
 import org.apache.datawise.backend.configstore.FileProjectStore;
+import org.apache.datawise.backend.domain.ProjectDeleteRequest;
 import org.apache.datawise.backend.domain.ProjectFileContentDto;
 import org.apache.datawise.backend.domain.ProjectFileEntryDto;
 import org.apache.datawise.backend.domain.ProjectIds;
@@ -95,5 +96,24 @@ class ProjectFilesServiceTest {
 
         assertThrows(IllegalArgumentException.class, () -> service.rename(ProjectIds.DEFAULT, new ProjectRenameRequest("docs", "a-renamed.txt", "b.txt")));
         assertThrows(IllegalArgumentException.class, () -> service.rename(ProjectIds.DEFAULT, new ProjectRenameRequest("docs", "missing.txt", "x.txt")));
+    }
+
+    @Test
+    void deleteFileAndFolderRejectRoot() throws Exception {
+        service.write(ProjectIds.DEFAULT, new ProjectFileContentDto("docs", "notes/readme.md", "# hi"));
+        service.write(ProjectIds.DEFAULT, new ProjectFileContentDto("docs", "notes/extra.md", "x"));
+
+        service.delete(ProjectIds.DEFAULT, new ProjectDeleteRequest("docs", "notes/extra.md"));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.read(ProjectIds.DEFAULT, "docs", "notes/extra.md"));
+
+        service.delete(ProjectIds.DEFAULT, new ProjectDeleteRequest("docs", "notes"));
+        List<ProjectFileEntryDto> top = service.list(ProjectIds.DEFAULT, "docs", "");
+        assertTrue(top.stream().noneMatch(e -> "notes".equals(e.name())));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.delete(ProjectIds.DEFAULT, new ProjectDeleteRequest("docs", ".")));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.delete(ProjectIds.DEFAULT, new ProjectDeleteRequest("docs", "missing.md")));
     }
 }

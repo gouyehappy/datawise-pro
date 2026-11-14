@@ -111,8 +111,12 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/explorer")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_OPEN)
 public class ExplorerNacosController {
 
     private final ExplorerNacosService nacosService;
@@ -134,6 +138,7 @@ public class ExplorerNacosController {
         }
 
         @PostMapping("/nacos/namespaces/detect")
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_DANGEROUS)
         public ApiResponse<NacosNamespacesResultDto> detectNacosNamespaces(@RequestBody ConnectionConfig config) {
             return ApiResponse.ok(nacosService.detectNamespaces(config));
         }
@@ -160,6 +165,7 @@ public class ExplorerNacosController {
         }
     
         @PutMapping("/connections/{connectionId}/nacos/config")
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_DANGEROUS)
         public ApiResponse<NacosConfigContentDto> publishNacosConfig(
                 @PathVariable String connectionId,
                 @RequestBody UpdateNacosConfigRequest request

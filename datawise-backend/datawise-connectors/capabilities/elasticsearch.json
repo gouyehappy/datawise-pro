@@ -1,0 +1,5 @@
+{
+  "dbType": "elasticsearch",
+  "extends": "specialized-browse",
+  "formKind": "document"
+}

@@ -85,6 +85,14 @@ public class UserAiTableTagStore {
         return fileFor(userId).append(entry);
     }
 
+    public synchronized void replaceAll(long userId, List<AiTableTagEntry> next) {
+        fileFor(userId).replaceAll(next != null ? next : List.of());
+    }
+
+    public synchronized void invalidate(long userId) {
+        cache.remove(TenantScopedConfigSupport.cacheKey(userId));
+    }
+
     static boolean matchesTable(AiTableTagEntry entry, String connectionId, String database, String tableName) {
         if (connectionId == null || connectionId.isBlank() || entry.getConnectionId() == null) {
             return false;

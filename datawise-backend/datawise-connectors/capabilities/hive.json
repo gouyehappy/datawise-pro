@@ -1,0 +1,4 @@
+{
+  "dbType": "hive",
+  "extends": "jdbc-query"
+}

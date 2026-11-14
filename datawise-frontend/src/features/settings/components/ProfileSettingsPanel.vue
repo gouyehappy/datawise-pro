@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {DwInlineAlert, DwButton, DwInput, DwCheckbox} from '@/core/components'
 import {onMounted, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
@@ -45,7 +45,6 @@ function changePassword() {
 }
 
 function onPasswordChanged() {
-  layout.showSuccessToast(t('profile.changePasswordSuccess'))
 }
 
 const sessionPolicyError = ref('')
@@ -61,7 +60,6 @@ async function saveSessionPolicy() {
     })
     sessionTtlMinutes.value = policy.ttlMinutes
     sessionSlidingRenewal.value = policy.slidingRenewal
-    toast.success(t('settings.profile.sessionPolicySaved'))
   } catch (err) {
     sessionPolicyError.value =
         resolveCaughtApiErrorMessage(err, t, 'settings.profile.sessionPolicySaveFailed')

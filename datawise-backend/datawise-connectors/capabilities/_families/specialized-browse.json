@@ -1,0 +1,25 @@
+{
+  "id": "specialized-browse",
+  "supportLevel": "operate",
+  "specializedSurface": true,
+  "formKind": "other",
+  "features": {
+    "queryExecution": false,
+    "metadataBrowse": true,
+    "objectBrowser": false,
+    "objectSource": false,
+    "schemaSearch": false,
+    "diagram": false,
+    "tableDataEdit": false,
+    "tableStructureEdit": false,
+    "tableImport": false,
+    "dataTransfer": false,
+    "sqlFileExecution": false,
+    "databaseCreate": false,
+    "fieldLineage": false,
+    "sqlExplain": false,
+    "visualQueryBuilder": false,
+    "schemaCompare": false,
+    "transactionalDdl": false
+  }
+}

@@ -1,13 +1,41 @@
 /**
- * Lightweight, dependency-free Markdown → HTML.
- * Escapes unsafe markup; allowlists common HTML; http(s)/mailto/# links only.
+ * Markdown → HTML with allowlist rewrite + DOMPurify final pass.
+ * Escapes unsafe markup; http(s)/mailto/# links only.
  * Used by AI chat replies and local-file preview.
+ *
+ * Progress invariant: every outer-loop iteration must advance `i`, or the scan
+ * aborts. Incomplete ATX headings (`## `) previously matched a paragraph-break
+ * regex but not the titled-heading parser, leaving `i` stuck → main-thread hang.
  */
 
+import createDOMPurify from 'dompurify'
+import type {Config as DomPurifyConfig} from 'dompurify'
 import {
     createHeadingIdAllocator,
     plainHeadingText,
 } from '@/core/markdown/markdown-outline'
+
+type DomPurifier = ReturnType<typeof createDOMPurify>
+
+let purifier: DomPurifier | null | undefined
+
+function getPurifier(): DomPurifier | null {
+    if (purifier !== undefined) {
+        return purifier
+    }
+    if (typeof window === 'undefined' || !window.document) {
+        purifier = null
+        return null
+    }
+    try {
+        const instance = createDOMPurify(window)
+        purifier = instance && typeof instance.sanitize === 'function' ? instance : null
+    } catch {
+        // Stub / incomplete DOM (unit tests) — allowlist rewrite remains the primary filter.
+        purifier = null
+    }
+    return purifier
+}
 
 export type RenderSafeMarkdownOptions = {
     /** Resolve relative img/src and md image/link targets (e.g. to file:// or absolute). */
@@ -40,6 +68,16 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
     span: new Set(['align']),
 }
 
+/** ATX heading with optional title — includes incomplete `## ` / `#`. */
+const ATX_HEADING_RE = /^(#{1,6})(?:\s+(.*))?$/
+/** Shared “block boundary” probes used by paragraph scanning (must stay aligned with parsers). */
+const ATX_HEADING_BOUNDARY_RE = /^(#{1,6})(?:\s|$)/
+const BLOCKQUOTE_RE = /^>\s?/
+const UL_ITEM_RE = /^\s*[-*+]\s+/
+const OL_ITEM_RE = /^\s*\d+\.\s+/
+const HR_RE = /^\s*([-*_])\1{2,}\s*$/
+const TABLE_SEP_RE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/
+
 function escapeHtml(text: string): string {
     return text
         .replace(/&/g, '&amp;')
@@ -52,12 +90,11 @@ function safeHref(raw: string, resolveUrl?: (url: string) => string): string | n
     const resolved = (resolveUrl ? resolveUrl(raw) : raw).trim()
     if (!resolved) return null
     const lower = resolved.toLowerCase()
+    // Deny file:// (local path probe) and non-http(s)/mailto schemes.
     if (
         lower.startsWith('http://')
         || lower.startsWith('https://')
         || lower.startsWith('mailto:')
-        || lower.startsWith('file:///')
-        || lower.startsWith('file://')
     ) {
         return escapeHtml(resolved)
     }
@@ -71,12 +108,16 @@ function safeSrc(raw: string, resolveUrl?: (url: string) => string): string | nu
     const resolved = (resolveUrl ? resolveUrl(raw) : raw).trim()
     if (!resolved) return null
     const lower = resolved.toLowerCase()
+    // Deny file:// and data:image/svg+xml (scriptable); allow raster data URIs only.
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+        return escapeHtml(resolved)
+    }
     if (
-        lower.startsWith('http://')
-        || lower.startsWith('https://')
-        || lower.startsWith('file:///')
-        || lower.startsWith('file://')
-        || lower.startsWith('data:image/')
+        lower.startsWith('data:image/png')
+        || lower.startsWith('data:image/jpeg')
+        || lower.startsWith('data:image/jpg')
+        || lower.startsWith('data:image/gif')
+        || lower.startsWith('data:image/webp')
     ) {
         return escapeHtml(resolved)
     }
@@ -120,6 +161,25 @@ function sanitizeAttrs(tag: string, rawAttrs: string, resolveUrl?: (url: string)
     return out.length ? ` ${out.join(' ')}` : ''
 }
 
+const PURIFY_CONFIG: DomPurifyConfig = {
+    ALLOWED_TAGS: [...ALLOWED_TAGS],
+    ALLOWED_ATTR: [
+        'href', 'title', 'align', 'src', 'alt', 'width', 'height',
+        'class', 'id', 'data-lang', 'target', 'rel',
+    ],
+    // Match review: only http(s), mailto, and in-page fragments.
+    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|#)/i,
+    ALLOW_DATA_ATTR: false,
+}
+
+function purifyHtml(html: string): string {
+    const purify = getPurifier()
+    if (!purify) {
+        return html
+    }
+    return purify.sanitize(html, PURIFY_CONFIG)
+}
+
 /** Allowlist-rewrite HTML tags; escape anything else that looks like a tag. */
 function sanitizeHtmlTags(source: string, resolveUrl?: (url: string) => string): string {
     // Drop comments and dangerous blocks entirely.
@@ -127,7 +187,7 @@ function sanitizeHtmlTags(source: string, resolveUrl?: (url: string) => string):
         .replace(/<!--[\s\S]*?-->/g, '')
         .replace(/<\/?(script|style|iframe|object|embed|link|meta|form|input|button|textarea|select)\b[^>]*>/gi, '')
 
-    return text.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)\/?>/g, (full, rawTag: string, rawAttrs: string) => {
+    const rewritten = text.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)\/?>/g, (full, rawTag: string, rawAttrs: string) => {
         const tag = rawTag.toLowerCase()
         if (!ALLOWED_TAGS.has(tag)) return escapeHtml(full)
         if (full.startsWith('</')) return `</${tag}>`
@@ -135,6 +195,7 @@ function sanitizeHtmlTags(source: string, resolveUrl?: (url: string) => string):
         if (VOID_TAGS.has(tag) || /\/>\s*$/.test(full)) return `<${tag}${attrs} />`
         return `<${tag}${attrs}>`
     })
+    return purifyHtml(rewritten)
 }
 
 function renderInline(text: string, resolveUrl?: (url: string) => string): string {
@@ -162,7 +223,12 @@ function replaceMarkdownImages(text: string, resolveUrl?: (url: string) => strin
 function replaceMarkdownLinks(text: string, resolveUrl?: (url: string) => string): string {
     let result = ''
     let i = 0
+    let guard = 0
+    const max = text.length + 2
     while (i < text.length) {
+        guard += 1
+        if (guard > max) break
+        const start = i
         if (text[i] === '!' && text[i + 1] === '[') {
             // image handled earlier
             result += text[i]
@@ -200,6 +266,7 @@ function replaceMarkdownLinks(text: string, resolveUrl?: (url: string) => string
             ? `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`
             : label
         i = j
+        if (i <= start) i = start + 1
     }
     return result
 }
@@ -247,7 +314,27 @@ function htmlTagDepthDelta(line: string): number {
     return delta
 }
 
-/** Render Markdown (+ allowlisted HTML) to sanitized HTML. */
+function isAtxHeadingLine(line: string): boolean {
+    return ATX_HEADING_RE.test(line)
+}
+
+function isParagraphBoundary(line: string, nextLine: string | undefined): boolean {
+    if (!line.trim()) return true
+    if (line.startsWith('```')) return true
+    if (ATX_HEADING_BOUNDARY_RE.test(line)) return true
+    if (BLOCKQUOTE_RE.test(line)) return true
+    if (UL_ITEM_RE.test(line)) return true
+    if (OL_ITEM_RE.test(line)) return true
+    if (HR_RE.test(line)) return true
+    if (isHtmlHeavyLine(line)) return true
+    if (line.trim().startsWith('|') && nextLine != null && TABLE_SEP_RE.test(nextLine)) return true
+    return false
+}
+
+/**
+ * Render Markdown (+ allowlisted HTML) to sanitized HTML.
+ * Guarantees forward progress on the line index — pathological input must not hang.
+ */
 export function renderSafeMarkdown(
     source: string,
     options: RenderSafeMarkdownOptions = {},
@@ -260,8 +347,17 @@ export function renderSafeMarkdown(
     const parts: string[] = []
     const allocHeadingId = createHeadingIdAllocator()
     let i = 0
+    // Absolute ceiling: one advance per line plus a small slack for double-steps (tables).
+    const maxIterations = lines.length * 2 + 8
+    let iterations = 0
 
     while (i < lines.length) {
+        iterations += 1
+        if (iterations > maxIterations) {
+            // Should be unreachable if every branch advances; abort rather than hang.
+            break
+        }
+        const cursor = i
         const line = lines[i]
 
         if (line.startsWith('```')) {
@@ -277,37 +373,33 @@ export function renderSafeMarkdown(
             parts.push(
                 `<pre class="lf-md__code"${langAttr}><code>${escapeHtml(code.join('\n'))}</code></pre>`,
             )
-            continue
-        }
-
-        // Pass through HTML blocks (allowlisted) using tag-depth so inner text like "·" stays inside.
-        if (isHtmlHeavyLine(line)) {
+        } else if (isHtmlHeavyLine(line)) {
+            // Pass through HTML blocks (allowlisted) using tag-depth so inner text stays inside.
             const block: string[] = []
             let depth = 0
+            let htmlGuard = 0
+            const htmlMax = lines.length - i + 2
             do {
+                htmlGuard += 1
+                if (htmlGuard > htmlMax) break
                 block.push(lines[i])
                 depth += htmlTagDepthDelta(lines[i])
                 i += 1
                 if (depth <= 0) break
                 if (i >= lines.length) break
                 // Bail out if a markdown heading appears while still open (malformed HTML).
-                if (/^(#{1,6})\s+/.test(lines[i]) && !isHtmlHeavyLine(lines[i])) break
+                if (ATX_HEADING_BOUNDARY_RE.test(lines[i]) && !isHtmlHeavyLine(lines[i])) break
             } while (true)
             const html = sanitizeHtmlTags(block.join('\n'), resolveUrl)
             parts.push(`<div class="lf-md__html">${html}</div>`)
-            continue
-        }
-
-        if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
+        } else if (HR_RE.test(line)) {
             parts.push('<hr class="lf-md__hr"/>')
             i += 1
-            continue
-        }
-
-        const heading = /^(#{1,6})\s+(.+)$/.exec(line)
-        if (heading) {
+        } else if (isAtxHeadingLine(line)) {
+            // Includes incomplete ATX headings (`## ` / `#`) so paragraph scan cannot stall.
+            const heading = ATX_HEADING_RE.exec(line)!
             const level = heading[1].length
-            const rawTitle = heading[2].trim()
+            const rawTitle = (heading[2] ?? '').trim()
             const plain = plainHeadingText(rawTitle)
             const idAttr = plain
                 ? ` id="${escapeHtml(allocHeadingId(plain))}"`
@@ -316,13 +408,10 @@ export function renderSafeMarkdown(
                 `<h${level}${idAttr} class="lf-md__h">${renderInline(rawTitle, resolveUrl)}</h${level}>`,
             )
             i += 1
-            continue
-        }
-
-        if (
+        } else if (
             line.trim().startsWith('|')
             && i + 1 < lines.length
-            && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(lines[i + 1])
+            && TABLE_SEP_RE.test(lines[i + 1])
         ) {
             const tableLines = [line, lines[i + 1]]
             i += 2
@@ -331,70 +420,51 @@ export function renderSafeMarkdown(
                 i += 1
             }
             parts.push(renderTable(tableLines, resolveUrl))
-            continue
-        }
-
-        if (/^>\s?/.test(line)) {
+        } else if (BLOCKQUOTE_RE.test(line)) {
             const quote: string[] = []
-            while (i < lines.length && /^>\s?/.test(lines[i])) {
+            while (i < lines.length && BLOCKQUOTE_RE.test(lines[i])) {
                 quote.push(lines[i].replace(/^>\s?/, ''))
                 i += 1
             }
             parts.push(
                 `<blockquote class="lf-md__quote">${renderInline(quote.join(' '), resolveUrl)}</blockquote>`,
             )
-            continue
-        }
-
-        if (/^\s*[-*+]\s+/.test(line)) {
+        } else if (UL_ITEM_RE.test(line)) {
             const items: string[] = []
-            while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+            while (i < lines.length && UL_ITEM_RE.test(lines[i])) {
                 items.push(lines[i].replace(/^\s*[-*+]\s+/, ''))
                 i += 1
             }
             parts.push(
                 `<ul class="lf-md__list">${items.map((item) => `<li>${renderInline(item, resolveUrl)}</li>`).join('')}</ul>`,
             )
-            continue
-        }
-
-        if (/^\s*\d+\.\s+/.test(line)) {
+        } else if (OL_ITEM_RE.test(line)) {
             const items: string[] = []
-            while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+            while (i < lines.length && OL_ITEM_RE.test(lines[i])) {
                 items.push(lines[i].replace(/^\s*\d+\.\s+/, ''))
                 i += 1
             }
             parts.push(
                 `<ol class="lf-md__list">${items.map((item) => `<li>${renderInline(item, resolveUrl)}</li>`).join('')}</ol>`,
             )
-            continue
+        } else if (!line.trim()) {
+            i += 1
+        } else {
+            const para: string[] = []
+            while (i < lines.length && !isParagraphBoundary(lines[i], lines[i + 1])) {
+                para.push(lines[i].trim())
+                i += 1
+            }
+            if (para.length) {
+                parts.push(`<p class="lf-md__p">${renderInline(para.join(' '), resolveUrl)}</p>`)
+            }
         }
 
-        if (!line.trim()) {
-            i += 1
-            continue
-        }
-
-        const para: string[] = []
-        while (
-            i < lines.length
-            && lines[i].trim()
-            && !lines[i].startsWith('```')
-            && !/^(#{1,6})\s+/.test(lines[i])
-            && !/^>\s?/.test(lines[i])
-            && !/^\s*[-*+]\s+/.test(lines[i])
-            && !/^\s*\d+\.\s+/.test(lines[i])
-            && !/^\s*([-*_])\1{2,}\s*$/.test(lines[i])
-            && !isHtmlHeavyLine(lines[i])
-            && !(lines[i].trim().startsWith('|') && i + 1 < lines.length && lines[i + 1].includes('---'))
-        ) {
-            para.push(lines[i].trim())
-            i += 1
-        }
-        parts.push(`<p class="lf-md__p">${renderInline(para.join(' '), resolveUrl)}</p>`)
+        // Hard progress: never stall the outer scan (main-thread hang).
+        if (i <= cursor) i = cursor + 1
     }
 
-    return parts.join('')
+    return purifyHtml(parts.join(''))
 }
 
 /** @deprecated Prefer renderSafeMarkdown */

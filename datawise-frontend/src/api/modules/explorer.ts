@@ -313,4 +313,6 @@ export const explorerApi = {
         payload: { name: string; catalog?: string },
     ) => api.explorer.createSchema(connectionId, payload),
     fetchMysqlCharsets: (connectionId: string) => api.explorer.fetchMysqlCharsets(connectionId),
+    fetchEngines: (connectionId: string) => api.explorer.fetchEngines(connectionId),
+    fetchDataTypes: (connectionId: string) => api.explorer.fetchDataTypes(connectionId),
 }

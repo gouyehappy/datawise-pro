@@ -18,6 +18,7 @@ import type {
 import {DEFAULT_SQL_EDITOR_AI_MODEL, resolveSqlEditorAiSettings} from '@sql-editor/ai/settings'
 
 type CaseValue = 'upper' | 'lower' | 'preserve'
+type ColumnDiagnosticsMode = 'auto' | 'on' | 'off'
 
 const props = defineProps<{
   settings: SqlEditorShortcutsSettings
@@ -39,6 +40,12 @@ const advancedOpen = ref(false)
 const localeOptions: { id: SqlEditorLocale; label: string }[] = [
   {id: 'zh-CN', label: '中文'},
   {id: 'en', label: 'EN'},
+]
+
+const columnDiagnosticsOptions: { id: ColumnDiagnosticsMode; labelKey: string }[] = [
+  {id: 'auto', labelKey: 'settings.column_diagnostics_auto'},
+  {id: 'on', labelKey: 'settings.column_diagnostics_on'},
+  {id: 'off', labelKey: 'settings.column_diagnostics_off'},
 ]
 
 const caseOptions: { id: CaseValue; labelKey: string }[] = [
@@ -155,6 +162,33 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
               type="checkbox"
               :checked="settings.showRunGutterButton !== false"
               @change="emit('patchSettings', { showRunGutterButton: ($event.target as HTMLInputElement).checked })"
+          />
+          <span class="bh-switch-track" aria-hidden="true"/>
+        </span>
+      </label>
+
+      <div class="bh-row bh-row-compact bh-row-select" :title="t('settings.column_diagnostics_mode_hint')">
+        <span class="bh-row-label">{{ t('settings.column_diagnostics_mode') }}</span>
+        <div class="bh-seg" role="group">
+          <button
+              v-for="opt in columnDiagnosticsOptions"
+              :key="opt.id"
+              type="button"
+              class="bh-seg-btn"
+              :class="{ on: (settings.columnDiagnosticsMode || 'auto') === opt.id }"
+              @click="emit('patchSettings', { columnDiagnosticsMode: opt.id })"
+          >{{ t(opt.labelKey) }}
+          </button>
+        </div>
+      </div>
+
+      <label class="bh-row" :title="t('settings.vim_mode_hint')">
+        <span class="bh-row-label">{{ t('settings.vim_mode') }}</span>
+        <span class="bh-switch">
+          <input
+              type="checkbox"
+              :checked="settings.vimModeEnabled === true"
+              @change="emit('patchSettings', { vimModeEnabled: ($event.target as HTMLInputElement).checked })"
           />
           <span class="bh-switch-track" aria-hidden="true"/>
         </span>

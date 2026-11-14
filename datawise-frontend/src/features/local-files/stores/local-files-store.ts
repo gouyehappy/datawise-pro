@@ -1,5 +1,6 @@
 import {defineStore} from 'pinia'
 import {computed, ref, shallowRef} from 'vue'
+import {useDebouncedRef} from '@/core/utils/debounced-ref'
 import {
     canUseLocalFilesWorkspace,
     deleteLocal,
@@ -119,6 +120,10 @@ export const useLocalFilesStore = defineStore('local-files', () => {
     const available = computed(() => canUseLocalFilesWorkspace())
     const inlineEdit = ref<LocalFilesInlineEdit | null>(null)
     const searchQuery = ref('')
+    /** PERF-15: tree visibility/flatten use debounced query; toolbar stays live. */
+    const debouncedSearchQuery = useDebouncedRef(searchQuery, 180, {
+        flushImmediately: (q) => !q.trim(),
+    })
     const extFilter = ref<LocalFilesExtFilter>('all')
     const searchLoading = ref(false)
     const searchInContent = ref(false)
@@ -997,6 +1002,7 @@ export const useLocalFilesStore = defineStore('local-files', () => {
         favoriteRoots,
         inlineEdit,
         searchQuery,
+        debouncedSearchQuery,
         extFilter,
         searchLoading,
         searchInContent,

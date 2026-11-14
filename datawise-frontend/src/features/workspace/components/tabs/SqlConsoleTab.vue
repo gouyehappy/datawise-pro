@@ -19,6 +19,7 @@ import {getActiveSqlEditorRuntime} from '@datawise/sql-editor/runtime/sql-editor
 import {useExplorerSqlSchemaProvider} from '@/features/workspace/adapters/explorer-sql-schema-provider'
 import {useShortcutPanelStore} from '@/features/layout/stores/shortcut-panel-store'
 import {buildRecentQueriesFromSqlLogs} from '@/features/workspace/services/recent-sql-suggest.service'
+import {sqlLogsRecentSyncKey} from '@/features/workspace/services/sql-logs-recent-sync.policy'
 import ResizeHandle from '@/core/components/ResizeHandle.vue'
 import {shortcutTooltip} from '@/features/layout/composables/useAppShortcutListener'
 import {useSqlEditorShortcuts} from '@/features/workspace/composables/useSqlEditorShortcuts'
@@ -32,7 +33,10 @@ import {
   buildTableShortcutSql,
 } from '@/features/workspace/services/sql-table-shortcut.service'
 import {useConnectionCapabilities} from '@/features/datasource/composables/useConnectionCapabilities'
+import WriteUnlockToolbar from '@/features/connection/components/WriteUnlockToolbar.vue'
+import {fetchConnectionConfig} from '@/shared/config/connections-catalog.service'
 import {useLayoutStore} from '@/features/layout/stores/layout'
+import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
 import {useEditorFullscreen} from '@/features/workspace/composables/useEditorFullscreen'
 import {useSqlEditorActions, type SqlRunOptions} from '@/features/workspace/composables/useSqlEditorActions'
@@ -62,6 +66,7 @@ import ConsoleSqlCancelDialog from '@/features/workspace/components/ConsoleSqlCa
 import SqlParameterPanel from '@/features/workspace/components/SqlParameterPanel.vue'
 import SqlExecutionLimitHint from '@/features/workspace/components/SqlExecutionLimitHint.vue'
 import DwPanelState from '@/core/components/DwPanelState.vue'
+import {DwButton} from '@/core/components'
 import {useIndexDraftSuggest} from '@/features/workspace/composables/useIndexDraftSuggest'
 import {useDangerousSqlPending} from '@/features/workspace/composables/useDangerousSqlPending'
 import {normalizeConnectionEnvironment} from '@/features/connection/services/connection-environment.service'
@@ -93,7 +98,6 @@ import {
 import {validateCrossEnvCompareSql, buildCrossEnvCompareScope} from '@/features/cross-env-compare/services/cross-env-compare.service'
 import {reviewSql} from '@/features/platform/services/sql-review.service'
 import type {SqlReviewFinding} from '@/features/platform/types/platform.types'
-import {fetchConnectionConfig} from '@/shared/config/connections-catalog.service'
 import {isJdbcSshTunnelEnabled} from '@/features/ssh/services/ssh-jdbc-tunnel.service'
 import {
   LOCAL_FILE_ABS_PATH_MIME,
@@ -103,6 +107,14 @@ import {
   readLocalFilePathFromDataTransfer,
 } from '@/features/local-files/services/local-files-dnd'
 import {openLocalWorkspaceFile} from '@/features/local-files/services/open-local-file.service'
+import {
+  buildResultAskPrompt,
+  buildSelectionInstruction,
+  requestAiAsk,
+  type AiAskIntent,
+} from '@/features/ai/shared/services/ai-ask.service'
+import type {AiConversationBinding} from '@/features/ai/types/session'
+import {extractTableNamesFromSql} from '@/features/workspace/services/sql-history-knowledge.utils'
 
 import {
   CONSOLE_EDITOR_HEIGHT_DEFAULT,
@@ -136,11 +148,19 @@ const VisualQueryBuilderDialog = defineAsyncComponent(
 const {t} = useI18n()
 const {readOnly: guestReadOnly, hint: guestReadOnlyHint} = useResourceWriteGuard(UserResource.WorkspaceScripts)
 const {can} = useFeaturePermission()
-const props = defineProps<{ tab: WorkspaceTab }>()
+const props = withDefaults(
+    defineProps<{
+      tab: WorkspaceTab
+      /** PERF-18: false while shelled in background — unmount result grid. */
+      paneActive?: boolean
+    }>(),
+    {paneActive: true},
+)
 
 const workspace = useWorkspaceStore()
 const explorer = useExplorerStore()
 const layout = useLayoutStore()
+const entitlement = useEntitlementStore()
 const appConfig = useAppConfigStore()
 const pluginStore = usePluginStore()
 const shortcutPanel = useShortcutPanelStore()
@@ -154,6 +174,16 @@ const parameterNames = computed(() => extractSqlParameters(sql.value))
 const aiSelectionSql = ref('')
 const splitRef = ref<HTMLElement>()
 const editorRef = ref<SqlEditorExpose>()
+/** A3-1: 空编辑器引导（有内容后自动消失） */
+const showEmptyEditorHint = computed(() => editorReady.value && !sql.value.trim())
+
+function insertSampleSql() {
+  sql.value = 'SELECT 1;'
+  void nextTick(() => {
+    editorRef.value?.goToLine(1, false)
+    editorRef.value?.layout()
+  })
+}
 const cursorLoading = ref(false)
 const transactionBarRef = ref<{ refreshStatus: () => Promise<void> } | null>(null)
 const schemaProvider = useExplorerSqlSchemaProvider()
@@ -167,8 +197,9 @@ const editorHeight = computed({
 const showResultPanel = ref(false)
 
 const sqlFormatEnabled = computed(() => pluginStore.isEnabled('p-sql-format'))
+const isStandardEdition = import.meta.env.VITE_DATAWISE_EDITION === 'standard'
 const consoleAiEnabled = computed(
-    () => import.meta.env.VITE_DATAWISE_EDITION !== 'standard' && pluginStore.isEnabled('p-console-ai'),
+    () => !isStandardEdition && pluginStore.isEnabled('p-console-ai'),
 )
 const indexSuggestEnabled = computed(
     () => import.meta.env.VITE_DATAWISE_EDITION !== 'standard' && pluginStore.isEnabled('p-ai-index-suggest'),
@@ -186,6 +217,13 @@ const aiExplainEnabled = computed(
     () => import.meta.env.VITE_DATAWISE_EDITION !== 'standard' && pluginStore.isEnabled('p-ai-explain'),
 )
 const dmlGenerateEnabled = computed(() => pluginStore.isSwitchEnabled('p-dml-generate'))
+/**
+ * P2-2：AI 是全局入口，控制台里的 SQL / 结果也能直接交给 AI 工作台，
+ * 不必让用户先切模块再重新描述一遍上下文。
+ */
+const canAskAi = computed(
+    () => import.meta.env.VITE_DATAWISE_EDITION !== 'standard' && layout.canAccessNavModule('ai'),
+)
 const explainPlanEnabled = computed(() => pluginStore.isEnabled('p-explain-plan'))
 const crossEnvCompareEnabled = computed(() => pluginStore.isEnabled('p-cross-env-compare'))
 const bookmarksEnabled = computed(() => pluginStore.isEnabled('p-sql-bookmarks'))
@@ -316,19 +354,16 @@ function applyVisualQuerySql(generatedSql: string, mode: 'replace' | 'insert') {
   if (!next) return
   if (mode === 'replace') {
     setConsoleSql(next)
-    layout.showSuccessToast(t('console.visualQuery.appliedReplace'))
     return
   }
   const current = sql.value.trim()
   setConsoleSql(current ? `${current}\n\n${next}` : next)
-  layout.showSuccessToast(t('console.visualQuery.appliedInsert'))
 }
 
 function applyAndRunVisualQuerySql(generatedSql: string) {
   const next = generatedSql.trim()
   if (!next) return
   setConsoleSql(next)
-  layout.showSuccessToast(t('console.visualQuery.appliedAndRun'))
   executeSql(next, {perfSource: 'vqb'})
 }
 
@@ -354,7 +389,12 @@ const databaseName = computed(() => {
 const dbDialect = computed(() => source.value?.dbType)
 
 watch(
-    [() => shortcutPanel.sqlLogs, connectionId, databaseName],
+    () =>
+        sqlLogsRecentSyncKey(
+            shortcutPanel.sqlLogs,
+            connectionId.value || props.tab.connectionId,
+            databaseName.value,
+        ),
     () => {
       const connId = connectionId.value || props.tab.connectionId
       const database = databaseName.value
@@ -370,7 +410,7 @@ watch(
           }),
       )
     },
-    {immediate: true, deep: true},
+    {immediate: true},
 )
 
 const connectionEnvironment = computed(() => {
@@ -384,6 +424,22 @@ const {productionPerfActive} = useProductionPerfMode(() => connectionId.value ||
 
 const {caps: connectionCaps, hint: capabilityHint} = useConnectionCapabilities(dbDialect)
 
+const connectionWriteGuard = ref(false)
+watch(
+  () => connectionId.value || props.tab.connectionId,
+  async (id) => {
+    connectionWriteGuard.value = false
+    if (!id) return
+    try {
+      const config = await fetchConnectionConfig(id)
+      connectionWriteGuard.value = Boolean(config.writeGuard)
+    } catch {
+      connectionWriteGuard.value = false
+    }
+  },
+  {immediate: true},
+)
+
 const {
   pending: dangerousSqlPending,
   pendingSql: dangerousSqlPendingSql,
@@ -394,6 +450,8 @@ const {
   sampleColumns: dangerousSqlSampleColumns,
   errorMessage: dangerousSqlErrorMessage,
   productionForced: dangerousSqlProductionForced,
+  risk: dangerousSqlRisk,
+  autoApprovedRows: dangerousSqlAutoApprovedRows,
   requiresConfirmation: requiresDangerousSqlConfirmation,
   armPending: armDangerousSqlPending,
   disarm: disarmDangerousSqlPending,
@@ -428,10 +486,12 @@ const productionApprovalError = ref('')
 /** Prod write SQL that skipped the dangerous-confirm bar (INSERT / ALTER / CREATE…). */
 const productionApprovalSql = ref<string | null>(null)
 const sqlReviewFindings = ref<SqlReviewFinding[]>([])
-const sqlReviewBlocked = ref(false)
+/** Fail-closed: block until review completes successfully. */
+const sqlReviewBlocked = ref(true)
 const sqlReviewSuggestedSql = ref<string | null>(null)
 const sqlReviewRewriteNote = ref<string | null>(null)
 const sqlReviewRewriteLoading = ref(false)
+let sqlReviewGeneration = 0
 
 const approvalContextSql = computed(
     () => dangerousSqlPendingSql.value?.trim() || productionApprovalSql.value?.trim() || '',
@@ -489,8 +549,13 @@ const showToolbarSaveGroup = computed(() =>
     || can(FeaturePermission.WorkbenchConsoleFullscreen),
 )
 
+/** B2-2: 标准版也露出 AI 入口，点开走 stub → Insight/AI 人话门禁，避免侧栏才是唯一路径 */
 const showToolbarAiGroup = computed(() =>
-    consoleAiEnabled.value && can(FeaturePermission.WorkbenchConsoleAi),
+    can(FeaturePermission.WorkbenchConsoleAi)
+    && (consoleAiEnabled.value || isStandardEdition),
+)
+const mountConsoleAiLayer = computed(() =>
+    editorReady.value && (anyAiFeatureEnabled.value || showToolbarAiGroup.value),
 )
 
 const productionApprovalTeams = computed(() => {
@@ -568,6 +633,10 @@ const runningElapsedLabel = computed(() =>
 
 const {isFullscreen: isEditorFullscreen, toggle: toggleEditorFullscreen, exit: exitEditorFullscreen} =
     useEditorFullscreen()
+/** PERF-18: keep results in store while hidden; remount grid when pane is active again. */
+const mountResultPane = computed(
+    () => props.paneActive && !isEditorFullscreen.value && showResultPanel.value,
+)
 
 /** 全屏编辑时执行 SQL 需先退出全屏，才能看到结果区 */
 function resolveConsoleExecutable(executableOverride?: unknown, mode?: SqlExecuteMode) {
@@ -591,8 +660,9 @@ function batchNeedsDangerousConfirmation(resolvedSql: string): boolean {
 }
 
 async function loadSqlReviewFindings(resolvedSql: string) {
+  const generation = ++sqlReviewGeneration
   sqlReviewFindings.value = []
-  sqlReviewBlocked.value = false
+  sqlReviewBlocked.value = true
   sqlReviewSuggestedSql.value = null
   sqlReviewRewriteNote.value = null
   const connId = connectionId.value || props.tab.connectionId
@@ -608,17 +678,22 @@ async function loadSqlReviewFindings(resolvedSql: string) {
         },
         {silent: true},
     )
+    if (generation !== sqlReviewGeneration) return
     sqlReviewFindings.value = result.findings ?? []
     sqlReviewBlocked.value = !result.allowed
     sqlReviewSuggestedSql.value = result.suggestedSql?.trim() || null
     sqlReviewRewriteNote.value = result.rewriteNote?.trim() || null
   } catch {
+    if (generation !== sqlReviewGeneration) return
+    // Fail-closed: keep blocked on network/API errors.
     sqlReviewFindings.value = []
-    sqlReviewBlocked.value = false
+    sqlReviewBlocked.value = true
     sqlReviewSuggestedSql.value = null
     sqlReviewRewriteNote.value = null
   } finally {
-    sqlReviewRewriteLoading.value = false
+    if (generation === sqlReviewGeneration) {
+      sqlReviewRewriteLoading.value = false
+    }
   }
 }
 
@@ -631,9 +706,18 @@ function applySqlReviewSuggestion() {
   void loadSqlReviewFindings(suggested)
 }
 
-async function armDangerousSqlWithReview(resolved: string) {
+type DangerousSqlGate = 'blocked' | 'armed' | 'auto'
+
+async function armDangerousSqlWithReview(resolved: string): Promise<DangerousSqlGate> {
   await loadSqlReviewFindings(resolved)
-  await armDangerousSqlPending(resolved)
+  if (sqlReviewBlocked.value) return 'blocked'
+  const suggested = sqlReviewSuggestedSql.value?.trim()
+  if (suggested && suggested !== resolved.trim()) {
+    // Suggested rewrite must be explicitly applied; do not arm the original dangerous SQL.
+    return 'blocked'
+  }
+  // 预演结果决定是否打断：低风险直接放行（P3 治理预演）
+  return (await armDangerousSqlPending(resolved)) ? 'armed' : 'auto'
 }
 
 function executeSql(executableOverride?: unknown, runOptions?: SqlRunOptions) {
@@ -646,7 +730,15 @@ function executeSql(executableOverride?: unknown, runOptions?: SqlRunOptions) {
     if (trimmed) {
       const resolved = applySqlParameters(trimmed, sqlParamValues.value)
       if (batchNeedsDangerousConfirmation(resolved)) {
-        void armDangerousSqlWithReview(resolved)
+        void armDangerousSqlWithReview(resolved).then((gate) => {
+          if (gate !== 'auto') return
+          const rows = dangerousSqlAutoApprovedRows.value
+          if (rows != null) {
+            workspace.setStatus(t('console.dangerousSql.autoApproved', {count: rows}))
+          }
+          // 低风险已预演：跳过确认直接执行
+          executeSql(executableOverride, {...runOptions, skipDangerousCheck: true})
+        })
         return
       }
       // INSERT / ALTER / CREATE etc. skip the dangerous bar but still need prod approval.
@@ -739,7 +831,12 @@ async function onSubmitProductionApproval(teamId: string) {
     })
     clearProductionApprovalPrompt()
     disarmDangerousSqlPending()
-    layout.showSuccessToast(t('console.productionApproval.submitted'))
+    layout.notifyQuiet({
+      category: 'workspace',
+      titleKey: 'approvalDone',
+      bodyKey: 'approvalDone',
+      params: {detail: t('console.productionApproval.submitted')},
+    })
   } catch (error) {
     productionApprovalError.value =
         resolveCaughtApiErrorMessage(error, t, 'console.productionApproval.submitFailed')
@@ -813,6 +910,8 @@ const {
     }
     void aiLayerRef.value?.openAiInput(prefill)
   },
+  askAiInWorkbench: (sql) => sendSelectionToAi(sql, 'ask'),
+  fixAiInWorkbench: (sql) => sendSelectionToAi(sql, 'fix'),
   getDbType: () => dbDialect.value,
   getCapabilities: () => connectionCaps.value,
   getCapabilityHint: () => capabilityHint('sqlExplain'),
@@ -860,6 +959,77 @@ function onRequestAiSummary() {
   if (result) aiLayerRef.value?.onRequestAiSummary(result)
 }
 
+/**
+ * T-AI-2：选区作为结构化数据附件发到 AI 工作台；同 binding 复用会话。
+ */
+function resolveEditorAskBinding(): AiConversationBinding | undefined {
+  const connId = connectionId.value || props.tab.connectionId
+  if (!connId) return undefined
+  const node = explorer.findNode(connId)
+  return {
+    connectionId: connId,
+    connectionName: props.tab.connectionName || source.value?.label || undefined,
+    database: databaseName.value || undefined,
+    dialect: typeof dbDialect.value === 'string' ? dbDialect.value : undefined,
+    environment: normalizeConnectionEnvironment(node?.env, node?.envCustom).env || undefined,
+    source: 'editor_send',
+  }
+}
+
+function sendSelectionToAi(sql: string, intent: AiAskIntent) {
+  const connId = connectionId.value || props.tab.connectionId
+  const database = databaseName.value
+  const mode = intent === 'fix' ? 'agent' : 'ask'
+  layout.setModule('ai')
+  void requestAiAsk({
+    intent,
+    mode,
+    prompt: buildSelectionInstruction(intent),
+    selectionText: sql,
+    binding: resolveEditorAskBinding(),
+    focusInput: true,
+    scope:
+      connId && database
+        ? {
+          connectionId: connId,
+          database,
+          tables: extractTableNamesFromSql(sql),
+        }
+        : undefined,
+  })
+}
+
+/** 结果集提问：带结果提示词 + 选区附件 */
+function askAiWithPrompt(sql: string, prompt: string) {
+  const connId = connectionId.value || props.tab.connectionId
+  const database = databaseName.value
+  layout.setModule('ai')
+  void requestAiAsk({
+    prompt,
+    selectionText: sql,
+    intent: 'ask',
+    mode: 'ask',
+    binding: resolveEditorAskBinding(),
+    focusInput: true,
+    scope:
+      connId && database
+        ? {
+          connectionId: connId,
+          database,
+          tables: extractTableNamesFromSql(sql),
+        }
+        : undefined,
+  })
+}
+
+function onRequestAiAsk() {
+  const view = consoleQuery.value.activeView
+  if (view < 0) return
+  const sql = consoleQuery.value.results[view]?.sql?.trim()
+  if (!sql) return
+  askAiWithPrompt(sql, buildResultAskPrompt(sql))
+}
+
 function onRequestAiExplain() {
   const view = consoleQuery.value.activeView
   if (view < 0) return
@@ -871,6 +1041,11 @@ const consoleQuery = computed(() => {
   const state = consoleQueryByTabId.value[props.tab.id]
   return state ?? {results: [], activeView: -1}
 })
+
+/** 有结果可回看时才显示底部收起条；从未查询过则编辑器占满 */
+const canReopenResultPanel = computed(
+    () => consoleQuery.value.results.length > 0 || running.value,
+)
 
 watch(
     () => props.tab.sql,
@@ -928,7 +1103,6 @@ function onInsertOrderByFromResult(payload: {column: string; direction: 'asc' | 
       : nextOrderDirection(lastOrderFill.value, payload.column)
   lastOrderFill.value = {column: payload.column, direction}
   editor.insertTextAtCursor(buildOrderByFillInsert(payload.column, direction))
-  layout.showSuccessToast(t('console.sqlFillInserted'))
 }
 
 function onInsertWhereFromResult(payload: {column: string; value: unknown}) {
@@ -936,7 +1110,6 @@ function onInsertWhereFromResult(payload: {column: string; value: unknown}) {
   if (!editor) return
   const statement = editor.getCurrentLineSql?.()?.trim() || sql.value
   editor.insertTextAtCursor(buildWhereFillInsert(statement, payload.column, payload.value))
-  layout.showSuccessToast(t('console.sqlFillInserted'))
 }
 
 function onInsertWhereInFromResult(payload: {column: string; clause: string}) {
@@ -946,7 +1119,6 @@ function onInsertWhereInFromResult(payload: {column: string; clause: string}) {
   const text = buildWhereInFillInsert(statement, payload.clause)
   if (!text) return
   editor.insertTextAtCursor(text)
-  layout.showSuccessToast(t('console.sqlFillInserted'))
 }
 
 function resolveActiveResultSql(): string {
@@ -959,7 +1131,6 @@ function resolveActiveResultSql(): string {
 function replaceEditorSql(nextSql: string) {
   sql.value = nextSql
   editorRef.value?.layout()
-  layout.showSuccessToast(t('console.sqlRewriteApplied'))
 }
 
 function onRewriteWhereFromResult(payload: {column: string; value: unknown}) {
@@ -1016,6 +1187,27 @@ watch(isEditorFullscreen, async () => {
   editorRef.value?.layout()
 })
 
+/** Sticky shell keeps this pane mounted while hidden; relayout Monaco when it becomes active again. */
+watch(
+    () => workspace.activeTabId === props.tab.id,
+    (active) => {
+      if (!active) return
+      void nextTick(() => {
+        editorRef.value?.layout()
+      })
+    },
+)
+
+watch(
+    () => workspace.tabActivateRefreshSeq[props.tab.id] ?? 0,
+    (seq, prev) => {
+      if (!seq || seq === prev) return
+      void nextTick(() => {
+        editorRef.value?.layout()
+      })
+    },
+)
+
 watch(sql, (value) => {
   if (syncingSqlFromStore) return
   if (value === props.tab.sql) return
@@ -1036,6 +1228,23 @@ watch(
       workspace.clearConsoleAutoRun()
       void nextTick(() => {
         executeSql(undefined, {perfSource: 'context-menu'})
+      })
+    },
+)
+
+watch(
+    () => workspace.consoleAiPromptRequest,
+    (req) => {
+      if (!req || req.tabId !== props.tab.id) return
+      workspace.clearConsoleAiPrompt()
+      void nextTick(() => {
+        if (typeof aiLayerRef.value?.openAiInput === 'function') {
+          void aiLayerRef.value.openAiInput()
+          return
+        }
+        // 无控制台 AI 层时回退到完整 Agent（分析模式）
+        if (!entitlement.guardAiNav()) return
+        layout.setModule('ai')
       })
     },
 )
@@ -1105,7 +1314,9 @@ useSqlEditorShortcuts(props.tab.id, () => ({
   'workspace.selectFirstRows': () => runTableShortcutFromSelection('select-first'),
   'workspace.countRows': () => runTableShortcutFromSelection('count'),
   'workspace.saveConsole': saveConsole,
-  'workspace.aiPrompt': consoleAiEnabled.value ? () => void aiLayerRef.value?.openAiInput() : undefined,
+  'workspace.aiPrompt': showToolbarAiGroup.value
+      ? () => void aiLayerRef.value?.openAiInput()
+      : undefined,
 }))
 
 function clampEditorHeight(value: number) {
@@ -1209,6 +1420,10 @@ onMounted(async () => {
         >
           <ConsoleToolbarIcon name="terminal"/>
         </IconButton>
+        <WriteUnlockToolbar
+            :connection-id="connectionId || props.tab.connectionId"
+            :write-guard="connectionWriteGuard"
+        />
         <span
             v-if="showToolbarRunGroup && showToolbarSaveGroup"
             class="dw-console-divider"
@@ -1274,7 +1489,7 @@ onMounted(async () => {
           <ConsoleToolbarIcon name="sqlEditorSettings"/>
         </IconButton>
         <IconButton
-            v-if="can(FeaturePermission.WorkbenchConsoleRun)"
+            v-if="can(FeaturePermission.WorkbenchConsoleRun) && connectionCaps.visualQueryBuilder"
             :title="t('console.visualQuery.toolbar')"
             @click="openVisualQueryBuilder"
         >
@@ -1341,6 +1556,7 @@ onMounted(async () => {
         :sample-columns="dangerousSqlSampleColumns"
         :error-message="dangerousSqlErrorMessage"
         :production-forced="dangerousSqlProductionForced"
+        :risk="dangerousSqlRisk"
         :production-approval-required="needsProductionApproval"
         :sql-review-findings="sqlReviewFindings"
         :sql-review-blocked="sqlReviewBlocked"
@@ -1358,7 +1574,7 @@ onMounted(async () => {
         :source-label="source?.label ?? ''"
     />
 
-    <div ref="splitRef" class="split dw-seam-stack dw-seam-stack--flush">
+    <div ref="splitRef" class="split dw-seam-stack">
       <div
           class="editor-pane"
           :class="{
@@ -1368,7 +1584,7 @@ onMounted(async () => {
           :style="!isEditorFullscreen && showResultPanel ? { height: `${editorHeight}px` } : undefined"
       >
         <SqlConsoleAiLayer
-            v-if="editorReady && anyAiFeatureEnabled"
+            v-if="mountConsoleAiLayer"
             ref="aiLayerRef"
             v-model:selection-sql="aiSelectionSql"
             :tab="tab"
@@ -1416,18 +1632,46 @@ onMounted(async () => {
               compact
               :message="t('common.editorLoading')"
           />
+          <div
+              v-if="showEmptyEditorHint"
+              class="editor-empty"
+              aria-live="polite"
+          >
+            <p class="editor-empty__title">{{ t('console.emptyEditorTitle') }}</p>
+            <p class="editor-empty__hint">
+              {{
+                (connectionId || tab.connectionId)
+                  ? t('console.emptyEditorHint')
+                  : t('console.emptyEditorNeedConnection')
+              }}
+            </p>
+            <DwButton
+                v-if="connectionId || tab.connectionId"
+                size="sm"
+                variant="secondary"
+                class="editor-empty__action"
+                @click="insertSampleSql"
+            >
+              {{ t('console.emptyEditorInsertSample') }}
+            </DwButton>
+          </div>
         </div>
       </div>
-      <ResizeHandle
+      <div
           v-if="!isEditorFullscreen && showResultPanel"
-          v-model="editorHeight"
-          direction="horizontal"
-          variant="line"
-          :min="CONSOLE_EDITOR_HEIGHT_MIN"
-          :max="CONSOLE_EDITOR_HEIGHT_MAX"
-      />
+          class="split__gap"
+          aria-hidden="true"
+      >
+        <ResizeHandle
+            v-model="editorHeight"
+            direction="horizontal"
+            variant="ghost"
+            :min="CONSOLE_EDITOR_HEIGHT_MIN"
+            :max="CONSOLE_EDITOR_HEIGHT_MAX"
+        />
+      </div>
       <QueryResultPane
-          v-if="!isEditorFullscreen && showResultPanel"
+          v-if="mountResultPane"
           class="result-pane"
           collapsible
           :results="consoleQuery.results"
@@ -1443,6 +1687,7 @@ onMounted(async () => {
           :enable-ai-fix="aiSqlFixEnabled"
           :ai-fix-loading="aiLayerRef?.aiFixLoading ?? false"
           :enable-ai-summary="aiResultSummaryEnabled"
+          :show-ai-ask="canAskAi"
           :ai-summary-loading="aiLayerRef?.aiSummaryLoading ?? false"
           :ai-summary-open="aiLayerRef?.aiSummaryOpen ?? false"
           :ai-summary-text="aiLayerRef?.aiSummaryText ?? ''"
@@ -1466,6 +1711,7 @@ onMounted(async () => {
           @jump-to-error-line="jumpToErrorLine"
           @request-ai-fix="(payload) => aiLayerRef?.requestAiSqlFix(payload)"
           @request-ai-summary="onRequestAiSummary"
+          @request-ai-ask="onRequestAiAsk"
           @close-ai-summary="aiLayerRef?.closeAiSummary()"
           @request-ai-explain="onRequestAiExplain"
           @close-ai-explain="aiLayerRef?.closeAiExplain()"
@@ -1482,7 +1728,7 @@ onMounted(async () => {
           @rewrite-order-by="onRewriteOrderByFromResult"
       />
       <button
-          v-if="!isEditorFullscreen && !showResultPanel"
+          v-if="!isEditorFullscreen && !showResultPanel && canReopenResultPanel"
           type="button"
           class="result-collapsed-bar"
           :title="t('queryResult.expandPanel')"
@@ -1600,10 +1846,15 @@ onMounted(async () => {
 }
 
 .split {
+  /* classic：有缝+圆角；ide：panel-radius=0 / panel-gap≈半缝 → 直角 */
+  --dw-console-split-gap: var(--dw-panel-gap, 0px);
+  --dw-console-split-radius: var(--dw-panel-radius, 0px);
+  --dw-console-split-hit: var(--dw-splitter-size, 4px);
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  gap: 0;
 }
 
 .editor-pane {
@@ -1612,7 +1863,38 @@ onMounted(async () => {
   flex-direction: column;
   flex-shrink: 0;
   min-height: 120px;
-  border-bottom: 1px solid var(--dw-border-light);
+  border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+  /* 顶贴 Tab；底随 --dw-console-split-radius（classic 有值，ide=0） */
+  border-radius: 0 0 var(--dw-console-split-radius, 0) var(--dw-console-split-radius, 0);
+  overflow: hidden;
+  background: var(--dw-bg-editor);
+}
+
+/* 间隙条：露出 chrome；拖动手柄铺满命中区 */
+.split__gap {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 var(--dw-console-split-gap);
+  height: var(--dw-console-split-gap);
+  min-height: var(--dw-console-split-gap);
+  margin: 0;
+  background: transparent;
+}
+
+.split__gap :deep(.resize-handle) {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  background: transparent;
+  cursor: row-resize;
+}
+
+.split__gap :deep(.resize-handle:hover),
+.split__gap :deep(.resize-handle.dragging) {
+  background: color-mix(in srgb, var(--dw-primary) 22%, transparent);
 }
 
 .editor-surface {
@@ -1628,6 +1910,40 @@ onMounted(async () => {
   min-height: 0;
 }
 
+.editor-empty {
+  pointer-events: none;
+  position: absolute;
+  inset: var(--dw-control-h-sm, 1.75rem) 0 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--dw-space-2);
+  padding: clamp(1.5rem, 4cqh, 2.75rem) clamp(1.25rem, 3cqi, 2.5rem);
+  max-width: 28rem;
+  color: var(--dw-text-muted);
+}
+
+.editor-empty__title {
+  margin: 0;
+  font-size: var(--dw-text-sm);
+  font-weight: 600;
+  color: var(--dw-text-secondary);
+  line-height: 1.4;
+}
+
+.editor-empty__hint {
+  margin: 0;
+  font-size: var(--dw-text-xs);
+  line-height: 1.45;
+}
+
+.editor-empty__action {
+  pointer-events: auto;
+  margin-top: var(--dw-space-1);
+}
+
 .editor-surface :deep(.sql-editor-hint-bar) {
   height: var(--dw-control-h-sm);
   min-height: var(--dw-control-h-sm);
@@ -1637,6 +1953,7 @@ onMounted(async () => {
   font-size: var(--dw-text-xs);
   line-height: var(--dw-tab-title-line);
   background: var(--dw-bg-editor);
+  border-bottom: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
 }
 
 .editor-surface :deep(.sql-editor-hint-bar .hint-text) {
@@ -1699,13 +2016,12 @@ onMounted(async () => {
 .editor-pane--fullscreen {
   flex: 1;
   min-height: 0;
-  border-bottom: none;
+  border-radius: 0;
 }
 
 .editor-pane--expanded {
   flex: 1;
   min-height: 0;
-  border-bottom: none;
 }
 
 .result-collapsed-bar {
@@ -1714,10 +2030,11 @@ onMounted(async () => {
   flex-shrink: 0;
   width: 100%;
   height: var(--dw-tab-height);
+  margin-top: var(--dw-console-split-gap, 0px);
   padding: 0 var(--dw-space-5);
-  border: none;
-  border-top: 1px solid var(--dw-tab-bar-border);
-  background: var(--dw-tab-bar-bg);
+  border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+  border-radius: var(--dw-console-split-radius, 0);
+  background: var(--dw-bg-muted);
   color: var(--dw-text-secondary);
   font-size: var(--dw-tab-title-size);
   cursor: pointer;
@@ -1736,9 +2053,14 @@ onMounted(async () => {
   min-height: 0;
 }
 
-.result-pane {
+.result-pane,
+.split > :deep(.result-pane) {
   flex: 1;
   min-height: 140px;
+  border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+  border-radius: var(--dw-console-split-radius, 0) !important;
+  overflow: hidden;
+  background: var(--dw-bg-muted);
 }
 
 .console-tab {
@@ -1746,5 +2068,18 @@ onMounted(async () => {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  /* 编辑 / 结果卡之间的间隙露出 chrome（盖过皮肤把 console-tab 刷成 editor 底） */
+  background: var(--dw-bg-chrome) !important;
+}
+
+/* 与上方 Tab 条贴合：不要圆角；底边把工具条从编辑井拆开。
+ * 勿 overflow:hidden —— Auto / 连接上下文菜单是 absolute 下拉，会被裁掉。 */
+.dw-console-toolbar {
+  border: none;
+  border-bottom: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+  border-radius: 0;
+  overflow: visible;
+  background: var(--dw-bg-editor);
+  flex-shrink: 0;
 }
 </style>

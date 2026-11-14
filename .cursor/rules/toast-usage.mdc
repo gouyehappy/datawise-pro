@@ -1,12 +1,57 @@
 ---
-description: When to use Toast vs StatusBar vs inline form errors in the frontend
+description: When to use Toast vs Notification drawer vs StatusBar vs inline form errors
 globs: datawise-frontend/src/**/*.{ts,vue}
 alwaysApply: false
 ---
 
-# Toast / StatusBar / Inline feedback
+# Toast / 通知 / StatusBar / Inline feedback
 
 Pick **one** channel per user action. Do not fire StatusBar and Toast together for the same outcome.
+
+## 三档成功反馈（优先少打扰）
+
+| 档位 | 何时用 | 怎么做 |
+|------|--------|--------|
+| **silent** | UI 已自证结果 | **不要** toast，也一般不必写通知 |
+| **notification** | 重要但可稍后看（导出 / 导入 / 安装 / 迁移 / 审批 / 版本） | `layout.notifyQuiet` / `toast.notify` / `notifyExportDone`。**不要**再叠 toast |
+| **toast** | 必须立刻看见，且页面无稳定锚点 | `useAppToast()` / `layout.show*Toast`（失败/警告优先；成功极少） |
+
+### silent 清单（常见）
+
+- 切项目；连接 / 断开 / 重连成功（树 / overlay 自证）
+- 粘贴板复制；编辑器插入 / 应用 / 格式化 / 改写
+- 设置 / 表单「已保存」且控件已反映新值
+- 树内创建 / 重命名 / 删除 / 移动 / 钉住 / 定位 / 刷新
+- 登录成功进入工作台；插件开关；收藏增减
+- 面板内已有 `lastFeedback` / inline banner 时，不要再 toast 成功
+
+### notification 清单（常见）
+
+- 导出 / 下载完成（含连接导出、ER 图、审计、迁移报告）
+- 导入连接 / 配置快照 / 布局导入
+- 驱动 / 连接器安装卸载；发现新版本
+- 迁移完成；恢复向导完成；结构同步完成
+- 生产审批提交 / 通过 / 驳回（可回溯）
+
+入口：
+
+```ts
+layout.notifyQuiet({ category: 'export', titleKey: 'exportDone', bodyKey: 'exportDone', params: {name} })
+// 或
+const toast = useAppToast()
+toast.notify({ category: 'workspace', titleKey: 'operationDone', bodyKey: 'operationDone', params: {detail} })
+```
+
+`titleKey` / `bodyKey` 对应 `i18n` `notification.messages.*`（如 `exportDone` `importDone` `installDone` `approvalDone` `operationDone` `migrationDone`）。
+
+### 仍可用 toast 的成功（例外，保持短）
+
+- 事务提交 / 回滚确认（`useConsoleTransaction`）
+- 取消执行「已请求」（异步 ack，状态栏未必够）
+- Kafka 发送成功（结果区无强反馈时）
+- 需要立即看见的阻塞解除，且无 overlay / 内联条
+
+失败 / 警告：继续用 `toast.error` / `toast.warning`（或内联错误）。
 
 ## Toast (`useAppToast`)
 
@@ -14,69 +59,53 @@ Prefer `useAppToast()` from `@/features/layout/composables/useAppToast` (forward
 
 ```ts
 const toast = useAppToast()
-toast.success('…')
+toast.success('…') // 成功慎用
 toast.error('…')
 toast.warning('…')
 toast.show('…') // info
+toast.notify({ category, titleKey, bodyKey, params })
 ```
-
-Use for brief, cross-context feedback with **no stable form anchor**:
-
-- Copy / clipboard results **outside** an open modal
-- Export / import completion (page chrome, not modal)
-- Explorer tree lifecycle (open/disconnect/delete connection, rename, etc.)
-- Kafka send, team/plugin short “operation done” when **no dialog is open**
-- Success that has already closed a modal / tab
 
 ### Modal / AppModal (硬约束)
 
 **弹窗仍打开时，禁止 toast。** 遮罩层会盖住 toast，用户看不到。
 
-弹窗内操作（复制、执行、保存失败、校验、生成完成等）一律用弹窗内反馈：
+弹窗内操作一律用：
 
 - `DwInlineAlert` `density="banner"`（推荐；可用 `useModalFeedback`）
-- `FormField` `:error`（字段错误）
-- `DwConfirmAlert`（确认风险条）
-- 按钮文案切换（如 Copy → Copied），仅适合瞬时成功
+- `FormField` `:error`
+- `DwConfirmAlert`
+- 按钮文案切换（Copy → Copied）
 
-弹窗**已关闭**后再 toast 可以（先 `close()`，再 toast）。
-
-Variants:
-
-- Success → `toast.success` / `layout.showSuccessToast`
-- Failure → `toast.error` / `layout.showErrorToast`
-- Neutral info → `toast.show` / `layout.showToast`
+弹窗**已关闭**后再考虑 silent / notification / toast。
 
 ## StatusBar (`workspace.setStatus`)
 
 Use when the user is already watching the console / editor chrome:
 
-- Run prerequisites (no connection selected, capability missing)
-- Format / save / execute status messages for SQL console
+- Run prerequisites
+- Format / save / execute status for SQL console
 - Tab rename / save failures from the workspace tab bar
 
 ## Inline & panel feedback
 
-Prefer shared components over ad-hoc `*__error` / banner markup:
-
 | Component | Use for |
 |-----------|---------|
-| `DwInlineAlert` | Field/form errors; dialog banners (`density="banner"`); info/success text hints |
-| `FormField` `:error` | Field-bound errors (wraps `DwInlineAlert`) |
+| `DwInlineAlert` | Field/form errors; dialog banners |
+| `FormField` `:error` | Field-bound errors |
 | `DwActionFeedback` | Connection / AI test footer chips |
-| `DwConfirmAlert` | Confirm-dialog warning/danger strips (icon + message + hint) |
-| `DwPanelState` | Panel loading / error / empty state machines (graphs, detail tabs, grids) |
-| `EmptyState` | Dedicated empty illustrations (also used inside `DwPanelState` empty) |
+| `DwConfirmAlert` | Confirm-dialog warning/danger strips |
+| `DwPanelState` | Panel loading / error / empty |
+| `EmptyState` | Dedicated empty illustrations |
 
 Guest read-only: rely on `guest-notice` + disabled controls — **do not toast**.
 
 ## Anti-patterns
 
 - Toast while `AppModal` / dialog is still open
-- Toast for guest write denial when a page banner already explains read-only
-- Toast that duplicates an already-rendered inline alert / StatusBar line
-- Direct `useToastStore()` in features (use `useAppToast` instead)
-- Using bare `showToast` / `toast.show` for success/error when a typed helper exists
+- Toast + inline `lastFeedback` for the same success
+- Toast for clipboard / project switch / connect-disconnect success / settings saved
+- Toast + notification for the same success
+- Direct `useToastStore()` in features
+- Bare `showToast` for success/error when typed helpers exist
 - Never change `layout.showToast` default to error; bare `show` means **info**
-- Do not extract SQL `error-callout` (AI fix) into these components
-- Do not reintroduce `dw-form-error` / `modal-alert-banner` / `modal-error-text` class copies

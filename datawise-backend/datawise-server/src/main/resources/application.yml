@@ -7,10 +7,13 @@ spring:
     default: open
   main:
     allow-bean-definition-overriding: true
+    # BE-P2-1: constructor @Lazy cycle breakers cleared (barrier / ObjectProvider /
+    # ObjectFactory). Keep true until a full ApplicationContext boot verifies false.
     allow-circular-references: true
   servlet:
     multipart:
       # Community .dwp packages (design cap 512 MiB). Default 1MB aborts the upload.
+      # Cloud profile lowers this — see application-cloud.yml.
       max-file-size: 512MB
       max-request-size: 512MB
 
@@ -58,7 +61,7 @@ datawise:
     heartbeat-url: ""
     heartbeat-interval-hours: 24
     heartbeat-check-ms: 3600000
-    # 生产必须 false；仅内部 profile 可开
+    # .dpk entitlement packs only（≠ community-plugin.allow-unsigned）。生产必须 false；非 dev/test 启动会 fail-fast。
     allow-unsigned: false
     core-version: 4.1.2
     # Ed25519 公钥 PEM（文件路径或 classpath:…）；空则仅校验 HMAC pack.sig
@@ -84,6 +87,7 @@ datawise:
       username: sa
       password: ""
       driver-class-name: org.h2.Driver
+      maximum-pool-size: 10
   tenancy:
     # single = 本地/私有化隐式 default 租户；multi = SaaS 多租户
     mode: single
@@ -118,6 +122,8 @@ datawise:
         - /api/auth/oidc/callback
         - /api/health
         - /actuator/health
+        - /api/public/shares
+        # Local/dev only — cloud profile omits swagger (see application-cloud.yml)
         - /v3/api-docs
         - /swagger-ui
         # WebSocket：浏览器无法带 X-DW-Session-Id，由 HandshakeInterceptor 校验 Sec-WebSocket-Protocol / ?dwSession=
@@ -169,8 +175,10 @@ datawise:
     absolute-max-result-rows: 100000
     # 游标 / 表分页 OFFSET 上限，避免深 OFFSET 全表扫描；0 = 不限制
     max-cursor-offset: 100000
-    # JDBC Statement.setQueryTimeout（秒）；0 表示不限制。默认 10 分钟防挂死查询（cloud 仍为 300）。
-    timeout-seconds: 600
+    # 结果游标存储：in-memory（进程内）| jdbc（共享 dw_sql_cursors，需 storage.backend=jdbc；cloud 默认 jdbc）
+    cursor-store-type: in-memory
+    # JDBC Statement.setQueryTimeout（秒）；0 表示不限制。默认 5 分钟防挂死查询（cloud 同为 300）。
+    timeout-seconds: 300
     # 交互 SQL 进程内并发上限；0 = 不限制。控制台执行与游标续页共用。
     max-concurrent-global: 64
     max-concurrent-per-user: 8
@@ -190,9 +198,10 @@ datawise:
       # 非空时仅当直连 remote 命中列表才读取 X-Forwarded-For / X-Real-IP（防伪造）
       trusted-proxy-ips: []
   connection:
-    # 长时间无 SQL/Explorer 操作后自动回收 JDBC 连接池（毫秒）；健康探测 ping 不计入活跃
+    # 长时间无 SQL/Explorer 操作后自动回收 JDBC 连接池（毫秒）；健康探测 ping 不计入活跃。
+    # 默认 30 分钟（原 15 分钟偏短，开会/切文档后易误断）。
     idle-evict-enabled: true
-    idle-evict-ms: 900000
+    idle-evict-ms: 1800000
     idle-evict-poll-ms: 60000
     # 进程内缓存的 Hikari 池上限；0=不限制。超出按最近活跃 LRU 回收
     max-active-pools: 64
@@ -222,6 +231,8 @@ datawise:
       idle-timeout-ms: 120000
       max-entries: 16
       schema-cache-ttl-ms: 3600000
+      # SchemaCacheStore 内存树快照条数上限（按 cachedAt 淘汰最旧）
+      schema-cache-max-entries: 64
       table-list-page-size: 500
   migration:
     default-batch-size: 500
@@ -262,7 +273,7 @@ datawise:
       enabled: true
       prefix: datawise.task.concurrency
   # Migration / 团队共享 Query SSE：默认进程内总线；多实例可改 jdbc（需 storage.backend=jdbc）
-  # 控制台事务会话 / 结果 cursor / AI 分析 SSE 仍为进程内（需 sticky 或单副本，见 docs/DEPLOYMENT.md#affinity）
+  # 控制台事务会话 / AI 分析 SSE 仍为进程内（需 sticky 或单副本）；cursor 可 jdbc 外置（见 docs/DEPLOYMENT.md#affinity）
   sse:
     bus-type: in-memory
     # instance-id:  # 可选；默认 spring.application.name@host:pid
@@ -270,6 +281,13 @@ datawise:
       poll-interval: 500ms
       retention: 5m
   ai:
+    stream:
+      executor:
+        # Bounded pool for SSE chat/analyze/resume (avoid ForkJoinPool.commonPool)
+        core-pool-size: 4
+        max-pool-size: 16
+        queue-capacity: 64
+        keep-alive-seconds: 60
     # offline = 使用模型配置里的 base URL（默认，兼容现网）
     # hybrid = 当 hybrid-base-url 非空时，OpenAI 兼容调用改走网关（云脑 / 私有网关）
     delivery: offline

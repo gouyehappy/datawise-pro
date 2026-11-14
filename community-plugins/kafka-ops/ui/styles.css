@@ -1,10 +1,10 @@
 :root {
       color-scheme: dark;
-      --bg: var(--color-background, #131416);
-      --rail: var(--color-muted, #1a1a1c);
-      --panel: var(--color-popover, #1e1e20);
-      --panel-2: var(--color-accent, #2e2f33);
-      --line: var(--color-border, rgb(110 110 114 / 0.28));
+      --bg: var(--color-background, #1a1b1e);
+      --rail: var(--color-muted, #1e1f22);
+      --panel: var(--color-popover, #222326);
+      --panel-2: var(--color-accent, #2a2b2e);
+      --line: var(--color-border, rgba(255, 255, 255, 0.08));
       --line-2: color-mix(in srgb, var(--color-foreground, #d7d7db) 18%, transparent);
       --fg: var(--color-foreground, #d7d7db);
       --muted: var(--color-muted-foreground, #97989d);
@@ -57,6 +57,8 @@
     }
     .app {
       display: grid; grid-template-columns: 56px 1fr; height: 100%;
+      gap: var(--dw-panel-gap, 0px);
+      background: var(--color-chrome, transparent);
     }
     .rail {
       background: var(--rail);
@@ -82,7 +84,11 @@
     }
     .rail-spacer { flex: 1; }
 
-    .shell { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .shell {
+      display: flex; flex-direction: column; min-width: 0; min-height: 0;
+      background: var(--bg);
+      border-radius: var(--dw-panel-radius, 0);
+    }
     .topbar {
       height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
       padding: 0 8px; border-bottom: 1px solid var(--line);

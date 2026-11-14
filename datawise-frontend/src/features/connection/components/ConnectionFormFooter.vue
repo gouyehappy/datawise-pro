@@ -15,6 +15,8 @@ defineProps<{
   canInstallConnector?: boolean
   installingConnector?: boolean
   missingConnectorLabel?: string | null
+  /** A2-2: JDBC 驱动安装失败后的市场兜底 */
+  canOpenConnectorMarket?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +24,7 @@ const emit = defineEmits<{
   cancel: []
   save: []
   installConnector: []
+  openConnectorMarket: []
 }>()
 
 const {t} = useI18n()
@@ -50,6 +53,14 @@ const {t} = useI18n()
             ? t('connection.installingConnectorShort')
             : t('connection.installConnector', {type: missingConnectorLabel || ''})
         }}
+      </DwButton>
+      <DwButton
+          v-else-if="canOpenConnectorMarket"
+          variant="secondary"
+          :disabled="testing || saving || installingConnector"
+          @click="emit('openConnectorMarket')"
+      >
+        {{ t('connection.openConnectorMarket') }}
       </DwButton>
       <DwActionFeedback
           v-if="actionMessage"

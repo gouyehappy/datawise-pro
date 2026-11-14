@@ -17,28 +17,31 @@ public final class AiAnalysisPromptTemplates {
                 "You are a data analyst for DataWise.",
                 "Summarize SQL query results clearly in the same language as the user.",
                 "Highlight key trends, outliers, and actionable insights.",
-                "Keep the reply concise (3-6 sentences). Do not repeat the full SQL."
-        ));
+                "Keep the reply concise (3-6 sentences). Do not repeat the full SQL."));
     }
 
     public static String renderSummaryUserPrompt(
-            String question,
-            String sql,
-            int rowCount,
-            List<Map<String, Object>> columns,
-            List<Map<String, Object>> rows,
-            AiChartSpecDto chart
-    ) {
+                                                 String question,
+                                                 String sql,
+                                                 int rowCount,
+                                                 List<Map<String, Object>> columns,
+                                                 List<Map<String, Object>> rows,
+                                                 AiChartSpecDto chart) {
         List<String> lines = new ArrayList<>();
         lines.add("User question: " + question);
-        lines.add("Executed SQL:\n" + sql);
+        lines.add("Executed SQL:\n" + PromptDataSanitizer.block(sql, 8_000));
         lines.add("Row count: " + rowCount);
         lines.add("Columns: " + AiPromptFormatters.formatColumns(columns));
-        lines.add("Sample rows (up to 20):\n" + AiPromptFormatters.formatRows(columns, rows, 20));
+        // Result rows are arbitrary database content; keep them bounded so a crafted cell cannot
+        // dominate the prompt.
+        lines.add("Sample rows (up to 20):\n" + PromptDataSanitizer.block(
+                AiPromptFormatters.formatRows(columns, rows, 20), 8_000));
         if (chart != null) {
-            lines.add("Chart type: " + chart.type());
-            lines.add("Chart x field: " + chart.xField());
-            lines.add("Chart y fields: " + String.join(", ", chart.yFields()));
+            lines.add("Chart type: " + PromptDataSanitizer.inline(chart.type(), 40));
+            lines.add("Chart x field: " + PromptDataSanitizer.inline(chart.xField()));
+            lines.add("Chart y fields: " + String.join(", ", chart.yFields().stream()
+                    .map(PromptDataSanitizer::inline)
+                    .toList()));
         }
         return String.join("\n\n", lines);
     }
@@ -49,16 +52,14 @@ public final class AiAnalysisPromptTemplates {
                 "Generate executable Python 3 code using pandas/numpy when helpful.",
                 "Assume SQL results are already loaded in variable `df` as a pandas DataFrame.",
                 "Print concise findings to stdout. Do not access network or filesystem.",
-                "Return only Python code without markdown fences."
-        ));
+                "Return only Python code without markdown fences."));
     }
 
     public static String renderPythonAnalysisUserPrompt(
-            String prompt,
-            ExecuteSqlResult sqlResult,
-            String failedCode,
-            String errorMessage
-    ) {
+                                                        String prompt,
+                                                        ExecuteSqlResult sqlResult,
+                                                        String failedCode,
+                                                        String errorMessage) {
         List<String> lines = new ArrayList<>();
         lines.add("User question:");
         lines.add(prompt != null ? prompt : "");
@@ -68,7 +69,8 @@ public final class AiAnalysisPromptTemplates {
         if (sqlResult != null) {
             lines.add("columns=" + AiPromptFormatters.formatColumns(sqlResult.columns()));
             lines.add("sampleRows=");
-            lines.add(AiPromptFormatters.formatRows(sqlResult.columns(), sqlResult.rows(), 5));
+            lines.add(PromptDataSanitizer.block(
+                    AiPromptFormatters.formatRows(sqlResult.columns(), sqlResult.rows(), 5), 4_000));
         }
         if (failedCode != null && !failedCode.isBlank()) {
             lines.add("");
@@ -85,15 +87,13 @@ public final class AiAnalysisPromptTemplates {
         return String.join("\n", List.of(
                 "You summarize Python statistical analysis output for business users.",
                 "Use the same language as the user question when possible.",
-                "Keep the answer concise (2-5 sentences)."
-        ));
+                "Keep the answer concise (2-5 sentences)."));
     }
 
     public static String renderPythonAnalyzeUserPrompt(String prompt, String pythonStdout) {
         return String.join("\n\n", List.of(
                 "User question: " + (prompt != null ? prompt : ""),
-                "Python stdout:\n" + (pythonStdout != null ? pythonStdout : "")
-        ));
+                "Python stdout:\n" + (pythonStdout != null ? pythonStdout : "")));
     }
 
     public static String renderStepRouteSystemPrompt() {

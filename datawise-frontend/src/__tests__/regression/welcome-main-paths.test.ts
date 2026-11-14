@@ -32,6 +32,23 @@ describe('welcome-main-paths', () => {
         assert.deepEqual(paths.map((path) => path.id), ['explore', 'ai'])
     })
 
+    it('filters main paths by workbench mode', () => {
+        const analyze = filterWelcomeMainPaths({
+            canCreateConnection: true,
+            canNewConsole: true,
+            canAi: true,
+            workbenchMode: 'analyze',
+        })
+        assert.deepEqual(analyze.map((path) => path.id), ['explore', 'sql', 'ai'])
+        const govern = filterWelcomeMainPaths({
+            canCreateConnection: true,
+            canNewConsole: true,
+            canAi: true,
+            workbenchMode: 'govern',
+        })
+        assert.deepEqual(govern.map((path) => path.id), ['sql'])
+    })
+
     it('filters common actions by capability', () => {
         const actions = filterWelcomeCommonActions({
             canCreateConnection: true,
@@ -43,6 +60,21 @@ describe('welcome-main-paths', () => {
         assert.deepEqual(
             actions.map((action) => action.id),
             ['newConnection', 'newConsole', 'import'],
+        )
+    })
+
+    it('filters common actions by workbench mode', () => {
+        const analyze = filterWelcomeCommonActions({
+            canCreateConnection: true,
+            canNewConsole: true,
+            canHistory: true,
+            canImport: true,
+            canAi: true,
+            workbenchMode: 'analyze',
+        })
+        assert.deepEqual(
+            analyze.map((action) => action.id),
+            ['newConnection', 'newConsole', 'history', 'ai'],
         )
     })
 

@@ -7,6 +7,7 @@ import org.apache.datawise.backend.model.ConnectionEntity;
 import org.apache.datawise.backend.model.SemanticMetricEntry;
 import org.apache.datawise.backend.database.context.ConnectionExecutionContext;
 import org.apache.datawise.backend.database.context.ConnectionExecutionContext.ResolvedConnectionWithDatabase;
+import org.apache.datawise.backend.security.UserContext;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
@@ -23,6 +24,7 @@ public class AiSchemaContextService {
     private final AiTableRelationService tableRelationService;
     private final AiTableTagService tableTagService;
     private final SemanticMetricStore semanticMetricStore;
+    private final AiSchemaCache schemaCache;
 
     public AiSchemaContextService(
             ConnectionExecutionContext connectionContext,
@@ -30,7 +32,8 @@ public class AiSchemaContextService {
             AiSchemaDdlLoader ddlLoader,
             AiTableRelationService tableRelationService,
             AiTableTagService tableTagService,
-            SemanticMetricStore semanticMetricStore
+            SemanticMetricStore semanticMetricStore,
+            AiSchemaCache schemaCache
     ) {
         this.connectionContext = connectionContext;
         this.jdbcMetadata = jdbcMetadata;
@@ -38,6 +41,7 @@ public class AiSchemaContextService {
         this.tableRelationService = tableRelationService;
         this.tableTagService = tableTagService;
         this.semanticMetricStore = semanticMetricStore;
+        this.schemaCache = schemaCache;
     }
 
     public AiSqlSchemaContext build(String connectionId, String database, String prompt) {
@@ -46,8 +50,18 @@ public class AiSchemaContextService {
 
     public List<String> listTableNames(String connectionId, String database) {
         ResolvedConnectionWithDatabase resolved = resolveScope(connectionId, database);
-        List<String> allTables = jdbcMetadata.listTables(resolved.entity(), resolved.database());
+        String tenantId = UserContext.getTenantId();
+        String cacheKey = AiSchemaCache.tablesKey(tenantId, connectionId, resolved.database());
+        List<String> allTables = schemaCache.getOrLoad(
+                cacheKey,
+                () -> jdbcMetadata.listTables(resolved.entity(), resolved.database())
+        );
         return tableTagService.filterTaggedTables(connectionId, resolved.database(), allTables);
+    }
+
+    /** Drop cached list/DDL for a connection (e.g. after DDL write success). */
+    public void invalidateSchemaCache(String connectionId) {
+        schemaCache.invalidateConnection(UserContext.getTenantId(), connectionId);
     }
 
     public AiSqlSchemaContext build(

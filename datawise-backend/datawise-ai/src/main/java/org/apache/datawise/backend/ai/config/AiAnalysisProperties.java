@@ -176,8 +176,18 @@ public class AiAnalysisProperties {
 
     public static class Llm {
         private int timeoutSeconds = 120;
-        private int maxAttempts = 2;
+        /** Default 1: avoid Thread.sleep backoff on Tomcat request threads. */
+        private int maxAttempts = 1;
         private long retryDelayMs = 400;
+        /** Consecutive provider failures before opening the circuit; {@code 0} disables. */
+        private int circuitFailureThreshold = 5;
+        /** How long the circuit stays open after the threshold is hit; {@code 0} disables. */
+        private long circuitOpenMs = 30_000L;
+        /**
+         * Max LLM calls in flight per process. Excess callers fail fast instead of piling
+         * up on retry sleeps and exhausting the request thread pool; {@code 0} = unlimited.
+         */
+        private int maxConcurrentCalls = 16;
 
         public int getTimeoutSeconds() {
             return Math.max(5, timeoutSeconds);
@@ -201,6 +211,30 @@ public class AiAnalysisProperties {
 
         public void setRetryDelayMs(long retryDelayMs) {
             this.retryDelayMs = retryDelayMs;
+        }
+
+        public int getCircuitFailureThreshold() {
+            return Math.max(0, circuitFailureThreshold);
+        }
+
+        public void setCircuitFailureThreshold(int circuitFailureThreshold) {
+            this.circuitFailureThreshold = circuitFailureThreshold;
+        }
+
+        public long getCircuitOpenMs() {
+            return Math.max(0L, circuitOpenMs);
+        }
+
+        public void setCircuitOpenMs(long circuitOpenMs) {
+            this.circuitOpenMs = circuitOpenMs;
+        }
+
+        public int getMaxConcurrentCalls() {
+            return Math.max(0, maxConcurrentCalls);
+        }
+
+        public void setMaxConcurrentCalls(int maxConcurrentCalls) {
+            this.maxConcurrentCalls = maxConcurrentCalls;
         }
     }
 }

@@ -127,7 +127,6 @@ async function saveJrePrefs() {
         })
         jreDirty.value = false
         jreMessage.value = t('settings.runtime.jreSavedRestart')
-        layout.showSuccessToast(t('settings.runtime.jreSaved'))
     } catch (err) {
         layout.showErrorToast(resolveCaughtApiErrorMessage(err, t, 'settings.runtime.jreSaveFailed'))
     } finally {
@@ -172,7 +171,12 @@ async function importOfflineSidecar() {
     lastError.value = null
     try {
         const result = await importRuntimeOfflineZip(path)
-        layout.showSuccessToast(result.message || t('settings.runtime.importOfflineDone'))
+        layout.notifyQuiet({
+          category: 'system',
+          titleKey: 'installDone',
+          bodyKey: 'installDone',
+          params: {detail: result.message || t('settings.runtime.importOfflineDone')},
+        })
         await refresh()
     } catch (err) {
         lastError.value = resolveCaughtApiErrorMessage(err, t, 'settings.runtime.importOfflineFailed')
@@ -202,7 +206,12 @@ async function installFamily(family: DriverFamilyGroup) {
     busyKey.value = `install:${family.id}`
     try {
         await installJdbcDriver(family.defaultMaven, family.driverClass)
-        layout.showSuccessToast(t('settings.runtime.driverInstalled'))
+        layout.notifyQuiet({
+          category: 'system',
+          titleKey: 'installDone',
+          bodyKey: 'installDone',
+          params: {detail: t('settings.runtime.driverInstalled')},
+        })
         await refresh()
     } catch (err) {
         layout.showErrorToast(resolveCaughtApiErrorMessage(err, t, 'settings.runtime.driverInstallFailed'))
@@ -232,7 +241,12 @@ async function removeVersion(version: DriverVersionEntry) {
                 await deleteCachedDriver(jar.relativePath)
             }
         }
-        layout.showSuccessToast(t('settings.runtime.driverDeleted'))
+        layout.notifyQuiet({
+          category: 'system',
+          titleKey: 'installDone',
+          bodyKey: 'installDone',
+          params: {detail: t('settings.runtime.driverDeleted')},
+        })
         await refresh()
     } catch (err) {
         layout.showErrorToast(resolveCaughtApiErrorMessage(err, t, 'settings.runtime.driverDeleteFailed'))
@@ -262,7 +276,12 @@ async function removeFamily(family: DriverFamilyGroup) {
                 await deleteCachedDriver(path)
             }
         }
-        layout.showSuccessToast(t('settings.runtime.driverDeleted'))
+        layout.notifyQuiet({
+          category: 'system',
+          titleKey: 'installDone',
+          bodyKey: 'installDone',
+          params: {detail: t('settings.runtime.driverDeleted')},
+        })
         await refresh()
     } catch (err) {
         layout.showErrorToast(resolveCaughtApiErrorMessage(err, t, 'settings.runtime.driverDeleteFailed'))

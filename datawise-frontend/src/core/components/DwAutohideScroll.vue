@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Thin host wrapper ¡ª SoT `@datawise/chrome` DwAutohideScroll (@deprecated alias). */
+/** Thin host wrapper â€” SoT `@datawise/chrome` DwAutohideScroll (@deprecated alias). */
 import {DwAutohideScroll as PackageDwAutohideScroll} from '@datawise/chrome'
 
 withDefaults(

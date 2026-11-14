@@ -54,7 +54,6 @@ async function copyConfig() {
     try {
         await navigator.clipboard.writeText(configJson.value)
         copied.value = true
-        toast.success(t('settings.mcp.copied'))
         window.setTimeout(() => {
             copied.value = false
         }, 1600)

@@ -65,13 +65,61 @@ function cellToString(value: unknown): string {
     return formatCellFullValue(value)
 }
 
-function escapeCsvCell(value: string): string {
-    if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`
+/** Excel/Sheets CSV injection triggers (OWASP); aligned with dbx `needs_formula_guard`. */
+const FORMULA_TRIGGER = new Set(['=', '+', '-', '@', '\t', '\r'])
+const EXCEL_SIGNIFICANT_DIGIT_LIMIT = 15
+
+function isExcelExactDecimalLiteral(value: string): boolean {
+    const bytes = value
+    const digits = bytes.startsWith('+') || bytes.startsWith('-') ? bytes.slice(1) : bytes
+    const validDigits = (part: string) => part.length > 0 && /^[0-9]+$/.test(part)
+    const dot = digits.indexOf('.')
+    const valid =
+        dot >= 0
+            ? validDigits(digits.slice(0, dot)) && validDigits(digits.slice(dot + 1))
+            : validDigits(digits)
+    if (!valid) return false
+    const significant = [...digits]
+        .filter((ch) => ch !== '.')
+        .join('')
+        .replace(/^0+/, '')
+    return significant.length <= EXCEL_SIGNIFICANT_DIGIT_LIMIT
+}
+
+function atSignBeginsExcelFormula(rest: string): boolean {
+    const first = rest.codePointAt(0)
+    return first != null && first <= 0x7f
+}
+
+/** Exported for unit tests. */
+export function needsFormulaGuard(value: string): boolean {
+    const rest = value.replace(/^ +/, '')
+    const first = rest[0]
+    if (!first || !FORMULA_TRIGGER.has(first)) return false
+    if (first === '-' && isExcelExactDecimalLiteral(rest.slice(1))) return false
+    if (first === '@' && !atSignBeginsExcelFormula(rest.slice(1))) return false
+    return true
+}
+
+/** Prefix `'` so spreadsheet apps treat the cell as text, not a formula. */
+export function applyFormulaGuard(value: string): string {
+    if (value.startsWith("'")) {
+        if (value[1] === "'" || needsFormulaGuard(value.slice(1))) return `'${value}`
+        return value
+    }
+    if (needsFormulaGuard(value)) return `'${value}`
     return value
 }
 
+function escapeCsvCell(value: string): string {
+    const guarded = applyFormulaGuard(value)
+    if (/[",\n\r]/.test(guarded)) return `"${guarded.replace(/"/g, '""')}"`
+    return guarded
+}
+
 function escapeTsvCell(value: string): string {
-    return value.replace(/\t/g, ' ').replace(/\r?\n/g, ' ')
+    const guarded = applyFormulaGuard(value)
+    return guarded.replace(/\t/g, ' ').replace(/\r?\n/g, ' ')
 }
 
 function escapeSqlString(value: string): string {

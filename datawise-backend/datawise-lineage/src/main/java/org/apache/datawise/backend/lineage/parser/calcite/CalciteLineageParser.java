@@ -10,11 +10,12 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * Phase 3 Calcite 解析器占位实现。
- * 启用 {@code lineage.calcite.enabled=true} 后注册；未实现前返回 FAILED，由 fallback 链继续。
+ * Calcite lakehouse parser placeholder — intentionally not on the default SPI chain.
+ * Only registers when {@code lineage.calcite.enabled=true}; until implemented it returns FAILED
+ * so the lakehouse/AST fallback continues. Prefer leaving the flag off in production.
  */
 @Component
-@ConditionalOnProperty(name = "lineage.calcite.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "lineage.calcite.enabled", havingValue = "true", matchIfMissing = false)
 public class CalciteLineageParser implements SqlLineageParser {
 
     private static final Set<String> OLAP = Set.of(

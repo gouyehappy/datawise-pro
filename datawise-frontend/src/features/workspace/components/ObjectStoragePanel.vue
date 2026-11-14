@@ -3,6 +3,7 @@ import {computed, onMounted, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {DwButton, DwInlineAlert, EmptyState} from '@/core/components'
 import {sqlApi} from '@/api'
+import {resolveCaughtApiErrorMessage} from '@/shared/api/http/api-error-message'
 import type {DbType} from '@/core/types'
 import {
     buildAdminMaintenanceSql,
@@ -54,10 +55,7 @@ async function load() {
     })
     rows.value = parseAdminStorageRows(result.rows ?? [], props.dbType)
   } catch (e) {
-    const detail = e instanceof Error ? e.message.trim() : ''
-    error.value = detail
-        ? `${t('shortcut.adminDiagnosis.loadFailed')}: ${detail}`
-        : t('shortcut.adminDiagnosis.loadFailed')
+    error.value = resolveCaughtApiErrorMessage(e, t, 'shortcut.adminDiagnosis.loadFailed')
   } finally {
     loading.value = false
   }

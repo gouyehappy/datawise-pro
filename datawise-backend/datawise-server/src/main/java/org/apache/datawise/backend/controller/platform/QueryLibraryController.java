@@ -13,8 +13,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api/platform/query-library")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_CONSOLE_SAVE)
 public class QueryLibraryController {
 
     private final QueryLibraryVersionService queryLibraryVersionService;

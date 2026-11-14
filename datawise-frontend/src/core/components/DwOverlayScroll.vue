@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Thin host wrapper ¡ª SoT `@datawise/chrome` DwOverlayScroll. */
+/** Thin host wrapper â€” SoT `@datawise/chrome` DwOverlayScroll. */
 import {DwOverlayScroll as PackageDwOverlayScroll} from '@datawise/chrome'
 
 withDefaults(

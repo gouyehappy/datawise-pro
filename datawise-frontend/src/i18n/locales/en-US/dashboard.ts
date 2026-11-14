@@ -189,6 +189,8 @@ export default {
         snapshotNote: 'Dashboard stores a snapshot of up to 500 rows. Refresh the chart by saving again from query results.',
         saveAction: 'Save to Dashboard',
         snapshotHint: 'Saved from query results',
+        sourceLineage: 'Lineage: {lineage}',
+        sourceOwner: 'Owner: {owner}',
         meta: '{rows} rows in snapshot',
         share: 'Share link',
         shareCopied: 'Read-only share link copied to clipboard',

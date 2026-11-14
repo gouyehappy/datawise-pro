@@ -4,13 +4,26 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.datawise.backend.common.support.ConnectionsXmlCodec;
 import org.apache.datawise.backend.common.support.XmlConfigSupport;
+import org.apache.datawise.backend.common.support.AtomicFileWrites;
 import org.apache.datawise.backend.configstore.AppConfigStore;
 import org.apache.datawise.backend.configstore.ConfigDirectoryService;
 import org.apache.datawise.backend.configstore.ConfigPaths;
 import org.apache.datawise.backend.configstore.ConnectionStore;
 import org.apache.datawise.backend.configstore.ProjectStore;
+import org.apache.datawise.backend.configstore.UserAiKnowledgeStore;
+import org.apache.datawise.backend.configstore.UserAiTableTagStore;
+import org.apache.datawise.backend.configstore.UserAnalysisCanvasStore;
 import org.apache.datawise.backend.configstore.UserAppConfigStore;
+import org.apache.datawise.backend.configstore.UserFederatedViewStore;
+import org.apache.datawise.backend.configstore.UserSchemaDriftMonitorStore;
+import org.apache.datawise.backend.configstore.UserSemanticMetricStore;
 import org.apache.datawise.backend.configstore.WorkspaceStore;
+import org.apache.datawise.backend.model.AiAnalysisCanvasEntry;
+import org.apache.datawise.backend.model.AiKnowledgeEntry;
+import org.apache.datawise.backend.model.AiTableTagEntry;
+import org.apache.datawise.backend.model.FederatedViewEntry;
+import org.apache.datawise.backend.model.SchemaDriftMonitorEntry;
+import org.apache.datawise.backend.model.SemanticMetricEntry;
 import org.apache.datawise.backend.configstore.app.AppConfigSections;
 import org.apache.datawise.backend.domain.ProjectConnectionMembership;
 import org.apache.datawise.backend.domain.ProjectIds;
@@ -84,6 +97,12 @@ public class ProfilePortabilityService {
     private final ProjectStore projectStore;
     private final ProjectService projectService;
     private final WorkspaceStore workspaceStore;
+    private final UserAiKnowledgeStore userAiKnowledgeStore;
+    private final UserSemanticMetricStore userSemanticMetricStore;
+    private final UserAiTableTagStore userAiTableTagStore;
+    private final UserAnalysisCanvasStore userAnalysisCanvasStore;
+    private final UserFederatedViewStore userFederatedViewStore;
+    private final UserSchemaDriftMonitorStore userSchemaDriftMonitorStore;
 
     private final ConcurrentHashMap<Long, AttemptWindow> passphraseAttempts = new ConcurrentHashMap<>();
 
@@ -98,7 +117,13 @@ public class ProfilePortabilityService {
                                      UserResourcePolicy resourcePolicy,
                                      @Autowired(required = false) ProjectStore projectStore,
                                      @Autowired(required = false) ProjectService projectService,
-                                     WorkspaceStore workspaceStore) {
+                                     WorkspaceStore workspaceStore,
+                                     @Autowired(required = false) UserAiKnowledgeStore userAiKnowledgeStore,
+                                     @Autowired(required = false) UserSemanticMetricStore userSemanticMetricStore,
+                                     @Autowired(required = false) UserAiTableTagStore userAiTableTagStore,
+                                     @Autowired(required = false) UserAnalysisCanvasStore userAnalysisCanvasStore,
+                                     @Autowired(required = false) UserFederatedViewStore userFederatedViewStore,
+                                     @Autowired(required = false) UserSchemaDriftMonitorStore userSchemaDriftMonitorStore) {
         this.connectionStore = connectionStore;
         this.userAppConfigStore = userAppConfigStore;
         this.appConfigStore = appConfigStore;
@@ -110,6 +135,12 @@ public class ProfilePortabilityService {
         this.projectStore = projectStore;
         this.projectService = projectService;
         this.workspaceStore = workspaceStore;
+        this.userAiKnowledgeStore = userAiKnowledgeStore;
+        this.userSemanticMetricStore = userSemanticMetricStore;
+        this.userAiTableTagStore = userAiTableTagStore;
+        this.userAnalysisCanvasStore = userAnalysisCanvasStore;
+        this.userFederatedViewStore = userFederatedViewStore;
+        this.userSchemaDriftMonitorStore = userSchemaDriftMonitorStore;
     }
 
     public byte[] exportProfile(ProfileExportRequest request) throws Exception {
@@ -122,10 +153,13 @@ public class ProfilePortabilityService {
                 && !domains.isSavedConsoles() && !domains.isSqlHistory()) {
             throw new IllegalArgumentException("NO_DOMAINS_SELECTED");
         }
+        boolean includeSecrets = request.resolvesIncludeSecrets();
         String passphrase = request.getPassphrase();
         String confirm = request.getConfirmPassphrase();
-        if (passphrase == null || !passphrase.equals(confirm)) {
-            throw new IllegalArgumentException("PASSPHRASE_MISMATCH");
+        if (includeSecrets) {
+            if (passphrase == null || !passphrase.equals(confirm)) {
+                throw new IllegalArgumentException("PASSPHRASE_MISMATCH");
+            }
         }
 
         Map<String, String> sealedSecrets = new LinkedHashMap<>();
@@ -161,11 +195,23 @@ public class ProfilePortabilityService {
             exportSqlHistory(userId, entries, counts);
         }
 
-        ProfilePassphraseCrypto.SealedSecrets sealed =
-                ProfilePassphraseCrypto.seal(passphrase, objectMapper.writeValueAsString(sealedSecrets));
-        entries.put("secrets/sealed.bin", sealed.sealedBin());
-        entries.put("secrets/kdf.json", objectMapper.writerWithDefaultPrettyPrinter()
-                .writeValueAsBytes(sealed.kdf()));
+        String secretMode;
+        if (includeSecrets) {
+            ProfilePassphraseCrypto.SealedSecrets sealed =
+                    ProfilePassphraseCrypto.seal(passphrase, objectMapper.writeValueAsString(sealedSecrets));
+            entries.put("secrets/sealed.bin", sealed.sealedBin());
+            entries.put("secrets/kdf.json", objectMapper.writerWithDefaultPrettyPrinter()
+                    .writeValueAsBytes(sealed.kdf()));
+            secretMode = ProfileManifest.SECRET_MODE_SEALED;
+            counts.put("sealedSecretFields", sealedSecrets.size());
+        } else {
+            counts.put("omittedSecretFields", sealedSecrets.size());
+            if (!sealedSecrets.isEmpty()) {
+                warnings.add("CREDENTIALS_OMITTED");
+            }
+            sealedSecrets.clear();
+            secretMode = ProfileManifest.SECRET_MODE_OMITTED;
+        }
 
         ProfileManifest manifest = new ProfileManifest();
         manifest.setKind(ProfileManifest.KIND);
@@ -174,14 +220,14 @@ public class ProfilePortabilityService {
         manifest.setExportedAt(Instant.now().toString());
         manifest.setTenantId(tenantId);
         manifest.setUserId(userId);
-        manifest.setSecretMode(ProfileManifest.SECRET_MODE_SEALED);
+        manifest.setSecretMode(secretMode);
         manifest.setDomains(domains.enabledDomainIds());
         manifest.setWarnings(warnings);
         manifest.setCounts(counts);
         entries.put("manifest.json", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest));
 
-        log.info("profile.exported userId={} tenantId={} domains={} secretCount={}",
-                userId, tenantId, domains.enabledDomainIds(), sealedSecrets.size());
+        log.info("profile.exported userId={} tenantId={} domains={} secretMode={}",
+                userId, tenantId, domains.enabledDomainIds(), secretMode);
         return ProfilePackageZipCodec.zipEntries(entries);
     }
 
@@ -245,6 +291,17 @@ public class ProfilePortabilityService {
             return result;
         }
 
+        if (isOmittedSecretMode(parsed.manifest())) {
+            result.setPassphraseOk(true);
+            result.setCounts(buildImportCounts(parsed, Map.of()));
+            result.setConflicts(detectConflicts(parsed, ProfileDomainOptions.defaults()));
+            if (parsed.manifest().getWarnings() != null) {
+                result.getWarnings().addAll(parsed.manifest().getWarnings());
+            }
+            result.getWarnings().add("CREDENTIALS_OMITTED_PACKAGE");
+            return result;
+        }
+
         try {
             Map<String, String> secrets = unsealSecrets(parsed, passphrase);
             result.setPassphraseOk(true);
@@ -285,13 +342,19 @@ public class ProfilePortabilityService {
             throw new IllegalArgumentException("SCHEMA_UNSUPPORTED");
         }
 
+        boolean omittedSecrets = isOmittedSecretMode(parsed.manifest());
         Map<String, String> secrets;
-        try {
-            secrets = unsealSecrets(parsed, passphrase);
-            clearPassphraseFailures(userId);
-        } catch (IllegalArgumentException ex) {
-            recordPassphraseFailure(userId);
-            throw ex;
+        if (omittedSecrets) {
+            secrets = Map.of();
+            warnings.add("CREDENTIALS_OMITTED_PACKAGE");
+        } else {
+            try {
+                secrets = unsealSecrets(parsed, passphrase);
+                clearPassphraseFailures(userId);
+            } catch (IllegalArgumentException ex) {
+                recordPassphraseFailure(userId);
+                throw ex;
+            }
         }
 
         Map<String, Object> counts = new LinkedHashMap<>();
@@ -300,7 +363,11 @@ public class ProfilePortabilityService {
 
         if (domains.isConnections() && parsed.files().containsKey("payload/connections.xml")) {
             resourcePolicy.requireWrite(UserResource.CONNECTIONS_XML_BULK);
-            int merged = importConnections(parsed.files().get("payload/connections.xml"), secrets, warnings);
+            int merged = importConnections(
+                    parsed.files().get("payload/connections.xml"),
+                    secrets,
+                    warnings,
+                    omittedSecrets);
             counts.put("connections", merged);
             applied.add(ProfileDomainOptions.CONNECTIONS);
         }
@@ -516,6 +583,10 @@ public class ProfilePortabilityService {
         }
         Document document = XmlConfigSupport.readDocumentFromString(xml);
         Map<String, Object> config = AppConfigSections.mapFromDocument(objectMapper, document);
+        // Device-local WebDAV / sync transport secrets must never leave this machine via profile packages.
+        if (config.remove(ConfigCloudSyncService.APP_SECTION) != null) {
+            warnings.add("CLOUD_SYNC_SETTINGS_EXCLUDED");
+        }
         extractAiSecrets(config, sealedSecrets, warnings);
         Document outDoc = XmlConfigSupport.newDocument();
         AppConfigSections.writeToDocument(objectMapper, outDoc, config);
@@ -614,7 +685,11 @@ public class ProfilePortabilityService {
         counts.put("sqlHistory", history.size());
     }
 
-    private int importConnections(byte[] xmlBytes, Map<String, String> secrets, List<String> warnings) throws Exception {
+    private int importConnections(
+                                  byte[] xmlBytes,
+                                  Map<String, String> secrets,
+                                  List<String> warnings,
+                                  boolean preserveLocalSecrets) throws Exception {
         ConnectionsXmlCodec.ParsedCatalog incoming = ConnectionsXmlCodec.readXml(
                 new String(xmlBytes, StandardCharsets.UTF_8),
                 objectMapper);
@@ -634,6 +709,16 @@ public class ProfilePortabilityService {
             connectionsById.put(connection.getId(), connection);
             if (connection.getName() != null && ownedByUser(connection.getUserId(), currentUserId)) {
                 nameToId.put(connection.getName().toLowerCase(Locale.ROOT), connection.getId());
+            }
+        }
+        if (preserveLocalSecrets) {
+            for (ConnectionEntity incomingConnection : incoming.connections()) {
+                if (incomingConnection == null || incomingConnection.getId() == null) {
+                    continue;
+                }
+                preserveBlankSecretsFromLocal(
+                        incomingConnection,
+                        connectionsById.get(incomingConnection.getId()));
             }
         }
 
@@ -938,9 +1023,51 @@ public class ProfilePortabilityService {
             if (bytes == null) {
                 continue;
             }
+            if (ConfigPaths.AI_KNOWLEDGE.equals(fileName) && userAiKnowledgeStore != null) {
+                List<AiKnowledgeEntry> entries = objectMapper.readValue(bytes, new TypeReference<>() {
+                });
+                userAiKnowledgeStore.replaceAll(userId, entries);
+                count++;
+                continue;
+            }
+            if ("semantic-metrics.json".equals(fileName) && userSemanticMetricStore != null) {
+                List<SemanticMetricEntry> entries = objectMapper.readValue(bytes, new TypeReference<>() {
+                });
+                userSemanticMetricStore.replaceAll(userId, entries);
+                count++;
+                continue;
+            }
+            if ("ai-table-tags.json".equals(fileName) && userAiTableTagStore != null) {
+                List<AiTableTagEntry> entries = objectMapper.readValue(bytes, new TypeReference<>() {
+                });
+                userAiTableTagStore.replaceAll(userId, entries);
+                count++;
+                continue;
+            }
+            if ("analysis-canvas.json".equals(fileName) && userAnalysisCanvasStore != null) {
+                List<AiAnalysisCanvasEntry> entries = objectMapper.readValue(bytes, new TypeReference<>() {
+                });
+                userAnalysisCanvasStore.replaceAll(userId, entries);
+                count++;
+                continue;
+            }
+            if ("federated-views.json".equals(fileName) && userFederatedViewStore != null) {
+                List<FederatedViewEntry> entries = objectMapper.readValue(bytes, new TypeReference<>() {
+                });
+                userFederatedViewStore.replaceAll(userId, entries);
+                count++;
+                continue;
+            }
+            if ("schema-drift-monitors.json".equals(fileName) && userSchemaDriftMonitorStore != null) {
+                List<SchemaDriftMonitorEntry> entries = objectMapper.readValue(bytes, new TypeReference<>() {
+                });
+                userSchemaDriftMonitorStore.replaceAll(userId, entries);
+                count++;
+                continue;
+            }
+            // Fallback only when the matching Store bean is unavailable.
             Path path = configDirectory.resolve(ConfigPaths.userTenantFile(userId, tenantId, fileName));
-            Files.createDirectories(path.getParent());
-            Files.write(path, bytes);
+            AtomicFileWrites.writeBytes(path, bytes);
             count++;
         }
         return count;
@@ -1017,8 +1144,7 @@ public class ProfilePortabilityService {
             if (Files.exists(target) && !preferImported) {
                 continue;
             }
-            Files.createDirectories(target.getParent());
-            Files.write(target, files.get(key));
+            AtomicFileWrites.writeBytes(target, files.get(key));
             writtenProjects.add(projectId);
         }
         projectCount = Math.max(added, writtenProjects.size());
@@ -1403,6 +1529,41 @@ public class ProfilePortabilityService {
         }
         counts.put("sealedSecretFields", secrets.size());
         return counts;
+    }
+
+    private static boolean isOmittedSecretMode(ProfileManifest manifest) {
+        return manifest != null && ProfileManifest.SECRET_MODE_OMITTED.equals(manifest.getSecretMode());
+    }
+
+    private static boolean isBlankSecret(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static void preserveBlankSecretsFromLocal(ConnectionEntity incoming, ConnectionEntity local) {
+        if (incoming == null || local == null) {
+            return;
+        }
+        if (isBlankSecret(incoming.getPassword())) {
+            incoming.setPassword(local.getPassword());
+        }
+        if (isBlankSecret(incoming.getSshPassword())) {
+            incoming.setSshPassword(local.getSshPassword());
+        }
+        if (isBlankSecret(incoming.getSshPrivateKey())) {
+            incoming.setSshPrivateKey(local.getSshPrivateKey());
+        }
+        if (isBlankSecret(incoming.getSshPassphrase())) {
+            incoming.setSshPassphrase(local.getSshPassphrase());
+        }
+        if (isBlankSecret(incoming.getJumpPrivateKey())) {
+            incoming.setJumpPrivateKey(local.getJumpPrivateKey());
+        }
+        if (isBlankSecret(incoming.getJumpPassphrase())) {
+            incoming.setJumpPassphrase(local.getJumpPassphrase());
+        }
+        if (isBlankSecret(incoming.getPluginSecrets())) {
+            incoming.setPluginSecrets(local.getPluginSecrets());
+        }
     }
 
     private Map<String, String> unsealSecrets(ParsedPackage parsed, String passphrase) throws Exception {

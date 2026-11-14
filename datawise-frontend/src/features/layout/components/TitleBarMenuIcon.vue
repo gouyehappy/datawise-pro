@@ -40,6 +40,10 @@ export type TitleBarMenuIconId =
     | 'tour'
     | 'sqlFile'
     | 'runtimeLog'
+    | 'plus'
+    | 'github'
+    | 'user'
+    | 'settingsBasic'
 
 const ICON_MAP: Record<TitleBarMenuIconId, DwIconName> = {
     database: 'database',
@@ -79,6 +83,10 @@ const ICON_MAP: Record<TitleBarMenuIconId, DwIconName> = {
     tour: 'tour',
     sqlFile: 'ddl',
     runtimeLog: 'editor',
+    plus: 'plus',
+    github: 'github',
+    user: 'user',
+    settingsBasic: 'settings-basic',
 }
 
 withDefaults(
@@ -96,7 +104,7 @@ withDefaults(
       :class="`titlebar-menu-icon--${size}`"
       :name="ICON_MAP[name]"
       :size="size"
-      :stroke-width="1.5"
+      :stroke-width="1.8"
   />
 </template>
 

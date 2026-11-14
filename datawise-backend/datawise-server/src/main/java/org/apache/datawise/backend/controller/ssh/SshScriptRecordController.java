@@ -1,7 +1,9 @@
 package org.apache.datawise.backend.controller.ssh;
 
 import org.apache.datawise.backend.common.ApiResponse;
+import org.apache.datawise.backend.domain.UserFeaturePermission;
 import org.apache.datawise.backend.model.SshScriptRecord;
+import org.apache.datawise.backend.security.RequiresFeature;
 import org.apache.datawise.backend.service.ssh.SshScriptRecordService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +19,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/ssh/script-records")
+@RequiresFeature(UserFeaturePermission.UTIL_TERMINAL)
 public class SshScriptRecordController {
 
     private final SshScriptRecordService scriptRecordService;

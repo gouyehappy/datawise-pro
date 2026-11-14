@@ -16,8 +16,13 @@ public class AiPythonProperties {
     private boolean enabled = true;
     /**
      * simulated | process | docker | k8s
+     * Default is simulated; process requires {@link #allowUnsafeProcessExecutor}=true.
      */
     private String executor = "simulated";
+    /**
+     * Explicit opt-in for host process executor (regex "sandbox" is not isolation).
+     */
+    private boolean allowUnsafeProcessExecutor = false;
     private boolean sandboxEnabled = true;
     private String pythonCommand = "python";
     private String pipCommand = "pip";
@@ -31,6 +36,8 @@ public class AiPythonProperties {
     private String k8sNamespace = "default";
     private String k8sImage = "";
     private String k8sMemory = "512Mi";
+    /** Kubernetes CPU limit (cores), aligned with Docker --cpus 1.0. */
+    private String k8sCpu = "1";
     private int timeoutSeconds = 30;
     private int maxRetries = 2;
 
@@ -51,7 +58,20 @@ public class AiPythonProperties {
     }
 
     public boolean isProcessExecutor() {
-        return "process".equalsIgnoreCase(executor);
+        return "process".equalsIgnoreCase(executor) && allowUnsafeProcessExecutor;
+    }
+
+    public boolean isAllowUnsafeProcessExecutor() {
+        return allowUnsafeProcessExecutor;
+    }
+
+    public void setAllowUnsafeProcessExecutor(boolean allowUnsafeProcessExecutor) {
+        this.allowUnsafeProcessExecutor = allowUnsafeProcessExecutor;
+    }
+
+    /** True when config asked for process but the unsafe opt-in flag is off. */
+    public boolean isProcessExecutorBlocked() {
+        return "process".equalsIgnoreCase(executor) && !allowUnsafeProcessExecutor;
     }
 
     public boolean isDockerExecutor() {
@@ -178,6 +198,14 @@ public class AiPythonProperties {
 
     public void setK8sMemory(String k8sMemory) {
         this.k8sMemory = k8sMemory;
+    }
+
+    public String getK8sCpu() {
+        return k8sCpu != null && !k8sCpu.isBlank() ? k8sCpu.trim() : "1";
+    }
+
+    public void setK8sCpu(String k8sCpu) {
+        this.k8sCpu = k8sCpu;
     }
 
     public int getTimeoutSeconds() {

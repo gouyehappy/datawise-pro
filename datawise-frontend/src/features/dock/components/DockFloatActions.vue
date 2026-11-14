@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Pop-out when docked (hover-chrome); pin / maximize / close when floated. */
+/** Pop-out when docked (panel hover-chrome, semi-visible by default); pin / maximize / close when floated. */
 import {useI18n} from 'vue-i18n'
 import {IconButton} from '@/core/components'
 import {DwIcon} from '@/core/icons'

@@ -49,8 +49,8 @@
     flex-shrink: 0;
     min-height: var(--dw-control-h);
     padding: var(--dw-space-4) var(--dw-space-4) var(--dw-space-4) var(--dw-space-7);
-    border-bottom: 1px solid var(--dw-border-light);
-    background: color-mix(in srgb, var(--dw-bg) 40%, var(--dw-bg-panel));
+    border-bottom: 1px solid color-mix(in srgb, var(--dw-panel-border) 80%, transparent);
+    background: transparent;
 }
 
 .tool-window__head-text {

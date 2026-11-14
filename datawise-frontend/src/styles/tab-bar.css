@@ -74,7 +74,9 @@
     flex-shrink: 0;
     width: var(--dw-icon-size-tab);
     height: var(--dw-icon-size-tab);
-    opacity: 0.85;
+    /* Keep icons denser than muted title text so type remains scannable. */
+    color: color-mix(in srgb, var(--dw-tab-inactive-text) 55%, var(--dw-text) 45%);
+    opacity: 1;
 }
 
 .dw-tab__icon svg,
@@ -85,8 +87,40 @@
     height: var(--dw-icon-size-tab);
 }
 
+.dw-tab:hover:not(.active) .dw-tab__icon {
+    color: color-mix(in srgb, var(--dw-tab-inactive-text) 35%, var(--dw-text) 65%);
+}
+
 .dw-tab.active .dw-tab__icon {
+    color: var(--dw-tab-active-text);
     opacity: 1;
+}
+
+/*
+ * Tab leading tones (gated by html[data-icon-tones=on] — see icon-tones.css).
+ * Hex + child .dw-icon-root so skin `.dw-tab.active { color }` cannot wash glyphs white.
+ */
+html[data-icon-tones='on'] .dw-tab__icon--sql,
+html[data-icon-tones='on'] .dw-tab.active .dw-tab__icon--sql {
+    color: #38bdf8;
+}
+
+html[data-icon-tones='on'] .dw-tab:hover:not(.active) .dw-tab__icon--sql {
+    color: #7dd3fc;
+}
+
+html[data-icon-tones='on'] .dw-tab__icon--terminal,
+html[data-icon-tones='on'] .dw-tab.active .dw-tab__icon--terminal {
+    color: #22d3ee;
+}
+
+html[data-icon-tones='on'] .dw-tab:hover:not(.active) .dw-tab__icon--terminal {
+    color: #67e8f9;
+}
+
+html[data-icon-tones='on'] .dw-tab__icon--messages,
+html[data-icon-tones='on'] .dw-tab.active .dw-tab__icon--messages {
+    color: #fbbf24;
 }
 
 .dw-tab__dirty {
@@ -327,21 +361,33 @@
     user-select: none;
 }
 
+body.is-workspace-tab-dragging {
+    cursor: default;
+    user-select: none;
+}
+
+/* IDEA: quiet placeholder slot while the chip / float preview follows */
 .dw-tab.is-tab-dragging {
-    opacity: 0.32;
-    transform: scale(0.97);
-    filter: saturate(0.7);
-    transition: opacity 0.14s ease, transform 0.14s ease, filter 0.14s ease;
+    opacity: 0.18;
+    filter: saturate(0.4);
+    color: transparent;
+    pointer-events: none;
+    transition: opacity 0.12s ease, filter 0.12s ease;
+}
+
+.dw-tab.is-tab-dragging .dw-tab__title,
+.dw-tab.is-tab-dragging .dw-tab__close,
+.dw-tab.is-tab-dragging .dw-tab__dirty {
+    visibility: hidden;
+}
+
+body.is-workspace-tab-float-away .dw-tab.is-tab-dragging {
+    opacity: 0.1;
 }
 
 .dw-tab.is-tab-floated {
     opacity: 0.82;
     box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--dw-accent) 70%, transparent);
-}
-
-.dw-tab-drag-ghost.is-float {
-    border-color: color-mix(in srgb, var(--dw-accent) 55%, transparent);
-    box-shadow: 0 8px 24px color-mix(in srgb, var(--dw-accent) 22%, transparent);
 }
 
 .dw-tab.is-tab-drop-before::before,
@@ -499,35 +545,36 @@
     outline: none;
 }
 
+/* Strip reorder chip */
 .dw-tab-drag-ghost {
     position: fixed;
     top: 0;
     left: 0;
     z-index: 10000;
     display: inline-flex;
-    flex-direction: column;
-    gap: 2px;
-    max-width: 240px;
-    padding: 6px 10px;
-    border: 1px solid color-mix(in srgb, var(--dw-accent) 55%, var(--dw-tab-active-border));
-    border-radius: var(--dw-control-radius);
-    background: color-mix(in srgb, var(--dw-tab-active-bg) 94%, var(--dw-accent));
+    flex-direction: row;
+    align-items: center;
+    gap: var(--dw-gap-xs, 4px);
+    max-width: 220px;
+    height: var(--dw-tab-pill-height);
+    padding: 0 var(--dw-space-3) 0 var(--dw-space-2);
+    border: 1px solid var(--dw-tab-active-border);
+    border-radius: var(--dw-tab-pill-radius);
+    background: color-mix(in srgb, var(--dw-tab-active-bg) 94%, transparent);
     color: var(--dw-tab-active-text);
-    font-size: var(--dw-font-size-tab);
+    font-size: var(--dw-tab-title-size, var(--dw-font-size-tab));
     pointer-events: none;
     white-space: nowrap;
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38),
-        0 0 0 1px color-mix(in srgb, var(--dw-accent) 22%, transparent);
-    animation: dw-tab-ghost-in 0.12s ease;
+    box-shadow:
+        0 1px 0 color-mix(in srgb, var(--dw-on-accent) 5%, transparent) inset,
+        0 4px 14px color-mix(in srgb, var(--dw-text) 22%, transparent);
+    opacity: 0.97;
+    will-change: transform;
 }
 
 .dw-tab-drag-ghost.is-merge {
     border-color: var(--dw-accent);
-    background: color-mix(in srgb, var(--dw-accent) 22%, var(--dw-tab-active-bg));
-}
-
-.dw-tab-drag-ghost.is-insert {
-    border-style: solid;
+    background: color-mix(in srgb, var(--dw-accent) 18%, var(--dw-tab-active-bg));
 }
 
 .dw-tab-drag-ghost.is-eject {
@@ -535,25 +582,148 @@
     border-color: var(--dw-accent);
 }
 
+.dw-tab-drag-ghost__icon {
+    flex-shrink: 0;
+    display: inline-flex;
+}
+
 .dw-tab-drag-ghost__title {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     font-weight: 500;
 }
 
 .dw-tab-drag-ghost__hint {
+    flex-shrink: 0;
+    margin-left: 2px;
+    padding: 0 5px;
+    border-radius: var(--dw-radius-pill, 999px);
+    background: color-mix(in srgb, var(--dw-accent) 22%, transparent);
     font-size: var(--dw-font-size-badge);
-    opacity: 0.82;
+    line-height: 1.4;
+    opacity: 0.95;
     letter-spacing: 0.02em;
 }
 
-@keyframes dw-tab-ghost-in {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 0.96;
-    }
+/*
+ * Undock preview — one window: tab chip sits in the title chrome (IDEA tear-off).
+ */
+.dw-tab-float-preview {
+    position: fixed;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    pointer-events: none;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--dw-accent) 40%, var(--dw-panel-border));
+    background: color-mix(in srgb, var(--dw-bg-panel) 82%, transparent);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--dw-text) 5%, transparent),
+        0 18px 44px color-mix(in srgb, #000 58%, transparent);
+    overflow: hidden;
+    opacity: 0.98;
+    transition:
+        left 0.12s cubic-bezier(0.2, 0.8, 0.2, 1),
+        top 0.12s cubic-bezier(0.2, 0.8, 0.2, 1),
+        width 0.14s cubic-bezier(0.2, 0.8, 0.2, 1),
+        height 0.14s cubic-bezier(0.2, 0.8, 0.2, 1),
+        border-color 0.12s ease,
+        background 0.12s ease,
+        box-shadow 0.12s ease;
+}
+
+.dw-tab-float-preview.is-snap {
+    border-color: color-mix(in srgb, var(--dw-accent) 68%, transparent);
+    background: color-mix(in srgb, var(--dw-accent) 12%, var(--dw-bg-panel));
+    box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--dw-accent) 18%, transparent),
+        0 14px 36px color-mix(in srgb, var(--dw-accent) 14%, transparent),
+        0 12px 30px color-mix(in srgb, #000 42%, transparent);
+}
+
+.dw-tab-float-preview.is-snap-top {
+    background: color-mix(in srgb, var(--dw-accent) 16%, var(--dw-bg-panel));
+}
+
+.dw-tab-float-preview__chrome {
+    display: flex;
+    align-items: flex-end;
+    flex-shrink: 0;
+    height: 34px;
+    padding: 0 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--dw-border-light) 85%, transparent);
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--dw-bg) 90%, var(--dw-bg-panel)) 0%,
+        color-mix(in srgb, var(--dw-bg-panel) 94%, transparent) 100%
+    );
+}
+
+.dw-tab-float-preview.is-snap .dw-tab-float-preview__chrome {
+    background: color-mix(in srgb, var(--dw-accent) 10%, var(--dw-bg-panel));
+    border-bottom-color: color-mix(in srgb, var(--dw-accent) 26%, transparent);
+}
+
+.dw-tab-float-preview__tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: min(200px, 72%);
+    height: 26px;
+    margin-bottom: -1px;
+    padding: 0 10px 0 8px;
+    border: 1px solid color-mix(in srgb, var(--dw-accent) 52%, var(--dw-tab-active-border));
+    border-bottom-color: color-mix(in srgb, var(--dw-bg-panel) 90%, transparent);
+    border-radius: 6px 6px 0 0;
+    background: color-mix(in srgb, var(--dw-bg-panel) 97%, var(--dw-accent));
+    color: var(--dw-tab-active-text);
+    box-shadow: 0 -1px 0 color-mix(in srgb, var(--dw-accent) 22%, transparent);
+}
+
+.dw-tab-float-preview__tab-icon {
+    flex-shrink: 0;
+    display: inline-flex;
+}
+
+.dw-tab-float-preview__tab-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--dw-tab-title-size, var(--dw-font-size-tab));
+    font-weight: 500;
+}
+
+.dw-tab-float-preview__body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 14px 16px 16px;
+    background: color-mix(in srgb, var(--dw-bg-editor) 78%, transparent);
+}
+
+.dw-tab-float-preview__body i {
+    display: block;
+    height: 2px;
+    border-radius: 1px;
+    background: color-mix(in srgb, var(--dw-text-muted) 16%, transparent);
+}
+
+.dw-tab-float-preview__body i:nth-child(1) { width: 42%; opacity: 0.9; }
+.dw-tab-float-preview__body i:nth-child(2) { width: 78%; }
+.dw-tab-float-preview__body i:nth-child(3) { width: 64%; }
+.dw-tab-float-preview__body i:nth-child(4) { width: 86%; }
+.dw-tab-float-preview__body i:nth-child(5) { width: 51%; opacity: 0.75; }
+
+.dw-tab-float-preview.is-snap .dw-tab-float-preview__body {
+    background: color-mix(in srgb, var(--dw-accent) 5%, var(--dw-bg-editor));
+}
+
+.dw-tab-float-preview.is-snap .dw-tab-float-preview__body i {
+    background: color-mix(in srgb, var(--dw-accent) 26%, transparent);
 }
 
 @keyframes dw-tab-drop-bar-in {

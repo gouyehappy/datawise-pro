@@ -72,7 +72,6 @@ export function useAiPromptPanel(
             visible.value = false
             // §1.2 Wave 35: first free-tier SQL success → unlock pitch.
             if (entitlement.noteAiSqlGenerateSuccess()) {
-                toast.success(t('pack.paywall.aiSqlSuccessToast'))
             }
         } catch (error) {
             toast.error(formatAiErrorMessage(error))

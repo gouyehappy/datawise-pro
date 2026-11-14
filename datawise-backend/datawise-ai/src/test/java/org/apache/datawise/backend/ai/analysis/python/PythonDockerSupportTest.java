@@ -21,6 +21,11 @@ class PythonDockerSupportTest {
         assertEquals("docker", command.get(0));
         assertTrue(command.contains("--network"));
         assertTrue(command.contains("none"));
+        assertTrue(command.contains("--read-only"));
+        assertTrue(command.contains("--cap-drop"));
+        assertTrue(command.contains("ALL"));
+        assertTrue(command.contains("--pids-limit"));
+        assertTrue(command.contains("--cpus"));
         assertTrue(command.contains("/tmp/work:/workspace:ro"));
         assertTrue(command.contains("python:3.12-slim"));
     }

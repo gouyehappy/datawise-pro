@@ -11,7 +11,9 @@ import java.util.regex.Pattern;
 public final class AiSqlSafetyChecker {
 
     private static final Pattern FORBIDDEN = Pattern.compile(
-            "\\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE|MERGE|GRANT|REVOKE|CALL|EXEC)\\b",
+            "\\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE|MERGE|GRANT|REVOKE|CALL|EXEC|"
+                    + "INTO\\s+OUTFILE|INTO\\s+DUMPFILE|FOR\\s+UPDATE|LOCK\\s+IN\\s+SHARE\\s+MODE|"
+                    + "LOAD\\s+DATA|COPY\\s+\\S+\\s+FROM|xp_cmdshell)\\b",
             Pattern.CASE_INSENSITIVE
     );
 

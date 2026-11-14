@@ -3,7 +3,7 @@
   "version": "5.0.0",
   "private": false,
   "type": "module",
-  "description": "DataWise code �� Monaco shell + code/log viewers with EditorSettingsPort SPI",
+  "description": "DataWise code — Monaco shell + code/log viewers with EditorSettingsPort SPI",
   "license": "MIT",
   "files": [
     "src",
@@ -26,7 +26,7 @@
     "@datawise/overlays": "5.0.0",
     "@datawise/theme": "5.0.0",
     "@datawise/ui": "5.0.0",
-    "monaco-editor": "^0.52.0",
+    "monaco-editor": "^0.55.1",
     "vue": "^3.5.0"
   },
   "peerDependenciesMeta": {
@@ -51,12 +51,15 @@
     "@datawise/overlays": "file:../overlays",
     "@datawise/theme": "file:../theme",
     "@datawise/ui": "file:../ui",
-    "monaco-editor": "^0.52.2",
+    "monaco-editor": "^0.55.1",
     "typescript": "~5.7.2",
-    "vue": "^3.5.13",
+    "vue": "^3.5.45",
     "vue-tsc": "^2.2.8"
   },
   "scripts": {
     "typecheck": "vue-tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "lucide-vue-next": "^0.577.0"
   }
 }

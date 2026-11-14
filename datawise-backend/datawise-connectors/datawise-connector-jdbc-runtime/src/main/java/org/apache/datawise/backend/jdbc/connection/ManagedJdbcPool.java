@@ -45,14 +45,13 @@ public final class ManagedJdbcPool {
 
     /** Creates and probes a new pool; caller owns eviction on failure after this returns. */
     public static ManagedJdbcPool create(
-            ConnectionEntity entity,
-            String fingerprint,
-            JdbcDriverLoader jdbcDriverLoader,
-            JdbcDriverDefaultsProvider defaultsProvider,
-            JdbcConnectionTargetResolver targetResolver,
-            MeterRegistry meterRegistry,
-            JdbcPoolProperties poolProperties
-    ) throws SQLException {
+                                         ConnectionEntity entity,
+                                         String fingerprint,
+                                         JdbcDriverLoader jdbcDriverLoader,
+                                         JdbcDriverDefaultsProvider defaultsProvider,
+                                         JdbcConnectionTargetResolver targetResolver,
+                                         MeterRegistry meterRegistry,
+                                         JdbcPoolProperties poolProperties) throws SQLException {
         if ("redis".equalsIgnoreCase(entity.getDbType())) {
             throw new SQLException("Redis connections do not use JDBC");
         }
@@ -66,8 +65,7 @@ public final class ManagedJdbcPool {
                 entity,
                 driverProperties,
                 pool.getConnectionTimeoutMs(),
-                Math.max(pool.getConnectionTimeoutMs() * 6L, 60_000L)
-        );
+                Math.max(pool.getConnectionTimeoutMs() * 6L, 60_000L));
         HikariConfig config = new HikariConfig();
         config.setPoolName("dw-" + entity.getId());
         int maximumPoolSize = JdbcPoolSizeResolver.resolveMaximumPoolSize(entity, pool);
@@ -78,19 +76,19 @@ public final class ManagedJdbcPool {
         config.setConnectionTimeout(pool.getConnectionTimeoutMs());
         config.setValidationTimeout(pool.getValidationTimeoutMs());
         config.setKeepaliveTime(pool.getKeepaliveTimeMs());
+        // Surface connection leaks with stack traces when a borrow exceeds 10s.
+        config.setLeakDetectionThreshold(10_000L);
 
         if (driver != null) {
             try {
                 JdbcDriverLoader.LoadedDriver loaded = jdbcDriverLoader.ensureDriver(
                         driver.mavenCoordinates(),
-                        driver.driverClass()
-                );
+                        driver.driverClass());
                 config.setDataSource(new ClassLoaderDriverDataSource(
                         loaded.driver(),
                         jdbcUrl,
                         driverProperties,
-                        loaded.classLoader()
-                ));
+                        loaded.classLoader()));
             } catch (IOException ex) {
                 throw new SQLException("Failed to load JDBC driver: " + ex.getMessage(), ex);
             }
@@ -106,7 +104,7 @@ public final class ManagedJdbcPool {
             }
         }
 
-        HikariJdbcPoolTuning.apply(config, entity);
+        HikariJdbcPoolTuning.apply(config, entity, pool);
         JdbcPoolMicrometerSupport.apply(config, meterRegistry);
 
         try {
@@ -125,8 +123,7 @@ public final class ManagedJdbcPool {
             SQLException sqlEx = unwrapSqlException(ex);
             throw new SQLException(
                     "Failed to initialize JDBC pool for connectionId=" + entity.getId() + ": " + sqlEx.getMessage(),
-                    sqlEx
-            );
+                    sqlEx);
         }
     }
 

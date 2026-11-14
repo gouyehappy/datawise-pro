@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
 /** Thin host shim → data-grid host wrapper (`@datawise/data-grid` SoT). */
 import Comp from '@/core/data-grid/components/DwDataGrid.vue'
 export default Comp

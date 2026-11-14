@@ -21,6 +21,7 @@ import org.apache.datawise.backend.ai.domain.AiAnalysisRunOutcome;
 import org.apache.datawise.backend.ai.domain.AiAnalysisStepEvent;
 import org.apache.datawise.backend.ai.domain.AiChatReply;
 import org.apache.datawise.backend.ai.domain.AiChatRequest;
+import org.apache.datawise.backend.ai.service.AgentWriteGrantService;
 import org.apache.datawise.backend.security.UserContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,10 +43,15 @@ public class AiAnalysisGraphRunner {
 
     private final CompiledGraph compiledGraph;
     private final AiAnalysisStepPolicy stepPolicy;
+    private final AgentWriteGrantService agentWriteGrantService;
 
-    public AiAnalysisGraphRunner(CompiledGraph aiAnalysisCompiledGraph, AiAnalysisStepPolicy stepPolicy) {
+    public AiAnalysisGraphRunner(
+            CompiledGraph aiAnalysisCompiledGraph,
+            AiAnalysisStepPolicy stepPolicy,
+            AgentWriteGrantService agentWriteGrantService) {
         this.compiledGraph = aiAnalysisCompiledGraph;
         this.stepPolicy = stepPolicy;
+        this.agentWriteGrantService = agentWriteGrantService;
     }
 
     public AiAnalysisRunOutcome run(
@@ -83,6 +89,11 @@ public class AiAnalysisGraphRunner {
         if (!request.approved()) {
             return AiAnalysisRunOutcome.completed(AiChatReply.chat("已取消 SQL 执行。"));
         }
+        // T-AI-1: Agent write must present a one-shot exact-SQL grant before resume executes.
+        agentWriteGrantService.consume(
+                request.grantId(),
+                request.confirmedSql(),
+                UserContext.requireUserId());
         long pipelineStart = System.currentTimeMillis();
         AiAnalysisInterruptPayload interrupt = new AiAnalysisInterruptPayload(
                 request.threadId(),

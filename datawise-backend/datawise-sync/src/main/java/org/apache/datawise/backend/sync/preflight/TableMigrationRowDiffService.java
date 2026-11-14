@@ -137,19 +137,30 @@ public class TableMigrationRowDiffService {
             if (samples.size() < MAX_SAMPLE_ITEMS
                     && !TableMigrationRowDiffSupport.KIND_UNCHANGED.equals(diff.kind())) {
                 Map<String, Object> pk = TableMigrationRowDiffSupport.extractPrimaryKey(sourceRow, pkColumns);
+                List<String> previewCols = TableMigrationRowDiffSupport.KIND_INSERT.equals(diff.kind())
+                        ? compareColumns
+                        : previewColumns(pkColumns, diff.changedColumns());
                 samples.add(new TableMigrationRowDiffItem(
                         diff.kind(),
                         pk,
                         diff.changedColumns(),
-                        projectColumns(sourceRow, previewColumns(pkColumns, diff.changedColumns())),
+                        projectColumns(sourceRow, previewCols),
                         targetRow == null
                                 ? null
-                                : projectColumns(targetRow, previewColumns(pkColumns, diff.changedColumns()))
+                                : projectColumns(targetRow, previewCols)
                 ));
             }
         }
 
         boolean truncated = Boolean.TRUE.equals(sourcePage.hasMore()) || sourceRows.size() >= sampleLimit;
+        List<TableMigrationRowDiffItem> sampleList = List.copyOf(samples);
+        String syncSql = TableMigrationRowDiffSupport.renderSampleSyncSql(
+                target.getDbType(),
+                targetDatabase,
+                tableName,
+                pkColumns,
+                sampleList
+        );
         return new TableMigrationRowDiffResult(
                 tableName,
                 pkColumns,
@@ -161,7 +172,8 @@ public class TableMigrationRowDiffService {
                 truncated
                         ? "Sample capped at " + sampleLimit + " source rows; counts are preview-only"
                         : null,
-                List.copyOf(samples)
+                sampleList,
+                syncSql
         );
     }
 

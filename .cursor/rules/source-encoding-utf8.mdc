@@ -1,0 +1,24 @@
+---
+description: All source text must be UTF-8 without BOM — never write GBK or U+FFFD
+alwaysApply: true
+---
+
+# Source encoding: UTF-8 (no BOM)
+
+仓库约定：**所有文本源文件使用 UTF-8、无 BOM、LF**（`*.ps1` 除外：UTF-8 BOM + CRLF）。
+
+## Do
+
+- 读写/生成 `.vue` / `.ts` / `.js` / `.css` / `.md` / `.json` / `.html` / `.java` 等时按 **UTF-8 无 BOM** 保存
+- 关闭钮、乘号、破折号用真正的 Unicode（`×` `—` `…`）或 SVG / 实体，写坏成 `` 禁止提交
+- 依赖根目录 `.editorconfig`、`.gitattributes`、`.vscode/settings.json`（`files.encoding=utf8`，`autoGuessEncoding=false`）
+
+## Don't
+
+- 不要用系统默认 ANSI/GBK 保存含中文的文件
+- 不要开启或依赖「自动猜测编码」改写工作区文件
+- 不要在注释/字符串里留下 U+FFFD（``）占位
+
+## Gate
+
+`scripts/sop/pre-commit-check.mjs` 的 **「源文件编码 UTF-8」** 会对暂存区文本做：合法 UTF-8、禁止 BOM（非 `.ps1`）、禁止 U+FFFD。

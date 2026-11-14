@@ -20,6 +20,7 @@ import {createHttpCommunityPluginsApi} from '@/shared/api/http/community-plugins
 import {useThemeStore} from '@/features/settings/stores/theme-store'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {backendHealth} from '@/features/layout/services/backend-health.service'
+import {resolveCaughtApiErrorMessage} from '@/shared/api/http/api-error-message'
 
 const props = defineProps<{
   /** Workspace tab id — used for CEF first-paint gating in WorkspaceArea. */
@@ -34,7 +35,7 @@ const props = defineProps<{
   active?: boolean
 }>()
 
-const {locale} = useI18n()
+const {t, locale} = useI18n()
 const themeStore = useThemeStore()
 const workspace = useWorkspaceStore()
 const iframeRef = ref<HTMLIFrameElement | null>(null)
@@ -227,7 +228,7 @@ async function refreshUiTicket() {
     // Safety: never leave the workspace stuck behind welcome / cover.
     scheduleReveal(2500)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = resolveCaughtApiErrorMessage(e, t, 'communityPlugin.openWorkbenchFailed')
     revealFrame()
   }
 }

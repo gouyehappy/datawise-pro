@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {useI18n} from 'vue-i18n'
 import type {TeamSharedAiSessionSummary} from '@/core/types'
 import DashboardWidgetFrame from '@/features/dashboard/components/DashboardWidgetFrame.vue'

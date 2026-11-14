@@ -175,7 +175,7 @@
 .module-shell__main .health-field {
     margin-top: clamp(14px, 1.6vmin, 16px);
     padding-top: clamp(14px, 1.6vmin, 16px);
-    border-top: 1px solid var(--dw-border-light);
+    border-top: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 /* ---- Basic settings (API server tweaks only) ---- */
@@ -257,7 +257,7 @@
     align-items: center;
     gap: var(--dw-gap);
     padding: var(--dw-pad-control-lg);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     border-radius: var(--dw-control-radius);
     font-size: var(--dw-text-xs);
     background: var(--dw-bg-panel);
@@ -265,7 +265,7 @@
 }
 
 .module-shell__main .watch-item:hover {
-    border-color: color-mix(in srgb, var(--dw-primary) 18%, var(--dw-border-light));
+    border-color: color-mix(in srgb, var(--dw-primary) 18%, var(--dw-panel-outline, var(--dw-border-light)));
     background: var(--dw-bg-muted);
 }
 
@@ -403,7 +403,7 @@
 
 .module-shell__main .jvm-panel {
     padding: var(--dw-space-7);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     border-radius: var(--dw-panel-radius);
     background: var(--dw-bg-panel);
 }
@@ -470,7 +470,7 @@
 .module-shell__main .entries-table td {
     padding: var(--dw-pad-control-lg);
     text-align: left;
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     vertical-align: top;
 }
 
@@ -605,7 +605,7 @@
 .module-shell__main .mock-note {
     padding: var(--dw-pad-control-lg);
     border-radius: var(--dw-panel-radius);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     background: var(--dw-bg-panel);
 }
 
@@ -647,7 +647,7 @@
 
 .module-shell__main .model-chip {
     padding: var(--dw-space-2) var(--dw-space-4);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     border-radius: var(--dw-control-radius-sm);
     background: var(--dw-bg-panel);
     color: var(--dw-text-secondary);
@@ -677,7 +677,7 @@
 .module-shell__main .slider-field {
     padding: var(--dw-pad-control-lg);
     border-radius: var(--dw-panel-radius);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     background: var(--dw-bg-panel);
 }
 
@@ -762,7 +762,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--dw-gap-lg);
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     flex: 1 1 auto;
     min-width: 0;
 }
@@ -857,7 +857,7 @@
     width: 100%;
     padding: clamp(13px, 1.5vmin, 15px) clamp(16px, 1.8vmin, 18px);
     border: none;
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     background: transparent;
     color: var(--dw-text);
     text-align: left;
@@ -866,7 +866,7 @@
 }
 
 .module-shell__main .ai-model-card:last-of-type {
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .module-shell__main .ai-model-card:hover {
@@ -902,7 +902,7 @@
     height: var(--dw-control-h);
     border-radius: var(--dw-control-radius);
     flex-shrink: 0;
-    border: 1px dashed color-mix(in srgb, var(--dw-primary) 35%, var(--dw-border-light));
+    border: 1px dashed color-mix(in srgb, var(--dw-primary) 35%, var(--dw-panel-outline, var(--dw-border-light)));
     background: color-mix(in srgb, var(--dw-primary) 6%, var(--dw-bg));
     color: var(--dw-primary);
 }
@@ -933,7 +933,7 @@
     height: var(--dw-control-h);
     border-radius: var(--dw-control-radius);
     flex-shrink: 0;
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     background: var(--dw-bg-muted);
     color: var(--dw-text-muted);
 }
@@ -941,7 +941,7 @@
 .module-shell__main .ai-model-card__icon.is-chat {
     color: var(--dw-primary);
     background: color-mix(in srgb, var(--dw-primary) 8%, var(--dw-bg));
-    border-color: color-mix(in srgb, var(--dw-primary) 20%, var(--dw-border-light));
+    border-color: color-mix(in srgb, var(--dw-primary) 20%, var(--dw-panel-outline, var(--dw-border-light)));
 }
 
 .module-shell__main .ai-model-card__icon.is-embedding {
@@ -978,7 +978,7 @@
     padding: 1px var(--dw-space-4);
     border-radius: var(--dw-radius-pill);
     background: var(--dw-bg-muted);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     color: var(--dw-text-muted);
     font-size: var(--dw-text-xs);
     font-weight: 600;
@@ -1038,7 +1038,7 @@
     justify-content: space-between;
     gap: var(--dw-space-8);
     padding: var(--dw-space-8);
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     background: var(--dw-bg-panel);
 }
 
@@ -1073,7 +1073,7 @@
 
 .module-shell__main .ai-edit-section {
     padding: var(--dw-space-7);
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .module-shell__main .ai-edit-section:last-child {
@@ -1204,7 +1204,7 @@
     margin: var(--dw-space-7) 0;
     padding: var(--dw-space-6) var(--dw-space-7);
     border-radius: var(--dw-control-radius);
-    border: 1px solid var(--dw-border-light);
+    border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
     background: color-mix(in srgb, var(--dw-primary) 4%, var(--dw-bg));
     cursor: pointer;
 }
@@ -1239,7 +1239,7 @@
     flex-wrap: wrap;
     margin-top: clamp(14px, 1.6vmin, 16px);
     padding-top: clamp(12px, 1.4vmin, 14px);
-    border-top: 1px solid var(--dw-border-light);
+    border-top: 1px solid var(--dw-panel-outline, var(--dw-border-light));
 }
 
 .module-shell__main .ai-action-row .field-hint {

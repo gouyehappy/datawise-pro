@@ -171,6 +171,12 @@ export function settingsSectionFeatureKey(section: SettingsSection): FeaturePerm
     return key
 }
 
+/** Settings section gate shared by layout shell and app-config (avoids Pinia cycle). */
+export function canOpenSettingsSection(section: SettingsSection): boolean {
+    if (!canAccessFeature(FeaturePermission.NavSettings)) return false
+    return canAccessFeature(settingsSectionFeatureKey(section))
+}
+
 export function titleBarMenuFeatureKey(id: string): FeaturePermissionKey | null {
     switch (id) {
         case 'new-connection':
@@ -359,6 +365,9 @@ export function paletteNavigationEntryAllowed(
     }
     if (entryId === 'action:data-catalog') {
         return can(FeaturePermission.WorkbenchExplorerSearch) && can(FeaturePermission.WorkbenchTabNew)
+    }
+    if (entryId === 'ai:ask') {
+        return canNav('ai')
     }
     if (entryId === 'action:bookmarks') {
         return can(FeaturePermission.ShortcutConsole)

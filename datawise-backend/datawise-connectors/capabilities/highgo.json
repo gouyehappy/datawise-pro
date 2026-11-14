@@ -1,0 +1,7 @@
+{
+  "dbType": "highgo",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": true
+  }
+}

@@ -27,8 +27,7 @@ public final class SqlServerCatalogSupport {
             "db_datareader",
             "db_datawriter",
             "db_denydatareader",
-            "db_denydatawriter"
-    );
+            "db_denydatawriter");
 
     private SqlServerCatalogSupport() {
     }
@@ -40,15 +39,45 @@ public final class SqlServerCatalogSupport {
     /**
      * Switches database context ({@code USE [catalog]}).
      * Always executes {@code USE} — JDBC {@link Connection#getCatalog()} is unreliable on SQL Server pools.
+     *
+     * <p>Requires a {@link JdbcConnectionScopeGuard.ScopedConnection} so the pre-switch database is
+     * restored when the connection returns to the pool (prevents cross-DB pollution). Prefer
+     * three-part names ({@link #listUserSchemaNames}) when the call site can avoid USE entirely.
      */
     public static void applyCatalog(Connection connection, String catalog) throws SQLException {
         if (connection == null || catalog == null || catalog.isBlank()) {
             return;
         }
+        if (!(connection instanceof JdbcConnectionScopeGuard.ScopedConnection scoped)) {
+            throw new SQLException(
+                    "SQL Server USE requires a scoped pooled connection so catalog can be restored on return"
+            );
+        }
         String quoted = DbType.SQLSERVER.quoteName(catalog.trim());
+        scoped.markScoped(currentDatabaseName(connection));
         try (Statement statement = connection.createStatement()) {
             statement.execute("USE " + quoted);
         }
+    }
+
+    /**
+     * Database this session is actually pointing at. {@link Connection#getCatalog()} keeps
+     * reporting the connection's initial catalog after a {@code USE}, so it cannot be used here.
+     *
+     * @return the current database, or {@code null} when it cannot be determined
+     */
+    private static String currentDatabaseName(Connection connection) {
+        try (
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery("SELECT DB_NAME()")) {
+            if (rs.next()) {
+                String name = rs.getString(1);
+                return name == null || name.isBlank() ? null : name.trim();
+            }
+        } catch (SQLException ignored) {
+            // Without a baseline the guard simply stays inert; the switch still happens.
+        }
+        return null;
     }
 
     public static String defaultSchema(Connection connection) throws SQLException {
@@ -56,11 +85,19 @@ public final class SqlServerCatalogSupport {
         return current != null && !current.isBlank() ? current.trim() : "dbo";
     }
 
+    /**
+     * Lists user schemas in {@code catalog}. Uses a three-part name instead of {@code USE} so the
+     * call leaves the connection's database context untouched.
+     */
     public static List<String> listUserSchemaNames(Connection connection, String catalog) throws SQLException {
-        applyCatalog(connection, catalog);
+        String catalogPrefix = catalog == null || catalog.isBlank()
+                ? ""
+                : DbType.SQLSERVER.quoteName(catalog.trim()) + ".";
         List<String> schemas = new ArrayList<>();
-        try (Statement statement = connection.createStatement();
-             ResultSet rs = statement.executeQuery("SELECT name FROM sys.schemas ORDER BY name")) {
+        try (
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(
+                        "SELECT name FROM " + catalogPrefix + "sys.schemas ORDER BY name")) {
             while (rs.next()) {
                 String name = rs.getString(1);
                 if (name == null || name.isBlank() || isSystemSchema(name)) {
@@ -79,10 +116,9 @@ public final class SqlServerCatalogSupport {
      * Explorer metadata listers: {@code catalog} + optional {@code schema} with {@code USE [catalog]} applied.
      */
     public static SqlServerMetadataScope resolveListingScope(
-            Connection connection,
-            String catalog,
-            String schema
-    ) throws SQLException {
+                                                             Connection connection,
+                                                             String catalog,
+                                                             String schema) throws SQLException {
         String database = schema != null && !schema.isBlank()
                 ? qualifyDatabase(catalog, schema)
                 : catalog;
@@ -98,12 +134,11 @@ public final class SqlServerCatalogSupport {
      * Table/view metadata: API {@code database} scope (e.g. {@code mydb.dbo}) with catalog fallback and relation hint.
      */
     public static SqlServerMetadataScope resolveRelationScope(
-            Connection connection,
-            String database,
-            String fallbackCatalog,
-            String relationName,
-            boolean viewHint
-    ) throws SQLException {
+                                                              Connection connection,
+                                                              String database,
+                                                              String fallbackCatalog,
+                                                              String relationName,
+                                                              boolean viewHint) throws SQLException {
         SqlServerMetadataScope scope = SqlServerMetadataScope.parse(database);
         if (!scope.hasCatalog() && fallbackCatalog != null && !fallbackCatalog.isBlank()) {
             scope = new SqlServerMetadataScope(fallbackCatalog.trim(), scope.schema());
@@ -120,8 +155,7 @@ public final class SqlServerCatalogSupport {
         return resolveRelationSchema(connection, relationName, false);
     }
 
-    public static String resolveRelationSchema(Connection connection, String relationName, boolean view)
-            throws SQLException {
+    public static String resolveRelationSchema(Connection connection, String relationName, boolean view) throws SQLException {
         if (connection == null || relationName == null || relationName.isBlank()) {
             return "dbo";
         }
@@ -162,16 +196,14 @@ public final class SqlServerCatalogSupport {
     }
 
     public static String qualifyTable(
-            Connection connection,
-            String database,
-            String tableName,
-            boolean view
-    ) throws SQLException {
+                                      Connection connection,
+                                      String database,
+                                      String tableName,
+                                      boolean view) throws SQLException {
         SqlServerMetadataScope scope = resolveRelationScope(connection, database, null, tableName, view);
         return DbType.quoteQualifiedTable(
                 DbType.SQLSERVER.id(),
                 qualifyDatabase(scope.catalog(), scope.schema()),
-                tableName
-        );
+                tableName);
     }
 }

@@ -122,6 +122,22 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <configuration>
+                    <!--
+                      Community-plugin tests install real plugin jars under
+                      target/classes/community-plugin-fixtures. JaCoCo then tries to analyse the
+                      multi-release classes inside those jars and aborts the report with
+                      "Can't add different class with same name". They are test fixtures, not
+                      application code, so keep them out of coverage analysis.
+                    -->
+                    <excludes>
+                        <exclude>community-plugin-fixtures/**</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>

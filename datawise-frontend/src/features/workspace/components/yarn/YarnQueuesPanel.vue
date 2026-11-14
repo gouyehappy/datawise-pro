@@ -80,11 +80,10 @@ async function applyQueueChanges() {
   saving.value = true
   error.value = null
   try {
-    const result = await explorerApi.updateYarnQueue(props.connectionId, {
+    await explorerApi.updateYarnQueue(props.connectionId, {
       queueName: selectedQueueName.value,
       params,
     })
-    layout.showSuccessToast(result.message ?? t('explorer.yarnQueues.updateSuccess'))
     await refresh()
   } catch (err) {
     error.value = resolveCaughtApiErrorMessage(err, t, 'explorer.yarnQueues.updateFailed')
@@ -99,10 +98,9 @@ async function removeSelectedQueue() {
   saving.value = true
   error.value = null
   try {
-    const result = await explorerApi.removeYarnQueue(props.connectionId, {
+    await explorerApi.removeYarnQueue(props.connectionId, {
       queueName: selectedQueueName.value,
     })
-    layout.showSuccessToast(result.message ?? t('explorer.yarnQueues.removeSuccess'))
     selectedQueueName.value = null
     await refresh()
   } catch (err) {

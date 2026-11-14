@@ -115,12 +115,17 @@ export function useExplorerRestoreWizard(deps: ExplorerRestoreWizardDeps) {
             })
             if (ok) {
                 showRestoreWizard.value = false
-                layout.showSuccessToast(
-                    t(resolveRestoreWizardMessageKey('done'), {
-                        name: file.fileName,
-                        count: file.preflight.statementCount,
-                    }),
-                )
+                layout.notifyQuiet({
+                    category: 'workspace',
+                    titleKey: 'operationDone',
+                    bodyKey: 'operationDone',
+                    params: {
+                        detail: t(resolveRestoreWizardMessageKey('done'), {
+                            name: file.fileName,
+                            count: file.preflight.statementCount,
+                        }),
+                    },
+                })
             } else {
                 restoreWizardActionError.value = t(resolveRestoreWizardMessageKey('failed'))
             }
@@ -145,7 +150,12 @@ export function useExplorerRestoreWizard(deps: ExplorerRestoreWizardDeps) {
                 sql: file.sql,
             })
             showRestoreWizard.value = false
-            layout.showSuccessToast(t(resolveExplorerFeatureMessageKey('productionApprovalSubmitted')))
+            layout.notifyQuiet({
+              category: 'workspace',
+              titleKey: 'approvalDone',
+              bodyKey: 'approvalDone',
+              params: {detail: t(resolveExplorerFeatureMessageKey('productionApprovalSubmitted'))},
+            })
         } catch (error) {
             restoreWizardApprovalError.value =
                 resolveCaughtApiErrorMessage(error, t, 'console.productionApproval.submitFailed')

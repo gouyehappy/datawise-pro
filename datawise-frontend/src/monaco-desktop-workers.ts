@@ -1,8 +1,12 @@
 /**
- * Desktop (JCEF) Monaco worker shim — default worker URLs are unreliable under
- * the host bridge / non-http origins, so use Vite-bundled Worker constructors.
+ * Monaco worker shim — Vite-bundled Worker constructors.
+ * Used for desktop (JCEF / file: / app:) and browser so CSP worker-src stays on
+ * blob:/self without relying on Monaco's default CDN-style worker URLs.
+ *
+ * Note: bundling workers does NOT remove the need for script-src 'unsafe-eval';
+ * Monaco's tokenizer still uses new Function on the main thread, and Vite HMR
+ * needs eval in development.
  */
-import {readDesktopBridge} from '@/features/layout/services/desktop-bridge'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
@@ -17,14 +21,7 @@ declare global {
     }
 }
 
-function needsMonacoWorkerShim(): boolean {
-    if (typeof window === 'undefined') return false
-    if (readDesktopBridge()) return true
-    const protocol = window.location.protocol
-    return protocol === 'file:' || protocol === 'app:'
-}
-
-if (needsMonacoWorkerShim()) {
+if (typeof window !== 'undefined' && !window.MonacoEnvironment) {
     window.MonacoEnvironment = {
         getWorker(_workerId, label) {
             if (label === 'json') return new jsonWorker()

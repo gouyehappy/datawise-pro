@@ -30,8 +30,14 @@ import {
   getSqlEditorFontSize,
   getSqlEditorTheme,
   getSqlEditorFormatterSettings,
+  getSqlEditorColumnDiagnosticsMode,
+  getSqlEditorVimModeEnabled,
   sqlEditorSettingsVersion,
 } from '@sql-editor/config/snippets/cache'
+import {
+  isLargeSqlDocument,
+  shouldRunLiveColumnDiagnostics,
+} from '@sql-editor/constants/large-document'
 import {applySqlEditorMonacoTheme, ensureSqlEditorMonacoThemes} from '@sql-editor/monaco/themes'
 import {
   planAiBlockInsert,
@@ -83,6 +89,7 @@ const emit = defineEmits<{
 
 const globalConfig = inject(SQL_EDITOR_CONFIG_KEY, null)
 const containerRef = ref<HTMLElement>()
+const vimStatusRef = ref<HTMLElement>()
 const uiTone = computed(() => resolveEditorUiTone(resolveTheme()))
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
 /** Body-level host so fixed suggest widgets are not skewed by ancestor transform/filter. */
@@ -101,6 +108,9 @@ let initRafInner = 0
 let diagnosticTimer: ReturnType<typeof setTimeout> | null = null
 let statementFrameTimer: ReturnType<typeof setTimeout> | null = null
 let formatAsYouTypeBusy = false
+let vimModeController: {dispose: () => void} | null = null
+let vimStatusNode: HTMLDivElement | null = null
+let vimAttachGeneration = 0
 
 const COLUMN_DIAGNOSTIC_OWNER = 'sql-column-diagnostics'
 
@@ -128,6 +138,9 @@ function resolveMonacoOptions(): monaco.editor.IStandaloneEditorConstructionOpti
   merged.foldingHighlight = folding
   merged.showFoldingControls = folding ? 'mouseover' : 'never'
   merged.glyphMargin = true
+  if (getSqlEditorVimModeEnabled()) {
+    merged.lineNumbers = 'relative'
+  }
   return merged
 }
 
@@ -293,6 +306,14 @@ function applyStatementFrame() {
     clearStatementFrame()
     return
   }
+  // Large docs: skip statement frame re-index (same gate as column diagnostics auto).
+  if (
+      getSqlEditorColumnDiagnosticsMode() === 'auto'
+      && isLargeSqlDocument(model.getValue(), model.getLineCount())
+  ) {
+    clearStatementFrame()
+    return
+  }
   const statement = resolveStatementAtEditorCursor()
   if (!statement?.sql.trim()) {
     clearStatementFrame()
@@ -329,12 +350,21 @@ function scheduleColumnDiagnostics() {
 function applyColumnDiagnostics() {
   const model = editor?.getModel()
   if (!model || props.readonly || props.preview) return
+  const text = model.getValue()
+  if (!shouldRunLiveColumnDiagnostics(
+      getSqlEditorColumnDiagnosticsMode(),
+      text,
+      model.getLineCount(),
+  )) {
+    clearColumnDiagnostics()
+    return
+  }
   const schema = getActiveSqlEditorRuntime().getSchema()
   if (!schema.tables.length) {
     clearColumnDiagnostics()
     return
   }
-  const diagnostics = collectSqlColumnDiagnostics(model.getValue(), schema)
+  const diagnostics = collectSqlColumnDiagnostics(text, schema)
   monaco.editor.setModelMarkers(
       model,
       COLUMN_DIAGNOSTIC_OWNER,
@@ -347,6 +377,55 @@ function applyColumnDiagnostics() {
         endColumn: item.endColumn,
       })),
   )
+}
+
+function disposeVimMode() {
+  vimAttachGeneration += 1
+  try {
+    vimModeController?.dispose()
+  } catch {
+    // ignore dispose races
+  }
+  vimModeController = null
+  if (vimStatusNode) {
+    vimStatusNode.textContent = ''
+    vimStatusNode.hidden = true
+  }
+}
+
+async function syncVimMode() {
+  if (!editor || props.preview || props.readonly) {
+    disposeVimMode()
+    return
+  }
+  const enabled = getSqlEditorVimModeEnabled()
+  if (!enabled) {
+    disposeVimMode()
+    editor.updateOptions({lineNumbers: resolveMonacoOptions().lineNumbers ?? 'on'})
+    return
+  }
+  if (vimModeController) {
+    editor.updateOptions({lineNumbers: 'relative'})
+    if (vimStatusNode) vimStatusNode.hidden = false
+    return
+  }
+  const generation = ++vimAttachGeneration
+  try {
+    const mod = await import('monaco-vim')
+    if (generation !== vimAttachGeneration || !editor || !getSqlEditorVimModeEnabled()) {
+      return
+    }
+    const statusEl = vimStatusRef.value
+    if (statusEl) {
+      vimStatusNode = statusEl
+      statusEl.hidden = false
+    }
+    vimModeController = mod.initVimMode(editor, statusEl ?? null)
+    editor.updateOptions({lineNumbers: 'relative'})
+  } catch (err) {
+    console.warn('[sql-editor] monaco-vim failed to load', err)
+    disposeVimMode()
+  }
 }
 
 function setErrorLine(lineNumber: number | null) {
@@ -783,6 +862,7 @@ function mountEditor() {
   emitCursorChange()
   scheduleColumnDiagnostics()
   scheduleStatementFrame()
+  void syncVimMode()
 }
 
 watch(
@@ -809,6 +889,9 @@ watch(
       if (editor && !props.preview && !getSqlEditorShowSuggestDetails()) {
         applySqlSuggestDetailsSetting(editor, false)
       }
+      scheduleColumnDiagnostics()
+      scheduleStatementFrame()
+      void syncVimMode()
     },
 )
 
@@ -847,6 +930,7 @@ onBeforeUnmount(() => {
   if (statementFrameTimer) clearTimeout(statementFrameTimer)
   clearColumnDiagnostics()
   clearStatementFrame()
+  disposeVimMode()
   suggestDetailsDisposable?.dispose()
   suggestWidthDisposable?.dispose()
   suggestAcceptDisposable?.dispose()
@@ -884,29 +968,58 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="containerRef" class="sql-monaco-host" :data-tone="uiTone"/>
+  <div class="sql-monaco-shell" :data-tone="uiTone">
+    <div ref="containerRef" class="sql-monaco-host"/>
+    <div
+        ref="vimStatusRef"
+        class="sql-monaco-vim-status"
+        hidden
+        aria-live="polite"
+    />
+  </div>
 </template>
 
 <style scoped>
-.sql-monaco-host {
+.sql-monaco-shell {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   min-height: 120px;
+}
+
+.sql-monaco-host {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
   /* 与 DwOverlayScroll / --dw-scrollbar-* 同色同宽，避免 Monaco 专用淡色显得更细 */
   --sql-scrollbar-thumb: var(--dw-overlay-sb-thumb, var(--dw-scrollbar-thumb, color-mix(in srgb, #94a3b8 50%, transparent)));
   --sql-scrollbar-thumb-hover: var(--dw-overlay-sb-thumb-hover, var(--dw-scrollbar-thumb-hover, color-mix(in srgb, #94a3b8 72%, transparent)));
   --sql-scrollbar-track: var(--dw-overlay-sb-track, var(--dw-scrollbar-track, transparent));
 }
 
-.sql-monaco-host[data-tone='dark'] {
+.sql-monaco-shell[data-tone='dark'] .sql-monaco-host {
   --sql-scrollbar-thumb: var(--dw-overlay-sb-thumb, var(--dw-scrollbar-thumb, color-mix(in srgb, #94a3b8 72%, #000)));
   --sql-scrollbar-thumb-hover: var(--dw-overlay-sb-thumb-hover, var(--dw-scrollbar-thumb-hover, color-mix(in srgb, #94a3b8 88%, #000)));
 }
 
-.sql-monaco-host[data-tone='light'] {
+.sql-monaco-shell[data-tone='light'] .sql-monaco-host {
   --sql-scrollbar-thumb: var(--dw-overlay-sb-thumb, var(--dw-scrollbar-thumb, color-mix(in srgb, #94a3b8 50%, transparent)));
   --sql-scrollbar-thumb-hover: var(--dw-overlay-sb-thumb-hover, var(--dw-scrollbar-thumb-hover, color-mix(in srgb, #94a3b8 72%, transparent)));
+}
+
+.sql-monaco-vim-status {
+  flex: 0 0 auto;
+  min-height: 22px;
+  padding: 2px 10px;
+  font-family: var(--dw-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dw-text-secondary, #9ca3af);
+  background: color-mix(in srgb, var(--dw-surface-raised, #1f2937) 88%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--dw-border, #374151) 80%, transparent);
 }
 </style>
 

@@ -20,6 +20,7 @@ import type {AiAnalysisConfigurableStepId} from '@/shared/api/ai.types'
 import {SHORTCUT_DEFINITIONS} from '@/core/shortcuts/definitions'
 import type {ShortcutPreferences} from '@/core/shortcuts/types'
 import {SHORTCUT_RAIL_NAV_DEFS} from '@/shared/config/shortcut-rail-nav'
+import {normalizeWorkbenchMode} from '@/shared/config/workbench-mode'
 import {
     DEFAULT_EDITOR_SETTINGS,
     EDITOR_FONT_SIZE_MAX,
@@ -248,6 +249,7 @@ export function normalizeLayout(raw: Partial<LayoutPreferences> | undefined): La
         terminalHeight: clamp(raw?.terminalHeight, base.terminalHeight, 160, 520),
         lastModule,
         lastShortcutPanel,
+        workbenchMode: normalizeWorkbenchMode(raw?.workbenchMode),
         openHttpLinksIn: raw?.openHttpLinksIn === 'system' ? 'system' : 'builtin',
         dockPlacement: raw?.dockPlacement == null
             ? (base.dockPlacement ?? null)

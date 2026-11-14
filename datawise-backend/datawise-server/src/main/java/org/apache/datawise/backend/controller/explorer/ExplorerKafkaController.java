@@ -98,9 +98,11 @@ import org.apache.datawise.backend.domain.YarnNodesResultDto;
 import org.apache.datawise.backend.domain.YarnQueuesResultDto;
 import org.apache.datawise.backend.domain.TreeNode;
 import org.apache.datawise.backend.domain.TreePayload;
+import org.apache.datawise.backend.security.ExplorerFeatureGate;
 import org.apache.datawise.backend.security.HeadlessSqlAuth;
-import org.apache.datawise.backend.server.pack.EntitlementService;
-import org.apache.datawise.backend.service.FeaturePermissionAccess;
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresExplorerGate;
+import org.apache.datawise.backend.security.RequiresFeature;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -123,14 +125,9 @@ import java.util.Map;
 public class ExplorerKafkaController {
 
     private final ExplorerKafkaService kafkaService;
-    private final FeaturePermissionAccess featurePermissionAccess;
 
-    public ExplorerKafkaController(
-            ExplorerKafkaService kafkaService,
-            FeaturePermissionAccess featurePermissionAccess
-    ) {
+    public ExplorerKafkaController(ExplorerKafkaService kafkaService) {
         this.kafkaService = kafkaService;
-        this.featurePermissionAccess = featurePermissionAccess;
     }
 
         @GetMapping("/connections/{connectionId}/kafka/topics")
@@ -150,11 +147,11 @@ public class ExplorerKafkaController {
         }
 
         @PostMapping("/connections/{connectionId}/kafka/topics")
+        @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
         public ApiResponse<KafkaMutationResultDto> createKafkaTopic(
                 @PathVariable String connectionId,
                 @RequestBody CreateKafkaTopicRequest request
         ) {
-            featurePermissionAccess.requireExplorerCatalogMutation();
             return ApiResponse.ok(kafkaService.createTopic(
                     connectionId,
                     request.name(),
@@ -171,22 +168,22 @@ public class ExplorerKafkaController {
             return ApiResponse.ok(kafkaService.describeTopic(connectionId, topic));
         }
 
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_DANGEROUS)
         @DeleteMapping("/connections/{connectionId}/kafka/topics/{topic}")
         public ApiResponse<KafkaMutationResultDto> deleteKafkaTopic(
                 @PathVariable String connectionId,
                 @PathVariable String topic
         ) {
-            featurePermissionAccess.requireExplorerContextDangerous();
             return ApiResponse.ok(kafkaService.deleteTopic(connectionId, topic));
         }
 
         @PutMapping("/connections/{connectionId}/kafka/topics/{topic}/partitions")
+        @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
         public ApiResponse<KafkaMutationResultDto> increaseKafkaTopicPartitions(
                 @PathVariable String connectionId,
                 @PathVariable String topic,
                 @RequestBody IncreaseKafkaPartitionsRequest request
         ) {
-            featurePermissionAccess.requireExplorerCatalogMutation();
             return ApiResponse.ok(kafkaService.increasePartitions(connectionId, topic, request.partitions()));
         }
 
@@ -199,12 +196,12 @@ public class ExplorerKafkaController {
         }
 
         @PutMapping("/connections/{connectionId}/kafka/topics/{topic}/configs")
+        @RequiresExplorerGate(ExplorerFeatureGate.CATALOG_MUTATION)
         public ApiResponse<KafkaMutationResultDto> updateKafkaTopicConfigs(
                 @PathVariable String connectionId,
                 @PathVariable String topic,
                 @RequestBody UpdateKafkaTopicConfigsRequest request
         ) {
-            featurePermissionAccess.requireExplorerCatalogMutation();
             return ApiResponse.ok(kafkaService.updateTopicConfigs(
                     connectionId,
                     topic,
@@ -227,13 +224,13 @@ public class ExplorerKafkaController {
             ));
         }
     
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
         @PostMapping("/connections/{connectionId}/kafka/topics/{topic}/messages")
         public ApiResponse<KafkaProduceResultDto> produceKafkaMessage(
                 @PathVariable String connectionId,
                 @PathVariable String topic,
                 @RequestBody ProduceKafkaMessageRequest request
         ) {
-            featurePermissionAccess.requireExplorerContextExport();
             return ApiResponse.ok(kafkaService.produceMessage(
                     connectionId,
                     topic,
@@ -242,13 +239,13 @@ public class ExplorerKafkaController {
                     request.partition()
             ));
         }
-    
+
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
         @PostMapping("/connections/{connectionId}/kafka/publish-table")
         public ApiResponse<PublishTableToKafkaResult> publishTableToKafka(
                 @PathVariable String connectionId,
                 @RequestBody PublishTableToKafkaRequest request
         ) {
-            featurePermissionAccess.requireExplorerContextExport();
             return ApiResponse.ok(kafkaService.publishTable(connectionId, request));
         }
     
@@ -270,13 +267,13 @@ public class ExplorerKafkaController {
             return ApiResponse.ok(kafkaService.describeConsumerGroupMetrics(connectionId, groupId, topic));
         }
 
+        @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_DANGEROUS)
         @PostMapping("/connections/{connectionId}/kafka/consumer-groups/{groupId}/reset-offsets")
         public ApiResponse<KafkaMutationResultDto> resetKafkaConsumerGroupOffsets(
                 @PathVariable String connectionId,
                 @PathVariable String groupId,
                 @RequestBody ResetKafkaConsumerGroupOffsetsRequest request
         ) {
-            featurePermissionAccess.requireExplorerContextDangerous();
             return ApiResponse.ok(kafkaService.resetConsumerGroupOffsets(
                     connectionId,
                     groupId,

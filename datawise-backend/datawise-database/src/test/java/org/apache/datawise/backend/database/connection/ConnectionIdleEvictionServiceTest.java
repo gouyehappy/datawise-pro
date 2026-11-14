@@ -34,7 +34,7 @@ class ConnectionIdleEvictionServiceTest {
     void setUp() {
         properties = new ConnectionLifecycleProperties();
         properties.setIdleEvictEnabled(true);
-        properties.setIdleEvictMs(900_000);
+        properties.setIdleEvictMs(1_800_000);
         properties.setMaxActivePools(0);
         service = new ConnectionIdleEvictionService(
                 properties,

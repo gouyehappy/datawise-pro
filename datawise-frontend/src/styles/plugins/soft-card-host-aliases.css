@@ -4,12 +4,32 @@
  * Skin-gated so IDE does not inherit Classic shadow. Radius still follows --dw-panel-radius.
  */
 
+/* 工作台壳：圆角，无描边（分区靠间隙色差） */
 html[data-ui-skin='classic'] :is(
     .tool-window,
     .explorer-panel,
     .explorer.dw-surface,
     .workspace.dw-surface,
     .shortcut-panel,
+    .terminal-window,
+    .terminal-pane
+),
+html:not([data-ui-skin]) :is(
+    .tool-window,
+    .explorer-panel,
+    .explorer.dw-surface,
+    .workspace.dw-surface,
+    .shortcut-panel,
+    .terminal-window,
+    .terminal-pane
+) {
+    border-radius: var(--dw-panel-radius);
+    border: none;
+    box-shadow: none;
+}
+
+/* 模块/设置等内容卡：仍可轻描边 */
+html[data-ui-skin='classic'] :is(
     .notification-drawer,
     .dw-side-browser,
     .mp-hero,
@@ -47,11 +67,6 @@ html[data-ui-skin='classic'] :is(
     .dw-workbench-page .dw-code-viewer--card
 ),
 html:not([data-ui-skin]) :is(
-    .tool-window,
-    .explorer-panel,
-    .explorer.dw-surface,
-    .workspace.dw-surface,
-    .shortcut-panel,
     .notification-drawer,
     .dw-side-browser,
     .mp-hero,
@@ -89,7 +104,8 @@ html:not([data-ui-skin]) :is(
     .dw-workbench-page .dw-code-viewer--card
 ) {
     border-radius: var(--dw-panel-radius);
-    box-shadow: var(--dw-panel-shadow);
+    box-shadow: none;
+    border-color: var(--dw-panel-outline, var(--dw-panel-border));
 }
 
 /* Radius only — already bordered; do not add a second shadow */
@@ -135,19 +151,21 @@ html:not([data-ui-skin]) .table-detail__sidebar {
     border-radius: var(--dw-panel-radius) 0 0 var(--dw-panel-radius);
 }
 
-/* SQL result split: same soft card, plus the inner seam border */
+/* SQL result split：圆角 + 间隙；黑底上同色井需描边才能分清消息/表格 */
 html[data-ui-skin='classic'] .result-pane--split:not(.result-pane--messages-only) > :is(.messages-panel, .messages-rail),
 html:not([data-ui-skin]) .result-pane--split:not(.result-pane--messages-only) > :is(.messages-panel, .messages-rail) {
     border-radius: var(--dw-panel-radius);
-    box-shadow: var(--dw-panel-shadow);
-    border-right: 1px solid var(--dw-border-light);
+    box-shadow: none;
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+    background: var(--dw-bg-muted);
 }
 
 html[data-ui-skin='classic'] .result-pane--split:not(.result-pane--messages-only) > .result-pane__main,
 html:not([data-ui-skin]) .result-pane--split:not(.result-pane--messages-only) > .result-pane__main {
     border-radius: var(--dw-panel-radius);
-    box-shadow: var(--dw-panel-shadow);
-    border-left: 1px solid var(--dw-border-light);
+    box-shadow: none;
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+    background: var(--dw-bg-muted);
 }
 
 /* Raised market / plugin cards: soft card + extra border, wash, padding */
@@ -189,10 +207,10 @@ html:not([data-ui-skin]) :is(
     .community-plugin-page .community-plugin-panel,
     .community-plugin-page .community-plugin-card
 ) {
-    border-radius: calc(var(--dw-panel-radius) + 2px);
-    box-shadow: var(--dw-panel-shadow), 0 1px 0 color-mix(in srgb, var(--dw-border) 55%, transparent);
-    border: 1px solid color-mix(in srgb, var(--dw-border) 70%, transparent);
-    background: color-mix(in srgb, var(--dw-surface) 96%, var(--dw-bg));
+    border-radius: var(--dw-panel-radius);
+    box-shadow: none;
+    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+    background: color-mix(in srgb, var(--dw-bg-panel) 72%, var(--dw-bg));
 }
 
 html[data-ui-skin='classic'] :is(

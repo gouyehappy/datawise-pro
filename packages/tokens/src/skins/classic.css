@@ -15,31 +15,44 @@ html:not([data-ui-skin]) {
     --dw-density-lg: clamp(36px, 4vmin, 42px);
     --dw-density-xl: clamp(48px, 5.5vmin, 56px);
 
-    /* Shell — breathing room (vs ide flush 0); panel radius matches soft cards */
-    --dw-shell-padding: var(--mp-gap);
-    --dw-panel-gap: var(--mp-gap);
+    /*
+     * Shell — IDEA 式无硬框：圆角 + 小间隙 + 色差分区。
+     * 间隙露出 chrome；模块页内容卡仍可用轻描边。
+     */
+    --dw-shell-padding: 6px;
+    --dw-panel-gap: 6px;
     --dw-panel-radius: var(--dw-radius-lg);
+    --dw-panel-outline: color-mix(in srgb, var(--dw-panel-border) 55%, transparent);
+    --dw-panel-shadow: none;
     --mp-card-gap: var(--dw-space-5);
-    --dw-splitter-size: 6px;
+    --dw-splitter-size: 5px;
 
-    /* Activity Bar — 图标+短文案可读（vs ide SquareStripe 紧凑） */
-    --dw-tool-stripe-width: 64px;
-    --dw-tool-btn-pad: 8px;
-    --dw-tool-icon-caption-gap: 5px;
-    --dw-tool-caption-leading: 1.2;
-    --dw-tool-caption-size: var(--dw-text-2xs);
+    /* Activity Bar — 仍保留文案，整体比原 64px 更窄 */
+    --dw-tool-stripe-width: 52px;
+    --dw-tool-btn-pad: 6px;
+    --dw-tool-icon-caption-gap: 3px;
+    --dw-tool-caption-leading: 1.15;
+    --dw-tool-caption-size: 10px;
     --dw-tool-pill-radius: var(--dw-control-radius);
-    --dw-icon-size-rail: clamp(20px, 2.4vmin, 22px);
+    --dw-icon-size-rail: clamp(18px, 2.2vmin, 20px);
 
-    /* Title bar */
+    /* Title bar — 与窗框同色，组件衔接不断层 */
     --dw-titlebar-height: clamp(40px, 4.5vmin, 44px);
     --dw-titlebar-chip-radius: 8px;
+    --dw-titlebar-bg: var(--dw-bg-chrome);
+    --dw-titlebar-tint: transparent;
+    --dw-titlebar-widget-h: var(--dw-density-sm);
 
-    /* Tabs — pill capsules (vs ide strip) */
+    /* 底栏再压 2px，略低于 density-sm */
+    --dw-status-height: calc(var(--dw-density-sm) - 2px);
+
+    /* Tabs — 介于原 xs 与过大 md 之间 */
     --dw-tab-height: var(--dw-density-md);
-    --dw-tab-pill-height: var(--dw-density-xs);
+    --dw-tab-pill-height: var(--dw-density-sm);
     --dw-tab-pill-radius: var(--dw-control-radius);
     --dw-tab-gap: clamp(2px, 0.35vmin, 3px);
+    --dw-tab-title-size: var(--dw-font-size-tab);
+    --dw-icon-size-tab: clamp(15px, 1.75vmin, 17px);
 
     /* Menus M1 — 卡片感（vs ide IDEA New UI） */
     --dw-menu-radius: 12px;
@@ -61,7 +74,7 @@ html:not([data-ui-skin]) {
 html[data-ui-skin='classic'] .dw-workbench-page,
 html:not([data-ui-skin]) .dw-workbench-page {
     --dw-wb-head-bg: var(--dw-bg-panel);
-    --dw-wb-head-border: var(--dw-border-light);
+    --dw-wb-head-border: var(--dw-panel-outline);
     --dw-wb-head-shadow: none;
     --dw-wb-head-pad-y: var(--dw-space-4);
     --dw-wb-head-min-height: clamp(52px, 6vmin, 56px);
@@ -75,17 +88,17 @@ html:not([data-ui-skin]) .dw-workbench-page {
     --dw-wb-content-pad-y: var(--dw-space-4);
     --dw-wb-stack-gap: var(--dw-space-3);
     --dw-wb-pane-pad: var(--dw-space-3);
-    --dw-wb-card-border: var(--dw-panel-border);
+    --dw-wb-card-border: transparent;
     --dw-wb-card-radius: var(--dw-radius-lg);
     --dw-wb-control-radius: var(--dw-radius-sm);
-    --dw-wb-card-shadow: var(--dw-panel-shadow);
+    --dw-wb-card-shadow: none;
     --dw-wb-card-bg: var(--dw-bg-panel);
     --dw-wb-placeholder-border: color-mix(in srgb, var(--dw-border) 80%, transparent);
     --dw-wb-placeholder-style: dashed;
     --dw-wb-placeholder-shadow: none;
     --dw-wb-terminal-border: transparent;
     --dw-wb-terminal-radius: var(--dw-radius-xl);
-    --dw-wb-terminal-shadow: 0 4px 20px color-mix(in srgb, var(--dw-text) 8%, transparent);
+    --dw-wb-terminal-shadow: none;
 }
 
 html[data-ui-skin='classic'] .lineage-panel__toolbar,
@@ -119,11 +132,16 @@ html:not([data-ui-skin]) :is(
     margin-bottom: 0;
 }
 
-/* Status bar — same chrome as titlebar (no seam line) */
+/* Status bar / titlebar / rails — 同一窗框，组件衔接无色带 */
 html[data-ui-skin='classic'] .status-bar,
 html:not([data-ui-skin]) .status-bar {
     background: var(--dw-bg-chrome);
     border-top: none;
+}
+
+html[data-ui-skin='classic'] .tool-stripe__group--bottom,
+html:not([data-ui-skin]) .tool-stripe__group--bottom {
+    border-top-color: color-mix(in srgb, var(--dw-panel-border) 50%, transparent);
 }
 
 /* —— Shell chrome (P1 全项目) —— */
@@ -132,6 +150,132 @@ html[data-ui-skin='classic'] .shell-main,
 html:not([data-ui-skin]) .shell-main {
     border-left: none;
     background: transparent;
+}
+
+/*
+ * 工作台壳：圆角 + 间隙，不描边。
+ * 独立感 = 亮灰窗框缝 + 树灰 / 编辑纯黑（对照 IDEA），不是 1px 框线。
+ */
+html[data-ui-skin='classic'] :is(
+    .explorer.dw-surface,
+    .workspace.dw-surface,
+    .tool-window,
+    .terminal-window,
+    .terminal-pane,
+    .shortcut-panel
+),
+html:not([data-ui-skin]) :is(
+    .explorer.dw-surface,
+    .workspace.dw-surface,
+    .tool-window,
+    .terminal-window,
+    .terminal-pane,
+    .shortcut-panel
+) {
+    border: none;
+    border-radius: var(--dw-panel-radius);
+    box-shadow: none;
+}
+
+html[data-ui-skin='classic'] .explorer.dw-surface,
+html:not([data-ui-skin]) .explorer.dw-surface {
+    background: var(--dw-bg-panel);
+}
+
+html[data-ui-skin='classic'] .workspace.dw-surface,
+html:not([data-ui-skin]) .workspace.dw-surface {
+    background: var(--dw-bg-editor);
+}
+
+html[data-ui-skin='classic'] :is(.terminal-window, .terminal-pane, .tool-window),
+html:not([data-ui-skin]) :is(.terminal-window, .terminal-pane, .tool-window) {
+    background: var(--dw-bg-editor);
+}
+
+/* 暗色：菜单边与 outline 同阶（覆盖皮肤基线 soft-mix） */
+html[data-ui-skin='classic'][data-theme='dark'],
+html:not([data-ui-skin])[data-theme='dark'] {
+    --dw-menu-border: var(--dw-panel-outline);
+    --dw-border-light: var(--dw-panel-outline);
+    --dw-tool-pill-active: color-mix(in srgb, #fff 10%, var(--dw-bg-rail));
+}
+
+/* 暗色强制色阶，避免运行时旧 inline 主题变量把对比冲掉 */
+html[data-ui-skin='classic'][data-theme='dark'] .shell-body,
+html:not([data-ui-skin])[data-theme='dark'] .shell-body {
+    background: var(--dw-bg-chrome);
+}
+
+html[data-ui-skin='classic'][data-theme='dark'] .explorer.dw-surface,
+html:not([data-ui-skin])[data-theme='dark'] .explorer.dw-surface {
+    background: var(--dw-bg-panel);
+}
+
+html[data-ui-skin='classic'][data-theme='dark'] :is(
+    .workspace.dw-surface,
+    .terminal-window,
+    .terminal-pane,
+    .tool-window,
+    .editor-pane,
+    .dw-console-toolbar
+),
+html:not([data-ui-skin])[data-theme='dark'] :is(
+    .workspace.dw-surface,
+    .terminal-window,
+    .terminal-pane,
+    .tool-window,
+    .editor-pane,
+    .dw-console-toolbar
+) {
+    background: var(--dw-bg-editor);
+}
+
+html[data-ui-skin='classic'][data-theme='dark'] :is(.result-pane, .result-collapsed-bar),
+html:not([data-ui-skin])[data-theme='dark'] :is(.result-pane, .result-collapsed-bar) {
+    background: var(--dw-bg-muted);
+}
+
+html[data-ui-skin='classic'] .terminal-window__body,
+html:not([data-ui-skin]) .terminal-window__body {
+    padding: var(--dw-space-2) var(--dw-space-3) var(--dw-space-3);
+}
+
+html[data-ui-skin='classic'] :is(.editor-pane, .dw-console-toolbar),
+html:not([data-ui-skin]) :is(.editor-pane, .dw-console-toolbar) {
+    border: 1px solid var(--dw-panel-outline);
+    background: var(--dw-bg-editor);
+}
+
+html[data-ui-skin='classic'] .dw-console-toolbar,
+html:not([data-ui-skin]) .dw-console-toolbar {
+    border-top: none;
+    border-left: none;
+    border-right: none;
+}
+
+html[data-ui-skin='classic'] .result-pane,
+html:not([data-ui-skin]) .result-pane,
+html[data-ui-skin='classic'] .result-collapsed-bar,
+html:not([data-ui-skin]) .result-collapsed-bar {
+    border: 1px solid var(--dw-panel-outline);
+    background: var(--dw-bg-muted);
+}
+
+/* 控制台编辑↔结果：间隙露出 chrome，结果顶角圆角（不受其它贴合规则影响） */
+html[data-ui-skin='classic'] .console-tab,
+html:not([data-ui-skin]) .console-tab {
+    background: var(--dw-bg-chrome);
+}
+
+html[data-ui-skin='classic'] .console-tab .result-pane,
+html:not([data-ui-skin]) .console-tab .result-pane {
+    border-radius: var(--dw-panel-radius);
+    overflow: hidden;
+}
+
+html[data-ui-skin='classic'] .console-tab .editor-pane:not(.editor-pane--expanded):not(.editor-pane--fullscreen),
+html:not([data-ui-skin]) .console-tab .editor-pane:not(.editor-pane--expanded):not(.editor-pane--fullscreen) {
+    border-radius: 0 0 var(--dw-panel-radius) var(--dw-panel-radius);
 }
 
 html[data-ui-skin='classic'] .desktop-titlebar,
@@ -158,18 +302,43 @@ html:not([data-ui-skin]) .dw-tab-bar {
     gap: var(--dw-space-1);
 }
 
+html[data-ui-skin='classic'] .dw-tab,
+html:not([data-ui-skin]) .dw-tab {
+    max-width: 230px;
+    padding: 0 var(--dw-space-3) 0 var(--dw-space-2);
+}
+
+html[data-ui-skin='classic'] .dw-tab:hover:not(.active),
+html:not([data-ui-skin]) .dw-tab:hover:not(.active) {
+    background: var(--dw-tab-hover-bg);
+    color: var(--dw-text);
+}
+
 html[data-ui-skin='classic'] .dw-tab.active,
 html[data-ui-skin='classic'] .dw-tab.active:hover,
 html:not([data-ui-skin]) .dw-tab.active,
 html:not([data-ui-skin]) .dw-tab.active:hover {
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--dw-text) 6%, transparent);
+    /* 黑底上用窗框灰胶囊，色差够明显；不描蓝框 */
+    border-color: transparent;
+    background: var(--dw-tab-active-bg);
+    color: var(--dw-tab-active-text);
+    box-shadow: none;
 }
 
 /* Soft-card radius/shadow for tool windows etc. → styles/plugins/soft-card.css */
 
 html[data-ui-skin='classic'] .tool-window__head,
 html:not([data-ui-skin]) .tool-window__head {
-    border-bottom: 1px solid var(--dw-border-light);
+    border-bottom: 1px solid var(--dw-panel-outline);
+    background: transparent;
+}
+
+/* 黑底里树头 / 工具条也要有缝，否则跟面板糊成一块 */
+html[data-ui-skin='classic'][data-theme='dark'] .explorer .header,
+html:not([data-ui-skin])[data-theme='dark'] .explorer .header,
+html[data-ui-skin='classic'][data-theme='dark'] .explorer .toolbar,
+html:not([data-ui-skin])[data-theme='dark'] .explorer .toolbar {
+    border-bottom: 1px solid var(--dw-panel-outline);
 }
 
 /* Modal / drawer shells */
@@ -187,18 +356,29 @@ html:not([data-ui-skin]) :is(
     box-shadow: var(--dw-menu-shadow);
 }
 
-/* Settings / module shell — soft nav */
+/* Settings / module shell — 与窗框同族，轻描边分区 */
+html[data-ui-skin='classic'] .module-shell,
+html:not([data-ui-skin]) .module-shell {
+    background: var(--dw-bg);
+}
+
 html[data-ui-skin='classic'] .module-shell__nav,
 html:not([data-ui-skin]) .module-shell__nav {
-    border-right: 1px solid var(--dw-border-light);
-    background: color-mix(in srgb, var(--dw-bg-chrome) 88%, var(--dw-bg-panel));
+    border-right: 1px solid var(--dw-panel-outline);
+    background: var(--dw-bg-panel);
+    box-shadow: none;
+}
+
+html[data-ui-skin='classic'] .module-shell__main,
+html:not([data-ui-skin]) .module-shell__main {
+    background: var(--dw-bg);
 }
 
 html[data-ui-skin='classic'] .module-shell__nav-item.is-active,
 html:not([data-ui-skin]) .module-shell__nav-item.is-active {
     border-radius: var(--dw-control-radius);
-    background: color-mix(in srgb, var(--dw-primary) 12%, var(--dw-bg-panel));
-    box-shadow: none;
+    background: color-mix(in srgb, var(--dw-primary) 12%, transparent);
+    box-shadow: inset 2px 0 0 var(--dw-primary);
 }
 
 /* Settings cards → styles/plugins/soft-card.css */
@@ -339,7 +519,7 @@ html:not([data-ui-skin]) .desktop-titlebar__controls {
 
 html[data-ui-skin='classic'] .status-bar__tools,
 html:not([data-ui-skin]) .status-bar__tools {
-    border-left-color: var(--dw-border-light);
+    border-left-color: var(--dw-panel-outline);
 }
 
 html[data-ui-skin='classic'] .dw-tab-scroll,

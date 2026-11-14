@@ -54,7 +54,7 @@ function toggle() {
 
 <style scoped>
 .collapse-section.join-standalone {
-  border: 1px solid var(--dw-border-light);
+  border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
   border-radius: var(--dw-panel-radius);
   background: var(--dw-bg);
   box-shadow: var(--dw-shadow-xs);
@@ -63,7 +63,7 @@ function toggle() {
 }
 
 .collapse-section.join-standalone.expanded {
-  border-color: color-mix(in srgb, var(--dw-primary) 18%, var(--dw-border-light));
+  border-color: color-mix(in srgb, var(--dw-primary) 18%, var(--dw-panel-outline, var(--dw-border-light)));
   box-shadow: var(--dw-shadow-md);
 }
 
@@ -71,7 +71,7 @@ function toggle() {
 .collapse-section.join-middle,
 .collapse-section.join-bottom,
 .collapse-section.join-single {
-  border: 1px solid var(--dw-border-light);
+  border: 1px solid var(--dw-panel-outline, var(--dw-border-light));
   border-radius: var(--dw-panel-radius);
   background: var(--dw-bg);
   overflow: hidden;
@@ -192,7 +192,7 @@ function toggle() {
 
 .collapse-body-wrap.open .collapse-body {
   padding: var(--dw-space-5) var(--dw-space-6) var(--dw-space-6);
-  border-top: 1px solid var(--dw-border-light);
+  border-top: 1px solid var(--dw-panel-outline, var(--dw-border-light));
   background: color-mix(in srgb, var(--dw-bg-muted) 55%, var(--dw-bg));
 }
 </style>

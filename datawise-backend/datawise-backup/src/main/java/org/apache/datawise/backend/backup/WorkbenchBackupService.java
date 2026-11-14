@@ -39,17 +39,20 @@ public class WorkbenchBackupService {
     private final StorageProperties storageProperties;
     private final BackupArtifactStore artifactStore;
     private final ObjectProvider<JdbcMetadataBackupExporter> metadataExporter;
+    private final ObjectProvider<BackupObjectStorageMirror> objectStorageMirror;
 
     public WorkbenchBackupService(
             ConfigDirectoryService configDirectory,
             StorageProperties storageProperties,
             BackupArtifactStore artifactStore,
-            ObjectProvider<JdbcMetadataBackupExporter> metadataExporter
+            ObjectProvider<JdbcMetadataBackupExporter> metadataExporter,
+            ObjectProvider<BackupObjectStorageMirror> objectStorageMirror
     ) {
         this.configDirectory = configDirectory;
         this.storageProperties = storageProperties;
         this.artifactStore = artifactStore;
         this.metadataExporter = metadataExporter;
+        this.objectStorageMirror = objectStorageMirror;
     }
 
     public WorkbenchBackupResult backup(
@@ -117,6 +120,13 @@ public class WorkbenchBackupService {
 
             BackupManifest manifest = buildManifest(tenantId, run, policy, includedPaths, finalZip, warnings);
             artifactStore.writeManifest(artifactDir, manifest);
+            BackupObjectStorageMirror mirror = objectStorageMirror.getIfAvailable();
+            if (mirror != null) {
+                mirror.mirrorArtifactIfEnabled(
+                        artifactDir,
+                        "workbench/" + TenantIds.normalizeOrDefault(tenantId) + "/" + run.getId()
+                );
+            }
 
             return new WorkbenchBackupResult(artifactDir, manifest);
         } finally {

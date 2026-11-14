@@ -21,6 +21,7 @@ import {useViewModelEditor} from '@/features/workspace/composables/useViewModelE
 import {useViewModelLineagePreview} from '@/features/workspace/composables/useViewModelLineagePreview'
 import {useExplorerSqlSchemaProvider} from '@/features/workspace/adapters/explorer-sql-schema-provider'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
+import {useDatasourceCatalogStore} from '@/features/datasource/stores/datasource-catalog'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {useResourceWriteGuard} from '@/features/auth/composables/useResourceWriteGuard'
@@ -43,6 +44,7 @@ import {
 } from '@/features/workspace/services/resolve-console-instance'
 import {
     extractDataSources,
+    filterConsoleCapableDataSources,
     filterSelectableDataSources,
     findDataSource,
     includePinnedDataSource,
@@ -65,6 +67,7 @@ const ViewModelLineagePreviewPanel = defineAsyncComponent((() =>
 const props = defineProps<{ tab: WorkspaceTab }>()
 const {t} = useI18n()
 const explorer = useExplorerStore()
+const catalogStore = useDatasourceCatalogStore()
 const layout = useLayoutStore()
 const workspace = useWorkspaceStore()
 const appConfig = useAppConfigStore()
@@ -88,7 +91,10 @@ const connectionId = ref(props.tab.connectionId ?? '')
 const instanceId = ref<string | null>(props.tab.instanceId ?? null)
 
 const dataSources = computed(() => {
-    const all = extractDataSources(explorer.tree)
+    const all = filterConsoleCapableDataSources(
+        extractDataSources(explorer.tree),
+        catalogStore.items,
+    )
     const selectable = filterSelectableDataSources(all, connectionHealthById.value)
     const pinned = props.tab.connectionId ?? connectionId.value
     return includePinnedDataSource(all, selectable, connectionHealthById.value, pinned)
@@ -398,7 +404,6 @@ async function onPublish() {
     const result = await save()
     if (!result) return
     if (result.outcome === 'published') {
-        layout.showSuccessToast(t('viewModel.saved', {name: viewModelTitle.value}))
         await refreshViewsTreeAfterSave()
         return
     }
@@ -407,7 +412,6 @@ async function onPublish() {
         return
     }
     if (!result.reason) {
-        layout.showSuccessToast(t('viewModel.savedDraft', {name: viewModelTitle.value}))
     }
     await refreshViewsTreeAfterSave()
 }
@@ -417,7 +421,6 @@ async function onSaveDraft() {
     const result = await saveDraft()
     if (!result) return
     if (result.reason) return
-    layout.showSuccessToast(t('viewModel.savedDraft', {name: viewModelTitle.value}))
     await refreshViewsTreeAfterSave()
 }
 

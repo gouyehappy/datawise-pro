@@ -234,14 +234,17 @@ function exportFullReport() {
             title: t('crossEnvCompare.reportTitle'),
             watermarkFooter: entitlement.watermarkFooter,
         })
-        layout.showSuccessToast(
-            t(
+        layout.notifyQuiet({
+          category: 'export',
+          titleKey: 'exportDone',
+          bodyKey: 'exportDone',
+          params: {name: t(
                 printOpened
                     ? 'crossEnvCompare.exportReportDonePrint'
                     : 'crossEnvCompare.exportReportDone',
                 {path: fileName},
-            ),
-        )
+            )},
+        })
     } catch (error) {
         const message = resolveCaughtApiErrorMessage(error, t, 'crossEnvCompare.exportReportFailed')
         layout.showErrorToast(message)
@@ -306,7 +309,6 @@ async function runCompare() {
         })
         diffView.value = result.diff
         wizardStep.value = 'diff'
-        layout.showSuccessToast(t('crossEnvCompare.compareDone'))
     } catch (error) {
         if (error instanceof CrossEnvCompareSideError) {
             formError.value = resolveErrorMessage(

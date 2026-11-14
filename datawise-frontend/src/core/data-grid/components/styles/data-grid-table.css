@@ -75,7 +75,7 @@
   font-weight: 500;
   font-size: var(--dw-text-sm);
   padding: var(--dw-space-2) var(--dw-space-4) var(--dw-space-2) var(--dw-space-3);
-  border-bottom: 1px solid color-mix(in srgb, var(--dw-text) 12%, var(--dw-border));
+  border-bottom: 1px solid var(--dw-panel-outline, var(--dw-grid-line));
   box-shadow:
       var(--dw-surface-inset-highlight),
       0 1px 0 color-mix(in srgb, var(--dw-text) 4%, transparent);

@@ -2,6 +2,7 @@
 import {computed, defineAsyncComponent, onMounted, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {EmptyState, ProgressBar, SectionHeader, StatusPill} from '@/core/components'
+import {usePopoverEscape} from '@/core/composables/usePopoverEscape'
 import {DwIcon} from '@/core/icons'
 import PillSelect from '@/core/components/PillSelect.vue'
 import ToolWindowShell from '@/features/layout/components/ToolWindowShell.vue'
@@ -230,6 +231,12 @@ function closePanel() {
   layout.activeShortcutPanel = null
 }
 
+/** AUDIT-02: Escape closes the shortcut tool window (context menu keeps its own dismiss). */
+usePopoverEscape(
+    () => Boolean(layout.activeShortcutPanel) && !sqlLogMenu.visible.value,
+    closePanel,
+)
+
 function openSqlLog(sqlOrLog: string | SqlLogEntry) {
   const sql = typeof sqlOrLog === 'string' ? sqlOrLog : sqlOrLog.sql
   layout.setModule('database')
@@ -262,7 +269,6 @@ async function archiveSqlLogToPersonalKnowledge(log: SqlLogEntry) {
   if (denyKnowledgeWrite()) return
   try {
     await appendSqlLogToPersonalKnowledge(log, resolveSqlLogContext(log))
-    layout.showSuccessToast(t('shortcut.sqlLogMenu.savedPersonal'))
   } catch (error) {
     const message = resolveCaughtApiErrorMessage(error, t, 'shortcut.bookmarks.saveFailed')
     layout.showErrorToast(t('shortcut.sqlLogMenu.saveFailed', {message}))
@@ -291,7 +297,6 @@ async function onTeamShareSave(payload: ShareTeamSharedQueryPayload) {
     })
     teamShareDialogOpen.value = false
     pendingTeamShareLog.value = null
-    layout.showSuccessToast(t('shortcut.sqlLogMenu.savedTeam'))
   } catch (error) {
     const message = resolveCaughtApiErrorMessage(error, t, 'shortcut.bookmarks.saveFailed')
     layout.showErrorToast(t('shortcut.sqlLogMenu.saveFailed', {message}))

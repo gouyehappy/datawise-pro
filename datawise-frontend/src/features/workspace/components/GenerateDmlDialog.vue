@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, ref, toRef, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {AppModal, DwButton, DwInlineAlert, DwInput, FormField} from '@/core/components'

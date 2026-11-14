@@ -5,6 +5,7 @@ import {
     buildErrorQueryResultItem,
     buildSuccessQueryResultItem,
 } from '@/features/workspace/services/query-result-item'
+import {expandExecuteSqlResults} from '@/features/workspace/services/expand-execute-sql-results'
 import type {QueryResultItem} from '@/features/workspace/types'
 import {
     appendStreamingBatchSummaryItem,
@@ -132,9 +133,13 @@ export async function executeSqlBatch(
 
         try {
             const result = await execute(sql, connection)
-            totalRows += result.rowCount
+            const expanded = expandExecuteSqlResults(result)
+            const expandedRows = expanded.reduce((sum, part) => sum + (part.rowCount || 0), 0)
+            totalRows += expandedRows
             totalDuration += result.durationMs
-            items.push(buildSuccessQueryResultItem(result, i, sql, connection.dbType))
+            for (const part of expanded) {
+                items.push(buildSuccessQueryResultItem(part, items.length, sql, connection.dbType))
+            }
             if (options?.isPluginEnabled) {
                 await runPluginAfterResult(
                     {
@@ -142,7 +147,7 @@ export async function executeSqlBatch(
                         connectionId: connection.connectionId,
                         database: connection.database,
                         success: true,
-                        rowCount: result.rowCount,
+                        rowCount: expandedRows,
                         durationMs: result.durationMs,
                     },
                     options.isPluginEnabled,
@@ -154,7 +159,7 @@ export async function executeSqlBatch(
                 duration: `${result.durationMs}ms`,
                 durationMs: result.durationMs,
                 status: 'success',
-                rows: result.rowCount,
+                rows: expandedRows,
             }).catch(() => {})
         } catch (error) {
             const message = resolveCaughtApiErrorMessage(error, t, 'console.runFailed')

@@ -1,3 +1,32 @@
 # Keep Maven config portable on Windows checkouts (Maven 3.9 one-arg-per-line).
 datawise-backend/.mvn/maven.config text eol=lf
 datawise-backend/.mvn/*.xml text eol=lf
+
+# Source / docs: UTF-8, LF（禁止工作区落成系统默认 GBK，避免中文/符号乱码）
+*.java text working-tree-encoding=UTF-8 eol=lf
+*.kt text working-tree-encoding=UTF-8 eol=lf
+*.kts text working-tree-encoding=UTF-8 eol=lf
+*.ts text working-tree-encoding=UTF-8 eol=lf
+*.tsx text working-tree-encoding=UTF-8 eol=lf
+*.js text working-tree-encoding=UTF-8 eol=lf
+*.mjs text working-tree-encoding=UTF-8 eol=lf
+*.cjs text working-tree-encoding=UTF-8 eol=lf
+*.vue text working-tree-encoding=UTF-8 eol=lf
+*.css text working-tree-encoding=UTF-8 eol=lf
+*.scss text working-tree-encoding=UTF-8 eol=lf
+*.less text working-tree-encoding=UTF-8 eol=lf
+*.html text working-tree-encoding=UTF-8 eol=lf
+*.md text working-tree-encoding=UTF-8 eol=lf
+*.mdc text working-tree-encoding=UTF-8 eol=lf
+*.json text working-tree-encoding=UTF-8 eol=lf
+*.yml text working-tree-encoding=UTF-8 eol=lf
+*.yaml text working-tree-encoding=UTF-8 eol=lf
+*.xml text working-tree-encoding=UTF-8 eol=lf
+*.properties text working-tree-encoding=UTF-8 eol=lf
+*.toml text working-tree-encoding=UTF-8 eol=lf
+*.svg text working-tree-encoding=UTF-8 eol=lf
+.editorconfig text working-tree-encoding=UTF-8 eol=lf
+.gitattributes text working-tree-encoding=UTF-8 eol=lf
+
+# PowerShell：CRLF；含非 ASCII 时用 UTF-8 BOM（见 .editorconfig）
+*.ps1 text working-tree-encoding=UTF-8 eol=crlf

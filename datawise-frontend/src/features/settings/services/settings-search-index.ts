@@ -44,6 +44,23 @@ export const SETTINGS_SEARCH_INDEX: SettingsSearchHit[] = [
         anchorId: 'settings-config-portability',
     },
     {
+        section: 'configCloudSync',
+        labelKey: 'settings.nav.configCloudSync',
+        keywords: [
+            'cloud sync',
+            'webdav',
+            'nextcloud',
+            'nas',
+            'redacted',
+            '同步',
+            '云同步',
+            '凭据',
+            'omitted',
+            'dwprofile',
+        ],
+        anchorId: 'settings-config-cloud-sync',
+    },
+    {
         section: 'layout',
         labelKey: 'settings.nav.layout',
         keywords: [

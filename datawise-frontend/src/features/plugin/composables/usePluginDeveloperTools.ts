@@ -114,18 +114,27 @@ export function usePluginDeveloperTools() {
 
     function exportPluginMatrixCsv() {
         downloadPluginMatrixCsv(matrixRows.value)
-        toast.success(t('plugin.matrix.exportSuccess'))
+        toast.notify({
+          category: 'export',
+          titleKey: 'exportDone',
+          bodyKey: 'exportDone',
+          params: {name: t('plugin.matrix.exportSuccess')},
+        })
     }
 
     function exportCatalogRegistryDiffCsv() {
         downloadPluginCatalogRegistryDiffCsv(catalogRegistryDiffRows.value)
-        toast.success(t('plugin.catalogAudit.exportDiffSuccess'))
+        toast.notify({
+          category: 'export',
+          titleKey: 'exportDone',
+          bodyKey: 'exportDone',
+          params: {name: t('plugin.catalogAudit.exportDiffSuccess')},
+        })
     }
 
     function clearUsageStats() {
         clearPluginUsageStats()
         usageRevision.value += 1
-        toast.success(t('plugin.usage.clearSuccess'))
     }
 
     onMounted(() => {

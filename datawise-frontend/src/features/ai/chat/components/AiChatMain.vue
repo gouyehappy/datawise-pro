@@ -4,8 +4,6 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
-import DbTypeIcon from '@/core/components/DbTypeIcon.vue'
-import {DB_TYPE_ICON_SIZE} from '@/features/connection/constants/db-type-icon-sizes'
 import {DwInlineAlert, ModuleHeader, TagChip, AiIcon} from '@/core/components'
 import {DwIcon} from '@/core/icons'
 import type {TenantAiUsage} from '@/shared/api/types'
@@ -46,6 +44,10 @@ const props = defineProps<{
   canUndoApplyToDocument?: boolean
   /** Basename of the local file AI will overwrite when applying a reply. */
   documentApplyTargetLabel?: string | null
+  /** 未选表且未进入通用问答模式：拦截发送并给出选表入口 */
+  needsScope?: boolean
+  /** 用户显式选择的「通用问答」 */
+  generalMode?: boolean
 }>()
 
 const input = defineModel<string>('input', {required: true})
@@ -62,6 +64,11 @@ const emit = defineEmits<{
   stop: []
   applyTemplate: [template: AiAnalysisTemplate]
   keydown: [event: KeyboardEvent]
+  openScope: []
+  toggleGeneral: []
+  scopeBlocked: []
+  pinConclusion: [messageId: string]
+  archiveConclusion: [messageId: string]
 }>()
 
 const {t} = useI18n()
@@ -75,6 +82,7 @@ defineExpose({
   buildSendPayload: (prompt: string) =>
       composerRef.value?.buildSendPayload(prompt) ?? Promise.resolve(prompt),
   clearAttachments: () => composerRef.value?.clearAttachments(),
+  focusInput: () => composerRef.value?.focus(),
 })
 
 const composerBusy = computed(
@@ -108,27 +116,20 @@ const quotaExhaustedMessage = computed(() => {
       <template #icon>
         <AiIcon :size="18"/>
       </template>
+      <template v-if="$slots.binding" #extra>
+        <slot name="binding"/>
+      </template>
     </ModuleHeader>
 
-    <div v-if="selectedTargets.length || documentApplyTargetLabel" class="ai-workspace__scope">
-      <TagChip v-for="target in selectedTargets" :key="target.id">
-        <template #icon>
-          <DbTypeIcon :db-type="target.dbType" :size="DB_TYPE_ICON_SIZE.compact"/>
-        </template>
-        {{ formatTargetLabel(target) }}
-      </TagChip>
-      <TagChip v-if="documentApplyTargetLabel" class="ai-workspace__doc-target">
+    <!-- 表范围只在输入框旁展示；此处仅保留「将写回本地文件」提示，避免三处重复连接路径 -->
+    <div v-if="documentApplyTargetLabel" class="ai-workspace__scope">
+      <TagChip class="ai-workspace__doc-target">
         <template #icon>
           <DwIcon name="file" size="sm" :stroke-width="1.5"/>
         </template>
         {{ t('ai.documentApplyTarget', {name: documentApplyTargetLabel}) }}
       </TagChip>
     </div>
-    <p v-else class="ai-workspace__scope-hint">
-      {{ t('ai.noDatabaseSelected') }}
-      <span class="ai-workspace__scope-sep">·</span>
-      {{ t('ai.documentApplyTargetHint') }}
-    </p>
 
     <div class="ai-workspace__body">
       <AiFederatedScopeBanner :target-count="selectedTargets.length"/>
@@ -156,6 +157,8 @@ const quotaExhaustedMessage = computed(() => {
             @quick-prompt="emit('quickPrompt', $event)"
             @confirm-sql="emit('confirmSql')"
             @cancel-sql="emit('cancelSql')"
+            @pin-conclusion="emit('pinConclusion', $event)"
+            @archive-conclusion="emit('archiveConclusion', $event)"
         />
       </div>
     </div>
@@ -196,10 +199,15 @@ const quotaExhaustedMessage = computed(() => {
           :quota-exhausted="!!tenantAiExhausted"
           :selected-targets="selectedTargets"
           :format-target-label="formatTargetLabel"
+          :needs-scope="!!needsScope"
+          :general-mode="!!generalMode"
           @send="emit('send', $event)"
           @stop="emit('stop')"
           @remove-target="emit('removeTarget', $event)"
           @keydown="emit('keydown', $event)"
+          @open-scope="emit('openScope')"
+          @toggle-general="emit('toggleGeneral')"
+          @scope-blocked="emit('scopeBlocked')"
       />
     </footer>
   </main>
@@ -240,23 +248,13 @@ const quotaExhaustedMessage = computed(() => {
   display: flex;
   flex-wrap: wrap;
   gap: var(--dw-gap-sm);
-  padding: var(--dw-space-5) var(--dw-space-9);
+  padding: var(--dw-space-3) var(--dw-space-9);
   border-bottom: 1px solid var(--dw-border-light);
-  background: color-mix(in srgb, var(--dw-bg-panel) 70%, var(--dw-bg-editor));
 }
 
-.ai-workspace__scope-hint {
-  margin: 0;
-  padding: var(--dw-space-5) var(--dw-space-9);
-  border-bottom: 1px solid var(--dw-border-light);
-  color: var(--dw-text-secondary);
-  font-size: var(--dw-text-sm);
-  background: color-mix(in srgb, var(--dw-bg-panel) 70%, var(--dw-bg-editor));
-}
-
-.ai-workspace__scope-sep {
-  margin: 0 var(--dw-space-2);
-  opacity: 0.55;
+.ai-workspace :deep(.dw-page-head__extra) {
+  margin-top: var(--dw-space-4);
+  min-height: 0;
 }
 
 .ai-workspace__footer {

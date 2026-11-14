@@ -1,12 +1,14 @@
-﻿<script setup lang="ts">
-import {computed} from 'vue'
+<script setup lang="ts">
+import {computed, ref} from 'vue'
 import {QueryResultPane} from '@/features/workspace/components'
 import TableDataChangeHistoryPanel from '@/features/workspace/components/TableDataChangeHistoryPanel.vue'
+import GridSaveSqlPreviewDialog from '@/features/workspace/components/GridSaveSqlPreviewDialog.vue'
 import type {GridPendingBatch} from '@/core/composables/useGridPendingEdit'
 import type {WorkspaceTab} from '@/core/types'
 import type {QueryResultItem} from '@/features/workspace/types'
 import {useTableDataView} from '@/features/workspace/composables/useTableDataView'
 import {useQueryResultAiSummary} from '@/features/workspace/composables/useQueryResultAiSummary'
+import {buildTableAskPrompt, requestAiAsk} from '@/features/ai/shared/services/ai-ask.service'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
@@ -36,6 +38,11 @@ const aiResultSummaryEnabled = computed(
 
 const showFakeDataAction = computed(
     () => pluginStore.isEnabled('p-fake-data') && Boolean(props.tab.tableName?.trim()),
+)
+
+/** P2-2：AI 全局入口在表数据页同样可用，不依赖结果摘要插件 */
+const canAskAi = computed(
+    () => import.meta.env.VITE_DATAWISE_EDITION !== 'standard' && layout.canAccessNavModule('ai'),
 )
 
 const dmlGenerateEnabled = computed(() => pluginStore.isSwitchEnabled('p-dml-generate'))
@@ -81,17 +88,61 @@ const showBootstrapLoading = computed(
 
 async function onAuditRestored() {
   await refresh()
-  layout.showSuccessToast(t('dataGrid.audit.restoreSuccess'))
 }
 
+/** T-GRID-1：保存前先预览 SQL，确认后再走现有 mutate */
+const savePreviewOpen = ref(false)
+const savePreviewBatch = ref<GridPendingBatch | null>(null)
+const savePreviewConfirming = ref(false)
+let savePreviewResolver: ((ok: boolean) => void) | null = null
+
 async function onSubmitChanges(batch: GridPendingBatch) {
-  const ok = await submitChanges(batch)
-  if (ok) {
-    layout.showSuccessToast(t('dataGrid.submitSuccess'))
-  } else {
-    layout.showErrorToast(t('dataGrid.submitFailed'))
+  savePreviewBatch.value = batch
+  savePreviewOpen.value = true
+  const confirmed = await new Promise<boolean>((resolve) => {
+    savePreviewResolver = resolve
+  })
+  if (!confirmed) {
+    savePreviewOpen.value = false
+    savePreviewBatch.value = null
+    return false
   }
-  return ok
+
+  savePreviewConfirming.value = true
+  try {
+    const ok = await submitChanges(batch)
+    if (!ok) {
+      layout.showErrorToast(t('dataGrid.submitFailed'))
+    }
+    return ok
+  } finally {
+    savePreviewConfirming.value = false
+    savePreviewOpen.value = false
+    savePreviewBatch.value = null
+  }
+}
+
+function onSavePreviewConfirm() {
+  if (!savePreviewResolver || savePreviewConfirming.value) return
+  const resolve = savePreviewResolver
+  savePreviewResolver = null
+  resolve(true)
+}
+
+function onSavePreviewCancel() {
+  if (savePreviewConfirming.value) return
+  if (!savePreviewResolver) {
+    savePreviewOpen.value = false
+    savePreviewBatch.value = null
+    return
+  }
+  const resolve = savePreviewResolver
+  savePreviewResolver = null
+  resolve(false)
+}
+
+function onSavePreviewOpenChange(open: boolean) {
+  if (!open) onSavePreviewCancel()
 }
 
 const gridStateScope = computed(() => {
@@ -138,6 +189,19 @@ const tableResultSnapshot = computed<QueryResultItem>(() => ({
 
 function onRequestAiSummary() {
   void summarizeActiveResult(tableResultSnapshot.value)
+}
+
+/** P2-2：这张表的浏览结果也能直接交给 AI 工作台，表顺手进 AI 数据范围 */
+function onRequestAiAsk() {
+  const table = props.tab.tableName?.trim()
+  const connectionId = props.tab.connectionId
+  const database = databaseName.value
+  if (!table || !connectionId || !database) return
+  layout.setModule('ai')
+  void requestAiAsk({
+    prompt: buildTableAskPrompt(table),
+    scope: {connectionId, database, tables: [table]},
+  })
 }
 </script>
 
@@ -230,9 +294,11 @@ function onRequestAiSummary() {
         :cursor-trimmed-rows="tableData.cursorTrimmedRows"
         :production-perf-active="productionPerfActive"
         :enable-row-document-view="supportsDocumentFilter"
+        :show-ai-ask="canAskAi"
         @refresh="refresh"
         @load-more="loadMore"
         @request-ai-summary="onRequestAiSummary"
+        @request-ai-ask="onRequestAiAsk"
         @close-ai-summary="closeAiSummary"
         @generate-fake-data="onGenerateFakeData"
     />
@@ -243,6 +309,17 @@ function onRequestAiSummary() {
         :can-restore="gridEditable"
         :refresh-token="changeRevision"
         @restored="onAuditRestored"
+    />
+    <GridSaveSqlPreviewDialog
+        :open="savePreviewOpen"
+        :batch="savePreviewBatch"
+        :table-name="tab.tableName ?? 'table'"
+        :columns="tableData.columns"
+        :pk-columns="primaryKeyColumns"
+        :confirming="savePreviewConfirming"
+        @update:open="onSavePreviewOpenChange"
+        @confirm="onSavePreviewConfirm"
+        @cancel="onSavePreviewCancel"
     />
     </template>
   </div>

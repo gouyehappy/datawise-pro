@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {IconButton} from '@/core/components'
 import ResizeHandle from '@/core/components/ResizeHandle.vue'
-import {DwIcon} from '@/core/icons'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {useEditorSettingsStore} from '@/features/settings/stores/editor-settings'
@@ -18,6 +16,7 @@ import {
 } from '@/features/layout/services/desktop-backend-startup.service'
 import {backendHealth} from '@/features/layout/services/backend-health.service'
 import ExplorerStatusBreadcrumb from '@/features/layout/components/ExplorerStatusBreadcrumb.vue'
+import ModuleHeroSettingsMenu, {type ModuleHeroMenuItem} from '@/core/components/ModuleHeroSettingsMenu.vue'
 import StatusBarQuickLaunch from '@/features/layout/components/StatusBarQuickLaunch.vue'
 import {useExplorerStatusPath} from '@/features/explorer/composables/useExplorerStatusPath'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
@@ -70,7 +69,6 @@ watch(pathWidth, (value) => writePersistedWidth(PATH_WIDTH_KEY, value))
 watch(quickWidth, (value) => writePersistedWidth(QUICK_WIDTH_KEY, value))
 
 const projectChipLabel = computed(() => projectStore.displayName)
-const projectChipTitle = computed(() => t('status.projectHint', {name: projectChipLabel.value}))
 
 const showStartupProgress = computed(
     () => desktopApp && !bootstrapProgress.startupComplete,
@@ -118,6 +116,40 @@ const isSlowExecution = computed(() => {
 
 const showRuntimeLogAction = computed(() => canOpenRuntimeLog())
 const exportPanelOpen = computed(() => layout.activeShortcutPanel === 'export')
+
+/** 只有时间敏感的续费/试用提醒才常驻，其余收进「更多」菜单（P1-3 chrome 收敛） */
+const entitlementUrgent = computed(
+    () => endingTrialCount.value > 0 || entitlement.lockedCount > 0,
+)
+
+const endMenuItems = computed<ModuleHeroMenuItem[]>(() => {
+    const items: ModuleHeroMenuItem[] = [
+        {
+            id: 'project',
+            label: t('status.menuProject', {name: projectChipLabel.value}),
+            disabled: true,
+        },
+    ]
+    if (showEntitlementChip.value) {
+        items.push({id: 'entitlement', label: entitlementChipLabel.value})
+    }
+    if (showRuntimeLogAction.value) {
+        items.push({id: 'runtimeLog', label: t('shortcut.runtimeLog.title'), icon: 'file'})
+    }
+    items.push({
+        id: 'export',
+        label: t('status.showAll'),
+        icon: 'export',
+        dividerBefore: true,
+    })
+    return items
+})
+
+function onEndMenuSelect(id: string) {
+    if (id === 'entitlement') openPackStore()
+    else if (id === 'runtimeLog') void onOpenRuntimeLog()
+    else if (id === 'export') toggleExportPanel()
+}
 
 const showEntitlementChip = computed(
     () => entitlement.ready && entitlement.mode === 'enforced',
@@ -236,15 +268,8 @@ async function onOpenRuntimeLog() {
     </div>
 
     <div class="status-bar__end">
-      <span
-          class="status-bar__chip status-bar__chip--project"
-          :title="projectChipTitle"
-          data-testid="status-project-chip"
-      >
-        {{ projectChipLabel }}
-      </span>
       <button
-          v-if="showEntitlementChip"
+          v-if="showEntitlementChip && entitlementUrgent"
           type="button"
           class="status-bar__chip"
           :class="`status-bar__chip--${entitlementTone}`"
@@ -254,25 +279,14 @@ async function onOpenRuntimeLog() {
       >
         {{ entitlementChipLabel }}
       </button>
-      <div class="status-bar__tools">
-        <IconButton
-            v-if="showRuntimeLogAction"
-            size="sm"
-            :title="t('shortcut.runtimeLog.title')"
-            @click="onOpenRuntimeLog"
-        >
-          <DwIcon class="status-bar__icon" name="file" fit :stroke-width="1.5"/>
-        </IconButton>
-        <IconButton
-            size="sm"
-            :title="t('status.showAll')"
-            :active="exportPanelOpen"
-            :aria-pressed="exportPanelOpen"
-            @click="toggleExportPanel"
-        >
-          <DwIcon class="status-bar__icon" name="export" fit :stroke-width="1.5"/>
-        </IconButton>
-      </div>
+      <ModuleHeroSettingsMenu
+          :ariaLabel="t('status.menuLabel')"
+          icon="ellipsis"
+          placement="up"
+          :active="exportPanelOpen"
+          :items="endMenuItems"
+          @select="onEndMenuSelect"
+      />
     </div>
   </footer>
 </template>
@@ -479,24 +493,4 @@ async function onOpenRuntimeLog() {
   color: var(--dw-text-muted);
 }
 
-.status-bar__chip--project {
-  background: color-mix(in srgb, var(--dw-text) 6%, transparent);
-  color: var(--dw-text-secondary);
-  font-weight: 500;
-  cursor: default;
-}
-
-.status-bar__tools {
-  display: inline-flex;
-  align-items: center;
-  gap: 1px;
-  padding-left: var(--dw-space-2);
-  border-left: 1px solid color-mix(in srgb, var(--dw-panel-border) 88%, transparent);
-}
-
-.status-bar__icon {
-  display: block;
-  width: var(--dw-icon-size-sm);
-  height: var(--dw-icon-size-sm);
-}
 </style>

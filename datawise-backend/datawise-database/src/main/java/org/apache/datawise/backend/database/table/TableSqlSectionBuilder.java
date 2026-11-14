@@ -59,6 +59,9 @@ public class TableSqlSectionBuilder {
             if (!inserts.isBlank()) {
                 sb.append("\n").append(inserts);
             }
+            if (Boolean.TRUE.equals(data.hasMore())) {
+                sb.append("\n-- WARNING: data truncated at page limit; remaining rows not exported\n");
+            }
         }
         return sb.toString().trim() + "\n";
     }

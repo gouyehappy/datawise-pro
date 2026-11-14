@@ -1,0 +1,7 @@
+{
+  "dbType": "mysql",
+  "extends": "jdbc-operate",
+  "features": {
+    "transactionalDdl": false
+  }
+}

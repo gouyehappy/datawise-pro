@@ -46,6 +46,9 @@ export interface AiAnalysisResumeRequest {
     threadId: string
     checkpointId: string
     approved: boolean
+    /** T-AI-1 exact-SQL one-shot grant (required when approved=true) */
+    grantId?: string | null
+    confirmedSql?: string | null
 }
 
 export type AiAnalysisStepStatus = 'running' | 'ok' | 'failed' | 'skipped'

@@ -149,17 +149,12 @@ public class ExplorerSchemaService {
     }
 
     public ConnectionConfig getConnection(String connectionId) {
-
+        featurePermissionAccess.requireExplorerContextConnection();
         ConnectionEntity entity = connectionContext.requireConnectionForCurrentUser(
-
                 connectionId,
-
                 ConnectionExecutionContext.EXPLORER_CONNECTION_NOT_FOUND
-
         ).entity();
-
-        return ConnectionMapper.toDto(entity);
-
+        return ConnectionMapper.toPublicDto(entity);
     }
 
     public List<TreeNode> fetchTree(boolean refresh) {

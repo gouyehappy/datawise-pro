@@ -19,8 +19,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.apache.datawise.backend.domain.UserFeaturePermission;
+import org.apache.datawise.backend.security.RequiresFeature;
+
 @RestController
 @RequestMapping("/api")
+@RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_OPEN)
 public class TableMetadataController {
 
     private static final Logger log = LoggerFactory.getLogger(TableMetadataController.class);
@@ -90,6 +94,7 @@ public class TableMetadataController {
     }
 
     @GetMapping("/tables/{tableName}/export-sql")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
     public ApiResponse<TableSqlExportResult> exportTableSql(
             @PathVariable String tableName,
             @RequestParam(required = false) String connectionId,
@@ -107,6 +112,7 @@ public class TableMetadataController {
     }
 
     @GetMapping("/export-sql/database")
+    @RequiresFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CONTEXT_EXPORT)
     public ApiResponse<TableSqlExportResult> exportDatabaseSql(
             @RequestParam(required = false) String connectionId,
             @RequestParam(required = false) String database,

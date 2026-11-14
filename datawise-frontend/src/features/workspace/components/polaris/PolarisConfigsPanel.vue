@@ -120,8 +120,8 @@ function resetState() {
   bootstrapped.value = false
 }
 
-function confirmLeaveEdit(): boolean {
-  const ok = confirmDiscardConfigEdits(
+async function confirmLeaveEdit(): Promise<boolean> {
+  const ok = await confirmDiscardConfigEdits(
       isDirty.value,
       t('common.codeViewer.discardConfirm'),
   )
@@ -135,9 +135,9 @@ function startEdit() {
   editing.value = true
 }
 
-function cancelEdit() {
+async function cancelEdit() {
   if (saving.value) return
-  if (!confirmLeaveEdit()) return
+  if (!(await confirmLeaveEdit())) return
 }
 
 async function saveEdit() {
@@ -155,7 +155,6 @@ async function saveEdit() {
     selected.value = updated
     draftContent.value = updated.content ?? ''
     editing.value = false
-    layout.showSuccessToast(t('explorer.polarisConfigs.saveSuccess'))
     registerStatelessConnectorUse(props.connectionId, 'polaris', 'ok')
   } catch (err) {
     error.value = resolveCaughtApiErrorMessage(err, t, 'explorer.polarisConfigs.saveFailed')
@@ -252,7 +251,7 @@ async function loadConfigs(options?: {force?: boolean; preserveSelection?: boole
 
 async function onNamespaceSelect(next: string) {
   if (next === namespace.value) return
-  if (!confirmLeaveEdit()) return
+  if (!(await confirmLeaveEdit())) return
   namespace.value = next
   lastNamespace.value = next
   clearSelection()
@@ -267,7 +266,7 @@ async function selectConfig(
   if (!props.connectionId || !config.name) return
   const key = polarisConfigRowKey(config)
   if (options?.skipIfSame && key === selectedKey.value && selected.value) return
-  if (!options?.quiet && !confirmLeaveEdit()) return
+  if (!options?.quiet && !(await confirmLeaveEdit())) return
   if (!options?.quiet) detailLoading.value = true
   error.value = null
   try {
@@ -291,7 +290,7 @@ async function selectConfig(
 }
 
 async function refresh() {
-  if (!confirmLeaveEdit()) return
+  if (!(await confirmLeaveEdit())) return
   configsCache.value = new Map()
   await loadNamespaces()
   lastNamespace.value = namespace.value
@@ -318,7 +317,7 @@ watch(
     () => props.preferredNamespace,
     async (next) => {
       if (!bootstrapped.value || next == null || next === namespace.value) return
-      if (!confirmLeaveEdit()) return
+      if (!(await confirmLeaveEdit())) return
       namespace.value = next
       lastNamespace.value = next
       emitNamespaceLabel()

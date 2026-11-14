@@ -30,7 +30,7 @@ public class MetadataJdbcConfiguration {
             hikari.setDriverClassName(cfg.getDriverClassName());
         }
         hikari.setPoolName("datawise-metadata");
-        hikari.setMaximumPoolSize(10);
+        hikari.setMaximumPoolSize(cfg.getMaximumPoolSize());
         return new HikariDataSource(hikari);
     }
 

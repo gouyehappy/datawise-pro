@@ -118,12 +118,11 @@ async function killSelectedApp() {
   mutationLoading.value = true
   error.value = null
   try {
-    const result = await explorerApi.killYarnApplication(
+    await explorerApi.killYarnApplication(
         props.connectionId,
         selectedApp.value.id,
         killDiagnostics.value.trim() ? {diagnostics: killDiagnostics.value.trim()} : undefined,
     )
-    if (result.message?.trim()) layout.showSuccessToast(result.message)
     await loadApps()
     if (selectedApp.value?.id) {
       selectedApp.value = await explorerApi.fetchYarnApplicationDetail(
@@ -146,12 +145,11 @@ async function moveSelectedApp() {
   mutationLoading.value = true
   error.value = null
   try {
-    const result = await explorerApi.moveYarnApplicationQueue(
+    await explorerApi.moveYarnApplicationQueue(
         props.connectionId,
         appId,
         {queue},
     )
-    if (result.message?.trim()) layout.showSuccessToast(result.message)
     await loadApps()
     const detail = await explorerApi.fetchYarnApplicationDetail(props.connectionId, appId)
     selectedApp.value = detail

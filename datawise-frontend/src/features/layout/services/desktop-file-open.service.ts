@@ -5,6 +5,8 @@ import {readDatawiseHost} from '@/features/layout/services/desktop-bridge'
 import {isLocalSqlFileName, isLocalTextFileName} from '@/features/local-files/services/local-files-path'
 import {openLocalWorkspaceFile} from '@/features/local-files/services/open-local-file.service'
 import {createHttpCommunityPluginsApi} from '@/shared/api/http/community-plugins'
+import {askAppConfirm} from '@/core/services/app-confirm.service'
+import {resolveCaughtApiErrorMessage} from '@/shared/api/http/api-error-message'
 
 export interface DesktopFileOpenPayload {
     path: string
@@ -27,9 +29,11 @@ export async function applyDesktopFileOpen(payload: DesktopFileOpenPayload): Pro
         const workspace = useWorkspaceStore()
         const name = fileBaseName(path)
         const allowUnsigned = readAllowUnsignedPreference()
-        const confirmed = window.confirm(
-            `${t('communityPlugin.confirmDesktopInstallTitle')}\n\n${t('communityPlugin.confirmDesktopInstallMessage', {name})}`,
-        )
+        const confirmed = await askAppConfirm({
+            title: t('communityPlugin.confirmDesktopInstallTitle'),
+            message: t('communityPlugin.confirmDesktopInstallMessage', {name}),
+            confirmVariant: 'primary',
+        })
         if (!confirmed) {
             workspace.openCommunityPluginCenter()
             return
@@ -38,11 +42,17 @@ export async function applyDesktopFileOpen(payload: DesktopFileOpenPayload): Pro
             const result = await createHttpCommunityPluginsApi().installFromPath(path, allowUnsigned)
             window.dispatchEvent(new CustomEvent('dw-community-plugin-changed'))
             workspace.openCommunityPluginCenter({selectPluginId: result.plugin.manifest.id})
-            layout.showSuccessToast(t('communityPlugin.installedToast'))
+            layout.notifyQuiet({
+              category: 'system',
+              titleKey: 'installDone',
+              bodyKey: 'installDone',
+              params: {detail: t('communityPlugin.installedToast')},
+            })
         } catch (error) {
             workspace.openCommunityPluginCenter()
-            const message = error instanceof Error ? error.message : t('communityPlugin.installFailed')
-            layout.showErrorToast(message)
+            layout.showErrorToast(
+                resolveCaughtApiErrorMessage(error, t, 'communityPlugin.installFailed'),
+            )
         }
         return
     }

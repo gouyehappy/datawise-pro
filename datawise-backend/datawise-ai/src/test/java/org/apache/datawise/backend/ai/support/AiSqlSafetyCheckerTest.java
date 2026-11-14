@@ -59,6 +59,20 @@ class AiSqlSafetyCheckerTest {
     }
 
     @Test
+    void rejectsSelectIntoOutfile() {
+        assertThrows(IllegalArgumentException.class, () ->
+                AiSqlSafetyChecker.requireReadOnlySelect("SELECT * FROM t INTO OUTFILE '/tmp/x'")
+        );
+    }
+
+    @Test
+    void rejectsSelectForUpdate() {
+        assertThrows(IllegalArgumentException.class, () ->
+                AiSqlSafetyChecker.requireReadOnlySelect("SELECT * FROM t FOR UPDATE")
+        );
+    }
+
+    @Test
     void rejectsCommentOnlyReply() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
                 AiSqlSafetyChecker.requireReadOnlySelect("-- AI: cannot fix\n-- schema missing")

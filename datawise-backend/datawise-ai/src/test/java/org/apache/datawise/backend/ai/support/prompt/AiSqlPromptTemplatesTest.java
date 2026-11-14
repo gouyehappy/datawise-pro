@@ -13,8 +13,7 @@ class AiSqlPromptTemplatesTest {
     @Test
     void systemPromptRequiresExecutableSelectNotCommentsOnly() {
         String prompt = AiSqlPromptTemplates.renderSystemPrompt(
-                new AiSqlSchemaContext("conn", "db", "mysql", List.of("orders"), List.of())
-        );
+                new AiSqlSchemaContext("conn", "db", "mysql", List.of("orders"), List.of()));
 
         assertTrue(prompt.contains("MUST contain a real read-only SELECT"));
         assertTrue(prompt.contains("Comments alone are never valid"));
@@ -24,8 +23,7 @@ class AiSqlPromptTemplatesTest {
     @Test
     void emptySchemaStillRequiresSelectFallback() {
         String prompt = AiSqlPromptTemplates.renderSystemPrompt(
-                new AiSqlSchemaContext("conn", "db", "mysql", List.of(), List.of())
-        );
+                new AiSqlSchemaContext("conn", "db", "mysql", List.of(), List.of()));
 
         assertTrue(prompt.contains("SELECT 1 AS need_schema"));
         assertTrue(prompt.contains("Never return comments without a SELECT/WITH"));

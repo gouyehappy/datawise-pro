@@ -55,6 +55,31 @@ datawise --token "$DATAWISE_API_TOKEN" migrate run \
 
 `overallStatus === success` 时退出码 `0`，否则 `1`。
 
+加 `--create-missing` 时，报告附带 `structureDeployAtomicity`（`guaranteed_rollback` / `partial_effects_possible`）与说明，便于 CI/Agent 诚实处理非事务性 DDL 方言。
+
+### `agent setup` / `agent doctor`
+
+安装官方 Agent Skill 到本机（默认 `~/.agents/skills/datawise`）：
+
+```bash
+datawise agent setup
+datawise agent setup --force
+datawise agent doctor
+```
+
+源目录为仓库 `skills/datawise/`。若目标已有本地修改，需 `--force` 覆盖，或 `--target <dir>` 另装。
+
+### `context`
+
+为 AI Agent 生成紧凑 schema 包（只读）：
+
+```bash
+datawise --token "$DATAWISE_API_TOKEN" context shop-db --database shop --tables users,orders --json
+datawise --token "$DATAWISE_API_TOKEN" context shop-db --database shop --max-tables 8
+```
+
+默认最多 8 张表（`--max-tables` 钳制 1–20）。官方 Skill 见仓库 `skills/datawise/`。
+
 ### `sql connections`
 
 列出当前 API Token 用户**可见**的连接（与桌面 Explorer 同源：自有 + 团队共享），并显示有效权限：

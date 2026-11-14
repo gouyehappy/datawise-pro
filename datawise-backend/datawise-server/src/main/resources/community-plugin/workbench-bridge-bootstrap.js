@@ -175,6 +175,57 @@
     ].join('\n');
   }
 
+  /**
+   * IDE layout baseline: chrome shows through panel gaps (half classic),
+   * major panes stay opaque + square. Host injects --dw-panel-gap / --radius-*.
+   */
+  function ensurePluginLayoutBaseline() {
+    var id = 'dw-plugin-layout-baseline';
+    var el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement('style');
+      el.id = id;
+      (document.head || document.documentElement).appendChild(el);
+    }
+    el.textContent = [
+      '/* Injected by workbench-bridge-bootstrap — IDE chrome gaps */',
+      'html[data-ui-skin="ide"] body {',
+      '  background: var(--color-chrome, var(--dw-bg-chrome, #2b2d30)) !important;',
+      '}',
+      'html[data-ui-skin="ide"] :is(#root, #app) {',
+      '  background: transparent !important;',
+      '  min-height: 100%;',
+      '}',
+      'html[data-ui-skin="ide"] :is(.app, .shell, .workbench, .wb, .wb-root, .wb-shell, .layout, .layout-root, .main-layout, .page-shell, .keys-split, .split-view, .panes, .wb-split, .jk-split) {',
+      '  gap: var(--dw-panel-gap, 3px) !important;',
+      '  column-gap: var(--dw-panel-gap, 3px) !important;',
+      '  row-gap: var(--dw-panel-gap, 3px) !important;',
+      '  background: transparent !important;',
+      '}',
+      'html[data-ui-skin="ide"] :is(.rail, .sidebar, .side-nav, .nav-rail, .wb-rail, .wb-sidebar, .rail__nav) {',
+      '  border-radius: 0 !important;',
+      '  border-right: 1px solid var(--color-border, rgba(255,255,255,0.08)) !important;',
+      '}',
+      'html[data-ui-skin="ide"] :is(.shell, .main, .content, .workspace, .panel, .pane, .stage, .keys-browser, .keys-detail, .detail, .editor-pane, .result-pane, .workbench, .wb-main) {',
+      '  border-radius: 0 !important;',
+      '}',
+      'html[data-ui-skin="ide"] :is(.rail, .sidebar, .wb-sidebar, .shell, .main, .content, .workspace, .panel, .pane, .stage, .workbench) {',
+      '  background-clip: padding-box;',
+      '}',
+      'html[data-ui-skin="ide"] :is(.rail, .sidebar, .wb-sidebar) {',
+      '  background: var(--color-muted, var(--rail, #1e1f22)) !important;',
+      '}',
+      'html[data-ui-skin="ide"] :is(.shell, .main, .content, .workspace, .stage, .wb-main) {',
+      '  background: var(--color-background, var(--bg, #1a1b1e)) !important;',
+      '}',
+      'html[data-ui-skin="ide"] {',
+      '  --radius-md: 0;',
+      '  --radius-sm: 0;',
+      '  --radius-lg: 0;',
+      '}'
+    ].join('\n');
+  }
+
   function applyThemeTokens(theme) {
     if (!theme || typeof theme !== 'object') return;
     var root = document.documentElement;
@@ -247,10 +298,17 @@
     // Tailwind text-sm = 0.875rem → root = body / 0.875 so plugin body matches host.
     root.style.fontSize = 'calc(var(--dw-font-size, var(--font-size, 13.5px)) / 0.875)';
     ensurePluginTypographyBaseline();
+    ensurePluginLayoutBaseline();
     // Shell uiDensity → data-ui-density (+ optional --dw-ui-density id token).
     var density = tokens['--dw-ui-density'];
     if (density === 'sm' || density === 'md' || density === 'lg') {
       root.setAttribute('data-ui-density', density);
+    }
+    var skin = tokens['--dw-ui-skin'];
+    if (skin === 'ide' || skin === 'classic' || skin === 'atelier' || skin === 'ledger') {
+      root.setAttribute('data-ui-skin', skin);
+    } else {
+      root.removeAttribute('data-ui-skin');
     }
   }
 
@@ -663,7 +721,25 @@
 
   window.datawisePlugin = api;
 
-  try {
-    parent.postMessage({ type: 'datawise-plugin-bridge-hello' }, '*');
-  } catch (e) {}
+  function sendBridgeHello(nonce) {
+    try {
+      var msg = { type: 'datawise-plugin-bridge-hello' };
+      if (typeof nonce === 'string' && nonce) {
+        msg.nonce = nonce;
+      }
+      parent.postMessage(msg, '*');
+    } catch (eHello) {}
+  }
+
+  // Host mints a one-time nonce and posts challenge after injectEnv; hello with
+  // that nonce binds the bridge. Provisional hello covers first-paint races.
+  window.addEventListener('message', function (ev) {
+    if (ev.source !== parent) return;
+    var payload = ev.data;
+    if (!payload || typeof payload !== 'object') return;
+    if (payload.type === 'datawise-plugin-bridge-challenge' && typeof payload.nonce === 'string') {
+      sendBridgeHello(payload.nonce);
+    }
+  });
+  sendBridgeHello();
 })();
