@@ -1099,6 +1099,24 @@ onUnmounted(() => {
   color: var(--dw-titlebar-fg-strong);
 }
 
+/* 点按后不要留浏览器默认白框；键盘聚焦用 hover 同级底色 */
+.tw-context:focus,
+.tw-run__main:focus,
+.tw-run__caret:focus,
+.tw-icon:focus {
+  outline: none;
+}
+
+.tw-context:focus-visible,
+.tw-run__main:focus-visible,
+.tw-run__caret:focus-visible,
+.tw-icon:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: var(--dw-titlebar-chip-hover);
+  color: var(--dw-titlebar-fg-strong);
+}
+
 /* 与项目切换器徽标同档：18×18 */
 .tw-context__type {
   display: inline-flex;

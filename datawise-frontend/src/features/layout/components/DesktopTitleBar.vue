@@ -223,12 +223,20 @@ async function onClose() {
   transition: background 100ms ease, color 100ms ease;
 }
 
-.desktop-titlebar__btn:hover {
+.desktop-titlebar__btn:focus {
+  outline: none;
+}
+
+.desktop-titlebar__btn:hover,
+.desktop-titlebar__btn:focus-visible {
+  outline: none;
+  box-shadow: none;
   background: var(--dw-titlebar-chip-hover);
   color: var(--dw-titlebar-fg-strong);
 }
 
-.desktop-titlebar__btn--close:hover {
+.desktop-titlebar__btn--close:hover,
+.desktop-titlebar__btn--close:focus-visible {
   background: var(--dw-danger);
   color: var(--dw-on-accent);
 }

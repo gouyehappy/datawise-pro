@@ -110,6 +110,16 @@ button {
     box-shadow: inset 0 0 0 999px var(--dw-btn-active-wash);
 }
 
+/* 点按不留浏览器默认白框；键盘聚焦用主题软环（组件可覆盖） */
+:where(button):focus {
+    outline: none;
+}
+
+:where(button):focus-visible {
+    outline: none;
+    box-shadow: var(--dw-focus-ring);
+}
+
 :where(button):disabled {
     cursor: not-allowed;
     opacity: 0.5;

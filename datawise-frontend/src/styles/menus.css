@@ -57,6 +57,7 @@
     background: var(--dw-menu-active);
     color: var(--dw-text);
     outline: none;
+    box-shadow: none;
 }
 
 .dw-dropdown-item:focus {

@@ -117,7 +117,14 @@ function onDocumentClick(event: MouseEvent) {
   transition: background 100ms ease, color 100ms ease;
 }
 
-.titlebar-app-menu__btn:hover {
+.titlebar-app-menu__btn:focus {
+  outline: none;
+}
+
+.titlebar-app-menu__btn:hover,
+.titlebar-app-menu__btn:focus-visible {
+  outline: none;
+  box-shadow: none;
   background: var(--dw-titlebar-chip-hover);
   color: var(--dw-titlebar-fg-strong);
 }

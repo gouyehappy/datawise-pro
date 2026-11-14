@@ -365,6 +365,7 @@ defineExpose({
   background: var(--dw-menu-active);
   color: var(--dw-text);
   outline: none;
+  box-shadow: none;
 }
 
 .titlebar-main-menu__item--accent .titlebar-main-menu__label {
@@ -493,6 +494,8 @@ defineExpose({
 
 .titlebar-main-menu__item-action:hover:not(:disabled),
 .titlebar-main-menu__item-action:focus-visible:not(:disabled) {
+  outline: none;
+  box-shadow: none;
   opacity: 1;
   color: var(--dw-danger);
   background: color-mix(in srgb, var(--dw-danger) 14%, transparent);

@@ -25,6 +25,16 @@
     border-radius: var(--dw-control-radius);
 }
 
+.dw-icon-btn:focus {
+    outline: none;
+}
+
+.dw-icon-btn:focus-visible {
+    outline: none;
+    border-color: var(--dw-focus-border);
+    box-shadow: var(--dw-focus-ring);
+}
+
 .dw-icon-btn:hover {
     background: var(--dw-primary-softer);
     border-color: color-mix(in srgb, var(--dw-primary) 18%, transparent);
@@ -82,6 +92,15 @@
 .dw-step-nav__btn:last-child,
 .dw-step-nav__btn--last {
     border-right: none;
+}
+
+.dw-step-nav__btn:focus {
+    outline: none;
+}
+
+.dw-step-nav__btn:focus-visible {
+    outline: none;
+    box-shadow: var(--dw-focus-ring);
 }
 
 .dw-step-nav__btn:hover:not(:disabled) {

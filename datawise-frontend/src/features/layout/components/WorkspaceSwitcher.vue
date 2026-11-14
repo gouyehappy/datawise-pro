@@ -359,8 +359,15 @@ onUnmounted(() => {
   transition: background 100ms ease;
 }
 
+.ws-switcher__trigger:focus {
+  outline: none;
+}
+
 .ws-switcher__trigger:hover:not(.is-disabled),
-.ws-switcher__trigger.is-open {
+.ws-switcher__trigger.is-open,
+.ws-switcher__trigger:focus-visible:not(.is-disabled) {
+  outline: none;
+  box-shadow: none;
   background: var(--dw-titlebar-chip-hover);
 }
 

@@ -91,7 +91,14 @@ function onOpenSettings() {
   shape-rendering: geometricPrecision;
 }
 
-.titlebar-quick__btn:hover:not(:disabled) {
+.titlebar-quick__btn:focus {
+  outline: none;
+}
+
+.titlebar-quick__btn:hover:not(:disabled),
+.titlebar-quick__btn:focus-visible:not(:disabled) {
+  outline: none;
+  box-shadow: none;
   background: var(--dw-titlebar-chip-hover);
   color: var(--dw-titlebar-fg-strong);
 }
