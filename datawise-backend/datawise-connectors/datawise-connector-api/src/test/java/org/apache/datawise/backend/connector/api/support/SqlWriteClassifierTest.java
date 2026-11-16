@@ -15,6 +15,23 @@ class SqlWriteClassifierTest {
     }
 
     @Test
+    void treatsTrinoShowMetadataAsReadOnly() {
+        // JSqlParser 5.x parses "SHOW SCHEMAS FROM …" as UnsupportedStatement, not ShowStatement.
+        assertFalse(SqlWriteClassifier.requiresWriteAccess("show schemas from kudu"));
+        assertFalse(SqlWriteClassifier.requiresWriteAccess("SHOW SCHEMAS FROM hive"));
+        assertFalse(SqlWriteClassifier.requiresWriteAccess("show catalogs"));
+        assertFalse(SqlWriteClassifier.requiresWriteAccess("show schemas"));
+        assertFalse(SqlWriteClassifier.requiresWriteAccess("SHOW TABLES FROM hive"));
+    }
+
+    @Test
+    void unsupportedWriteStatementsStillRequireWriteViaLexicalFallback() {
+        // CREATE still matches FORBIDDEN when AST yields UnsupportedStatement / parse miss.
+        assertTrue(SqlWriteClassifier.requiresWriteAccess("CREATE TABLE t (id INT)"));
+        assertTrue(SqlWriteClassifier.requiresWriteAccess("INSERT INTO t VALUES (1)"));
+    }
+
+    @Test
     void treatsSelectSideEffectsAsWrite() {
         assertTrue(SqlWriteClassifier.requiresWriteAccess("SELECT * FROM t INTO OUTFILE '/tmp/x'"));
         assertTrue(SqlWriteClassifier.requiresWriteAccess("SELECT * FROM t FOR UPDATE"));

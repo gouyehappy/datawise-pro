@@ -5,10 +5,14 @@ import org.apache.datawise.sqlparser.support.SqlTextSupport;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.DescribeStatement;
 import net.sf.jsqlparser.statement.ExplainStatement;
+import net.sf.jsqlparser.statement.ShowColumnsStatement;
 import net.sf.jsqlparser.statement.ShowStatement;
 import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.UnsupportedStatement;
 import net.sf.jsqlparser.statement.UseStatement;
 import net.sf.jsqlparser.statement.select.Select;
+import net.sf.jsqlparser.statement.show.ShowIndexStatement;
+import net.sf.jsqlparser.statement.show.ShowTablesStatement;
 
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -124,10 +128,16 @@ public final class SqlWriteClassifier {
                 return selectHasWriteSideEffects(select) ? Boolean.TRUE : Boolean.FALSE;
             }
             if (statement instanceof ExplainStatement
-                    || statement instanceof ShowStatement
                     || statement instanceof DescribeStatement
-                    || statement instanceof UseStatement) {
+                    || statement instanceof UseStatement
+                    || isMetadataShowStatement(statement)) {
                 return Boolean.FALSE;
+            }
+            // Trino/Presto etc.: "SHOW SCHEMAS FROM catalog" parses as UnsupportedStatement,
+            // not ShowStatement. Treating that as write would block query-only engines
+            // (tableDataEdit=false) with CONNECTION_ACCESS_DENIED. Fall back to lexical gates.
+            if (statement instanceof UnsupportedStatement) {
+                return null;
             }
             // Any other parsed statement (DML/DDL/txn/admin) needs write access.
             return Boolean.TRUE;
@@ -139,6 +149,14 @@ public final class SqlWriteClassifier {
     private static boolean selectHasWriteSideEffects(Select select) {
         String rendered = select.toString();
         return SELECT_SIDE_EFFECT.matcher(rendered).find();
+    }
+
+    /** SHOW / SHOW TABLES / SHOW COLUMNS / SHOW INDEX — metadata reads, never writes. */
+    private static boolean isMetadataShowStatement(Statement statement) {
+        return statement instanceof ShowStatement
+                || statement instanceof ShowTablesStatement
+                || statement instanceof ShowColumnsStatement
+                || statement instanceof ShowIndexStatement;
     }
 
     private static boolean requiresDangerousSqlConfirmationSingle(String sql) {
