@@ -494,10 +494,13 @@
   function renderSavedRequest(collection, saved, depth) {
     const active = store.activeTab() && store.activeTab().savedRequestId === saved.id;
     const path = requestPath(saved.url);
-    const label = path || saved.name || shortMethod(saved.method);
+    const untitled = t("tab.untitled");
+    const named = String(saved.name || "").trim();
+    // Prefer request name so the tree is readable; path stays in tooltip.
+    const label = (named && named !== untitled) ? named : (path || named || shortMethod(saved.method));
     const item = el("div", {
       class: `hc-tree-row hc-tree-request-row${active ? " is-active" : ""}`,
-      title: saved.name && path ? `${saved.name}\n${saved.url || path}` : (saved.url || saved.name || ""),
+      title: named && path ? `${named}\n${saved.url || path}` : (saved.url || named || ""),
       dataset: {
         nodeId: saved.id,
         kind: "request",

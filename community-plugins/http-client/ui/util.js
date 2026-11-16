@@ -959,14 +959,236 @@
     return JSON.parse(stripJsonComments(text));
   }
 
-  function tryFormatJson(text) {
+  /** Tokenize JSONC (strings / numbers / literals / punct / comments). Skips whitespace. */
+  function tokenizeJsonc(text) {
+    const src = String(text == null ? "" : text);
+    const tokens = [];
+    let i = 0;
+    while (i < src.length) {
+      const ch = src[i];
+      const next = src[i + 1];
+      if (/\s/.test(ch)) { i += 1; continue; }
+      if (ch === "/" && next === "/") {
+        let j = i + 2;
+        while (j < src.length && src[j] !== "\n" && src[j] !== "\r") j += 1;
+        tokens.push({ type: "lineComment", value: src.slice(i, j) });
+        i = j;
+        continue;
+      }
+      if (ch === "/" && next === "*") {
+        let j = i + 2;
+        while (j < src.length && !(src[j] === "*" && src[j + 1] === "/")) j += 1;
+        if (j < src.length) j += 2;
+        tokens.push({ type: "blockComment", value: src.slice(i, j) });
+        i = j;
+        continue;
+      }
+      if (ch === "\"") {
+        let j = i + 1;
+        let esc = false;
+        while (j < src.length) {
+          const c = src[j];
+          if (esc) { esc = false; j += 1; continue; }
+          if (c === "\\") { esc = true; j += 1; continue; }
+          if (c === "\"") { j += 1; break; }
+          if (c === "\n" || c === "\r") break;
+          j += 1;
+        }
+        tokens.push({ type: "string", value: src.slice(i, j) });
+        i = j;
+        continue;
+      }
+      if (ch === "{" || ch === "}" || ch === "[" || ch === "]" || ch === ":" || ch === ",") {
+        tokens.push({ type: ch, value: ch });
+        i += 1;
+        continue;
+      }
+      if (ch === "-" || /[0-9]/.test(ch)) {
+        let j = i + 1;
+        while (j < src.length && /[0-9.eE+-]/.test(src[j])) j += 1;
+        tokens.push({ type: "number", value: src.slice(i, j) });
+        i = j;
+        continue;
+      }
+      if (/[A-Za-z_]/.test(ch)) {
+        let j = i + 1;
+        while (j < src.length && /[A-Za-z0-9_]/.test(src[j])) j += 1;
+        tokens.push({ type: "literal", value: src.slice(i, j) });
+        i = j;
+        continue;
+      }
+      i += 1;
+    }
+    return tokens;
+  }
+
+  function isJsoncCommentToken(token) {
+    return token && (token.type === "lineComment" || token.type === "blockComment");
+  }
+
+  /** Pretty-print JSONC while keeping comments. Null if not a valid JSONC object/array. */
+  function formatJsoncPreserve(text) {
     try {
       const parsed = parseJsonc(text);
       if (parsed === null || typeof parsed !== "object") return null;
-      return JSON.stringify(parsed, null, 2);
     } catch (error) {
       return null;
     }
+    const tokens = tokenizeJsonc(text);
+    if (!tokens.length) return null;
+
+    let out = "";
+    let depth = 0;
+    let atLineStart = true;
+
+    const pad = () => "  ".repeat(depth);
+    const ensureLine = () => {
+      if (!atLineStart) {
+        out += "\n";
+        atLineStart = true;
+      }
+    };
+    const writeIndent = () => {
+      if (atLineStart) {
+        out += pad();
+        atLineStart = false;
+      }
+    };
+
+    for (let i = 0; i < tokens.length; i += 1) {
+      const tok = tokens[i];
+
+      if (isJsoncCommentToken(tok)) {
+        if (tok.type === "lineComment") {
+          if (atLineStart) writeIndent();
+          else out += " ";
+          out += tok.value;
+          out += "\n";
+          atLineStart = true;
+        } else if (atLineStart) {
+          writeIndent();
+          out += tok.value;
+          out += "\n";
+          atLineStart = true;
+        } else {
+          out += " " + tok.value;
+        }
+        continue;
+      }
+
+      if (tok.type === "{" || tok.type === "[") {
+        writeIndent();
+        out += tok.value;
+        depth += 1;
+        const closer = tok.type === "{" ? "}" : "]";
+        if (tokens[i + 1] && tokens[i + 1].type === closer) {
+          /* empty {} / [] stay compact on one line */
+        } else {
+          out += "\n";
+          atLineStart = true;
+        }
+        continue;
+      }
+
+      if (tok.type === "}" || tok.type === "]") {
+        depth = Math.max(0, depth - 1);
+        const opener = tok.type === "}" ? "{" : "[";
+        if (out.endsWith(opener)) {
+          out += tok.value;
+        } else {
+          ensureLine();
+          writeIndent();
+          out += tok.value;
+        }
+        atLineStart = false;
+        continue;
+      }
+
+      if (tok.type === ",") {
+        out += ",\n";
+        atLineStart = true;
+        continue;
+      }
+
+      if (tok.type === ":") {
+        out += ": ";
+        atLineStart = false;
+        continue;
+      }
+
+      writeIndent();
+      out += tok.value;
+      atLineStart = false;
+    }
+
+    return out.replace(/[ \t]+$/gm, "").replace(/\n+$/, "") + "\n";
+  }
+
+  function tryFormatJson(text) {
+    return formatJsoncPreserve(text);
+  }
+
+  /**
+   * Fullscreen code editor modal. Live-syncs via onChange; syncs back through onClose(value).
+   * options: { title, value, mode, placeholder, showFormat, onChange, onClose }
+   */
+  function openCodeEditorFullscreen(options) {
+    const opts = options || {};
+    const mode = opts.mode === "js" ? "js" : "json";
+    let latest = opts.value == null ? "" : String(opts.value);
+
+    openModal({
+      title: opts.title || t("action.fullscreen"),
+      onDismiss: () => {
+        if (typeof opts.onClose === "function") opts.onClose(latest);
+      },
+      render: (body, api) => {
+        if (api.modal) api.modal.classList.add("is-fullscreen");
+        body.classList.add("is-fill");
+
+        const fsEditor = createHighlightedEditor({
+          className: "hc-code-editor-fs",
+          mode,
+          value: latest,
+          placeholder: opts.placeholder || "",
+          onChange: (value) => {
+            latest = value;
+            if (typeof opts.onChange === "function") opts.onChange(value);
+          }
+        });
+
+        const toolbar = el("div", { class: "hc-body-toolbar" });
+        if (opts.showFormat !== false && mode === "json") {
+          toolbar.append(el("button", {
+            class: "hc-btn hc-btn-sm hc-btn-ghost",
+            type: "button",
+            text: t("action.format"),
+            on: {
+              click: () => {
+                const formatted = tryFormatJson(fsEditor.textarea.value) || tryFormatXml(fsEditor.textarea.value);
+                if (!formatted) return;
+                fsEditor.setValue(formatted);
+                latest = formatted;
+                if (typeof opts.onChange === "function") opts.onChange(formatted);
+              }
+            }
+          }));
+        }
+        toolbar.append(el("span", { class: "hc-hint", text: t("editor.fullscreenHint") }));
+        body.append(toolbar, fsEditor.root);
+        api._fsEditor = fsEditor;
+      },
+      actions: [
+        {
+          label: t("action.close"),
+          kind: "primary",
+          onClick: (api) => {
+            if (typeof opts.onClose === "function") opts.onClose(latest);
+            api.close();
+          }
+        }
+      ]
+    });
   }
 
   function looksLikeJson(text) {
@@ -1170,14 +1392,299 @@
     });
   }
 
+  /** Insert text at the caret of a textarea and optionally notify. */
+  function insertTextAtCursor(textarea, text, onChange) {
+    if (!textarea) return;
+    const start = textarea.selectionStart == null ? textarea.value.length : textarea.selectionStart;
+    const end = textarea.selectionEnd == null ? start : textarea.selectionEnd;
+    const value = textarea.value;
+    const next = value.slice(0, start) + text + value.slice(end);
+    textarea.value = next;
+    const pos = start + String(text).length;
+    try { textarea.focus(); textarea.setSelectionRange(pos, pos); } catch (_) { /* ignore */ }
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    if (typeof onChange === "function") onChange(next);
+  }
+
+  /** Built-in parameter dictionary (ApiPost-style 字典库 starters). */
+  const PARAM_DICTIONARY = [
+    { key: "appId", descriptionKey: "paramHelper.dict.appId" },
+    { key: "page", descriptionKey: "paramHelper.dict.page" },
+    { key: "token", descriptionKey: "paramHelper.dict.token" },
+    { key: "email", descriptionKey: "paramHelper.dict.email" },
+    { key: "password", descriptionKey: "paramHelper.dict.password" },
+    { key: "username", descriptionKey: "paramHelper.dict.username" },
+    { key: "telephone", descriptionKey: "paramHelper.dict.telephone" },
+    { key: "tel", descriptionKey: "paramHelper.dict.tel" },
+    { key: "mobile", descriptionKey: "paramHelper.dict.mobile" }
+  ];
+
+  const paramHelperUi = { open: false, wide: false, tab: "dict", query: "" };
+
+  /**
+   * ApiPost-like 参数助手 rail next to a code editor.
+   * options: { getTextarea, onInsert(text), className }
+   * Returns { root, refresh }.
+   */
+  function createParamHelper(options) {
+    const opts = options || {};
+    const t = (key, params) => HC.i18n.t(key, params);
+    const root = el("aside", {
+      class: ["hc-param-helper", opts.className || ""].filter(Boolean).join(" "),
+      "aria-label": t("paramHelper.title")
+    });
+
+    function insertToken(token) {
+      const textarea = typeof opts.getTextarea === "function" ? opts.getTextarea() : null;
+      if (textarea) {
+        insertTextAtCursor(textarea, token, (value) => {
+          if (typeof opts.onInsert === "function") opts.onInsert(token, value);
+        });
+      } else if (typeof opts.onInsert === "function") {
+        opts.onInsert(token, null);
+      }
+      toast(t("paramHelper.inserted", { name: token }), "success");
+    }
+
+    function dictRows() {
+      const rows = [];
+      const seen = new Set();
+      const environment = HC.store && HC.store.activeEnvironment ? HC.store.activeEnvironment() : null;
+      (environment && environment.variables ? environment.variables : []).forEach((row) => {
+        if (!row || row.enabled === false || !row.key) return;
+        const key = String(row.key).trim();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        rows.push({
+          key,
+          token: `{{${key}}}`,
+          detail: row.description || row.value || "",
+          source: "env"
+        });
+      });
+      PARAM_DICTIONARY.forEach((item) => {
+        if (seen.has(item.key)) return;
+        seen.add(item.key);
+        const desc = t(item.descriptionKey);
+        rows.push({
+          key: item.key,
+          token: `{{${item.key}}}`,
+          detail: desc && desc !== item.descriptionKey ? desc : "",
+          source: "dict"
+        });
+      });
+      return rows;
+    }
+
+    function dynamicRows() {
+      const catalog = (HC.store && HC.store.listDynamicVariables)
+        ? HC.store.listDynamicVariables()
+        : [];
+      return catalog.map((item) => {
+        const token = `{{${item.name}}}`;
+        const descKey = `misc.dynamic.${item.name}`;
+        const desc = t(descKey);
+        const sample = HC.store && HC.store.resolve ? HC.store.resolve(token) : "";
+        return {
+          key: item.name,
+          token,
+          detail: desc && desc !== descKey ? desc : sample,
+          source: "dynamic",
+          group: item.group
+        };
+      });
+    }
+
+    function matchesQuery(row, query) {
+      if (!query) return true;
+      const q = query.toLowerCase();
+      return String(row.key).toLowerCase().includes(q)
+        || String(row.detail || "").toLowerCase().includes(q)
+        || String(row.token || "").toLowerCase().includes(q);
+    }
+
+    function paint() {
+      clear(root);
+      root.classList.toggle("is-open", !!paramHelperUi.open);
+      root.classList.toggle("is-wide", !!(paramHelperUi.open && paramHelperUi.wide));
+
+      if (!paramHelperUi.open) {
+        const rail = el("button", {
+          type: "button",
+          class: "hc-param-helper-rail",
+          title: t("paramHelper.openHint"),
+          on: { click: () => { paramHelperUi.open = true; paint(); } }
+        });
+        rail.append(el("span", {
+          class: "hc-param-helper-rail-mid",
+          html: `<span class="hc-param-helper-rail-label"><span class="hc-param-helper-rail-chevron" aria-hidden="true">«</span><span class="hc-param-helper-rail-text">${escapeHtml(t("paramHelper.title"))}</span></span>`
+        }));
+        root.append(rail);
+        return;
+      }
+
+      const panel = el("div", { class: "hc-param-helper-panel" });
+      const head = el("div", { class: "hc-param-helper-head" });
+      const tabs = el("div", { class: "hc-param-helper-tabs" }, [
+        el("button", {
+          type: "button",
+          class: `hc-param-helper-tab${paramHelperUi.tab === "dict" ? " is-on" : ""}`,
+          text: t("paramHelper.tab.dict"),
+          on: { click: () => { paramHelperUi.tab = "dict"; paint(); } }
+        }),
+        el("button", {
+          type: "button",
+          class: `hc-param-helper-tab${paramHelperUi.tab === "dynamic" ? " is-on" : ""}`,
+          text: t("paramHelper.tab.dynamic"),
+          on: { click: () => { paramHelperUi.tab = "dynamic"; paint(); } }
+        })
+      ]);
+      const tools = el("div", { class: "hc-param-helper-tools" }, [
+        el("button", {
+          type: "button",
+          class: "hc-icon-btn hc-param-helper-tool",
+          title: paramHelperUi.wide ? t("paramHelper.narrow") : t("paramHelper.widen"),
+          html: paramHelperUi.wide
+            ? "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\"><path d=\"M6 3H3v3M10 3h3v3M6 13H3v-3M10 13h3v-3M3 3l4 4M13 3L9 7M3 13l4-4M13 13l-4-4\"/></svg>"
+            : "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\"><path d=\"M9.5 2.5H13.5V6.5M6.5 13.5H2.5V9.5M13.5 2.5L9 7M2.5 13.5L7 9\"/></svg>",
+          on: { click: () => { paramHelperUi.wide = !paramHelperUi.wide; paint(); } }
+        }),
+        el("button", {
+          type: "button",
+          class: "hc-icon-btn hc-param-helper-tool",
+          title: t("action.collapse"),
+          text: "«",
+          on: { click: () => { paramHelperUi.open = false; paint(); } }
+        })
+      ]);
+      head.append(tabs, tools);
+
+      const search = el("input", {
+        class: "hc-input hc-param-helper-search",
+        type: "search",
+        placeholder: t("paramHelper.search"),
+        value: paramHelperUi.query || ""
+      });
+      search.addEventListener("input", () => {
+        paramHelperUi.query = search.value;
+        paintList();
+      });
+
+      const list = el("div", { class: "hc-param-helper-list" });
+      function paintList() {
+        clear(list);
+        const query = String(paramHelperUi.query || "").trim();
+        const rows = (paramHelperUi.tab === "dynamic" ? dynamicRows() : dictRows())
+          .filter((row) => matchesQuery(row, query));
+        if (!rows.length) {
+          list.append(el("div", { class: "hc-param-helper-empty", text: t("paramHelper.empty") }));
+          return;
+        }
+        rows.forEach((row) => {
+          const item = el("button", {
+            type: "button",
+            class: "hc-param-helper-item",
+            title: t("paramHelper.insertHint", { name: row.token }),
+            on: { click: () => insertToken(row.token) }
+          });
+          item.append(el("span", { class: "hc-param-helper-key", text: row.key }));
+          item.append(el("span", { class: "hc-param-helper-detail", text: row.detail || "" }));
+          list.append(item);
+        });
+      }
+      paintList();
+
+      const foot = el("div", { class: "hc-param-helper-foot" }, [
+        el("span", { class: "hc-param-helper-foot-label", text: t("paramHelper.title") }),
+        el("button", {
+          type: "button",
+          class: "hc-link-btn",
+          text: t("paramHelper.howTo"),
+          on: {
+            click: () => toast(t("paramHelper.howToDetail"), "success")
+          }
+        })
+      ]);
+
+      panel.append(head, search, list, foot);
+      root.append(panel);
+    }
+
+    paint();
+    return { root, refresh: paint };
+  }
+
+  /**
+   * Wrap a code editor with the param-helper rail on the right.
+   * Returns { root, editor, helper }.
+   */
+  function wrapEditorWithParamHelper(editor, options) {
+    const opts = options || {};
+    const row = el("div", { class: "hc-editor-with-helper" });
+    const helper = createParamHelper({
+      getTextarea: () => editor && editor.textarea,
+      onInsert: (token, value) => {
+        if (value != null && editor && typeof editor.setValue === "function") {
+          // setValue would reset caret; value already applied via insertTextAtCursor
+          if (typeof opts.onChange === "function") opts.onChange(value);
+        } else if (typeof opts.onChange === "function" && editor) {
+          opts.onChange(editor.textarea.value);
+        }
+      }
+    });
+    row.append(editor.root, helper.root);
+    return { root: row, editor, helper };
+  }
+
+  const ICON_FORMAT = "<svg width=\"1em\" height=\"1em\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 4h10M3 8h7M3 12h10\"/><path d=\"M12.5 6.5l1.5 1.5-1.5 1.5\"/></svg>";
+  /* Corners-style maximize — cleaner than diagonal expand arrows */
+  const ICON_FULLSCREEN = "<svg width=\"1em\" height=\"1em\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3\"/></svg>";
+
+  /**
+   * Float format / fullscreen icon buttons at the top-right of a code editor.
+   * options: { onFormat?, onFullscreen? }
+   */
+  function mountEditorFloatActions(editor, options) {
+    const opts = options || {};
+    if (!editor || !editor.root) return null;
+    const host = el("div", { class: "hc-editor-float-actions", role: "toolbar" });
+    const t = (key, params) => HC.i18n.t(key, params);
+
+    if (typeof opts.onFormat === "function") {
+      host.append(el("button", {
+        type: "button",
+        class: "hc-editor-float-btn",
+        title: t("action.format"),
+        "aria-label": t("action.format"),
+        html: ICON_FORMAT,
+        on: { click: (event) => { event.preventDefault(); opts.onFormat(); } }
+      }));
+    }
+    if (typeof opts.onFullscreen === "function") {
+      host.append(el("button", {
+        type: "button",
+        class: "hc-editor-float-btn",
+        title: t("editor.fullscreenHint"),
+        "aria-label": t("action.fullscreen"),
+        html: ICON_FULLSCREEN,
+        on: { click: (event) => { event.preventDefault(); opts.onFullscreen(); } }
+      }));
+    }
+    editor.root.append(host);
+    editor.root.classList.add("has-float-actions");
+    return host;
+  }
+
   window.HC.util = {
     $, $$, el, clear, uid, escapeHtml, escapeAttr,
     formatBytes, formatDuration, statusClass,
     copyText, toast, openModal, closeModal, confirmDialog, promptDialog,
     createKVEditor, emptyRow, readFileBase64, varTips, renderDynamicVarCatalog, openDynamicVarsDialog,
-    highlightJson, highlightSource, createHighlightedEditor,
-    tryFormatJson, tryFormatXml, isTextual, isImage, looksLikeJson,
-    isJsonContentType, stripJsonComments, parseJsonc, toggleLineComments, bindCommentShortcut,
+    insertTextAtCursor, createParamHelper, wrapEditorWithParamHelper, mountEditorFloatActions,
+    highlightJson, highlightSource, createHighlightedEditor, openCodeEditorFullscreen,
+    tryFormatJson, formatJsoncPreserve, tryFormatXml, isTextual, isImage, looksLikeJson,
+    isJsonContentType, stripJsonComments, parseJsonc, tokenizeJsonc,
+    toggleLineComments, bindCommentShortcut,
     debounce, decodeText, base64ToBytes
   };
 })();

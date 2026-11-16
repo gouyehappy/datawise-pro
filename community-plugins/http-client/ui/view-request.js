@@ -460,6 +460,7 @@
     const panel = el("div", { class: "hc-panel" });
     host.append(panel);
     if (tab.clientType === "markdown") {
+      host.classList.remove("is-editor-fill");
       renderMarkdown(panel, tab);
       return;
     }
@@ -474,6 +475,13 @@
     else if (tab.section === "scripts-post") renderScriptPane(panel, tab, "post");
     else if (tab.section === "scripts") renderScriptPane(panel, tab, "pre");
     else renderOptions(panel, tab);
+
+    // raw Body / 脚本编辑器：面板不滚，只滚编辑器，避免双滚动条
+    const fillEditor = (tab.section === "body" && tab.body && tab.body.mode === "raw")
+      || ((tab.section === "scripts-pre" || tab.section === "scripts-post" || tab.section === "scripts")
+        && panel.querySelector(".hc-editor-with-helper, .hc-code-editor"));
+    host.classList.toggle("is-editor-fill", !!fillEditor);
+    panel.classList.toggle("is-editor-fill", !!fillEditor);
   }
 
   function renderMarkdown(panel, tab) {
@@ -803,30 +811,38 @@
 
     if (tab.body.mode === "raw") {
       const bodyMode = util.isJsonContentType(tab.body.contentType) ? "json" : "js";
+      const onBodyChange = (value) => { tab.body.raw = value; markChanged(tab); };
       const editor = util.createHighlightedEditor({
         className: "hc-body-raw",
         mode: bodyMode,
         value: tab.body.raw || "",
         placeholder: t("body.placeholder"),
-        onChange: (value) => { tab.body.raw = value; markChanged(tab); }
+        onChange: onBodyChange
       });
-      const toolbar = el("div", { class: "hc-body-toolbar" }, [
-        el("button", {
-          class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("action.format"),
-          on: {
-            click: () => {
-              const formatted = util.tryFormatJson(editor.textarea.value) || util.tryFormatXml(editor.textarea.value);
-              if (formatted) {
-                editor.setValue(formatted);
-                tab.body.raw = formatted;
-                markChanged(tab);
-              }
-            }
-          }
-        }),
-        el("span", { class: "hc-hint", text: t("body.rawHint") })
-      ]);
-      panel.append(toolbar, editor.root);
+      const wrapped = util.wrapEditorWithParamHelper(editor, { onChange: onBodyChange });
+      const syncBody = (value) => {
+        tab.body.raw = value;
+        markChanged(tab);
+        editor.setValue(value);
+      };
+      util.mountEditorFloatActions(editor, {
+        onFormat: () => {
+          const formatted = util.tryFormatJson(editor.textarea.value) || util.tryFormatXml(editor.textarea.value);
+          if (formatted) syncBody(formatted);
+        },
+        onFullscreen: () => {
+          util.openCodeEditorFullscreen({
+            title: t("section.body"),
+            value: editor.textarea.value,
+            mode: bodyMode,
+            placeholder: t("body.placeholder"),
+            showFormat: true,
+            onChange: onBodyChange,
+            onClose: (value) => { editor.setValue(value); }
+          });
+        }
+      });
+      panel.append(el("div", { class: "hc-hint", text: t("body.rawHint") }), wrapped.root);
       return;
     }
 
@@ -943,22 +959,36 @@
       return;
     }
 
-    panel.append(el("div", {
-      class: "hc-hint",
-      text: isPre ? t("scripts.preHint") : t("scripts.postHint")
-    }));
+    const onScriptChange = (value) => {
+      if (isPre) tab.scripts.pre = value;
+      else tab.scripts.post = value;
+      markChanged(tab);
+    };
     const editor = util.createHighlightedEditor({
       className: "hc-scripts-editor is-solo",
       mode: "js",
       value: code,
       placeholder: t(isPre ? "scripts.prePlaceholder" : "scripts.postPlaceholder"),
-      onChange: (value) => {
-        if (isPre) tab.scripts.pre = value;
-        else tab.scripts.post = value;
-        markChanged(tab);
+      onChange: onScriptChange
+    });
+    const wrapped = util.wrapEditorWithParamHelper(editor, { onChange: onScriptChange });
+    util.mountEditorFloatActions(editor, {
+      onFullscreen: () => {
+        util.openCodeEditorFullscreen({
+          title: isPre ? t("scripts.pre") : t("scripts.post"),
+          value: editor.textarea.value,
+          mode: "js",
+          placeholder: t(isPre ? "scripts.prePlaceholder" : "scripts.postPlaceholder"),
+          showFormat: false,
+          onChange: onScriptChange,
+          onClose: (value) => { editor.setValue(value); }
+        });
       }
     });
-    panel.append(editor.root);
+    panel.append(
+      el("div", { class: "hc-hint", text: isPre ? t("scripts.preHint") : t("scripts.postHint") }),
+      wrapped.root
+    );
     requestAnimationFrame(() => {
       try { editor.textarea.focus(); } catch (_) { /* ignore */ }
     });

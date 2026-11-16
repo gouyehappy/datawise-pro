@@ -54,9 +54,21 @@ assert(
   parseJsonc('{ "q": "say \\"hi\\" // not comment", "b": 2 }').b === 2
 );
 
+const formatted = tryFormatJson('{\n//a\n"x":1}');
 assert(
-  "format with comments",
-  tryFormatJson('{\n//a\n"x":1}') === '{\n  "x": 1\n}'
+  "format keeps comments",
+  !!formatted && formatted.includes("//a") && formatted.includes('"x"') && formatted.includes(":"),
+  formatted
+);
+assert(
+  "format empty object",
+  tryFormatJson("{}") === "{}\n"
+);
+const withBlock = tryFormatJson('{ "a": /* keep */ 1 }');
+assert(
+  "format keeps block comment",
+  !!withBlock && withBlock.includes("/* keep */") && withBlock.includes('"a"'),
+  withBlock
 );
 
 assert(
