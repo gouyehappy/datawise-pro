@@ -90,6 +90,8 @@ export default {
             '还没有装好 {type} 连接器。打开「设置 → 连接器市场」安装后，再试一次连接。',
         DATASOURCE_TYPE_REQUIRED: '请选择数据源类型',
         CONNECTION_ACCESS_DENIED: '当前账号对此连接没有操作权限，请使用自己的连接或联系管理员',
+        CONNECTION_SHARE_NOT_FOUND: '要共享的连接不存在，请刷新后重试',
+        CONNECTION_SHARE_FORBIDDEN: '只能共享你自己拥有的连接（不能共享他人私有或无主连接）',
         API_TOKEN_FORBIDDEN: '当前 API Token 权限不足，请检查 Token 的 scope 配置',
         HTTP_NOT_READY: '无法连接后端服务，请确认 DataWise 已启动后重试',
         HTTP_STATUS: '服务请求失败，请稍后重试',

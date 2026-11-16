@@ -6,7 +6,13 @@ import {DwButton, DwCheckbox, DwInput} from '@/core/components'
 
 interface SharedConnectionRow {
   id: string
+  label: string
   access: ConnectionAccessLevel
+}
+
+interface ShareableConnectionOption {
+  id: string
+  label: string
 }
 
 interface ProjectOption {
@@ -20,7 +26,8 @@ defineProps<{
   requireInviteApproval: boolean
   showInviteBadge: boolean
   pendingInviteCount: number
-  sharedConnectionsInput: string
+  shareableConnections: ShareableConnectionOption[]
+  sharedConnectionIds: string[]
   sharedConsolesInput: string
   shareSqlHistory: boolean
   restrictVisibleProjects: boolean
@@ -38,12 +45,12 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:sharedConnectionsInput': [value: string]
   'update:sharedConsolesInput': [value: string]
   'update:requireInviteApproval': [value: boolean]
   'update:shareSqlHistory': [value: boolean]
   'update:restrictVisibleProjects': [value: boolean]
   'toggle-visible-project': [projectId: string]
+  'toggle-shared-connection': [connectionId: string]
   'update-connection-access': [connectionId: string, access: ConnectionAccessLevel]
   'copy-invite-code': []
   'open-invites-tab': []
@@ -136,13 +143,21 @@ const emit = defineEmits<{
     <div class="sharing-block">
       <h3 class="sharing-block__title">{{ $t('team.sharedConnectionsTitle') }}</h3>
       <p class="sharing-block__desc">{{ $t('team.sharedConnectionsDesc') }}</p>
-      <DwInput
-          class="shared-input"
-          :model-value="sharedConnectionsInput"
-          :rows="3"
-          :placeholder="$t('team.sharedConnectionsPlaceholder')"
-          @update:model-value="emit('update:sharedConnectionsInput', String($event))"
-      />
+      <p v-if="!shareableConnections.length" class="sharing-block__hint">
+        {{ $t('team.sharedConnectionsEmpty') }}
+      </p>
+      <div v-else class="on-call-list" data-testid="team-shared-connections-picker">
+        <DwCheckbox
+            v-for="item in shareableConnections"
+            :key="item.id"
+            class="on-call-row"
+            :model-value="sharedConnectionIds.includes(item.id)"
+            @update:model-value="emit('toggle-shared-connection', item.id)"
+        >
+          <span class="shared-connection-label">{{ item.label }}</span>
+          <code class="on-call-row__id">{{ item.id }}</code>
+        </DwCheckbox>
+      </div>
       <div v-if="sharedConnectionRows.length" class="shared-access-list">
         <p class="shared-access-list__hint">{{ $t('team.connectionAccessHint') }}</p>
         <div
@@ -150,6 +165,7 @@ const emit = defineEmits<{
             :key="row.id"
             class="shared-access-row"
         >
+          <span class="shared-access-row__name">{{ row.label }}</span>
           <code class="shared-access-row__id">{{ row.id }}</code>
           <DwSelect
               :model-value="row.access"
@@ -184,6 +200,7 @@ const emit = defineEmits<{
             :model-value="onCallConnectionIds.includes(row.id)"
             @update:model-value="emit('toggle-on-call-connection', row.id)"
         >
+          <span class="shared-connection-label">{{ row.label }}</span>
           <code class="on-call-row__id">{{ row.id }}</code>
         </DwCheckbox>
       </div>
@@ -309,13 +326,31 @@ const emit = defineEmits<{
   background: var(--dw-bg-panel);
 }
 
+.shared-access-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--dw-text-md);
+}
+
 .shared-access-row__id {
   font-size: var(--dw-text-sm);
+  color: var(--dw-text-muted);
 }
 
 .shared-access-row :deep(.dw-select) {
   min-width: 120px;
   width: auto;
+}
+
+.shared-connection-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .on-call-list {

@@ -56,6 +56,10 @@ public final class DatawiseErrorCodes {
     public static final String TEAM_AUDIT_FORBIDDEN = "TEAM_AUDIT_FORBIDDEN";
     /** Shared SQL query optimistic-lock conflict — client should pull latest. */
     public static final String SHARED_QUERY_CONFLICT = "SHARED_QUERY_CONFLICT";
+    /** Team share: connection id does not exist. */
+    public static final String CONNECTION_SHARE_NOT_FOUND = "CONNECTION_SHARE_NOT_FOUND";
+    /** Team share: actor cannot share this connection (not owner / unowned / wrong tenant). */
+    public static final String CONNECTION_SHARE_FORBIDDEN = "CONNECTION_SHARE_FORBIDDEN";
 
     private DatawiseErrorCodes() {
     }

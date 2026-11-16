@@ -2,9 +2,12 @@ package org.apache.datawise.backend.service.team;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.datawise.backend.common.DatawiseErrorCodes;
 import org.apache.datawise.backend.common.support.ConnectionAccessLevelSupport;
 import org.apache.datawise.backend.common.support.ExceptionLogging;
 import org.apache.datawise.backend.common.support.IdGenerator;
+import org.apache.datawise.backend.common.support.TeamSharedAccessMigration;
+import org.apache.datawise.backend.configstore.ConnectionStore;
 import org.apache.datawise.backend.configstore.ProjectStore;
 import org.apache.datawise.backend.domain.ProjectIds;
 import org.apache.datawise.backend.domain.ShareTeamAiSessionRequest;
@@ -13,6 +16,7 @@ import org.apache.datawise.backend.domain.TeamSharedAiSessionDto;
 import org.apache.datawise.backend.domain.TeamSummaryDto;
 import org.apache.datawise.backend.domain.TenantIds;
 import org.apache.datawise.backend.domain.UpdateOnCallConnectionsRequest;
+import org.apache.datawise.backend.model.ConnectionEntity;
 import org.apache.datawise.backend.model.ProjectEntity;
 import org.apache.datawise.backend.model.TeamEntity;
 import org.apache.datawise.backend.model.TeamMemberEntity;
@@ -39,16 +43,19 @@ public class TeamSharingService {
     private final TeamAuditService auditService;
     private final ObjectMapper objectMapper;
     private final ProjectStore projectStore;
+    private final ConnectionStore connectionStore;
 
     public TeamSharingService(
                               TeamSupport support,
                               TeamAuditService auditService,
                               ObjectMapper objectMapper,
-                              ProjectStore projectStore) {
+                              ProjectStore projectStore,
+                              ConnectionStore connectionStore) {
         this.support = support;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
         this.projectStore = projectStore;
+        this.connectionStore = connectionStore;
     }
 
     public TeamSummaryDto updateSharedConnections(String teamId, List<String> connectionIds) {
@@ -183,10 +190,12 @@ public class TeamSharingService {
         TeamMemberEntity actor = support.requireManager(teamId, userId);
         TeamEntity team = support.requireTeam(teamId);
         if (connectionIds != null) {
-            team.setSharedConnectionIds(new ArrayList<>(connectionIds));
+            List<String> normalizedIds = normalizeConnectionIds(connectionIds);
+            validateShareableConnections(team, userId, normalizedIds);
+            team.setSharedConnectionIds(new ArrayList<>(normalizedIds));
             if (connectionAccess != null) {
                 Map<String, String> normalized = new java.util.LinkedHashMap<>();
-                for (String id : connectionIds) {
+                for (String id : normalizedIds) {
                     String stored = ConnectionAccessLevelSupport.normalizeStored(connectionAccess.get(id));
                     if (ConnectionAccessLevelSupport.shouldPersist(stored)) {
                         normalized.put(id, stored);
@@ -195,7 +204,7 @@ public class TeamSharingService {
                 team.setSharedConnectionAccess(normalized);
             } else {
                 Map<String, String> pruned = new java.util.LinkedHashMap<>();
-                for (String id : connectionIds) {
+                for (String id : normalizedIds) {
                     String existing = team.getSharedConnectionAccess().get(id);
                     String stored = ConnectionAccessLevelSupport.normalizeStored(existing);
                     if (ConnectionAccessLevelSupport.shouldPersist(stored)) {
@@ -204,11 +213,12 @@ public class TeamSharingService {
                 }
                 team.setSharedConnectionAccess(pruned);
             }
-            java.util.Set<String> allowed = new HashSet<>(connectionIds);
+            team.setSharedAccessSchema(TeamSharedAccessMigration.SHARED_ACCESS_SCHEMA_READONLY_DEFAULT);
+            java.util.Set<String> allowed = new HashSet<>(normalizedIds);
             team.setOnCallConnectionIds(
                     team.getOnCallConnectionIds().stream().filter(allowed::contains).toList());
             auditService.audit(teamId, userId, "sharing.connections",
-                    "Updated shared connections (" + connectionIds.size() + ")");
+                    "Updated shared connections (" + normalizedIds.size() + ")");
         }
         if (consoleIds != null) {
             team.setSharedConsoleIds(new ArrayList<>(consoleIds));
@@ -244,6 +254,46 @@ public class TeamSharingService {
         } catch (Exception ex) {
             ExceptionLogging.recoverable(logger, "Failed to count shared AI session messages", ex);
             return 0;
+        }
+    }
+
+    private static List<String> normalizeConnectionIds(List<String> connectionIds) {
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        if (connectionIds == null) {
+            return List.of();
+        }
+        for (String id : connectionIds) {
+            if (id == null || id.isBlank()) {
+                continue;
+            }
+            normalized.add(id.trim());
+        }
+        return new ArrayList<>(normalized);
+    }
+
+    /**
+     * New shares must be owned by the actor and same-tenant.
+     * IDs already on the team may remain (co-admin can edit access without re-owning).
+     * Unowned (legacy) connections cannot be newly shared — avoids elevating tenant-wide readonly.
+     */
+    private void validateShareableConnections(TeamEntity team, Long actorUserId, List<String> connectionIds) {
+        Set<String> alreadyShared = new HashSet<>(team.getSharedConnectionIds());
+        String teamTenant = TenantIds.normalizeOrDefault(team.getTenantId());
+        for (String connectionId : connectionIds) {
+            if (alreadyShared.contains(connectionId)) {
+                continue;
+            }
+            ConnectionEntity connection = connectionStore.findConnectionById(connectionId).orElse(null);
+            if (connection == null) {
+                throw new IllegalArgumentException(DatawiseErrorCodes.CONNECTION_SHARE_NOT_FOUND);
+            }
+            String connectionTenant = TenantIds.normalizeOrDefault(connection.getTenantId());
+            if (!teamTenant.equals(connectionTenant)) {
+                throw new IllegalArgumentException(DatawiseErrorCodes.CONNECTION_SHARE_FORBIDDEN);
+            }
+            if (connection.getUserId() == null || !connection.getUserId().equals(actorUserId)) {
+                throw new IllegalArgumentException(DatawiseErrorCodes.CONNECTION_SHARE_FORBIDDEN);
+            }
         }
     }
 }

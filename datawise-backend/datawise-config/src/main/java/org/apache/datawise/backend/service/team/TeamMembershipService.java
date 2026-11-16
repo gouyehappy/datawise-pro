@@ -64,6 +64,8 @@ public class TeamMembershipService {
         team.setInviteCode(UUID.randomUUID().toString().substring(0, 8));
         team.setRequireInviteApproval(true);
         team.setCreatedAt(Instant.now());
+        team.setSharedAccessSchema(
+                org.apache.datawise.backend.common.support.TeamSharedAccessMigration.SHARED_ACCESS_SCHEMA_READONLY_DEFAULT);
         support.teamStore().saveTeam(team);
 
         TeamMemberEntity member = new TeamMemberEntity();

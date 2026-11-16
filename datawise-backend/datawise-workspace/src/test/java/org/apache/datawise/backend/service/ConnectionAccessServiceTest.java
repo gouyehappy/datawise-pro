@@ -115,10 +115,10 @@ class ConnectionAccessServiceTest {
     }
 
     @Test
-    void memberDefaultsToDdlWhenAccessNotConfigured() {
+    void memberDefaultsToReadonlyWhenAccessNotConfigured() {
         seedTeam("team-1", List.of("conn-1"), Map.of(), 1L);
         seedMember("team-1", 2L, "member");
-        assertEquals(ConnectionAccessLevel.DDL, service.resolveAccess(2L, "conn-1"));
+        assertEquals(ConnectionAccessLevel.READONLY, service.resolveAccess(2L, "conn-1"));
     }
 
     @Test

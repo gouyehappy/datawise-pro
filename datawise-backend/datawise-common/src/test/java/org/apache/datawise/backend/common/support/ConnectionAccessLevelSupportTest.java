@@ -14,14 +14,14 @@ class ConnectionAccessLevelSupportTest {
         assertEquals(ConnectionAccessLevel.READONLY, ConnectionAccessLevelSupport.fromStored("readonly"));
         assertEquals(ConnectionAccessLevel.READWRITE, ConnectionAccessLevelSupport.fromStored("readwrite"));
         assertEquals(ConnectionAccessLevel.DDL, ConnectionAccessLevelSupport.fromStored("write"));
-        assertEquals(ConnectionAccessLevel.DDL, ConnectionAccessLevelSupport.fromStored(null));
+        assertEquals(ConnectionAccessLevel.READONLY, ConnectionAccessLevelSupport.fromStored(null));
         assertEquals(ConnectionAccessLevel.READONLY, ConnectionAccessLevelSupport.fromStored("weird-level"));
     }
 
     @Test
-    void persistsOnlyRestrictedLevels() {
-        assertTrue(ConnectionAccessLevelSupport.shouldPersist("readonly"));
+    void persistsElevationsAboveReadonlyDefault() {
+        assertFalse(ConnectionAccessLevelSupport.shouldPersist("readonly"));
         assertTrue(ConnectionAccessLevelSupport.shouldPersist("readwrite"));
-        assertFalse(ConnectionAccessLevelSupport.shouldPersist("ddl"));
+        assertTrue(ConnectionAccessLevelSupport.shouldPersist("ddl"));
     }
 }

@@ -7,9 +7,13 @@ public final class ConnectionAccessLevelSupport {
     private ConnectionAccessLevelSupport() {
     }
 
+    /**
+     * Missing / blank map entry means {@link ConnectionAccessLevel#READONLY} (least privilege).
+     * Explicit DDL must be stored — see {@link #shouldPersist(String)}.
+     */
     public static ConnectionAccessLevel fromStored(String configured) {
         if (configured == null || configured.isBlank()) {
-            return ConnectionAccessLevel.DDL;
+            return ConnectionAccessLevel.READONLY;
         }
         return switch (configured.trim().toLowerCase(Locale.ROOT)) {
             case "read", "readonly" -> ConnectionAccessLevel.READONLY;
@@ -29,7 +33,8 @@ public final class ConnectionAccessLevelSupport {
         };
     }
 
+    /** Persist elevations above the readonly default (ddl / readwrite). */
     public static boolean shouldPersist(String normalized) {
-        return "readonly".equals(normalized) || "readwrite".equals(normalized);
+        return "ddl".equals(normalized) || "readwrite".equals(normalized);
     }
 }

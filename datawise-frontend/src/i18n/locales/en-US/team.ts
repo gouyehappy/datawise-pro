@@ -85,8 +85,11 @@ export default {
     nameRequired: 'Team name is required',
     codeRequired: 'Invite code is required',
     sharedConnectionsTitle: 'Shared connections',
-    sharedConnectionsDesc: 'Configure connection IDs shared with the active team (comma- or line-separated).',
+    sharedConnectionsDesc:
+        'Select data sources to share with the team (you can only add connections you own; members default to read-only).',
     sharedConnectionsPlaceholder: 'conn-1, conn-2',
+    sharedConnectionsEmpty:
+        'No visible connections yet. Create connections you own in Explorer, then share them here.',
     sharedConnectionsSave: 'Save shared connections',
     sharedConnectionsSaving: 'Saving…',
     sharedConnectionsSaved: 'Shared connections updated',
@@ -98,7 +101,8 @@ export default {
     onCallConnectionsSaving: 'Saving…',
     onCallConnectionsSaved: 'On-call connection pack updated',
     onCallConnectionsSaveFailed: 'Failed to save on-call connection pack',
-    connectionAccessHint: 'Set member default access per shared connection (viewer = read-only; admin/owner = full DDL).',
+    connectionAccessHint:
+        'Set member default access per shared connection (unset = read-only; viewer = read-only; admin/owner = full DDL).',
     connectionAccessDdl: 'DDL (full)',
     connectionAccessReadWrite: 'Read & write (DML)',
     connectionAccessReadonly: 'Read only',

@@ -26,8 +26,17 @@ public class TeamEntity {
     /** 值班连接包：须为 sharedConnectionIds 的子集 */
     private List<String> onCallConnectionIds = new ArrayList<>();
 
-    /** connectionId → read | write（仅对 member 生效；viewer 恒为 read，admin/owner 恒为 write） */
+    /**
+     * connectionId → readonly | readwrite | ddl（仅对 member 生效；viewer 恒为 readonly，admin/owner 恒为 ddl）。
+     * 缺省（未写入）= readonly；显式 ddl / readwrite 才持久化。
+     */
     private Map<String, String> sharedConnectionAccess = new HashMap<>();
+
+    /**
+     * Shared access map schema. {@code < 2} = legacy (missing entry meant DDL);
+     * {@code >= 2} = missing entry means readonly. See {@code TeamSharedAccessMigration}.
+     */
+    private int sharedAccessSchema;
 
     private List<String> sharedConsoleIds = new ArrayList<>();
 
@@ -120,6 +129,14 @@ public class TeamEntity {
 
     public void setSharedConnectionAccess(Map<String, String> sharedConnectionAccess) {
         this.sharedConnectionAccess = sharedConnectionAccess != null ? sharedConnectionAccess : new HashMap<>();
+    }
+
+    public int getSharedAccessSchema() {
+        return sharedAccessSchema;
+    }
+
+    public void setSharedAccessSchema(int sharedAccessSchema) {
+        this.sharedAccessSchema = sharedAccessSchema;
     }
 
     public List<String> getSharedConsoleIds() {

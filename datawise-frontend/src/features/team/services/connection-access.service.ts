@@ -21,7 +21,8 @@ const ACCESS_ORDER: Record<ConnectionAccessLevel, number> = {
 }
 
 export function normalizeStoredAccess(value: string | undefined): ConnectionAccessLevel {
-    if (!value?.trim()) return 'ddl'
+    // Missing entry = readonly (least privilege); match backend ConnectionAccessLevelSupport
+    if (!value?.trim()) return 'readonly'
     switch (value.trim().toLowerCase()) {
         case 'read':
         case 'readonly':
@@ -160,7 +161,8 @@ export function toStoredConnectionAccess(
 ): Record<string, ConnectionAccessLevel> {
     const stored: Record<string, ConnectionAccessLevel> = {}
     for (const [id, level] of Object.entries(access)) {
-        if (level === 'readonly' || level === 'readwrite') {
+        // Persist elevations above the readonly default (ddl / readwrite).
+        if (level === 'ddl' || level === 'readwrite') {
             stored[id] = level
         }
     }

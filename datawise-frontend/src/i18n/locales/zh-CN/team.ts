@@ -84,8 +84,10 @@ export default {
     nameRequired: '请输入团队名称',
     codeRequired: '请输入邀请码',
     sharedConnectionsTitle: '共享连接',
-    sharedConnectionsDesc: '为当前团队配置可共享的数据源连接 ID（逗号或换行分隔）。',
+    sharedConnectionsDesc:
+        '勾选要分享给团队的数据源（仅可新增你自己拥有的连接；成员默认只读，可按连接调整）。',
     sharedConnectionsPlaceholder: 'conn-1, conn-2',
+    sharedConnectionsEmpty: '当前可见连接为空。请先在资源管理器中创建属于你的连接，再回来分享。',
     sharedConnectionsSave: '保存共享连接',
     sharedConnectionsSaving: '正在保存…',
     sharedConnectionsSaved: '共享连接已更新',
@@ -97,7 +99,8 @@ export default {
     onCallConnectionsSaving: '正在保存…',
     onCallConnectionsSaved: '值班连接包已更新',
     onCallConnectionsSaveFailed: '值班连接包保存失败',
-    connectionAccessHint: '为每个共享连接设置成员默认权限（viewer 恒为只读；admin/owner 恒为 DDL 全权限）。',
+    connectionAccessHint:
+        '为每个共享连接设置成员默认权限（未设置时为只读；viewer 恒为只读；admin/owner 恒为 DDL 全权限）。',
     connectionAccessDdl: 'DDL（全权限）',
     connectionAccessReadWrite: '读写（DML）',
     connectionAccessReadonly: '只读',

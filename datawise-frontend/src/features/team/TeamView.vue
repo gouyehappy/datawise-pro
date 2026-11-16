@@ -25,7 +25,11 @@ import {
     shouldAutoOpenInvitesTab,
     shouldShowInviteApprovalBadge,
 } from '@/features/team/services/team-invite.service'
-import {parseDelimitedIds} from '@/features/team/services/team-sharing.service'
+import {
+    buildShareableConnectionOptions,
+    parseDelimitedIds,
+    toggleSharedConnectionId,
+} from '@/features/team/services/team-sharing.service'
 import {
     pruneOnCallConnectionIds,
     toggleOnCallConnectionId,
@@ -37,7 +41,9 @@ import {
     type TeamRole,
 } from '@/features/team/services/team-role.service'
 import {useAuthStore} from '@/features/auth/stores/auth-store'
+import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useProjectStore} from '@/features/project/stores/project'
+import {walkTree} from '@/core/utils/tree'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
 
 type TeamTab = 'members' | 'invites' | 'audit' | 'sharing' | 'aiSessions' | 'sharedQueries'
@@ -48,6 +54,7 @@ const {t, locale} = useI18n()
 const layout = useLayoutStore()
 const shortcutPanel = useShortcutPanelStore()
 const teamStore = useTeamStore()
+const explorerStore = useExplorerStore()
 const projectStore = useProjectStore()
 const auth = useAuthStore()
 
@@ -57,7 +64,7 @@ const createError = ref('')
 const joinError = ref('')
 const composerMode = ref<ComposerMode | null>(null)
 const activeTab = ref<TeamTab>('members')
-const sharedConnectionsInput = ref('')
+const sharedConnectionIds = ref<string[]>([])
 const sharedConnectionAccess = ref<Record<string, ConnectionAccessLevel>>({})
 const sharedConsolesInput = ref('')
 const shareSqlHistory = ref(false)
@@ -129,10 +136,33 @@ const connectionAccessOptions = computed<SelectOption[]>(() => [
   {value: 'readonly', label: t('team.connectionAccessReadonly')},
 ])
 
+const explorerConnectionOptions = computed(() => {
+    const rows: {id: string; label: string}[] = []
+    walkTree(explorerStore.tree, (node) => {
+        if (node.type === 'connection' && node.id) {
+            rows.push({id: node.id, label: node.label?.trim() || node.id})
+        }
+    })
+    return rows
+})
+
+const shareableConnections = computed(() =>
+    buildShareableConnectionOptions(explorerConnectionOptions.value, sharedConnectionIds.value),
+)
+
+const connectionLabelById = computed(() => {
+    const map = new Map<string, string>()
+    for (const item of shareableConnections.value) {
+        map.set(item.id, item.label)
+    }
+    return map
+})
+
 const sharedConnectionRows = computed(() =>
-    parseDelimitedIds(sharedConnectionsInput.value).map((id) => ({
+    sharedConnectionIds.value.map((id) => ({
         id,
-        access: sharedConnectionAccess.value[id] ?? 'ddl',
+        label: connectionLabelById.value.get(id) ?? id,
+        access: sharedConnectionAccess.value[id] ?? 'readonly',
     })),
 )
 
@@ -164,7 +194,7 @@ function inviteStatusLabel(status: string): string {
 watch(
     activeTeam,
     (team) => {
-        sharedConnectionsInput.value = (team?.sharedConnectionIds ?? []).join(', ')
+        sharedConnectionIds.value = [...(team?.sharedConnectionIds ?? [])]
         sharedConnectionAccess.value = buildConnectionAccessMap(
             team?.sharedConnectionIds ?? [],
             team?.sharedConnectionAccess,
@@ -339,6 +369,13 @@ function selectTeam(teamId: string) {
     teamStore.activeTeamId = teamId
 }
 
+function toggleSharedConnection(connectionId: string) {
+    const nextIds = toggleSharedConnectionId(sharedConnectionIds.value, connectionId)
+    sharedConnectionIds.value = nextIds
+    sharedConnectionAccess.value = buildConnectionAccessMap(nextIds, sharedConnectionAccess.value)
+    onCallConnectionIds.value = pruneOnCallConnectionIds(onCallConnectionIds.value, nextIds)
+}
+
 async function saveSharedConnections() {
     const team = activeTeam.value
     if (!team) {
@@ -347,7 +384,7 @@ async function saveSharedConnections() {
     }
     savingSharedConnections.value = true
     try {
-        const connectionIds = parseDelimitedIds(sharedConnectionsInput.value)
+        const connectionIds = [...sharedConnectionIds.value]
         const connectionAccess = buildConnectionAccessMap(connectionIds, sharedConnectionAccess.value)
         sharedConnectionAccess.value = connectionAccess
         onCallConnectionIds.value = pruneOnCallConnectionIds(
@@ -424,7 +461,7 @@ async function saveOnCallConnections() {
     }
     savingOnCallConnections.value = true
     try {
-        const sharedIds = parseDelimitedIds(sharedConnectionsInput.value)
+        const sharedIds = [...sharedConnectionIds.value]
         const payload = pruneOnCallConnectionIds(onCallConnectionIds.value, sharedIds)
         onCallConnectionIds.value = payload
         await teamStore.updateOnCallConnections(team.id, payload)
@@ -831,7 +868,6 @@ onMounted(() => {
                     v-else-if="activeTab === 'sharing' && canManage"
                     :invite-code="activeInviteCode"
                     v-model:require-invite-approval="requireInviteApproval"
-                    v-model:shared-connections-input="sharedConnectionsInput"
                     v-model:shared-consoles-input="sharedConsolesInput"
                     v-model:share-sql-history="shareSqlHistory"
                     :restrict-visible-projects="restrictVisibleProjects"
@@ -839,6 +875,8 @@ onMounted(() => {
                     :project-options="projectOptions"
                     :show-invite-badge="showInviteBadge"
                     :pending-invite-count="pendingInviteCount"
+                    :shareable-connections="shareableConnections"
+                    :shared-connection-ids="sharedConnectionIds"
                     :shared-connection-rows="sharedConnectionRows"
                     :on-call-connection-ids="onCallConnectionIds"
                     :connection-access-options="connectionAccessOptions"
@@ -851,6 +889,7 @@ onMounted(() => {
                     @copy-invite-code="copyInviteCode"
                     @open-invites-tab="openInvitesTab"
                     @save-settings="saveTeamSettings"
+                    @toggle-shared-connection="toggleSharedConnection"
                     @update-connection-access="setSharedConnectionAccess"
                     @save-shared-connections="saveSharedConnections"
                     @toggle-on-call-connection="toggleOnCallConnection"

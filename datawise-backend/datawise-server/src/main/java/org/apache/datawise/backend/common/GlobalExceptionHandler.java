@@ -308,7 +308,9 @@ public class GlobalExceptionHandler {
                  "PASSPHRASE_INCORRECT",
                  "SCHEMA_UNSUPPORTED",
                  "LEGACY_UNSUPPORTED",
-                 "CONNECTION_NOT_FOUND" -> true;
+                 "CONNECTION_NOT_FOUND",
+                 DatawiseErrorCodes.CONNECTION_SHARE_NOT_FOUND,
+                 DatawiseErrorCodes.CONNECTION_SHARE_FORBIDDEN -> true;
             default -> false;
         };
     }
