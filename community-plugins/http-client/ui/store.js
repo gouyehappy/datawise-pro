@@ -1017,8 +1017,14 @@
       }
     };
     if (tab.body.mode === "raw") {
-      spec.body.raw = resolveText(tab.body.raw);
-      spec.body.contentType = tab.body.contentType || "";
+      let raw = resolveText(tab.body.raw);
+      const contentType = tab.body.contentType || "";
+      // JSONC: keep // and /* */ in the editor; strip before wire so APIs get strict JSON.
+      if (util.isJsonContentType(contentType) && raw) {
+        raw = util.stripJsonComments(raw);
+      }
+      spec.body.raw = raw;
+      spec.body.contentType = contentType;
     } else if (tab.body.mode === "urlencoded" || tab.body.mode === "formdata") {
       spec.body.fields = activeRows(tab.body.fields).map((row) => ({
         key: resolveText(row.key),

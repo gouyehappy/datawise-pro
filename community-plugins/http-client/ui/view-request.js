@@ -802,23 +802,31 @@
     }
 
     if (tab.body.mode === "raw") {
+      const bodyMode = util.isJsonContentType(tab.body.contentType) ? "json" : "js";
+      const editor = util.createHighlightedEditor({
+        className: "hc-body-raw",
+        mode: bodyMode,
+        value: tab.body.raw || "",
+        placeholder: t("body.placeholder"),
+        onChange: (value) => { tab.body.raw = value; markChanged(tab); }
+      });
       const toolbar = el("div", { class: "hc-body-toolbar" }, [
         el("button", {
           class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("action.format"),
           on: {
             click: () => {
-              const formatted = util.tryFormatJson(textarea.value) || util.tryFormatXml(textarea.value);
-              if (formatted) { textarea.value = formatted; tab.body.raw = formatted; markChanged(tab); }
+              const formatted = util.tryFormatJson(editor.textarea.value) || util.tryFormatXml(editor.textarea.value);
+              if (formatted) {
+                editor.setValue(formatted);
+                tab.body.raw = formatted;
+                markChanged(tab);
+              }
             }
           }
         }),
         el("span", { class: "hc-hint", text: t("body.rawHint") })
       ]);
-      const textarea = el("textarea", {
-        class: "hc-textarea hc-body-raw", spellcheck: "false", placeholder: t("body.placeholder"), value: tab.body.raw || ""
-      });
-      textarea.addEventListener("input", () => { tab.body.raw = textarea.value; markChanged(tab); });
-      panel.append(toolbar, textarea);
+      panel.append(toolbar, editor.root);
       return;
     }
 
@@ -939,20 +947,20 @@
       class: "hc-hint",
       text: isPre ? t("scripts.preHint") : t("scripts.postHint")
     }));
-    const editor = el("textarea", {
-      class: "hc-textarea hc-scripts-editor is-solo",
-      spellcheck: "false",
+    const editor = util.createHighlightedEditor({
+      className: "hc-scripts-editor is-solo",
+      mode: "js",
+      value: code,
       placeholder: t(isPre ? "scripts.prePlaceholder" : "scripts.postPlaceholder"),
-      value: code
+      onChange: (value) => {
+        if (isPre) tab.scripts.pre = value;
+        else tab.scripts.post = value;
+        markChanged(tab);
+      }
     });
-    editor.addEventListener("input", () => {
-      if (isPre) tab.scripts.pre = editor.value;
-      else tab.scripts.post = editor.value;
-      markChanged(tab);
-    });
-    panel.append(editor);
+    panel.append(editor.root);
     requestAnimationFrame(() => {
-      try { editor.focus(); } catch (_) { /* ignore */ }
+      try { editor.textarea.focus(); } catch (_) { /* ignore */ }
     });
   }
 

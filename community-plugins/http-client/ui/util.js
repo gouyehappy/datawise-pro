@@ -759,23 +759,209 @@
   /* ------------------------------------------------------- highlighting --- */
 
   function highlightJson(text) {
-    const escaped = escapeHtml(text, true);
-    return escaped.replace(
-      /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g,
-      (match, string, colon, literal) => {
-        if (string) {
-          const cls = colon ? "hc-json-key" : "hc-json-string";
-          return `<span class="${cls}">${string}</span>${colon || ""}`;
-        }
-        if (literal) return `<span class="hc-json-literal">${literal}</span>`;
-        return `<span class="hc-json-number">${match}</span>`;
+    return highlightSource(text, "json");
+  }
+
+  const JS_KEYWORDS = /^(var|let|const|function|return|if|else|for|while|do|switch|case|break|continue|new|typeof|instanceof|this|try|catch|finally|throw|class|extends|import|export|default|async|await|of|in|pm|apt|expect|console)$/;
+
+  /** Syntax highlight for JSONC / JS editors (comments, strings, keys, literals). */
+  function highlightSource(text, mode) {
+    const src = String(text == null ? "" : text);
+    const js = mode === "js";
+    let html = "";
+    let i = 0;
+
+    const push = (chunk, cls) => {
+      const escaped = escapeHtml(chunk, true);
+      html += cls ? `<span class="${cls}">${escaped}</span>` : escaped;
+    };
+
+    while (i < src.length) {
+      const ch = src[i];
+      const next = src[i + 1];
+
+      if (ch === "/" && next === "/") {
+        let j = i + 2;
+        while (j < src.length && src[j] !== "\n" && src[j] !== "\r") j += 1;
+        push(src.slice(i, j), "hc-code-comment");
+        i = j;
+        continue;
       }
-    );
+      if (ch === "/" && next === "*") {
+        let j = i + 2;
+        while (j < src.length && !(src[j] === "*" && src[j + 1] === "/")) j += 1;
+        if (j < src.length) j += 2;
+        push(src.slice(i, j), "hc-code-comment");
+        i = j;
+        continue;
+      }
+
+      if (ch === "\"" || (js && (ch === "'" || ch === "`"))) {
+        const quote = ch;
+        let j = i + 1;
+        let esc = false;
+        while (j < src.length) {
+          const c = src[j];
+          if (esc) { esc = false; j += 1; continue; }
+          if (c === "\\") { esc = true; j += 1; continue; }
+          if (c === quote) { j += 1; break; }
+          if (quote !== "`" && (c === "\n" || c === "\r")) break;
+          j += 1;
+        }
+        const str = src.slice(i, j);
+        if (!js && quote === "\"") {
+          let k = j;
+          while (k < src.length && /[ \t\r\n]/.test(src[k])) k += 1;
+          if (src[k] === ":") {
+            push(str, "hc-json-key");
+            i = j;
+            continue;
+          }
+        }
+        push(str, "hc-json-string");
+        i = j;
+        continue;
+      }
+
+      if ((ch === "-" && next && /[0-9]/.test(next)) || /[0-9]/.test(ch)) {
+        const before = i > 0 ? src[i - 1] : "";
+        if (!/[A-Za-z_$]/.test(before)) {
+          let j = i + 1;
+          while (j < src.length && /[0-9.eE+-]/.test(src[j])) j += 1;
+          push(src.slice(i, j), "hc-json-number");
+          i = j;
+          continue;
+        }
+      }
+
+      if (/[A-Za-z_$]/.test(ch)) {
+        let j = i + 1;
+        while (j < src.length && /[A-Za-z0-9_$]/.test(src[j])) j += 1;
+        const word = src.slice(i, j);
+        if (word === "true" || word === "false" || word === "null" || word === "undefined") {
+          push(word, "hc-json-literal");
+        } else if (js && JS_KEYWORDS.test(word)) {
+          push(word, "hc-code-keyword");
+        } else {
+          push(word, "");
+        }
+        i = j;
+        continue;
+      }
+
+      push(ch, "");
+      i += 1;
+    }
+    return html;
+  }
+
+  /**
+   * Transparent textarea over a highlighted <pre> so comments / JSON tokens show colors.
+   * Returns { root, textarea, setValue, refresh }.
+   */
+  function createHighlightedEditor(options) {
+    const opts = options || {};
+    const mode = opts.mode === "js" ? "js" : "json";
+    const root = el("div", {
+      class: ["hc-code-editor", opts.className || ""].filter(Boolean).join(" ")
+    });
+    const backdrop = el("pre", { class: "hc-code-editor-backdrop", "aria-hidden": "true" });
+    const code = el("code", {});
+    backdrop.appendChild(code);
+    const textarea = el("textarea", {
+      class: ["hc-textarea", "hc-code-editor-input", opts.inputClass || ""].filter(Boolean).join(" "),
+      spellcheck: "false",
+      placeholder: opts.placeholder || "",
+      value: opts.value || ""
+    });
+
+    function paint() {
+      const value = textarea.value;
+      code.innerHTML = highlightSource(value, mode) + (value.endsWith("\n") ? "\n" : "");
+    }
+
+    function syncScroll() {
+      backdrop.scrollTop = textarea.scrollTop;
+      backdrop.scrollLeft = textarea.scrollLeft;
+    }
+
+    function emit() {
+      paint();
+      if (typeof opts.onChange === "function") opts.onChange(textarea.value);
+    }
+
+    textarea.addEventListener("input", emit);
+    textarea.addEventListener("scroll", syncScroll);
+    bindCommentShortcut(textarea, emit);
+    paint();
+    root.append(backdrop, textarea);
+
+    return {
+      root,
+      textarea,
+      setValue: (value) => {
+        textarea.value = value == null ? "" : String(value);
+        paint();
+      },
+      refresh: paint
+    };
+  }
+
+  /** True when Content-Type is JSON (incl. +json / charset). */
+  function isJsonContentType(contentType) {
+    const type = String(contentType || "").toLowerCase().split(";")[0].trim();
+    return type === "application/json" || type === "text/json" || /\+json$/.test(type);
+  }
+
+  /** Strip line/block comments outside JSON strings (JSONC). Block comments → one space. */
+  function stripJsonComments(text) {
+    const src = String(text == null ? "" : text);
+    let out = "";
+    let i = 0;
+    let inString = false;
+    let escape = false;
+    while (i < src.length) {
+      const ch = src[i];
+      const next = src[i + 1];
+      if (inString) {
+        out += ch;
+        if (escape) escape = false;
+        else if (ch === "\\") escape = true;
+        else if (ch === "\"") inString = false;
+        i += 1;
+        continue;
+      }
+      if (ch === "\"") {
+        inString = true;
+        out += ch;
+        i += 1;
+        continue;
+      }
+      if (ch === "/" && next === "/") {
+        i += 2;
+        while (i < src.length && src[i] !== "\n" && src[i] !== "\r") i += 1;
+        continue;
+      }
+      if (ch === "/" && next === "*") {
+        i += 2;
+        while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) i += 1;
+        if (i < src.length) i += 2;
+        out += " ";
+        continue;
+      }
+      out += ch;
+      i += 1;
+    }
+    return out;
+  }
+
+  function parseJsonc(text) {
+    return JSON.parse(stripJsonComments(text));
   }
 
   function tryFormatJson(text) {
     try {
-      const parsed = JSON.parse(text);
+      const parsed = parseJsonc(text);
       if (parsed === null || typeof parsed !== "object") return null;
       return JSON.stringify(parsed, null, 2);
     } catch (error) {
@@ -784,8 +970,57 @@
   }
 
   function looksLikeJson(text) {
-    const trimmed = String(text || "").trim();
-    return trimmed.startsWith("{") || trimmed.startsWith("[");
+    const stripped = stripJsonComments(text).trim();
+    return stripped.startsWith("{") || stripped.startsWith("[");
+  }
+
+  /**
+   * Toggle // line comments for the current selection (Ctrl+/ / ⌘+/).
+   * Returns { value, selectionStart, selectionEnd } or null if unchanged.
+   */
+  function toggleLineComments(value, selStart, selEnd) {
+    const text = String(value == null ? "" : value);
+    const start = Math.max(0, Math.min(Number(selStart) || 0, text.length));
+    let end = Math.max(start, Math.min(Number(selEnd) || 0, text.length));
+    if (end > start && text[end - 1] === "\n") end -= 1;
+    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+    const lineEndIdx = text.indexOf("\n", end);
+    const lineEnd = lineEndIdx < 0 ? text.length : lineEndIdx;
+    const block = text.slice(lineStart, lineEnd);
+    const lines = block.split("\n");
+    if (!lines.length) return null;
+    const commentable = lines.filter((line) => line.trim().length > 0);
+    if (!commentable.length) return null;
+    const allCommented = commentable.every((line) => /^\s*\/\//.test(line));
+    const nextLines = lines.map((line) => {
+      if (!line.trim()) return line;
+      if (allCommented) return line.replace(/^(\s*)\/\/ ?/, "$1");
+      const indent = (line.match(/^\s*/) || [""])[0];
+      return indent + "// " + line.slice(indent.length);
+    });
+    const newBlock = nextLines.join("\n");
+    return {
+      value: text.slice(0, lineStart) + newBlock + text.slice(lineEnd),
+      selectionStart: lineStart,
+      selectionEnd: lineStart + newBlock.length
+    };
+  }
+
+  /** Bind Ctrl+/ (⌘+/) line-comment toggle on a textarea. */
+  function bindCommentShortcut(textarea, onChange) {
+    if (!textarea || textarea.__hcCommentBound) return;
+    textarea.__hcCommentBound = true;
+    textarea.addEventListener("keydown", (event) => {
+      if (event.key !== "/" || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+      event.preventDefault();
+      const next = toggleLineComments(textarea.value, textarea.selectionStart, textarea.selectionEnd);
+      if (!next) return;
+      textarea.value = next.value;
+      try {
+        textarea.setSelectionRange(next.selectionStart, next.selectionEnd);
+      } catch (_) { /* ignore */ }
+      if (typeof onChange === "function") onChange(textarea.value);
+    });
   }
 
   function tryFormatXml(text) {
@@ -940,7 +1175,9 @@
     formatBytes, formatDuration, statusClass,
     copyText, toast, openModal, closeModal, confirmDialog, promptDialog,
     createKVEditor, emptyRow, readFileBase64, varTips, renderDynamicVarCatalog, openDynamicVarsDialog,
-    highlightJson, tryFormatJson, tryFormatXml, isTextual, isImage, looksLikeJson,
+    highlightJson, highlightSource, createHighlightedEditor,
+    tryFormatJson, tryFormatXml, isTextual, isImage, looksLikeJson,
+    isJsonContentType, stripJsonComments, parseJsonc, toggleLineComments, bindCommentShortcut,
     debounce, decodeText, base64ToBytes
   };
 })();

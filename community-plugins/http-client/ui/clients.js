@@ -164,7 +164,7 @@
     if (!tab.graphql) tab.graphql = { query: "", variables: "{}" };
     let variables = {};
     try {
-      variables = JSON.parse(tab.graphql.variables || "{}");
+      variables = util.parseJsonc(tab.graphql.variables || "{}");
     } catch (error) {
       variables = {};
     }
