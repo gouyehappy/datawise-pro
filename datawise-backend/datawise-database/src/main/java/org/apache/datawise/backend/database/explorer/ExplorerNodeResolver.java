@@ -128,6 +128,12 @@ public class ExplorerNodeResolver {
             );
             return page.appendLoadMoreNode(loadMoreNodeId(target), "Load more");
         }
+        if ("scripts".equalsIgnoreCase(target.getLabel())
+                && treeBuilder.findParentById(schemaRoots, target.getId()) == null) {
+            // Connection-level scripts folder → disk instance `_scripts`
+            return instanceWorkspaceService.listSqlFileNodes(
+                    session.connectionId(), CatalogSchemaScope.CONNECTION_SCRIPTS);
+        }
         if ("workspaces".equalsIgnoreCase(target.getLabel())) {
             ExplorerTreeBuilder.CatalogSchemaContext context = resolveTablesFolderContext(schemaRoots, target, dbType);
             String instanceKey = CatalogSchemaScope.formatInstanceKey(context.catalog(), context.schema());

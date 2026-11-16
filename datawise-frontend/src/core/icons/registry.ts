@@ -15,6 +15,7 @@ import {
     Bot,
     Cable,
     Check,
+    CheckCircle,
     ChevronDown,
     ChevronLeft,
     ChevronRight,
@@ -61,6 +62,7 @@ import {
     Layers,
     Link,
     List,
+    ListChecks,
     ListOrdered,
     ListPlus,
     ListMinus,
@@ -131,6 +133,8 @@ export type DwIconName =
     | 'alert-circle'
     | 'alert-triangle'
     | 'check'
+    | 'check-circle'
+    | 'list-checks'
     | 'calendar'
     | 'info'
     | 'send'
@@ -295,6 +299,8 @@ export const DW_ICON_REGISTRY = {
     'alert-circle': CircleAlert,
     'alert-triangle': TriangleAlert,
     check: Check,
+    'check-circle': CheckCircle,
+    'list-checks': ListChecks,
     calendar: Calendar,
     info: Info,
     send: Send,

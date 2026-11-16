@@ -2,8 +2,10 @@ package org.apache.datawise.backend.schema.introspect;
 
 import org.apache.datawise.backend.common.DbType;
 import org.apache.datawise.backend.domain.TreeNode;
+import org.apache.datawise.backend.schema.CatalogSchemaScope;
 import org.apache.datawise.backend.schema.SchemaDialect;
 import org.apache.datawise.backend.schema.SchemaDialectRegistry;
+import org.apache.datawise.backend.schema.SchemaNodeIds;
 import org.apache.datawise.backend.schema.SchemaScope;
 
 import java.util.ArrayList;
@@ -57,29 +59,48 @@ public final class ExplorerSchemaFilter {
         return filtered;
     }
 
-    /** Connection root nodes: filter system catalogs and legacy Trino scripts folder. */
+    /**
+     * Connection root nodes: filter system catalogs.
+     * Catalog-schema engines (Trino / Presto / …) keep a connection-level {@code scripts}
+     * folder that maps to disk instance {@link org.apache.datawise.backend.schema.CatalogSchemaScope#CONNECTION_SCRIPTS}.
+     */
     public static List<TreeNode> filterConnectionRoots(
                                                        List<TreeNode> nodes,
                                                        String dbType,
                                                        SchemaDialectRegistry dialectRegistry) {
-        List<TreeNode> filtered = filterDatabaseRoots(nodes, dbType, dialectRegistry);
-        if (!DbType.isCatalogSchemaFamily(dbType)) {
-            return filtered;
-        }
-        List<TreeNode> withoutScripts = new ArrayList<>(filtered.size());
-        for (TreeNode node : filtered) {
-            if (isConnectionScriptsFolder(node)) {
-                continue;
-            }
-            withoutScripts.add(node);
-        }
-        return withoutScripts;
+        return filterDatabaseRoots(nodes, dbType, dialectRegistry);
     }
 
-    static boolean isConnectionScriptsFolder(TreeNode node) {
-        return "folder".equals(node.getType())
+    public static boolean isConnectionScriptsFolder(TreeNode node) {
+        return node != null
+                && "folder".equals(node.getType())
                 && node.getLabel() != null
                 && "scripts".equalsIgnoreCase(node.getLabel());
+    }
+
+    /** Ensure Trino/Presto-style connections expose a connection-level scripts folder. */
+    public static List<TreeNode> ensureConnectionScriptsFolder(
+                                                              String connectionId,
+                                                              String dbType,
+                                                              List<TreeNode> roots) {
+        if (!DbType.usesCatalogSchemaInstanceKey(dbType)) {
+            return roots == null ? List.of() : roots;
+        }
+        List<TreeNode> next = roots == null ? new ArrayList<>() : new ArrayList<>(roots);
+        for (TreeNode node : next) {
+            if (isConnectionScriptsFolder(node)) {
+                return next;
+            }
+        }
+        TreeNode scripts = new TreeNode();
+        scripts.setId(SchemaNodeIds.nodeId(
+                "folder-scripts", connectionId, CatalogSchemaScope.CONNECTION_SCRIPTS));
+        scripts.setLabel("scripts");
+        scripts.setType("folder");
+        scripts.setExpanded(false);
+        scripts.setChildren(new ArrayList<>());
+        next.add(0, scripts);
+        return next;
     }
 
     public static boolean matchesTableScope(SchemaScope scope, String tableCatalog, String tableSchema) {

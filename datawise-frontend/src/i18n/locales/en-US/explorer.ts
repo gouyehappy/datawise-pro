@@ -1003,6 +1003,8 @@ export default {
         restoreWizard: 'Import SQL…',
         exportStructure: 'Structure only',
         exportAll: 'Structure + data',
+        dataTools: 'Data tools',
+        generateData: 'Generate data…',
         importData: 'Import data',
         exportData: 'Export data',
         publishToKafka: 'Publish to Kafka…',

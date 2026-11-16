@@ -110,6 +110,7 @@ export function createExplorerLocateDomain(deps: ExplorerLocateDomainDeps) {
             findDatabaseNode: deps.findDatabaseNode,
             findNodeLabel: (nodeId) => deps.findNode(nodeId)?.label,
             findTableNodeGlobal: findTableNodeId,
+            resolveScopedLabel: buildExplorerScopedLabelResolver(deps.tree.value, deps.findNode),
         })
     }
 

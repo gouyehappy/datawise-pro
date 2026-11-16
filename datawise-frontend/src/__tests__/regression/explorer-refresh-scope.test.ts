@@ -74,7 +74,7 @@ describe('explorer-menu-intents remaining actions', () => {
     })
 
     it('resolves shortcut / kafka / scoped menu intents', () => {
-        assert.equal(resolveShortcutOpenIntent({type: 'connection', dbType: 'mysql'}), 'connection-form')
+        assert.equal(resolveShortcutOpenIntent({type: 'connection', dbType: 'mysql'}), 'open-node')
         assert.equal(resolveShortcutOpenIntent({type: 'table'}), 'open-node')
         assert.equal(resolveShortcutEditIntent({type: 'table'}), 'table-properties')
         assert.equal(resolveShortcutEditIntent({type: 'connection', dbType: 'mysql'}), 'connection-form')

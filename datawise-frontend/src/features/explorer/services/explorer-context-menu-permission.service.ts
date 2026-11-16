@@ -83,6 +83,7 @@ const EXPLORER_CONTEXT_MENU_PERMISSION_BY_ID: Record<string, FeaturePermissionKe
     'backup-wizard': FeaturePermission.WorkbenchExplorerContextExport,
     'export-structure': FeaturePermission.WorkbenchExplorerContextExport,
     'export-all': FeaturePermission.WorkbenchExplorerContextExport,
+    'generate-data': FeaturePermission.WorkbenchExplorerContextExport,
     import: FeaturePermission.WorkbenchExplorerContextExport,
     'migrate-data': FeaturePermission.WorkbenchExplorerContextExport,
     'export-data': FeaturePermission.WorkbenchExplorerContextExport,

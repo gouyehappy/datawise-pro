@@ -12,7 +12,6 @@ import {mapDatabaseShortcutToSqlEditorAction} from '@/features/explorer/services
 import {
     resolveExplorerDeleteShortcutUiPlan,
     resolveShortcutEditCommand,
-    resolveShortcutOpenCommand,
 } from '@/features/explorer/services/explorer-shortcut-commands.service'
 import {canDdlConnection} from '@/features/team/services/connection-access.service'
 import {isExplorerUiBlocking} from '@/features/explorer/services/explorer-context-menu-builders.service'
@@ -137,14 +136,8 @@ export function useExplorerTreeShortcuts(deps: ExplorerTreeShortcutsDeps) {
         if (!canRunExplorerContextMenuAction('open')) return
         const node = explorer.selectedNode
         if (!node) return
-        const command = resolveShortcutOpenCommand(node)
-        if (command.type === 'open-connection-form') {
-            workspace.openConnectionForm(command.dbType, {
-                connectionId: command.connectionId,
-                connectionName: command.connectionName,
-            })
-            return
-        }
+        // Same activate path as double-click / Enter (connect, open tab, expand).
+        // Connection edit remains F4 / runShortcutEditSelected.
         void onOpen(node)
     }
 

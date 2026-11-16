@@ -77,15 +77,35 @@ export function withCsvImportMenuDisabled(
     items: ContextMenuItem[],
     disabledHint: string,
 ): ContextMenuItem[] {
-    return items.map((item) =>
-        item.id === 'import'
-            ? {
+    return items.map((item) => {
+        if (item.id === 'import') {
+            return {...item, disabled: true, disabledHint}
+        }
+        if (item.children?.length) {
+            return {
                 ...item,
-                disabled: true,
-                disabledHint,
+                children: withCsvImportMenuDisabled(item.children, disabledHint),
             }
-            : item,
-    )
+        }
+        return item
+    })
+}
+
+/** Remove a menu id from a flat or nested context-menu tree. */
+export function omitMenuItemById(
+    items: ContextMenuItem[],
+    menuId: string,
+): ContextMenuItem[] {
+    const next: ContextMenuItem[] = []
+    for (const item of items) {
+        if (item.id === menuId) continue
+        if (item.children?.length) {
+            next.push({...item, children: omitMenuItemById(item.children, menuId)})
+            continue
+        }
+        next.push(item)
+    }
+    return next
 }
 
 /**

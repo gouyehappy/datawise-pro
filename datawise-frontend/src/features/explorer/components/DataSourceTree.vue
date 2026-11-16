@@ -673,6 +673,7 @@ function onCatalogPointerDown(event: MouseEvent, node: TreeNode) {
   }
 }
 
+/** 单击：仅选中（+ Info）；不展开、不开 Tab。拖拽后的 click 会被吞掉。 */
 function onRowClick(node: TreeNode) {
   if (suppressNextClick.value) {
     suppressNextClick.value = false
@@ -695,6 +696,7 @@ function onRowClick(node: TreeNode) {
   emit('select', node)
 }
 
+/** 双击：主激活（开 Tab / 连接 / 纯文件夹展开）。与 Enter、打开快捷键同路径。 */
 function onRowDblClick(node: TreeNode) {
   if (props.selectable) return
   commitInlineIfLeaving(node)
@@ -707,6 +709,7 @@ function onRowDblClick(node: TreeNode) {
   emit('open', node)
 }
 
+/** 三角：只展开/折叠，不走 open。 */
 function onTwistieClick(node: TreeNode) {
   commitInlineIfLeaving(node)
   emit('toggleExpand', node.id)

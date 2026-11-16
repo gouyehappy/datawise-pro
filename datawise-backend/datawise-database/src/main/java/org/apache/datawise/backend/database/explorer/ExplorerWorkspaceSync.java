@@ -2,6 +2,8 @@ package org.apache.datawise.backend.database.explorer;
 
 import org.apache.datawise.backend.domain.TreeNode;
 import org.apache.datawise.backend.schema.CatalogSchemaScope;
+import org.apache.datawise.backend.schema.SchemaNodeIds;
+import org.apache.datawise.backend.schema.introspect.ExplorerSchemaFilter;
 import org.apache.datawise.backend.service.InstanceWorkspaceService;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +33,11 @@ public class ExplorerWorkspaceSync {
         }
 
         CatalogSchemaScope scope = CatalogSchemaScope.parse(instanceName);
+        if (scope.isConnectionScripts()) {
+            syncConnectionScriptsFolder(connectionId, schemaRoots);
+            return;
+        }
+
         TreeNode scopeNode = findScopeNode(schemaRoots, scope);
         if (scopeNode == null) {
             return;
@@ -51,6 +58,26 @@ public class ExplorerWorkspaceSync {
                     return folder;
                 });
         workspacesFolder.setChildren(instanceWorkspaceService.listSqlFileNodes(connectionId, instanceKey));
+        treeBuilder.saveSchemaChildren(connectionId, schemaRoots);
+    }
+
+    private void syncConnectionScriptsFolder(String connectionId, List<TreeNode> schemaRoots) throws IOException {
+        TreeNode scriptsFolder = schemaRoots.stream()
+                .filter(ExplorerSchemaFilter::isConnectionScriptsFolder)
+                .findFirst()
+                .orElseGet(() -> {
+                    TreeNode folder = new TreeNode();
+                    folder.setId(SchemaNodeIds.nodeId(
+                            "folder-scripts", connectionId, CatalogSchemaScope.CONNECTION_SCRIPTS));
+                    folder.setLabel("scripts");
+                    folder.setType("folder");
+                    folder.setExpanded(false);
+                    folder.setChildren(new ArrayList<>());
+                    schemaRoots.add(0, folder);
+                    return folder;
+                });
+        scriptsFolder.setChildren(
+                instanceWorkspaceService.listSqlFileNodes(connectionId, CatalogSchemaScope.CONNECTION_SCRIPTS));
         treeBuilder.saveSchemaChildren(connectionId, schemaRoots);
     }
 

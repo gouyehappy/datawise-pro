@@ -23,6 +23,7 @@ import {
     injectProjectFolderShareMenuItem,
     prependJdbcSshTunnelMenuItems,
     resolveExplorerContextMenuType,
+    omitMenuItemById,
     withCsvImportMenuDisabled,
 } from '@/features/explorer/services/explorer-context-menu-builders.service'
 import {isShareableProjectFolder} from '@/features/project/services/project-explorer-files'
@@ -132,6 +133,9 @@ export function useExplorerTreeContextMenu(deps: ExplorerTreeContextMenuDeps) {
                 items = buildElasticsearchIndexMenuItems(t)
             } else if (!isCsvImportSupported(ctx?.dbType, catalogStore.items)) {
                 items = withCsvImportMenuDisabled(items, t(CAPABILITY_HINT_I18N.csvImport))
+            }
+            if (!usePluginStore().isEnabled('p-fake-data')) {
+                items = omitMenuItemById(items, 'generate-data')
             }
             const community = useCommunityPluginContributionStore()
             community.ensureLoaded()

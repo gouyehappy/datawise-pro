@@ -14,9 +14,8 @@ export type ShortcutConnectionFormCommand = {
     connectionName: string
 }
 
-export type ShortcutOpenCommand =
-    | ShortcutConnectionFormCommand
-    | {type: 'open-node'}
+/** Open shortcut always delegates to tree `onOpen` (connect / tab / expand). */
+export type ShortcutOpenCommand = {type: 'open-node'}
 
 export type ShortcutEditCommand =
     | ShortcutConnectionFormCommand
@@ -34,14 +33,11 @@ function connectionFormCommand(
     }
 }
 
-/** Pure workspace command for explorer Enter / open shortcut. */
+/** Pure workspace command for explorer open shortcut (same as double-click / Enter). */
 export function resolveShortcutOpenCommand(
     node: Pick<TreeNode, 'type' | 'id' | 'label' | 'dbType'>,
 ): ShortcutOpenCommand {
-    if (resolveShortcutOpenIntent(node) === 'connection-form') {
-        return connectionFormCommand(node) ?? {type: 'open-node'}
-    }
-    return {type: 'open-node'}
+    return {type: resolveShortcutOpenIntent(node)}
 }
 
 /** Pure workspace command for explorer F4 / edit shortcut. */

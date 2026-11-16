@@ -43,7 +43,7 @@ export function formatExplorerDatabaseScope(
     return catalog
 }
 
-/** workspaces / SQL 脚本绑定的实例名（Trino 为 catalog.schema） */
+/** workspaces / SQL 脚本绑定的实例名（Trino 为 catalog.schema；连接级 scripts → `_scripts`） */
 export function resolveExplorerInstanceLabel(
     tree: TreeNode[],
     nodeId: string,
@@ -61,6 +61,15 @@ export function resolveExplorerInstanceLabel(
     if (node.type === 'database') {
         return node.label
     }
+    if (
+        node.type === 'folder'
+        && node.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+        && isCatalogSchemaDbType(dbType)
+        && findAncestorByType(tree, node.id, 'connection')
+        && !findAncestorByType(tree, node.id, 'database')
+    ) {
+        return '_scripts'
+    }
     return undefined
 }
 
@@ -69,20 +78,36 @@ export interface ExplorerSqlFileScope {
     instanceLabel: string
 }
 
-/** 从 sql_file 节点向上解析 scope（Trino 优先 schema，MySQL 为 database） */
+/** 从 sql_file 节点向上解析 scope（Trino 优先 schema，MySQL 为 database；连接级 scripts → `_scripts`） */
 export function resolveExplorerSqlFileScope(
     tree: TreeNode[],
     sqlFileNodeId: string,
 ): ExplorerSqlFileScope | null {
     const schemaNode = findAncestorByType(tree, sqlFileNodeId, 'schema')
     const databaseNode = findAncestorByType(tree, sqlFileNodeId, 'database')
-    const scopeNode = schemaNode ?? databaseNode
-    if (!scopeNode) return null
+    if (schemaNode || databaseNode) {
+        const scopeNode = schemaNode ?? databaseNode!
+        const connection = findAncestorByType(tree, scopeNode.id, 'connection')
+        const instanceLabel =
+            resolveExplorerInstanceLabel(tree, scopeNode.id, connection?.dbType) ?? scopeNode.label
+        return {scopeNode, instanceLabel}
+    }
 
-    const connection = findAncestorByType(tree, scopeNode.id, 'connection')
-    const instanceLabel =
-        resolveExplorerInstanceLabel(tree, scopeNode.id, connection?.dbType) ?? scopeNode.label
-    return {scopeNode, instanceLabel}
+    // Connection-level scripts folder (Trino / Presto)
+    const fileNode = findNodeById(tree, sqlFileNodeId)
+    const scriptsFolder = fileNode
+        ? findAncestorByType(tree, sqlFileNodeId, 'folder')
+        : null
+    if (
+        scriptsFolder
+        && scriptsFolder.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+        && findAncestorByType(tree, scriptsFolder.id, 'connection')
+        && !findAncestorByType(tree, scriptsFolder.id, 'database')
+    ) {
+        return {scopeNode: scriptsFolder, instanceLabel: '_scripts'}
+    }
+
+    return null
 }
 
 export function findExplorerScopeNode(

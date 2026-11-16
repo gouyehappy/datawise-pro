@@ -76,6 +76,7 @@ import {
     exportTableDataCsv,
     parseSpreadsheetFile,
     pickSpreadsheetFile,
+    resolveOpenTableWorkspaceArgs,
     resolveTableContext,
     resolveTableDataIoMessageKey,
 } from '@/features/explorer/services/table-context-actions.service'
@@ -893,6 +894,31 @@ export function useExplorerTreeMenuActions(deps: ExplorerTreeMenuActionsDeps) {
                 message: t(dangerPlan.messageKey, {name: node.label}),
             }
             showTableActionDialog.value = true
+            closeMenu()
+            return
+        }
+
+        if (id === 'generate-data' && node.type === 'table') {
+            if (!usePluginStore().isEnabled('p-fake-data')) {
+                closeMenu()
+                return
+            }
+            const args = resolveOpenTableWorkspaceArgs(explorer.tree, node, 'data')
+            if (!args) {
+                layout.showErrorToast(t(resolveTableDataIoMessageKey('contextMissing')))
+                closeMenu()
+                return
+            }
+            const tabId = workspace.openTable(
+                args.tableName,
+                args.connectionId,
+                args.catalogNodeId,
+                args.database,
+                args.nodeId,
+                args.tableView,
+                args.objectType,
+            )
+            workspace.requestFakeDataDialog(tabId)
             closeMenu()
             return
         }

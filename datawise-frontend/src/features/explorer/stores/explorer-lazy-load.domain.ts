@@ -481,6 +481,32 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
                     return byId
                 }
             }
+            // Trino/Presto 连接级 scripts 文件夹
+            if (
+                byId
+                && byId.type === 'folder'
+                && byId.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+            ) {
+                const parentConnectionId = resolveConnectionId(deps.tree.value, byId.id)
+                if (parentConnectionId === connectionId) {
+                    return byId
+                }
+            }
+        }
+
+        if (
+            connection
+            && isCatalogSchemaDbType(dbType)
+            && (
+                instanceLabel === '_scripts'
+                || instanceLabel.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+            )
+        ) {
+            return connection.children?.find(
+                (node) =>
+                    node.type === 'folder'
+                    && node.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0,
+            ) ?? null
         }
 
         if (connection && isCatalogSchemaDbType(dbType) && instanceLabel.includes('.')) {
@@ -575,6 +601,19 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
         if (!scopeNode) return
 
         await expandPathToNode(scopeNode.id)
+
+        // Connection-level scripts folder: SQL files are direct children (no nested workspaces).
+        if (
+            scopeNode.type === 'folder'
+            && scopeNode.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+        ) {
+            await forceLoadChildren(connectionId, scopeNode)
+            scopeNode.expanded = true
+            deps.touchTree()
+            await expandPathToNode(scopeNode.id)
+            return
+        }
+
         await forceLoadChildren(connectionId, scopeNode)
 
         const folder = scopeNode.children?.find(

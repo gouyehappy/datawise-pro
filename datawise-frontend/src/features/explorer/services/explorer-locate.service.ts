@@ -60,6 +60,16 @@ export function findSqlFileNodeUnderDatabase(
     return matches.length === 1 ? matches[0] : null
 }
 
+/** 连接级 scripts 文件夹在磁盘上的 instance key */
+function normalizeWorkspaceInstanceLabel(instanceLabel: string): string {
+    const trimmed = instanceLabel.trim()
+    if (trimmed === '_scripts') return trimmed
+    if (trimmed.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0) {
+        return '_scripts'
+    }
+    return trimmed
+}
+
 export function resolveSqlFileNodeForLocate(
     databaseNode: TreeNode,
     connectionId: string,
@@ -70,7 +80,8 @@ export function resolveSqlFileNodeForLocate(
     if (!trimmed) return null
 
     const files = listSqlFileNodesUnderDatabase(databaseNode)
-    const expectedId = buildWorkspaceSqlFileNodeId(connectionId, instanceLabel, trimmed)
+    const diskInstance = normalizeWorkspaceInstanceLabel(instanceLabel)
+    const expectedId = buildWorkspaceSqlFileNodeId(connectionId, diskInstance, trimmed)
     const byId = files.find((node) => node.id === expectedId)
     if (byId) return byId
 
@@ -108,6 +119,7 @@ export function resolveActiveTabLocateNodeId(
         ) => TreeNode | null
         findNodeLabel: (nodeId: string) => string | undefined
         findTableNodeGlobal: (tableName: string) => string | null
+        resolveScopedLabel?: (nodeId: string) => string | undefined
     },
 ): string | null {
     if (!activeTab) return null
@@ -123,6 +135,7 @@ export function resolveActiveTabLocateNodeId(
             tabInstanceId: activeTab.instanceId,
             tabDatabase: activeTab.database,
             findNodeLabel: options.findNodeLabel,
+            resolveScopedLabel: options.resolveScopedLabel,
         })
         if (instanceLabel) {
             const databaseNode = options.findDatabaseNode(
@@ -133,17 +146,18 @@ export function resolveActiveTabLocateNodeId(
             if (databaseNode) {
                 const sqlFile = resolveSqlFileForLocate(activeTab)
                 if (sqlFile) {
+                    const diskInstance = normalizeWorkspaceInstanceLabel(instanceLabel)
                     const sqlNode = resolveSqlFileNodeForLocate(
                         databaseNode,
                         activeTab.connectionId,
-                        instanceLabel,
+                        diskInstance,
                         sqlFile,
                     )
                     if (sqlNode) return sqlNode.id
 
                     return buildWorkspaceSqlFileNodeId(
                         activeTab.connectionId,
-                        instanceLabel,
+                        diskInstance,
                         sqlFile,
                     )
                 }

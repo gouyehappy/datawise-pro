@@ -8,7 +8,10 @@ import {
     prepareExplorerInfoNode,
 } from '@/features/explorer/services/explorer-node-info.service'
 import {openLatestSqlEditor} from '@/features/explorer/services/sql-editor-actions.service'
-import {resolveExplorerNodeOpenKind} from '@/features/explorer/services/explorer-node-open.service'
+import {
+    hasExplorerNodeActivateAction,
+    resolveExplorerNodeOpenKind,
+} from '@/features/explorer/services/explorer-node-open.service'
 import {openSqlFileFromTree} from '@/features/explorer/services/instance-console.service'
 import {resolvePlatformFeatureId} from '@/features/explorer/services/explorer-ai-tree.service'
 import type {PlatformFeatureId} from '@/features/platform/types/platform.types'
@@ -240,9 +243,9 @@ export function useExplorerTreeNodeNavigation(deps: ExplorerTreeNodeNavigationDe
 }
     
     async function onOpen(node: TreeNode) {
-    cancelScheduledExplorerInfoSync()
     const favoritesNav = resolveExplorerFavoritesNavIntent(node)
     if (favoritesNav === 'show-all') {
+        cancelScheduledExplorerInfoSync()
         explorer.showAllFavoriteTables()
         return
     }
@@ -252,10 +255,14 @@ export function useExplorerTreeNodeNavigation(deps: ExplorerTreeNodeNavigationDe
     }
     const favorite = shouldOpenFavoriteTable(node)
     if (favorite && !explorer.findNode(node.id)) {
+        cancelScheduledExplorerInfoSync()
         await openPinnedTableFavorite(favorite)
         return
     }
     explorer.selectNode(node.id)
+    // Leaf meta (column/index/…): no activate — keep click/Enter Info sync.
+    if (!hasExplorerNodeActivateAction(node)) return
+    cancelScheduledExplorerInfoSync()
     const openKind = resolveExplorerNodeOpenKind(node)
     if (openKind === 'table-or-view') {
         const favorite = shouldOpenFavoriteTable(node)

@@ -228,15 +228,7 @@ public class ExplorerSchemaService {
 
             }
 
-            List<TreeNode> schemaRoots = new ArrayList<>(ExplorerSchemaFilter.filterConnectionRoots(
-
-                    treeBuilder.loadSchemaChildren(connectionId),
-
-                    connection.getDbType(),
-
-                    dialectRegistry
-
-            ));
+            List<TreeNode> schemaRoots = new ArrayList<>(connectionSchemaRoots(connection));
 
             TreeNode target = resolveTargetNode(connection, connectionId, nodeId, schemaRoots);
 
@@ -362,15 +354,7 @@ public class ExplorerSchemaService {
 
             }
 
-            List<TreeNode> schemaRoots = ExplorerSchemaFilter.filterConnectionRoots(
-
-                    treeBuilder.loadSchemaChildren(connectionId),
-
-                    connection.getDbType(),
-
-                    dialectRegistry
-
-            );
+            List<TreeNode> schemaRoots = connectionSchemaRoots(connection);
 
             TreeNode target = treeBuilder.findNodeById(schemaRoots, nodeId);
 
@@ -504,13 +488,21 @@ public class ExplorerSchemaService {
 
             if (!cached.isEmpty()) {
 
-                return ExplorerSchemaFilter.filterConnectionRoots(
+                return ExplorerSchemaFilter.ensureConnectionScriptsFolder(
 
-                        cached,
+                        connectionId,
 
                         connection.getDbType(),
 
-                        dialectRegistry
+                        ExplorerSchemaFilter.filterConnectionRoots(
+
+                                cached,
+
+                                connection.getDbType(),
+
+                                dialectRegistry
+
+                        )
 
                 );
 
@@ -536,13 +528,21 @@ public class ExplorerSchemaService {
 
         }
 
-        return ExplorerSchemaFilter.filterConnectionRoots(
+        return ExplorerSchemaFilter.ensureConnectionScriptsFolder(
 
-                children,
+                connectionId,
 
                 connection.getDbType(),
 
-                dialectRegistry
+                ExplorerSchemaFilter.filterConnectionRoots(
+
+                        children,
+
+                        connection.getDbType(),
+
+                        dialectRegistry
+
+                )
 
         );
 
@@ -668,18 +668,39 @@ public class ExplorerSchemaService {
 
         }
 
-        List<TreeNode> children = ExplorerSchemaFilter.filterConnectionRoots(
+        List<TreeNode> children = ExplorerSchemaFilter.ensureConnectionScriptsFolder(
 
-                cached,
+                connectionId,
 
                 connection.getDbType(),
 
-                dialectRegistry
+                ExplorerSchemaFilter.filterConnectionRoots(
+
+                        cached,
+
+                        connection.getDbType(),
+
+                        dialectRegistry
+
+                )
 
         );
 
         return Optional.of(buildLoadResult(connectionId, connectionId, children, null));
 
+    }
+
+    private List<TreeNode> connectionSchemaRoots(ConnectionEntity connection) {
+        String connectionId = connection.getId();
+        return ExplorerSchemaFilter.ensureConnectionScriptsFolder(
+                connectionId,
+                connection.getDbType(),
+                ExplorerSchemaFilter.filterConnectionRoots(
+                        treeBuilder.loadSchemaChildren(connectionId),
+                        connection.getDbType(),
+                        dialectRegistry
+                )
+        );
     }
 
     private List<TreeNode> resolveCachedChildren(TreeNode target, ExplorerLoadOptions options, String dbType) {

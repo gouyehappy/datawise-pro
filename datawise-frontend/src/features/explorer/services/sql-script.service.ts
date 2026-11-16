@@ -7,6 +7,10 @@ import {isCatalogSchemaDbType} from '@/features/explorer/services/explorer-lazy-
 import {listSqlFileNodesUnderDatabase} from '@/features/explorer/services/explorer-locate.service'
 import {nextScriptFileName} from '@/features/explorer/services/sql-script-naming'
 import {
+    findConnectionScriptsFolder,
+    isConnectionScriptsInstance,
+} from '@/features/workspace/services/console-workspace-instance'
+import {
     mergeConsoleScriptFileNames,
     resolveNextConsoleScriptFileName,
 } from '@/features/workspace/services/console-tab-title'
@@ -38,7 +42,14 @@ function findScopeNodeForScripts(
         const byId = findNodeById(tree, options.instanceId)
         if (
             byId
-            && (byId.type === 'database' || byId.type === 'schema')
+            && (
+                byId.type === 'database'
+                || byId.type === 'schema'
+                || (
+                    byId.type === 'folder'
+                    && byId.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+                )
+            )
             && resolveConnectionIdForNode(tree, byId.id) === connectionId
         ) {
             return byId
@@ -47,6 +58,10 @@ function findScopeNodeForScripts(
 
     const database = options?.database?.trim()
     if (!database) return null
+
+    if (isCatalogSchemaDbType(connection.dbType) && isConnectionScriptsInstance(database)) {
+        return findConnectionScriptsFolder(connection)
+    }
 
     if (isCatalogSchemaDbType(connection.dbType) && database.includes('.')) {
         return findExplorerScopeNode(connection, connection.dbType, database)

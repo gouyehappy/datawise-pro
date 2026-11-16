@@ -138,7 +138,7 @@ public class FeaturePermissionAccess {
             permissionPolicy.requirePermission(user, UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_MODELS);
             return;
         }
-        if ("workspaces".equals(label)) {
+        if ("workspaces".equals(label) || "scripts".equals(label)) {
             permissionPolicy.requirePermission(user, UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_WORKSPACES);
             return;
         }
@@ -183,7 +183,7 @@ public class FeaturePermissionAccess {
         if ("models".equals(label)) {
             return permissionPolicy.hasPermission(user, UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_MODELS);
         }
-        if ("workspaces".equals(label)) {
+        if ("workspaces".equals(label) || "scripts".equals(label)) {
             return permissionPolicy.hasPermission(user, UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_WORKSPACES);
         }
         if ("ai".equals(label) || "semantics".equals(label)) {
@@ -204,7 +204,7 @@ public class FeaturePermissionAccess {
             return ApiTokenFeatureScopes.allows(
                     currentApiTokenScopes(), UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_MODELS);
         }
-        if ("workspaces".equals(label)) {
+        if ("workspaces".equals(label) || "scripts".equals(label)) {
             return ApiTokenFeatureScopes.allows(
                     currentApiTokenScopes(), UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_WORKSPACES);
         }
@@ -228,7 +228,7 @@ public class FeaturePermissionAccess {
             requireApiTokenFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_MODELS);
             return;
         }
-        if ("workspaces".equals(label)) {
+        if ("workspaces".equals(label) || "scripts".equals(label)) {
             requireApiTokenFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_WORKSPACES);
             return;
         }

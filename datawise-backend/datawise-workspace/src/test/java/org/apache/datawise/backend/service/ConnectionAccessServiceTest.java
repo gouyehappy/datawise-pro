@@ -188,6 +188,16 @@ class ConnectionAccessServiceTest {
     }
 
     @Test
+    void requireSqlWriteAccessAllowsTrinoShowSchemasFromCatalog() {
+        ConnectionEntity trino = connection("conn-trino", 2L);
+        trino.setDbType("trino");
+        when(connectionStore.findConnectionById("conn-trino")).thenReturn(Optional.of(trino));
+        // Must not treat SHOW SCHEMAS FROM as DML (would require tableDataEdit=false → deny).
+        service.requireSqlWriteAccess(2L, "conn-trino", "show schemas from kudu");
+        service.requireEngineFeature(2L, "conn-trino", "queryExecution");
+    }
+
+    @Test
     void requireEngineFeatureBlocksRedisSchemaCompare() {
         ConnectionEntity redis = connection("conn-redis", 2L);
         redis.setDbType("redis");

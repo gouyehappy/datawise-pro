@@ -1003,6 +1003,8 @@ export default {
         restoreWizard: '导入 SQL…',
         exportStructure: '仅结构',
         exportAll: '结构 + 数据',
+        dataTools: '数据工具',
+        generateData: '生成数据…',
         importData: '导入数据',
         exportData: '导出数据',
         publishToKafka: '发布到 Kafka…',
