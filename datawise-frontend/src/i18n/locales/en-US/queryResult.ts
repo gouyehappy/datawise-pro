@@ -120,6 +120,7 @@ export default {
     indexSuggestDraft: 'Suggested indexes',
     indexSuggestApply: 'Open in console',
     indexSuggestConsoleTitle: 'Index suggestions',
+    aiMenu: 'AI',
     askAi: 'Ask AI',
     aiSummary: 'AI summary',
     aiSummaryLoading: 'Summarizing…',
@@ -209,5 +210,10 @@ export default {
         numericAlignRight: 'Right',
         typeColoring: 'Color by data type',
         hideNullColumns: 'Hide NULL columns',
+        hideEmptyColumns: 'Hide NULL / empty columns',
+        freezeFirstColumn: 'Freeze first column',
+        hideToolbarLabels: 'Hide toolbar labels',
+        csvWithoutBom: 'CSV UTF-8 without BOM',
+        tableFontSize: 'Table font size',
     },
 }

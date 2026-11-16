@@ -81,6 +81,69 @@ const {
   clearDocumentFilter,
 } = useTableDataView(props.tab)
 
+async function onImportTableData() {
+  const connectionId = props.tab.connectionId
+  const tableName = props.tab.tableName?.trim()
+  const database = databaseName.value
+  if (!connectionId || !tableName || !database) {
+    layout.showErrorToast(t('explorer.importDataFailed'))
+    return
+  }
+  const connection = explorer.findNode(connectionId)
+  const dbType = connection?.dbType
+  const {isCsvImportSupported} = await import('@/shared/capabilities/db-type-capabilities')
+  const {CAPABILITY_HINT_I18N} = await import('@/shared/capabilities/capability-keys')
+  const {useDatasourceCatalogStore} = await import('@/features/datasource/stores/datasource-catalog')
+  const catalogStore = useDatasourceCatalogStore()
+  if (!isCsvImportSupported(dbType, catalogStore.items)) {
+    workspace.setStatus(t(CAPABILITY_HINT_I18N.csvImport))
+    return
+  }
+  const {
+    buildInsertStatementsFromCsv,
+    parseSpreadsheetFile,
+    pickSpreadsheetFile,
+  } = await import('@/features/explorer/services/table-context-actions.service')
+  const {executeSqlBatch} = await import('@/features/workspace/services/sql-batch-execute.service')
+  const file = await pickSpreadsheetFile()
+  if (!file) return
+  try {
+    const parsed = await parseSpreadsheetFile(file)
+    if (!parsed.headers.length || !parsed.rows.length) {
+      layout.showErrorToast(t('explorer.importDataEmpty'))
+      return
+    }
+    const statements = buildInsertStatementsFromCsv(
+        {
+          connectionId,
+          database,
+          tableName,
+          nodeId: props.tab.explorerNodeId ?? props.tab.id,
+          dbType,
+        },
+        parsed.headers,
+        parsed.rows,
+    )
+    if (!statements.length) {
+      layout.showErrorToast(t('explorer.importDataEmpty'))
+      return
+    }
+    const result = await executeSqlBatch(
+        statements,
+        {connectionId, database},
+        undefined,
+        {isPluginEnabled: (pluginId) => pluginStore.isEnabled(pluginId)},
+    )
+    if (result.lastErrorMessage) {
+      layout.showErrorToast(result.lastErrorMessage)
+      return
+    }
+    await refresh()
+  } catch {
+    layout.showErrorToast(t('explorer.importDataFailed'))
+  }
+}
+
 /** 首屏尚无列信息时整页占位，避免空工具栏挤在左上角 */
 const showBootstrapLoading = computed(
     () => loading.value && tableData.value.columns.length === 0,
@@ -263,6 +326,7 @@ function onRequestAiAsk() {
     <QueryResultPane
         :enable-ai-summary="aiResultSummaryEnabled"
         :enable-fake-data="showFakeDataAction"
+        :show-data-tools-menu="true"
         :enable-dml-generate="dmlGenerateEnabled"
         :dml-connection-id="tab.connectionId"
         :dml-connection-name="connectionLabel"
@@ -301,6 +365,7 @@ function onRequestAiAsk() {
         @request-ai-ask="onRequestAiAsk"
         @close-ai-summary="closeAiSummary"
         @generate-fake-data="onGenerateFakeData"
+        @import-table-data="onImportTableData"
     />
     <TableDataChangeHistoryPanel
         :table-name="tab.tableName"

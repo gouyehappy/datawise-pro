@@ -119,6 +119,7 @@ export default {
     indexSuggestDraft: '建议的索引',
     indexSuggestApply: '在控制台打开',
     indexSuggestConsoleTitle: '索引建议',
+    aiMenu: 'AI',
     askAi: '向 AI 提问',
     aiSummary: 'AI 摘要',
     aiSummaryLoading: 'AI 摘要生成中…',
@@ -206,5 +207,10 @@ export default {
         numericAlignRight: '右对齐',
         typeColoring: '数据类型着色',
         hideNullColumns: '隐藏 NULL 列',
+        hideEmptyColumns: '隐藏 NULL / 空字符串列',
+        freezeFirstColumn: '全局冻结首列',
+        hideToolbarLabels: '隐藏工具栏文字',
+        csvWithoutBom: 'CSV UTF-8 无 BOM',
+        tableFontSize: '表格字号',
     },
 }

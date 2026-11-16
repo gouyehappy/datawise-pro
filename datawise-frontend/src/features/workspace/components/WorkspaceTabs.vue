@@ -110,16 +110,6 @@ const {
   refreshPreview,
 } = fakeData
 
-watch(
-    () => workspace.fakeDataDialogRequest?.nonce,
-    () => {
-      const request = workspace.fakeDataDialogRequest
-      if (!request) return
-      const tab = workspace.tabs.find((item) => item.id === request.tabId)
-      if (tab) void openForTable(tab)
-    },
-)
-
 let unsavedDialogResolver: ((action: 'save' | 'discard' | 'cancel') => void) | null = null
 
 function promptUnsavedClose(dirtyTabIds: string[]): Promise<'save' | 'discard' | 'cancel'> {
@@ -272,6 +262,16 @@ async function openFakeDataDialog(tabId: string) {
   if (!tab) return
   await openForTable(tab)
 }
+
+// 工具栏 / 资源树「生成数据」都走 requestFakeDataDialog → 必须带套餐门禁（勿直接 openForTable）
+watch(
+    () => workspace.fakeDataDialogRequest?.nonce,
+    () => {
+      const request = workspace.fakeDataDialogRequest
+      if (!request) return
+      void openFakeDataDialog(request.tabId)
+    },
+)
 
 const {
   menuVisible,

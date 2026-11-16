@@ -72,6 +72,22 @@ export function resolveConsoleWorkspaceInstance(options: {
     return TRINO_CONNECTION_SCRIPTS_INSTANCE
 }
 
+/** 连接级 scripts 文件夹（磁盘 instance = `_scripts`） */
+export function findConnectionScriptsFolder(connection: TreeNode): TreeNode | null {
+    return connection.children?.find(
+        (node) =>
+            node.type === 'folder'
+            && node.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0,
+    ) ?? null
+}
+
+export function isConnectionScriptsInstance(instanceName?: string | null): boolean {
+    const trimmed = instanceName?.trim()
+    if (!trimmed) return false
+    return trimmed === TRINO_CONNECTION_SCRIPTS_INSTANCE
+        || trimmed.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+}
+
 export function resolveWorkspaceInstanceNodeId(
     tree: TreeNode[],
     connectionId: string,
@@ -80,6 +96,10 @@ export function resolveWorkspaceInstanceNodeId(
 ): string | null {
     const connection = findNodeById(tree, connectionId)
     if (!connection) return null
+
+    if (isCatalogSchemaDbType(dbType) && isConnectionScriptsInstance(instanceName)) {
+        return findConnectionScriptsFolder(connection)?.id ?? null
+    }
 
     if (!isCatalogSchemaDbType(dbType)) {
         return connection.children?.find(

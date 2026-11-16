@@ -3,14 +3,16 @@ import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {DwIcon} from '@/core/icons'
 import {DwSegment} from '@/core/components'
-import type {
-  ResultPaneColumnDensity,
-  ResultPaneLayout,
-  ResultPaneNumericAlign,
-  ResultPaneSortOrder,
+import {
+  TABLE_FONT_SIZE_MAX,
+  TABLE_FONT_SIZE_MIN,
+  type ResultPaneColumnDensity,
+  type ResultPaneLayout,
+  type ResultPaneNumericAlign,
+  type ResultPaneSortOrder,
 } from '@/features/workspace/services/query-result-pane-settings.service'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   anchorEl: HTMLElement | null
   sortOrder: ResultPaneSortOrder
   keepExistingResults: boolean
@@ -21,10 +23,19 @@ const props = defineProps<{
   columnDensity: ResultPaneColumnDensity
   numericAlign: ResultPaneNumericAlign
   hideNullColumns: boolean
+  hideEmptyColumns: boolean
   typeColoring: boolean
+  freezeFirstColumn: boolean
+  hideToolbarLabels: boolean
+  csvWithoutBom: boolean
+  tableFontSize: number
   showGridOptions: boolean
   showLayoutOption: boolean
-}>()
+  /** 控制台多结果才有的：结果排序 / 保留已有结果 */
+  showConsoleOptions?: boolean
+}>(), {
+  showConsoleOptions: true,
+})
 
 const emit = defineEmits<{
   'update:sortOrder': [value: ResultPaneSortOrder]
@@ -36,7 +47,12 @@ const emit = defineEmits<{
   'update:columnDensity': [value: ResultPaneColumnDensity]
   'update:numericAlign': [value: ResultPaneNumericAlign]
   'update:hideNullColumns': [value: boolean]
+  'update:hideEmptyColumns': [value: boolean]
   'update:typeColoring': [value: boolean]
+  'update:freezeFirstColumn': [value: boolean]
+  'update:hideToolbarLabels': [value: boolean]
+  'update:csvWithoutBom': [value: boolean]
+  'update:tableFontSize': [value: number]
 }>()
 
 const {t} = useI18n()
@@ -67,7 +83,15 @@ const panelRef = ref<HTMLElement | null>(null)
 const panelStyle = ref<Record<string, string>>({})
 const GAP = 6
 const VIEWPORT_PAD = 8
-const PANEL_WIDTH = 278
+const PANEL_WIDTH = 300
+
+function bumpTableFontSize(delta: number) {
+  const next = Math.min(
+      TABLE_FONT_SIZE_MAX,
+      Math.max(TABLE_FONT_SIZE_MIN, props.tableFontSize + delta),
+  )
+  if (next !== props.tableFontSize) emit('update:tableFontSize', next)
+}
 
 function placePanel() {
   const anchor = props.anchorEl
@@ -150,7 +174,7 @@ defineExpose({
         role="dialog"
         :aria-label="t('queryResult.settings.menu')"
     >
-      <div class="view-options__row">
+      <div v-if="showConsoleOptions" class="view-options__row">
         <div class="view-options__meta">
           <DwIcon class="view-options__icon" name="arrow-up-down" size="md" :stroke-width="1.5"/>
           <span class="view-options__label">{{ t('queryResult.settings.sortLabel') }}</span>
@@ -225,9 +249,37 @@ defineExpose({
         />
       </div>
 
+      <div v-if="showGridOptions" class="view-options__row">
+        <div class="view-options__meta">
+          <DwIcon class="view-options__icon" name="format" size="md" :stroke-width="1.5"/>
+          <span class="view-options__label">{{ t('queryResult.settings.tableFontSize') }}</span>
+        </div>
+        <div class="view-options__stepper" role="group" :aria-label="t('queryResult.settings.tableFontSize')">
+          <button
+              type="button"
+              class="view-options__stepper-btn"
+              :disabled="tableFontSize <= TABLE_FONT_SIZE_MIN"
+              :aria-label="`${t('queryResult.settings.tableFontSize')} -`"
+              @click="bumpTableFontSize(-1)"
+          >
+            <DwIcon name="minus" size="sm" :stroke-width="1.75"/>
+          </button>
+          <span class="view-options__stepper-value">{{ tableFontSize }}</span>
+          <button
+              type="button"
+              class="view-options__stepper-btn"
+              :disabled="tableFontSize >= TABLE_FONT_SIZE_MAX"
+              :aria-label="`${t('queryResult.settings.tableFontSize')} +`"
+              @click="bumpTableFontSize(1)"
+          >
+            <DwIcon name="plus" size="sm" :stroke-width="1.75"/>
+          </button>
+        </div>
+      </div>
+
       <div class="view-options__divider" role="separator"/>
 
-      <div class="view-options__row">
+      <div v-if="showConsoleOptions" class="view-options__row">
         <div class="view-options__meta">
           <DwIcon class="view-options__icon" name="layers" size="md" :stroke-width="1.5"/>
           <span class="view-options__label">{{ t('queryResult.settings.keepExisting') }}</span>
@@ -307,6 +359,74 @@ defineExpose({
             :aria-checked="hideNullColumns"
             :class="{ 'is-on': hideNullColumns }"
             @click="emit('update:hideNullColumns', !hideNullColumns)"
+        >
+          <span class="view-options__switch-knob"/>
+        </button>
+      </div>
+
+      <div v-if="showGridOptions" class="view-options__row">
+        <div class="view-options__meta">
+          <DwIcon class="view-options__icon" name="visibility-off" size="md" :stroke-width="1.5"/>
+          <span class="view-options__label">{{ t('queryResult.settings.hideEmptyColumns') }}</span>
+        </div>
+        <button
+            type="button"
+            class="view-options__switch"
+            role="switch"
+            :aria-checked="hideEmptyColumns"
+            :class="{ 'is-on': hideEmptyColumns }"
+            @click="emit('update:hideEmptyColumns', !hideEmptyColumns)"
+        >
+          <span class="view-options__switch-knob"/>
+        </button>
+      </div>
+
+      <div v-if="showGridOptions" class="view-options__row">
+        <div class="view-options__meta">
+          <DwIcon class="view-options__icon" name="pin" size="md" :stroke-width="1.5"/>
+          <span class="view-options__label">{{ t('queryResult.settings.freezeFirstColumn') }}</span>
+        </div>
+        <button
+            type="button"
+            class="view-options__switch"
+            role="switch"
+            :aria-checked="freezeFirstColumn"
+            :class="{ 'is-on': freezeFirstColumn }"
+            @click="emit('update:freezeFirstColumn', !freezeFirstColumn)"
+        >
+          <span class="view-options__switch-knob"/>
+        </button>
+      </div>
+
+      <div v-if="showGridOptions" class="view-options__row">
+        <div class="view-options__meta">
+          <DwIcon class="view-options__icon" name="menu-group" size="md" :stroke-width="1.5"/>
+          <span class="view-options__label">{{ t('queryResult.settings.hideToolbarLabels') }}</span>
+        </div>
+        <button
+            type="button"
+            class="view-options__switch"
+            role="switch"
+            :aria-checked="hideToolbarLabels"
+            :class="{ 'is-on': hideToolbarLabels }"
+            @click="emit('update:hideToolbarLabels', !hideToolbarLabels)"
+        >
+          <span class="view-options__switch-knob"/>
+        </button>
+      </div>
+
+      <div v-if="showGridOptions" class="view-options__row">
+        <div class="view-options__meta">
+          <DwIcon class="view-options__icon" name="export" size="md" :stroke-width="1.5"/>
+          <span class="view-options__label">{{ t('queryResult.settings.csvWithoutBom') }}</span>
+        </div>
+        <button
+            type="button"
+            class="view-options__switch"
+            role="switch"
+            :aria-checked="csvWithoutBom"
+            :class="{ 'is-on': csvWithoutBom }"
+            @click="emit('update:csvWithoutBom', !csvWithoutBom)"
         >
           <span class="view-options__switch-knob"/>
         </button>
@@ -407,5 +527,52 @@ defineExpose({
 
 .view-options__switch.is-on .view-options__switch-knob {
   transform: translateX(15px);
+}
+
+.view-options__stepper {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  min-width: 76px;
+  height: 24px;
+  padding: 1px;
+  border: 1px solid color-mix(in srgb, var(--dw-border) 70%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--dw-bg) 72%, var(--dw-bg-muted));
+}
+
+.view-options__stepper-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: color-mix(in srgb, var(--dw-text) 72%, transparent);
+  cursor: pointer;
+}
+
+.view-options__stepper-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dw-text) 8%, transparent);
+  color: var(--dw-text);
+}
+
+.view-options__stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.view-options__stepper-value {
+  flex: 1;
+  min-width: 22px;
+  text-align: center;
+  font-size: var(--dw-text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--dw-text) 88%, transparent);
 }
 </style>

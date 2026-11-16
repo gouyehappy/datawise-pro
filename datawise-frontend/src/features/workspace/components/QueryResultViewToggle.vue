@@ -19,6 +19,8 @@ const {t} = useI18n()
         :class="{ 'is-active': viewMode === 'grid' }"
         role="tab"
         :aria-selected="viewMode === 'grid'"
+        :title="t('queryResult.chart.grid')"
+        :aria-label="t('queryResult.chart.grid')"
         @click="viewMode = 'grid'"
     >
       <DwIcon class="grid-glyph" name="table" fit :stroke-width="1.75"/>
@@ -30,6 +32,8 @@ const {t} = useI18n()
         :class="{ 'is-active': viewMode === 'chart' }"
         role="tab"
         :aria-selected="viewMode === 'chart'"
+        :title="t('queryResult.chart.chart')"
+        :aria-label="t('queryResult.chart.chart')"
         @click="viewMode = 'chart'"
     >
       <DwIcon class="grid-glyph" name="chart" fit :stroke-width="1.75"/>

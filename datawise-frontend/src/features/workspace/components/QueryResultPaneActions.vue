@@ -23,12 +23,15 @@ const props = withDefaults(defineProps<{
     activeResult: QueryResultItem | null
     showGridViewOptions: boolean
     showLayoutViewOption: boolean
+    /** false for table-data / single-result panes (hide multi-result console prefs) */
+    showConsoleOptions?: boolean
     collapsible: boolean
 }>(), {
     canCompare: false,
     activeResult: null,
     showGridViewOptions: true,
     showLayoutViewOption: true,
+    showConsoleOptions: true,
     collapsible: false,
 })
 
@@ -205,9 +208,15 @@ onUnmounted(() => {
         :column-density="resultPaneSettings.settings.columnDensity"
         :numeric-align="resultPaneSettings.settings.numericAlign"
         :hide-null-columns="resultPaneSettings.settings.hideNullColumns"
+        :hide-empty-columns="resultPaneSettings.settings.hideEmptyColumns"
         :type-coloring="resultPaneSettings.settings.typeColoring"
+        :freeze-first-column="resultPaneSettings.settings.freezeFirstColumn"
+        :hide-toolbar-labels="resultPaneSettings.settings.hideToolbarLabels"
+        :csv-without-bom="resultPaneSettings.settings.csvWithoutBom"
+        :table-font-size="resultPaneSettings.settings.tableFontSize"
         :show-grid-options="showGridViewOptions"
         :show-layout-option="showLayoutViewOption"
+        :show-console-options="showConsoleOptions"
         @update:sort-order="resultPaneSettings.patchSettings({ sortOrder: $event })"
         @update:keep-existing-results="resultPaneSettings.patchSettings({ keepExistingResults: $event })"
         @update:show-field-types="resultPaneSettings.patchSettings({ showFieldTypes: $event })"
@@ -217,7 +226,12 @@ onUnmounted(() => {
         @update:column-density="resultPaneSettings.patchSettings({ columnDensity: $event })"
         @update:numeric-align="resultPaneSettings.patchSettings({ numericAlign: $event })"
         @update:hide-null-columns="resultPaneSettings.patchSettings({ hideNullColumns: $event })"
+        @update:hide-empty-columns="resultPaneSettings.patchSettings({ hideEmptyColumns: $event })"
         @update:type-coloring="resultPaneSettings.patchSettings({ typeColoring: $event })"
+        @update:freeze-first-column="resultPaneSettings.patchSettings({ freezeFirstColumn: $event })"
+        @update:hide-toolbar-labels="resultPaneSettings.patchSettings({ hideToolbarLabels: $event })"
+        @update:csv-without-bom="resultPaneSettings.patchSettings({ csvWithoutBom: $event })"
+        @update:table-font-size="resultPaneSettings.patchSettings({ tableFontSize: $event })"
     />
   </div>
   <CollapseButton v-if="collapsible" @click="emit('collapse')"/>
