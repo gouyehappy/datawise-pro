@@ -2,6 +2,10 @@ import {type Ref} from 'vue'
 import type {ComposerTranslation} from 'vue-i18n'
 import {askAppConfirm} from '@/core/services/app-confirm.service'
 import type {TreeNode} from '@/core/types'
+import {
+    shareProjectFolderNode,
+    unshareProjectFolderNode,
+} from '@/features/project/services/project-explorer-files'
 import {runAfterContextMenuClose as waitAfterContextMenuClose} from '@/core/ui/inline-rename'
 import {findAncestorByType, findParentConnectionId} from '@/core/utils/tree'
 import {communityInvokeMessage} from '@/features/explorer/services/connection-tree-helpers'
@@ -593,6 +597,28 @@ export function useExplorerTreeMenuActions(deps: ExplorerTreeMenuActionsDeps) {
         }
         if (id === 'refresh-project-files') {
             void refreshProjectFilesFromMenu(node)
+            closeMenu()
+            return
+        }
+        if (id === 'share-project-folder' || id === 'unshare-project-folder') {
+            const sharing = id === 'share-project-folder'
+            void (async () => {
+                try {
+                    const ok = sharing
+                        ? await shareProjectFolderNode(node)
+                        : await unshareProjectFolderNode(node)
+                    if (ok) {
+                        layout.showSuccessToast(t(
+                            sharing ? 'explorer.projectFiles.shared' : 'explorer.projectFiles.unshared',
+                            {name: node.label},
+                        ))
+                    }
+                } catch {
+                    layout.showErrorToast(t(
+                        sharing ? 'explorer.projectFiles.shareFailed' : 'explorer.projectFiles.unshareFailed',
+                    ))
+                }
+            })()
             closeMenu()
             return
         }

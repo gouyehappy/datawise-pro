@@ -8,6 +8,7 @@ import {
 } from '@/features/pack/catalog/pack-catalog'
 import {hasDevProductivityAccess} from '@/features/pack/services/dev-productivity-entitlement'
 import {isPackRuntimeDeliverable} from '@/features/pack/services/pack-runtime-deliverable'
+import {isGuestOrAnonymousSession} from '@/features/auth/services/user-access-policy'
 import type {
     EntitlementMode,
     EntitlementSnapshot,
@@ -128,6 +129,11 @@ export const useEntitlementStore = defineStore('entitlement', () => {
 
     async function load(): Promise<void> {
         if (loading.value) return
+        // 访客直接用本地 open 态，避免启动阶段打到需要登录的授权接口。
+        if (isGuestOrAnonymousSession()) {
+            applySnapshot(openSnapshot())
+            return
+        }
         loading.value = true
         try {
             const snapshot = await packsApi.fetchEntitlement()

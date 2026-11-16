@@ -68,7 +68,7 @@ function mapTeamSummary(wire: TeamWire): TeamSummary {
 export function createHttpTeamApi(): TeamApi {
     return {
         fetchAll: async () => {
-            const list = await getJson<TeamWire[]>(API_PATHS.teams.list)
+            const list = await getJson<TeamWire[]>(API_PATHS.teams.list, undefined, {background: true})
             return (list ?? []).map(mapTeamSummary)
         },
 

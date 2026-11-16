@@ -11,9 +11,11 @@ export interface WriteUnlockStatus {
 
 export async function fetchWriteUnlockStatus(connectionId: string): Promise<WriteUnlockStatus | null> {
     try {
-        return await getJson<WriteUnlockStatus>(API_PATHS.connection.writeUnlock(connectionId), {
-            silent: true,
-        })
+        return await getJson<WriteUnlockStatus>(
+            API_PATHS.connection.writeUnlock(connectionId),
+            undefined,
+            {silent: true},
+        )
     } catch {
         // 404 / not unlocked / offline → treat as locked
         return null

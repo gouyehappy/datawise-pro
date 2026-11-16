@@ -37,8 +37,14 @@ export const API_PATHS = {
         active: '/api/projects/active',
         one: (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}`,
         files: (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/files`,
+        fileRoots: (projectId: string) =>
+            `/api/projects/${encodeURIComponent(projectId)}/files/ensure-roots`,
         fileContent: (projectId: string) =>
             `/api/projects/${encodeURIComponent(projectId)}/files/content`,
+        fileShares: (projectId: string) =>
+            `/api/projects/${encodeURIComponent(projectId)}/files/shares`,
+        fileUnshare: (projectId: string) =>
+            `/api/projects/${encodeURIComponent(projectId)}/files/shares/unshare`,
         mkdir: (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/files/mkdir`,
         rename: (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/files/rename`,
         delete: (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/files/delete`,

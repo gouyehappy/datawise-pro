@@ -66,6 +66,8 @@ export default {
     unauthorized: '未登录或会话已失效，请重新登录',
     serviceUnavailable: '登录后可用',
     permissionDenied: '当前账号没有此操作权限',
+    guestFeatureLocked: '当前为访客模式，该功能登录账号后即可使用；查询、浏览等基础功能不受影响',
+    guestHintLoginAction: '登录',
     guestNotAllowed: '访客模式下无法执行此操作，请登录账号',
     adminRequired: '需要管理员权限',
     platformAdminRequired: '需要平台超级管理员权限',

@@ -1,7 +1,45 @@
 import {API_PATHS} from '@/shared/api/http/paths'
 import {getJson, postJson, putJson, type HttpRequestOptions} from '@/shared/api/http/request'
 
+/**
+ * 项目文件树只有两个根：私有 docs / 私有 scripts，内容按创建者账号隔离。
+ * 团队共享不是独立根，而是把私有区里的某个目录共享出来；其它账号在对应根下
+ * 看到一个 `@shared/u{ownerId}/{path}` 的引用节点。
+ */
 export type ProjectFileRoot = 'docs' | 'scripts'
+
+export const PROJECT_FILE_ROOTS: ProjectFileRoot[] = ['docs', 'scripts']
+
+export function isProjectFileRoot(value: string): value is ProjectFileRoot {
+    return (PROJECT_FILE_ROOTS as string[]).includes(value)
+}
+
+export function isDocsProjectFileRoot(root: ProjectFileRoot): boolean {
+    return root === 'docs'
+}
+
+export function isScriptsProjectFileRoot(root: ProjectFileRoot): boolean {
+    return root === 'scripts'
+}
+
+/** 共享引用节点的虚拟路径前缀，与后端 ProjectFilesService.SHARED_REF_PREFIX 一致。 */
+export const SHARED_REF_PREFIX = '@shared'
+const SHARED_REF_PATTERN = /^@shared\/u(\d+)(?:\/(.*))?$/
+
+export function isSharedRefPath(path: string): boolean {
+    return SHARED_REF_PATTERN.test(path)
+}
+
+export function parseSharedRefPath(path: string): {ownerUserId: number; path: string} | null {
+    const match = SHARED_REF_PATTERN.exec(path)
+    if (!match) return null
+    return {ownerUserId: Number(match[1]), path: match[2] ?? ''}
+}
+
+export function buildSharedRefPath(ownerUserId: number, relativePath: string): string {
+    const rel = relativePath.replace(/^\/+/, '').replace(/\\/g, '/')
+    return `${SHARED_REF_PREFIX}/u${ownerUserId}/${rel}`
+}
 
 export type ProjectFileEntryDto = {
     name: string
@@ -9,12 +47,24 @@ export type ProjectFileEntryDto = {
     directory: boolean
     sizeBytes?: number | null
     updatedAt?: string | null
+    /** 已共享给项目内其它账号，或本身是别人共享出来的引用 */
+    shared?: boolean
+    /** 引用节点的来源账号名 */
+    sharedBy?: string | null
 }
 
 export type ProjectFileContentDto = {
     root: ProjectFileRoot
     path: string
     content: string
+}
+
+export type ProjectFileShareDto = {
+    ownerUserId: number
+    ownerUsername: string
+    root: ProjectFileRoot
+    path: string
+    sharedAt: string
 }
 
 const PROJECT_FILE_PREFIX = 'dw-project://'
@@ -41,7 +91,7 @@ export function parseProjectFileUri(
     const rootSlash = afterProject.indexOf('/')
     const rootRaw = rootSlash < 0 ? afterProject : afterProject.slice(0, rootSlash)
     const path = rootSlash < 0 ? '' : afterProject.slice(rootSlash + 1)
-    if (rootRaw !== 'docs' && rootRaw !== 'scripts') return null
+    if (!isProjectFileRoot(rootRaw)) return null
     if (!projectId) return null
     return {projectId, root: rootRaw, path}
 }
@@ -67,6 +117,12 @@ export function resolveProjectFileNodeIdFromUri(uri: string | null | undefined):
 }
 
 export const projectFilesApi = {
+    /** 登录 / 切换项目后初始化两个空的私有目录骨架，失败不影响主流程。 */
+    ensureRoots: (projectId: string) =>
+        postJson<null>(API_PATHS.projects.fileRoots(projectId), {}, {
+            background: true,
+            silent: true,
+        }),
     list: (projectId: string, root: ProjectFileRoot, path = '') =>
         getJson<ProjectFileEntryDto[]>(API_PATHS.projects.files(projectId), {root, path}),
     read: (
@@ -90,4 +146,10 @@ export const projectFilesApi = {
     ) => postJson<ProjectFileEntryDto>(API_PATHS.projects.rename(projectId), body),
     delete: (projectId: string, body: {root: ProjectFileRoot; path: string}) =>
         postJson<null>(API_PATHS.projects.delete(projectId), body),
+    listShares: (projectId: string, options?: HttpRequestOptions) =>
+        getJson<ProjectFileShareDto[]>(API_PATHS.projects.fileShares(projectId), undefined, options),
+    share: (projectId: string, body: {root: ProjectFileRoot; path: string}) =>
+        postJson<ProjectFileShareDto>(API_PATHS.projects.fileShares(projectId), body),
+    unshare: (projectId: string, body: {root: ProjectFileRoot; path: string}) =>
+        postJson<null>(API_PATHS.projects.fileUnshare(projectId), body),
 }

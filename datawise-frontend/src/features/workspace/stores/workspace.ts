@@ -394,7 +394,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                 if (!written) return false
                 markConsoleTabSaved(tabId)
                 setStatus(t('console.savedToWorkspace', {path: written.path}))
-                void refreshProjectScriptsExplorerRoot()
+                void refreshProjectScriptsExplorerRoot(written.root)
                 return true
             } catch {
                 return false

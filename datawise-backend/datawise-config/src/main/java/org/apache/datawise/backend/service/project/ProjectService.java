@@ -526,7 +526,9 @@ public class ProjectService {
     }
 
     private void seedTemplateFiles(String tenantId, String projectId, String templateId) {
-        Path root = configDirectory.resolve(ConfigPaths.tenantProjectDir(tenantId, projectId));
+        // 模板文件属于项目创建者，与 docs/scripts 的按账号隔离保持一致。
+        Path root = configDirectory.resolve(
+                ConfigPaths.tenantProjectUserDir(tenantId, projectId, UserContext.requireUserId()));
         try {
             Path docs = root.resolve("docs");
             Path scripts = root.resolve("scripts");

@@ -5,9 +5,9 @@ import {resolveCatalogReorderPosition} from '@/features/explorer/services/explor
 import type {ProjectFileRoot} from '@/features/project/services/project-files-api'
 import {
     isProjectFilesFolderNode,
+    isProjectFilesVirtualRootId,
     parseProjectFileNodeId,
-    PROJECT_DOCS_ROOT_ID,
-    PROJECT_SCRIPTS_ROOT_ID,
+    projectFileRootFromNodeId,
     projectFilesRootNodeId,
 } from '@/features/project/services/project-explorer-files'
 
@@ -47,11 +47,9 @@ export function parseProjectFileMoveTargetMenuId(menuId: string): string | null 
 function resolveNodeRootAndPath(
     node: Pick<TreeNode, 'id' | 'type'>,
 ): {projectId: string; root: ProjectFileRoot; path: string} | null {
-    if (node.id === PROJECT_DOCS_ROOT_ID) {
-        return {projectId: '', root: 'docs', path: ''}
-    }
-    if (node.id === PROJECT_SCRIPTS_ROOT_ID) {
-        return {projectId: '', root: 'scripts', path: ''}
+    const virtualRoot = projectFileRootFromNodeId(node.id)
+    if (virtualRoot) {
+        return {projectId: '', root: virtualRoot, path: ''}
     }
     return parseProjectFileNodeId(node.id)
 }
@@ -70,7 +68,7 @@ export function findProjectFileParentFolderId(
 ): string | null {
     const parent = findParentNode(tree, nodeId)
     if (!parent) return null
-    if (parent.id === PROJECT_DOCS_ROOT_ID || parent.id === PROJECT_SCRIPTS_ROOT_ID) {
+    if (isProjectFilesVirtualRootId(parent.id)) {
         return parent.id
     }
     if (parent.id.startsWith('project-file:') && isProjectFilesFolderNode(parent)) {
@@ -99,10 +97,9 @@ export function canMoveProjectFileToFolder(
 
     // Virtual roots have empty projectId in resolve — fill from source.
     const targetRoot = targetParsed.root
-    const targetPath =
-        targetFolder.id === PROJECT_DOCS_ROOT_ID || targetFolder.id === PROJECT_SCRIPTS_ROOT_ID
-            ? ''
-            : (parseProjectFileNodeId(targetFolder.id)?.path ?? '')
+    const targetPath = isProjectFilesVirtualRootId(targetFolder.id)
+        ? ''
+        : (parseProjectFileNodeId(targetFolder.id)?.path ?? '')
 
     if (sourceParsed.root !== targetRoot) return false
     if (targetFolder.id.startsWith('project-file:')) {
@@ -194,8 +191,14 @@ export function resolveProjectFileReorderDrop(
     const folderId = resolveProjectFileDropFolderId(tree, target, position)
     if (!folderId) return null
     const folder = findNodeById(tree, folderId) ?? (
-        folderId === PROJECT_DOCS_ROOT_ID || folderId === PROJECT_SCRIPTS_ROOT_ID
-            ? ({id: folderId, type: folderId === PROJECT_DOCS_ROOT_ID ? 'project-docs' : 'project-scripts', label: ''} as TreeNode)
+        isProjectFilesVirtualRootId(folderId)
+            ? ({
+                id: folderId,
+                type: projectFileRootFromNodeId(folderId) === 'scripts'
+                    ? 'project-scripts'
+                    : 'project-docs',
+                label: '',
+            } as TreeNode)
             : null
     )
     if (!folder) return null
@@ -218,17 +221,9 @@ function canShowProjectFileInsertLine(
     if (source.id === targetFolder.id) return false
     const sourceParsed = parseProjectFileNodeId(source.id)
     if (!sourceParsed) return false
-    const targetRoot =
-        targetFolder.id === PROJECT_DOCS_ROOT_ID
-            ? 'docs'
-            : targetFolder.id === PROJECT_SCRIPTS_ROOT_ID
-              ? 'scripts'
-              : parseProjectFileNodeId(targetFolder.id)?.root
-    if (!targetRoot || sourceParsed.root !== targetRoot) return false
-    const targetPath =
-        targetFolder.id === PROJECT_DOCS_ROOT_ID || targetFolder.id === PROJECT_SCRIPTS_ROOT_ID
-            ? ''
-            : (parseProjectFileNodeId(targetFolder.id)?.path ?? '')
+    const targetParsed = resolveNodeRootAndPath(targetFolder)
+    if (!targetParsed || sourceParsed.root !== targetParsed.root) return false
+    const targetPath = targetParsed.path
     if (
         (source.type === 'project-docs' || source.type === 'project-scripts')
         && isUnderPath(sourceParsed.path, targetPath)

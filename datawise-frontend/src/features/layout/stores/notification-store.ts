@@ -2,6 +2,7 @@ import {defineStore} from 'pinia'
 import {computed, ref} from 'vue'
 import type {AppNotification, NotificationCategory} from '@/core/types'
 import {notificationsApi} from '@/api'
+import {isGuestOrAnonymousSession} from '@/features/auth/services/user-access-policy'
 
 /** 应用内通知（后端持久化） */
 export const useNotificationStore = defineStore('notification', () => {
@@ -10,7 +11,17 @@ export const useNotificationStore = defineStore('notification', () => {
 
     const unreadCount = computed(() => items.value.filter((item) => !item.read).length)
 
+    /** 访客无个人通知，落空态即可，避免启动阶段向登录专属接口发请求。 */
+    function resetForGuest() {
+        items.value = []
+        ready.value = true
+    }
+
     async function load() {
+        if (isGuestOrAnonymousSession()) {
+            resetForGuest()
+            return
+        }
         items.value = await notificationsApi.fetchAll()
         ready.value = true
     }
@@ -57,6 +68,7 @@ export const useNotificationStore = defineStore('notification', () => {
         unreadCount,
         ready,
         load,
+        resetForGuest,
         push,
         markAllRead,
         markRead,

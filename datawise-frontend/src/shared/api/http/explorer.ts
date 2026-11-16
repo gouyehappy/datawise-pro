@@ -604,7 +604,7 @@ export function createHttpExplorerApi(): ExplorerApi {
         },
 
         listPooledConnections: async () =>
-            getJson<string[]>(API_PATHS.explorer.pooledConnections),
+            getJson<string[]>(API_PATHS.explorer.pooledConnections, undefined, {background: true}),
 
         reconnectConnection: async (connectionId) =>
             mapTestResult(

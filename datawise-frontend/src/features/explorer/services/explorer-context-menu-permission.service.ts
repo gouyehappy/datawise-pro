@@ -40,6 +40,8 @@ const EXPLORER_CONTEXT_MENU_PERMISSION_BY_ID: Record<string, FeaturePermissionKe
     'move-project-file': FeaturePermission.WorkbenchExplorerContextEdit,
     'delete-project-file': FeaturePermission.WorkbenchExplorerContextEdit,
     'refresh-project-files': FeaturePermission.WorkbenchExplorerContextOpen,
+    'share-project-folder': FeaturePermission.WorkbenchExplorerContextEdit,
+    'unshare-project-folder': FeaturePermission.WorkbenchExplorerContextEdit,
 
     console: FeaturePermission.WorkbenchExplorerContextConsole,
     'ask-ai': FeaturePermission.NavAi,

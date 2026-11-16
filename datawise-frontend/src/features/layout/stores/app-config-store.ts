@@ -122,6 +122,7 @@ import {useUpdateSettingsStore} from '@/features/settings/stores/update-settings
 import {setupDesktopWindowSync} from '@/features/layout/composables/useDesktopWindowSync'
 import {toWindowStatePayload} from '@/features/layout/services/desktop-window-state.service'
 import {isDesktopApp} from '@/features/layout/services/desktop-chrome'
+import {setVisibleProjectFileRoots} from '@/features/project/services/project-file-root-visibility'
 import {useDockPlacementStore} from '@/features/dock/stores/dock-placement-store'
 import {ensureShortcutFloatContent} from '@/features/dock/services/ensure-shortcut-float-content'
 import {
@@ -143,6 +144,10 @@ export const useAppConfigStore = defineStore('app-config', () => {
     const sqlEditorShortcuts = useSqlEditorShortcutsStore()
 
     const config = ref<AppConfigFile>(readAppConfig())
+    setVisibleProjectFileRoots({
+        docs: config.value.layout.showProjectDocsRoot,
+        scripts: config.value.layout.showProjectScriptsRoot,
+    })
     /** 结果面板展开状态仅会话内有效；配置加载时重置为收起 */
     const showConsoleResultPanel = ref(false)
     let syncing = false
@@ -642,6 +647,10 @@ export const useAppConfigStore = defineStore('app-config', () => {
 
     function applyLayoutEffects(next: LayoutPreferences) {
         config.value = {...config.value, layout: next}
+        setVisibleProjectFileRoots({
+            docs: next.showProjectDocsRoot,
+            scripts: next.showProjectScriptsRoot,
+        })
         syncOpenHttpLinksIn(next.openHttpLinksIn)
         installOpenUrlClickDelegation()
         explorer.width = next.explorerWidth
@@ -1047,6 +1056,17 @@ export const useAppConfigStore = defineStore('app-config', () => {
         applyLayoutState(next)
     }
 
+    /** 设置页开关：显示 / 隐藏 Explorer 顶部的两个项目文件根节点。 */
+    function setProjectFileRootVisible(root: 'docs' | 'scripts', visible: boolean) {
+        const next = snapshotLayout()
+        if (root === 'docs') {
+            next.showProjectDocsRoot = visible
+        } else {
+            next.showProjectScriptsRoot = visible
+        }
+        applyLayoutState(next)
+    }
+
     function setDockPlacement(next: DockPlacement) {
         const dock = useDockPlacementStore()
         dock.applyPlacement(next)
@@ -1256,6 +1276,7 @@ export const useAppConfigStore = defineStore('app-config', () => {
         setShortcutVisible,
         setShowExplorerPanel,
         setOpenHttpLinksIn,
+        setProjectFileRootVisible,
         setDockPlacement,
         persistDockLayout,
         resetDockPlacement,

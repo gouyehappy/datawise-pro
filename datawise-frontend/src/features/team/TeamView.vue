@@ -12,7 +12,7 @@ import TeamProductionApprovalsPanel from '@/features/team/components/panels/Team
 import TeamSharingPanel from '@/features/team/components/panels/TeamSharingPanel.vue'
 import TeamAiSessionsPanel from '@/features/team/components/panels/TeamAiSessionsPanel.vue'
 import TeamSharedQueriesPanel from '@/features/team/components/panels/TeamSharedQueriesPanel.vue'
-import {DwButton, DwSplitPane, EmptyState, DwInlineAlert, ModulePageHeader, ModulePageRegions, DwCard, DwInput} from '@/core/components'
+import {DwButton, DwSplitPane, EmptyState, DwInlineAlert, ModulePageHeader, ModulePageRegions, DwInput, DwIcon} from '@/core/components'
 import type {SelectOption} from '@/core/components/select.types'
 import {
     buildConnectionAccessMap,
@@ -41,8 +41,10 @@ import {useProjectStore} from '@/features/project/stores/project'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
 
 type TeamTab = 'members' | 'invites' | 'audit' | 'sharing' | 'aiSessions' | 'sharedQueries'
+type ComposerMode = 'create' | 'join'
+type TeamTabItem = {key: TeamTab; label: string; manageOnly: boolean; group: 'work' | 'manage'}
 
-const {t} = useI18n()
+const {t, locale} = useI18n()
 const layout = useLayoutStore()
 const shortcutPanel = useShortcutPanelStore()
 const teamStore = useTeamStore()
@@ -53,6 +55,7 @@ const createName = ref('')
 const joinCode = ref('')
 const createError = ref('')
 const joinError = ref('')
+const composerMode = ref<ComposerMode | null>(null)
 const activeTab = ref<TeamTab>('members')
 const sharedConnectionsInput = ref('')
 const sharedConnectionAccess = ref<Record<string, ConnectionAccessLevel>>({})
@@ -95,6 +98,24 @@ const canManage = computed(() => canManageTeam(activeTeam.value?.role))
 const isOwner = computed(() => isTeamOwner(activeTeam.value?.role))
 
 const currentUserId = computed(() => auth.user?.userId ?? undefined)
+
+const activeInviteCode = computed(() => activeTeam.value?.inviteCode ?? null)
+
+const canInvite = computed(() => canManage.value && Boolean(activeInviteCode.value))
+
+const tabs = computed<TeamTabItem[]>(() => {
+    const items: TeamTabItem[] = [
+        {key: 'members', label: t('team.tabMembers'), manageOnly: false, group: 'work'},
+        {key: 'sharedQueries', label: t('team.tabSharedQueries'), manageOnly: false, group: 'work'},
+        {key: 'aiSessions', label: t('team.tabAiSessions'), manageOnly: false, group: 'work'},
+        {key: 'invites', label: t('team.tabInvites'), manageOnly: true, group: 'manage'},
+        {key: 'audit', label: t('team.tabAudit'), manageOnly: true, group: 'manage'},
+        {key: 'sharing', label: t('team.tabSharing'), manageOnly: true, group: 'manage'},
+    ]
+    return items.filter((tab) => !tab.manageOnly || canManage.value)
+})
+
+const firstManageTabIndex = computed(() => tabs.value.findIndex((tab) => tab.group === 'manage'))
 
 const assignableRoles: readonly TeamRole[] = ASSIGNABLE_TEAM_ROLES
 
@@ -173,7 +194,11 @@ watch(
     () => teamStore.requestedTab,
     (tab) => {
       if (!tab) return
-      activeTab.value = tab
+      // Ignore deep links to manage-only tabs for members without manage rights,
+      // otherwise the content pane would render nothing.
+      if (tabs.value.some((item) => item.key === tab)) {
+          activeTab.value = tab
+      }
       teamStore.consumeRequestedTab()
     },
     {immediate: true},
@@ -257,6 +282,16 @@ async function openSharedSession(sessionId: string) {
     }
 }
 
+function openComposer(mode: ComposerMode) {
+    composerMode.value = mode
+    createError.value = ''
+    joinError.value = ''
+}
+
+function closeComposer() {
+    composerMode.value = null
+}
+
 async function submitCreate() {
     const name = createName.value.trim()
     createError.value = ''
@@ -265,8 +300,9 @@ async function submitCreate() {
         return
     }
     try {
-        const team = await teamStore.createTeam(name)
+        await teamStore.createTeam(name)
         createName.value = ''
+        closeComposer()
     } catch (error) {
         createError.value = resolveCaughtApiErrorMessage(error, t, 'team.createFailed')
     }
@@ -282,6 +318,7 @@ async function submitJoin() {
     try {
         const result = await teamStore.joinTeam(code)
         if (result.status === 'joined' && result.team) {
+            // The store switches the active team on a successful join.
         } else if (result.status === 'pending') {
             layout.showToast(result.message || t('team.joinPending'))
             await loadMyJoinRequests()
@@ -292,6 +329,7 @@ async function submitJoin() {
             return
         }
         joinCode.value = ''
+        closeComposer()
     } catch (error) {
         joinError.value = resolveCaughtApiErrorMessage(error, t, 'team.joinFailed')
     }
@@ -496,11 +534,15 @@ async function rejectInvite(invite: TeamInvite) {
     }
 }
 
-function copyInviteCode() {
-    const code = activeTeam.value?.inviteCode
+async function copyInviteCode() {
+    const code = activeInviteCode.value
     if (!code) return
-    void navigator.clipboard.writeText(code).then(() => {
-    })
+    try {
+        await navigator.clipboard.writeText(code)
+        layout.showToast(t('team.inviteCodeCopied'))
+    } catch {
+        layout.showErrorToast(t('team.copyFailed'))
+    }
 }
 
 function openInvitesTab() {
@@ -514,7 +556,15 @@ function openWorkspace() {
 function formatDate(value: string) {
     if (!value) return '—'
     const date = new Date(value)
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+    if (Number.isNaN(date.getTime())) return value
+    return new Intl.DateTimeFormat(locale.value, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(date)
 }
 
 onMounted(() => {
@@ -532,270 +582,296 @@ onMounted(() => {
             :subtitle="t('team.subtitle')"
         >
           <template #actions>
-            <DwButton variant="secondary" @click="openWorkspace">
-              {{ t('team.enterWorkspace') }}
-            </DwButton>
+            <div class="team-actions">
+              <DwButton variant="ghost" size="sm" @click="openWorkspace">
+                {{ t('team.enterWorkspace') }}
+                <DwIcon name="chevron-right" size="xs"/>
+              </DwButton>
+              <DwButton variant="secondary" size="sm" @click="openComposer('join')">
+                <DwIcon name="key" size="xs"/>
+                {{ t('team.joinAction') }}
+              </DwButton>
+              <DwButton variant="primary" size="sm" @click="openComposer('create')">
+                <DwIcon name="plus" size="xs"/>
+                {{ t('team.createAction') }}
+              </DwButton>
+            </div>
           </template>
         </ModulePageHeader>
       </template>
 
       <div class="team-page__body">
-    <div class="team-onboarding mp-grid-2">
-      <DwCard
-          class="team-onboarding__card"
-          :title="t('team.createTitle')"
-          :description="t('team.createDesc')"
-      >
-        <div class="team-onboarding__row">
-          <DwInput
-              v-model="createName"
-              :placeholder="t('team.createPlaceholder')"
-              @keydown.enter="submitCreate"
-          />
-          <DwButton variant="primary" class="team-onboarding__action" @click="submitCreate">
-            {{ t('team.createAction') }}
-          </DwButton>
-        </div>
-        <DwInlineAlert :message="createError"/>
-      </DwCard>
-
-      <DwCard
-          class="team-onboarding__card"
-          :title="t('team.joinTitle')"
-          :description="t('team.joinDesc')"
-      >
-        <div class="team-onboarding__row">
-          <DwInput
-              v-model="joinCode"
-              :placeholder="t('team.joinPlaceholder')"
-              @keydown.enter="submitJoin"
-          />
-          <DwButton variant="secondary" class="team-onboarding__action" @click="submitJoin">
-            {{ t('team.joinAction') }}
-          </DwButton>
-        </div>
-        <DwInlineAlert :message="joinError"/>
-        <ul v-if="myJoinRequests.length" class="join-request-list">
-          <li v-for="request in myJoinRequests" :key="`${request.teamId}-${request.requestedAt}`">
-            {{ t('team.myJoinRequestPending', {name: request.teamName, time: formatDate(request.requestedAt)}) }}
-          </li>
-        </ul>
-      </DwCard>
-    </div>
-
-    <DwSplitPane
-        class="team-main"
-        storage-key="dw.split.team-main"
-        default-ratio="third"
-        :default-width="260"
-        :min-width="220"
-        :max-width="480"
-        :stack-below="900"
-        start-class="mp-panel team-sidebar"
-        end-class="mp-panel team-detail"
-    >
-      <template #start>
-        <header class="mp-panel__head">
-          <span>{{ t('team.myTeams') }}</span>
-          <span class="mp-panel__count">{{ teamStore.teams.length }}</span>
-        </header>
-        <div class="mp-panel__body mp-panel__body--scroll team-sidebar__body">
-          <EmptyState
-              v-if="!teamStore.teams.length"
-              embedded
-              compact
-              class="mp-empty"
-              :title="t('team.emptyTeams')"
-          />
-          <ul v-else class="mp-list team-list">
-            <li
-                v-for="team in teamStore.teams"
-                :key="team.id"
-                class="mp-list__row"
-                :class="{ 'is-active': teamStore.activeTeamId === team.id }"
-                @click="selectTeam(team.id)"
-            >
-              <div class="mp-list__main">
-                <span class="mp-avatar">{{ team.name.charAt(0) }}</span>
-                <div>
-                  <div class="mp-list__name">{{ team.name }}</div>
-                  <div class="mp-list__meta">
-                    {{ t('team.memberCount', {count: team.memberCount}) }}
-                    ·
-                    {{ roleLabel(team.role) }}
-                  </div>
-                </div>
-              </div>
-              <span v-if="teamStore.activeTeamId === team.id" class="mp-list__mark">✓</span>
+        <div v-if="composerMode" class="team-composer">
+          <div class="team-composer__intro">
+            <div class="team-composer__title">
+              {{ composerMode === 'create' ? t('team.createTitle') : t('team.joinTitle') }}
+            </div>
+            <div class="team-composer__hint">
+              {{ composerMode === 'create' ? t('team.composerCreateHint') : t('team.composerJoinHint') }}
+            </div>
+          </div>
+          <div class="team-composer__form">
+            <template v-if="composerMode === 'create'">
+              <DwInput
+                  v-model="createName"
+                  :placeholder="t('team.createPlaceholder')"
+                  aria-label="team name"
+                  @keydown.enter="submitCreate"
+              />
+              <DwButton variant="primary" size="sm" @click="submitCreate">
+                {{ t('team.createAction') }}
+              </DwButton>
+            </template>
+            <template v-else>
+              <DwInput
+                  v-model="joinCode"
+                  :placeholder="t('team.joinPlaceholder')"
+                  aria-label="invite code"
+                  @keydown.enter="submitJoin"
+              />
+              <DwButton variant="primary" size="sm" @click="submitJoin">
+                {{ t('team.joinAction') }}
+              </DwButton>
+            </template>
+            <DwButton variant="ghost" size="sm" @click="closeComposer">
+              {{ t('team.cancel') }}
+            </DwButton>
+          </div>
+          <DwInlineAlert :message="composerMode === 'create' ? createError : joinError"/>
+          <ul v-if="composerMode === 'join' && myJoinRequests.length" class="join-request-list">
+            <li v-for="request in myJoinRequests" :key="`${request.teamId}-${request.requestedAt}`">
+              {{ t('team.myJoinRequestPending', {name: request.teamName, time: formatDate(request.requestedAt)}) }}
             </li>
           </ul>
         </div>
-      </template>
 
-      <template #end>
-        <template v-if="activeTeam">
-          <header class="mp-panel__head team-detail__head">
-            <span class="team-detail__title">{{ activeTeam.name }}</span>
-            <nav class="team-tabs" role="tablist">
+        <DwSplitPane
+            class="team-main"
+            storage-key="dw.split.team-main"
+            default-ratio="third"
+            :default-width="260"
+            :min-width="220"
+            :max-width="480"
+            :stack-below="900"
+            start-class="mp-panel team-sidebar"
+            end-class="mp-panel team-detail"
+        >
+          <template #start>
+            <header class="mp-panel__head team-sidebar__head">
+              <span class="team-sidebar__heading">
+                {{ t('team.myTeams') }}
+                <span class="mp-panel__count">{{ teamStore.teams.length }}</span>
+              </span>
               <button
                   type="button"
-                  class="team-tab"
-                  :class="{ 'is-active': activeTab === 'members' }"
-                  data-testid="team-tab-members"
-                  @click="activeTab = 'members'"
+                  class="team-icon-btn"
+                  :title="t('team.createAction')"
+                  :aria-label="t('team.createAction')"
+                  @click="openComposer('create')"
               >
-                {{ t('team.tabMembers') }}
+                <DwIcon name="plus" size="sm"/>
               </button>
-              <button
-                  v-if="canManage"
-                  type="button"
-                  class="team-tab"
-                  :class="{ 'is-active': activeTab === 'invites' }"
-                  data-testid="team-tab-invites"
-                  @click="activeTab = 'invites'"
-              >
-                {{ t('team.tabInvites') }}
-                <span v-if="showInviteBadge" class="team-tab__badge">{{ pendingInviteCount }}</span>
-              </button>
-              <button
-                  v-if="canManage"
-                  type="button"
-                  class="team-tab"
-                  :class="{ 'is-active': activeTab === 'audit' }"
-                  data-testid="team-tab-audit"
-                  @click="activeTab = 'audit'"
-              >
-                {{ t('team.tabAudit') }}
-              </button>
-              <button
-                  v-if="canManage"
-                  type="button"
-                  class="team-tab"
-                  :class="{ 'is-active': activeTab === 'sharing' }"
-                  data-testid="team-tab-sharing"
-                  @click="activeTab = 'sharing'"
-              >
-                {{ t('team.tabSharing') }}
-              </button>
-              <button
-                  type="button"
-                  class="team-tab"
-                  :class="{ 'is-active': activeTab === 'sharedQueries' }"
-                  @click="activeTab = 'sharedQueries'"
-              >
-                {{ t('team.tabSharedQueries') }}
-              </button>
-              <button
-                  type="button"
-                  class="team-tab"
-                  :class="{ 'is-active': activeTab === 'aiSessions' }"
-                  @click="activeTab = 'aiSessions'"
-              >
-                {{ t('team.tabAiSessions') }}
-              </button>
-            </nav>
-          </header>
+            </header>
+            <div class="mp-panel__body mp-panel__body--scroll team-sidebar__body">
+              <div v-if="!teamStore.teams.length" class="team-sidebar__empty">
+                <DwIcon name="users" size="lg" muted/>
+                <p class="team-sidebar__empty-text">{{ t('team.emptyTeams') }}</p>
+                <p class="team-sidebar__empty-hint">{{ t('team.noTeamsHint') }}</p>
+                <DwButton variant="primary" size="sm" @click="openComposer('create')">
+                  {{ t('team.createAction') }}
+                </DwButton>
+                <button type="button" class="team-sidebar__empty-link" @click="openComposer('join')">
+                  {{ t('team.joinAction') }}
+                </button>
+              </div>
+              <ul v-else class="mp-list team-list">
+                <li
+                    v-for="team in teamStore.teams"
+                    :key="team.id"
+                    class="mp-list__row team-list__row"
+                    :class="{ 'is-active': teamStore.activeTeamId === team.id }"
+                    @click="selectTeam(team.id)"
+                >
+                  <div class="mp-list__main">
+                    <span class="mp-avatar">{{ team.name.charAt(0) }}</span>
+                    <div class="team-list__copy">
+                      <div class="mp-list__name">{{ team.name }}</div>
+                      <div class="mp-list__meta">
+                        {{ t('team.memberCount', {count: team.memberCount}) }}
+                        ·
+                        {{ roleLabel(team.role) }}
+                      </div>
+                    </div>
+                  </div>
+                  <DwIcon
+                      v-if="teamStore.activeTeamId === team.id"
+                      name="check"
+                      size="sm"
+                      class="team-list__check"
+                  />
+                </li>
+              </ul>
+            </div>
+          </template>
 
-          <div class="mp-panel__body mp-panel__body--scroll team-detail__body">
-        <TeamMembersPanel
-            v-if="activeTab === 'members'"
-            :loading="loadingMembers"
-            :members="members"
-            :is-owner="isOwner"
-            :role-options="roleOptions"
-            :role-updating-user-id="roleUpdatingUserId"
-            :role-label="roleLabel"
-            :format-date="formatDate"
-            @update-role="updateMemberRole"
-        />
+          <template #end>
+            <template v-if="activeTeam">
+              <header class="team-detail__head">
+                <div class="mp-panel__head team-detail__head-row">
+                  <div class="team-detail__identity">
+                    <span class="mp-avatar team-detail__avatar">{{ activeTeam.name.charAt(0) }}</span>
+                    <h2 class="team-detail__title">{{ activeTeam.name }}</h2>
+                    <span class="team-detail__meta">
+                      <span class="team-detail__role">{{ roleLabel(activeTeam.role) }}</span>
+                      <span class="team-detail__dot">·</span>
+                      <span>{{ t('team.memberCount', {count: activeTeam.memberCount}) }}</span>
+                    </span>
+                  </div>
+                  <div
+                      v-if="activeInviteCode && canManage"
+                      class="team-invite"
+                      :title="t('team.inviteHint')"
+                  >
+                    <span class="team-invite__label">
+                      <DwIcon name="key" size="xs"/>
+                      {{ t('team.inviteCodeLabel') }}
+                    </span>
+                    <code class="team-invite__code">{{ activeInviteCode }}</code>
+                    <button type="button" class="team-invite__copy" @click="copyInviteCode">
+                      <DwIcon name="copy" size="xs"/>
+                      {{ t('team.inviteCodeCopy') }}
+                    </button>
+                  </div>
+                </div>
 
-        <TeamInvitesPanel
-            v-else-if="activeTab === 'invites' && canManage"
-            :loading="loadingInvites"
-            :invites="invites"
-            :invite-action-id="inviteActionId"
-            :invite-status-label="inviteStatusLabel"
-            :format-date="formatDate"
-            @approve="approveInvite"
-            @reject="rejectInvite"
-        />
+                <nav class="team-tabs" role="tablist">
+                  <template v-for="(tab, index) in tabs" :key="tab.key">
+                    <span
+                        v-if="index === firstManageTabIndex"
+                        class="team-tabs__divider"
+                        aria-hidden="true"
+                    />
+                    <button
+                        type="button"
+                        class="team-tab"
+                        :class="{ 'is-active': activeTab === tab.key }"
+                        role="tab"
+                        :aria-selected="activeTab === tab.key"
+                        :data-testid="`team-tab-${tab.key}`"
+                        @click="activeTab = tab.key"
+                    >
+                      {{ tab.label }}
+                      <span v-if="tab.key === 'invites' && showInviteBadge" class="team-tab__badge">
+                        {{ pendingInviteCount }}
+                      </span>
+                    </button>
+                  </template>
+                </nav>
+              </header>
 
-        <div v-else-if="activeTab === 'audit' && canManage" class="audit-tab-stack">
-          <TeamProductionApprovalsPanel
-              :team-id="activeTeam.id"
-              :can-manage="canManage"
-          />
-          <TeamAuditPanel
-              :team-id="activeTeam.id"
-              :team-name="activeTeam.name"
-              :members="members"
-          />
-        </div>
+              <div class="mp-panel__body mp-panel__body--scroll team-detail__body">
+                <TeamMembersPanel
+                    v-if="activeTab === 'members'"
+                    :loading="loadingMembers"
+                    :members="members"
+                    :is-owner="isOwner"
+                    :role-options="roleOptions"
+                    :role-updating-user-id="roleUpdatingUserId"
+                    :role-label="roleLabel"
+                    :format-date="formatDate"
+                    :current-user-id="currentUserId"
+                    :can-invite="canInvite"
+                    @update-role="updateMemberRole"
+                    @invite="copyInviteCode"
+                />
 
-        <TeamSharedQueriesPanel
-            v-else-if="activeTab === 'sharedQueries'"
-            :team-id="activeTeam.id"
-            :team-name="activeTeam.name"
-            :members="members"
-            :can-manage="canManage"
-            :current-user-id="currentUserId"
-        />
+                <TeamInvitesPanel
+                    v-else-if="activeTab === 'invites' && canManage"
+                    :loading="loadingInvites"
+                    :invites="invites"
+                    :invite-action-id="inviteActionId"
+                    :invite-status-label="inviteStatusLabel"
+                    :format-date="formatDate"
+                    @approve="approveInvite"
+                    @reject="rejectInvite"
+                />
 
-        <TeamAiSessionsPanel
-            v-else-if="activeTab === 'aiSessions'"
-            :loading-list="loadingSharedAiSessions"
-            :loading-detail="loadingSharedSessionDetail"
-            :sessions="sharedAiSessions"
-            :selected-session="selectedSharedSession"
-            :format-date="formatDate"
-            @select="openSharedSession"
-        />
+                <div v-else-if="activeTab === 'audit' && canManage" class="audit-tab-stack">
+                  <TeamProductionApprovalsPanel
+                      :team-id="activeTeam.id"
+                      :can-manage="canManage"
+                  />
+                  <TeamAuditPanel
+                      :team-id="activeTeam.id"
+                      :team-name="activeTeam.name"
+                      :members="members"
+                  />
+                </div>
 
-        <TeamSharingPanel
-            v-else-if="activeTab === 'sharing' && canManage"
-            :invite-code="activeTeam.inviteCode ?? null"
-            v-model:require-invite-approval="requireInviteApproval"
-            v-model:shared-connections-input="sharedConnectionsInput"
-            v-model:shared-consoles-input="sharedConsolesInput"
-            v-model:share-sql-history="shareSqlHistory"
-            :restrict-visible-projects="restrictVisibleProjects"
-            :visible-project-ids="visibleProjectIds"
-            :project-options="projectOptions"
-            :show-invite-badge="showInviteBadge"
-            :pending-invite-count="pendingInviteCount"
-            :shared-connection-rows="sharedConnectionRows"
-            :on-call-connection-ids="onCallConnectionIds"
-            :connection-access-options="connectionAccessOptions"
-            :saving-settings="savingSettings"
-            :saving-shared-connections="savingSharedConnections"
-            :saving-on-call-connections="savingOnCallConnections"
-            :saving-shared-consoles="savingSharedConsoles"
-            :saving-share-sql-history="savingShareSqlHistory"
-            :saving-visible-projects="savingVisibleProjects"
-            @copy-invite-code="copyInviteCode"
-            @open-invites-tab="openInvitesTab"
-            @save-settings="saveTeamSettings"
-            @update-connection-access="setSharedConnectionAccess"
-            @save-shared-connections="saveSharedConnections"
-            @toggle-on-call-connection="toggleOnCallConnection"
-            @save-on-call-connections="saveOnCallConnections"
-            @save-shared-consoles="saveSharedConsoles"
-            @save-share-sql-history="saveShareSqlHistory"
-            @update:restrict-visible-projects="onRestrictVisibleProjects"
-            @toggle-visible-project="toggleVisibleProject"
-            @save-visible-projects="saveVisibleProjects"
-        />
-        </div>
-        </template>
+                <TeamSharedQueriesPanel
+                    v-else-if="activeTab === 'sharedQueries'"
+                    :team-id="activeTeam.id"
+                    :team-name="activeTeam.name"
+                    :members="members"
+                    :can-manage="canManage"
+                    :current-user-id="currentUserId"
+                />
 
-        <EmptyState
-            v-else
-            class="team-detail__placeholder"
-            :title="t('team.selectTeamHint')"
-            :hint="t('team.selectTeamHintDesc')"
-        />
-      </template>
-    </DwSplitPane>
+                <TeamAiSessionsPanel
+                    v-else-if="activeTab === 'aiSessions'"
+                    :loading-list="loadingSharedAiSessions"
+                    :loading-detail="loadingSharedSessionDetail"
+                    :sessions="sharedAiSessions"
+                    :selected-session="selectedSharedSession"
+                    :format-date="formatDate"
+                    @select="openSharedSession"
+                />
+
+                <TeamSharingPanel
+                    v-else-if="activeTab === 'sharing' && canManage"
+                    :invite-code="activeInviteCode"
+                    v-model:require-invite-approval="requireInviteApproval"
+                    v-model:shared-connections-input="sharedConnectionsInput"
+                    v-model:shared-consoles-input="sharedConsolesInput"
+                    v-model:share-sql-history="shareSqlHistory"
+                    :restrict-visible-projects="restrictVisibleProjects"
+                    :visible-project-ids="visibleProjectIds"
+                    :project-options="projectOptions"
+                    :show-invite-badge="showInviteBadge"
+                    :pending-invite-count="pendingInviteCount"
+                    :shared-connection-rows="sharedConnectionRows"
+                    :on-call-connection-ids="onCallConnectionIds"
+                    :connection-access-options="connectionAccessOptions"
+                    :saving-settings="savingSettings"
+                    :saving-shared-connections="savingSharedConnections"
+                    :saving-on-call-connections="savingOnCallConnections"
+                    :saving-shared-consoles="savingSharedConsoles"
+                    :saving-share-sql-history="savingShareSqlHistory"
+                    :saving-visible-projects="savingVisibleProjects"
+                    @copy-invite-code="copyInviteCode"
+                    @open-invites-tab="openInvitesTab"
+                    @save-settings="saveTeamSettings"
+                    @update-connection-access="setSharedConnectionAccess"
+                    @save-shared-connections="saveSharedConnections"
+                    @toggle-on-call-connection="toggleOnCallConnection"
+                    @save-on-call-connections="saveOnCallConnections"
+                    @save-shared-consoles="saveSharedConsoles"
+                    @save-share-sql-history="saveShareSqlHistory"
+                    @update:restrict-visible-projects="onRestrictVisibleProjects"
+                    @toggle-visible-project="toggleVisibleProject"
+                    @save-visible-projects="saveVisibleProjects"
+                />
+              </div>
+            </template>
+
+            <EmptyState
+                v-else
+                class="team-detail__placeholder"
+                :title="t('team.selectTeamHint')"
+                :hint="t('team.selectTeamHintDesc')"
+            />
+          </template>
+        </DwSplitPane>
       </div>
     </ModulePageRegions>
   </div>
@@ -813,90 +889,412 @@ onMounted(() => {
   min-height: 0;
 }
 
+/* Compact hero: the shared ModulePageHeader is a card by default; team page
+   uses it as a single toolbar row so the content area is not pushed down. */
+.team-page :deep(.mp-hero.mp-hero--compact) {
+  margin-bottom: 0;
+  border-color: var(--dw-panel-outline, var(--dw-panel-border));
+  border-radius: var(--dw-panel-radius);
+  background: color-mix(in srgb, var(--dw-bg-panel) 78%, var(--dw-bg));
+  box-shadow: none;
+}
+
+.team-page :deep(.mp-hero.mp-hero--compact .mp-hero__inner) {
+  padding: var(--dw-space-3) var(--dw-space-5);
+}
+
+.team-page :deep(.mp-hero.mp-hero--compact .mp-hero__title) {
+  font-size: var(--dw-text-xl);
+  letter-spacing: 0;
+}
+
+.team-page :deep(.mp-hero.mp-hero--compact .mp-hero__sub) {
+  margin-top: 1px;
+  font-size: var(--dw-text-xs);
+}
+
 .team-page__body {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: var(--mp-gap);
-  height: 100%;
-  min-height: 0;
-}
-
-.team-onboarding {
-  align-items: stretch;
-}
-
-.team-onboarding__card {
   display: flex;
   flex-direction: column;
-  gap: var(--dw-gap);
-  height: 100%;
-}
-
-.team-onboarding__card .mp-card__desc {
-  margin-bottom: 0;
-}
-
-.team-onboarding__row {
-  display: flex;
-  align-items: stretch;
-  gap: var(--dw-gap);
-  margin-top: auto;
-}
-
-.team-onboarding__row :deep(input.dw-input) {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  height: var(--mp-input-h);
-}
-
-.team-onboarding__action {
-  flex: 0 0 auto;
-  width: auto;
-  min-width: 96px;
-  margin: 0;
-  height: var(--mp-input-h);
-  padding-inline: clamp(12px, 1.4vmin, 16px);
-  align-self: stretch;
-}
-
-.team-main.dw-split-pane {
   gap: var(--mp-gap);
+  height: 100%;
   min-height: 0;
 }
 
-.team-sidebar__body,
+.team-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--dw-gap);
+}
+
+.team-actions :deep(button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ---- On-demand create / join composer ---- */
+
+.team-composer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dw-space-3) var(--dw-space-5);
+  flex-shrink: 0;
+  padding: var(--dw-space-3) var(--dw-space-5);
+  border: 1px solid color-mix(in srgb, var(--dw-primary) 28%, var(--dw-panel-border));
+  border-radius: var(--dw-panel-radius);
+  background: color-mix(in srgb, var(--dw-primary) 5%, var(--dw-bg-panel));
+}
+
+.team-composer__intro {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.team-composer__title {
+  font-size: var(--dw-text-md);
+  font-weight: 600;
+}
+
+.team-composer__hint {
+  margin-top: 2px;
+  font-size: var(--dw-text-xs);
+  color: var(--dw-text-muted);
+  line-height: 1.5;
+}
+
+.team-composer__form {
+  display: flex;
+  align-items: center;
+  gap: var(--dw-gap);
+  flex: 2 1 320px;
+  min-width: 0;
+}
+
+.team-composer__form :deep(input.dw-input) {
+  flex: 1 1 auto;
+  min-width: 120px;
+  margin: 0;
+  height: var(--mp-input-h);
+}
+
+.team-composer__form :deep(button) {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.team-composer :deep(.dw-inline-alert) {
+  flex-basis: 100%;
+}
+
+.join-request-list {
+  flex-basis: 100%;
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--dw-text-xs);
+  color: var(--dw-text-secondary);
+}
+
+/* ---- Split layout ---- */
+
+.team-main.dw-split-pane {
+  flex: 1;
+  gap: 0;
+  min-height: 0;
+}
+
+/* Panels sit flush with the splitter (system default); each pane controls
+   its own inner padding, so there is no double gutter around lists. */
+.team-sidebar__body {
+  padding: var(--dw-space-3);
+}
+
 .team-detail__body {
-  padding: var(--dw-space-4);
+  padding: 0;
+}
+
+.team-sidebar__body .mp-list {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.team-sidebar__body .mp-list__row {
+  gap: var(--dw-gap);
+  padding: var(--dw-space-3) var(--dw-space-4);
+  border-radius: var(--dw-control-radius-sm);
+}
+
+.team-sidebar__body .mp-list__row + .mp-list__row {
+  border-top: 0;
+}
+
+.team-sidebar__body .mp-list__main {
+  gap: var(--dw-space-4);
+}
+
+.team-sidebar__body .mp-avatar {
+  width: var(--dw-density-sm);
+  height: var(--dw-density-sm);
+  font-size: var(--dw-text-xs);
+}
+
+.team-sidebar__head {
+  height: var(--mp-head-h);
+}
+
+.team-sidebar__heading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--dw-space-3);
+}
+
+.team-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dw-density-sm);
+  height: var(--dw-density-sm);
+  padding: 0;
+  border: 1px solid var(--dw-border-light);
+  border-radius: var(--dw-control-radius-sm);
+  background: transparent;
+  color: var(--dw-text-secondary);
+  cursor: pointer;
+}
+
+.team-icon-btn:hover {
+  border-color: var(--dw-primary-border);
+  color: var(--dw-primary);
+  background: var(--dw-primary-soft);
+}
+
+.team-sidebar__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--dw-space-2);
+  margin: auto;
+  padding: var(--dw-space-6) var(--dw-space-4);
+  text-align: center;
+}
+
+.team-sidebar__empty-text {
+  margin: 0;
+  font-size: var(--dw-text-sm);
+  font-weight: 500;
+}
+
+.team-sidebar__empty-hint {
+  margin: 0 0 var(--dw-space-3);
+  font-size: var(--dw-text-xs);
+  color: var(--dw-text-muted);
+  line-height: 1.5;
+}
+
+.team-sidebar__empty-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dw-primary);
+  font-size: var(--dw-text-xs);
+  cursor: pointer;
+}
+
+.team-sidebar__empty-link:hover {
+  text-decoration: underline;
 }
 
 .team-list {
   align-content: start;
 }
 
-.mp-list__row {
+.team-list__row {
+  position: relative;
   cursor: pointer;
 }
 
-.mp-list__row.is-active {
-  background: color-mix(in srgb, var(--dw-primary) 8%, var(--dw-bg-panel));
+.team-list__row:hover {
+  background: var(--dw-bg-muted);
 }
 
+.team-list__row.is-active {
+  background: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg-panel));
+  box-shadow: inset 2px 0 0 var(--dw-primary);
+}
+
+.team-list__copy {
+  min-width: 0;
+}
+
+.team-list__check {
+  flex-shrink: 0;
+  color: var(--dw-primary);
+}
+
+/* ---- Detail header: one system-standard panel head + one tab strip ---- */
+
 .team-detail__head {
-  flex-wrap: wrap;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--dw-border-light);
+  background: transparent;
+}
+
+.team-detail__head-row {
+  height: var(--mp-head-h);
+  gap: var(--dw-gap);
+  padding: 0 var(--dw-space-5);
+  font-size: var(--dw-text-sm);
+  font-weight: 400;
+}
+
+.team-detail__identity {
+  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--dw-gap-md);
-  min-height: var(--mp-head-h);
-  height: auto;
-  padding-block: 8px;
+  gap: var(--dw-space-3);
+  min-width: 0;
+}
+
+.team-detail__avatar {
+  width: var(--dw-density-xs);
+  height: var(--dw-density-xs);
+  border-radius: 50%;
+  font-size: var(--dw-text-2xs);
 }
 
 .team-detail__title {
-  min-width: 0;
+  margin: 0;
+  font-size: var(--dw-text-md);
+  font-weight: 600;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.team-detail__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dw-space-2);
+  flex-shrink: 0;
+  font-size: var(--dw-text-xs);
+  font-weight: 400;
+  color: var(--dw-text-muted);
+}
+
+.team-detail__role {
+  color: var(--dw-primary);
+  font-weight: 500;
+}
+
+.team-detail__dot {
+  opacity: 0.6;
+}
+
+/* Invite code is an inline chip in the head, not a stacked card. */
+.team-invite {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dw-space-3);
+  flex-shrink: 0;
+  padding: 0 var(--dw-space-3);
+  border: 1px solid var(--dw-border-light);
+  border-radius: var(--dw-control-radius-sm);
+  background: var(--dw-bg-panel);
+}
+
+.team-invite__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--dw-text-2xs);
+  font-weight: 400;
+  color: var(--dw-text-muted);
+}
+
+.team-invite__code {
+  font-family: var(--dw-mono);
+  font-size: var(--dw-text-sm);
+  letter-spacing: 0.04em;
+  color: var(--dw-text);
+  user-select: all;
+}
+
+.team-invite__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px var(--dw-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--dw-control-radius-sm);
+  background: transparent;
+  color: var(--dw-primary);
+  font-size: var(--dw-text-xs);
+  cursor: pointer;
+}
+
+.team-invite__copy:hover {
+  border-color: var(--dw-primary-border);
+  background: var(--dw-primary-soft);
+}
+
+.team-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0 var(--dw-space-4);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.team-tabs__divider {
+  flex: 0 0 1px;
+  width: 1px;
+  margin: 6px var(--dw-space-3);
+  background: var(--dw-border-light);
+}
+
+.team-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dw-space-2);
+  flex: 0 0 auto;
+  height: var(--mp-head-h);
+  padding: 0 var(--dw-space-4);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--dw-text-secondary);
+  font-size: var(--dw-font-size-tab);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.team-tab:hover {
+  color: var(--dw-text);
+  background: color-mix(in srgb, var(--dw-text) 4%, transparent);
+}
+
+.team-tab.is-active {
+  border-bottom-color: var(--dw-primary);
+  color: var(--dw-primary);
+  font-weight: 500;
+}
+
+.team-tab__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--dw-radius-pill);
+  background: var(--dw-danger);
+  color: var(--dw-on-accent);
+  font-size: var(--dw-text-2xs);
+  font-weight: 600;
 }
 
 .team-detail__placeholder {
@@ -904,242 +1302,198 @@ onMounted(() => {
   min-height: 200px;
 }
 
-.team-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--dw-tab-gap);
-  padding: 0 var(--dw-space-2);
-  background: var(--dw-tab-bar-bg);
-  border-bottom: 1px solid var(--dw-tab-bar-border);
-}
-
-.team-tab {
-  height: var(--mp-btn-h);
-  padding: 0 var(--dw-space-6);
-  border-radius: var(--dw-tab-pill-radius);
-  font-size: var(--dw-text-xs);
-  cursor: pointer;
-}
-
-.team-tab.is-active {
-  font-weight: 600;
-}
-
-.team-tab__badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: var(--dw-icon-size-lg);
-  height: var(--dw-icon-size-lg);
-  margin-left: var(--dw-space-3);
-  padding: 0 var(--dw-space-2);
-  border-radius: var(--dw-radius-pill);
-  background: var(--dw-danger);
-  color: var(--dw-on-accent);
-  font-size: var(--dw-text-xs);
-  font-weight: 700;
-}
-
-.join-request-list {
-  margin: var(--dw-space-5) 0 0;
-  padding-left: 18px;
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text-secondary);
-}
-
-.sharing-block__hint {
-  margin-top: var(--dw-space-5);
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text-secondary);
-}
-
-.link-btn {
-  margin-left: var(--dw-space-2);
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--dw-primary);
-  font-size: inherit;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.detail-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--dw-gap);
-}
-
-.detail-list__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--dw-space-6);
-  padding: var(--dw-pad-control-lg);
-  border: 1px solid var(--dw-border-light);
-  border-radius: var(--dw-control-radius);
-  background: var(--dw-bg-panel);
-}
-
-.detail-list__name {
-  font-size: var(--dw-text-md);
-  font-weight: 600;
-}
-
-.detail-list__meta {
-  font-size: var(--dw-text-xs);
-  color: var(--dw-text-muted);
-  margin-top: var(--dw-space-1);
-}
-
-.role-badge {
-  font-size: var(--dw-text-sm);
-}
-
-.detail-list__row :deep(.dw-select) {
-  width: auto;
-  min-width: 108px;
-}
-
-.invite-actions {
-  display: flex;
-  gap: var(--dw-gap);
-  flex-shrink: 0;
-}
-
 .audit-tab-stack {
   display: flex;
   flex-direction: column;
-  gap: 0;
-}
-
-.audit-list__row {
-  align-items: flex-start;
-}
-
-.audit-detail {
-  margin-top: var(--dw-space-2);
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text-secondary);
-}
-
-.sharing-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--dw-space-8);
-}
-
-.sharing-block__title {
-  margin: 0 0 var(--dw-space-2);
-  font-size: var(--dw-text-xl);
-  font-weight: 600;
-}
-
-.sharing-block__desc {
-  margin: 0 0 var(--dw-space-5);
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text-muted);
-}
-
-.shared-input {
-  width: 100%;
-  min-height: 84px;
-  resize: vertical;
-  margin-bottom: var(--dw-space-6);
-}
-
-.shared-access-list {
-  display: grid;
-  gap: var(--dw-gap);
-  margin-bottom: var(--dw-space-6);
-}
-
-.shared-access-list__hint {
-  margin: 0;
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text-muted);
-}
-
-.shared-access-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--dw-space-6);
-  padding: var(--dw-pad-control);
-  border: 1px solid var(--dw-border-light);
-  border-radius: var(--dw-control-radius);
-  background: var(--dw-bg-panel);
-}
-
-.shared-access-row__id {
-  font-size: var(--dw-text-sm);
-}
-
-.shared-access-row :deep(.dw-select) {
-  min-width: 120px;
-  width: auto;
-}
-
-.invite-row {
-  display: flex;
-  align-items: center;
-  gap: var(--dw-space-6);
-  flex-wrap: wrap;
-}
-
-.invite-code {
-  padding: var(--dw-space-4) var(--dw-space-6);
-  border-radius: var(--dw-control-radius);
-  background: var(--dw-bg-muted);
-  font-family: var(--dw-mono);
-  font-size: var(--dw-text-lg);
-  letter-spacing: 0.08em;
-}
-
-.share-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--dw-gap);
-  margin-bottom: var(--dw-space-6);
-  font-size: var(--dw-text-md);
-}
-
-.ai-sessions-layout {
-  display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-  gap: var(--dw-space-6);
-  min-height: 320px;
-}
-
-.ai-sessions-list {
-  overflow: auto;
-  max-height: 420px;
-}
-
-.ai-sessions-list__row {
-  cursor: pointer;
-}
-
-.ai-sessions-list__row.is-active {
-  border-color: color-mix(in srgb, var(--dw-primary) 35%, var(--dw-border-light));
-  background: color-mix(in srgb, var(--dw-primary-soft) 40%, var(--dw-bg-panel));
-}
-
-.ai-sessions-detail {
-  min-height: 0;
-  overflow: auto;
-  padding: var(--dw-space-6);
-  border: 1px solid var(--dw-border-light);
-  border-radius: var(--dw-control-radius);
-  background: var(--dw-bg-panel);
+  gap: var(--mp-gap);
 }
 
 @media (max-width: 900px) {
   :deep(.team-sidebar) {
     max-height: 220px;
   }
+
+  .team-detail__head-row {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--mp-head-h);
+    gap: var(--dw-space-2);
+    padding: var(--dw-space-2) var(--dw-space-5);
+  }
+}
+</style>
+
+<style>
+/*
+ * Team tab panes share one compact baseline.
+ * 系统内容区统一是「贴边 + 发丝线 + --mp-gap」(mp-panel / mp-list)；
+ * 这里把历史子面板的「独立卡片 + 大间距」收敛到同一密度。
+ * 所有规则以 .team-page 前缀限定，不会泄漏到其他模块。
+ */
+.team-page .team-detail__body > .tab-panel,
+.team-page .team-detail__body > .audit-tab-stack {
+  flex: 1 0 auto;
+  min-height: 0;
+  padding: var(--dw-space-4) var(--dw-space-5);
+}
+
+.team-page .team-detail__body > .tab-panel,
+.team-page .team-detail__body > .audit-tab-stack,
+.team-page .team-detail__body .sharing-panel,
+.team-page .team-detail__body .audit-panel,
+.team-page .team-detail__body .shared-queries-panel,
+.team-page .team-detail__body .ai-sessions-panel,
+.team-page .team-detail__body .production-approvals {
+  gap: var(--mp-gap);
+}
+
+.team-page .team-detail__body > .audit-tab-stack > .tab-panel {
+  padding: 0;
+}
+
+.team-page .team-detail__body .production-approvals {
+  margin-bottom: var(--mp-gap);
+  padding-bottom: var(--mp-gap);
+}
+
+/* 连续列表 + 发丝线，取代一张张独立卡片 */
+.team-page .team-detail__body .detail-list {
+  gap: 0;
+  border: 1px solid var(--dw-border-light);
+  border-radius: var(--dw-panel-radius);
+  background: var(--dw-bg-panel);
+  overflow: hidden;
+}
+
+.team-page .team-detail__body .detail-list__row {
+  gap: var(--dw-space-4);
+  min-height: var(--dw-density-md);
+  padding: var(--dw-space-3) var(--dw-space-5);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.team-page .team-detail__body .detail-list__row + .detail-list__row {
+  border-top: 1px solid var(--dw-border-light);
+}
+
+.team-page .team-detail__body .detail-list__name {
+  font-size: var(--dw-text-sm);
+  font-weight: 500;
+}
+
+.team-page .team-detail__body .detail-list__meta {
+  margin-top: 1px;
+  font-size: var(--dw-text-xs);
+}
+
+.team-page .team-detail__body .ai-sessions-list__row.is-active {
+  background: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg-panel));
+  box-shadow: inset 2px 0 0 var(--dw-primary);
+}
+
+/* 工具行 / 设置分区：与 settings 的 setting-block 同族 */
+.team-page .team-detail__body .audit-toolbar {
+  gap: var(--dw-space-4);
+  padding: var(--dw-space-4) var(--dw-space-5);
+}
+
+.team-page .team-detail__body .sharing-block {
+  padding: var(--dw-space-4) var(--dw-space-5);
+  border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+  border-radius: var(--dw-panel-radius);
+  background: color-mix(in srgb, var(--dw-bg-panel) 78%, var(--dw-bg));
+}
+
+.team-page .team-detail__body .sharing-block__title {
+  margin-bottom: var(--dw-space-1);
+  font-size: var(--dw-text-md);
+}
+
+.team-page .team-detail__body .sharing-block__desc {
+  margin-bottom: var(--dw-space-4);
+  font-size: var(--dw-text-xs);
+}
+
+.team-page .team-detail__body .sharing-block__hint {
+  margin-top: var(--dw-space-3);
+  font-size: var(--dw-text-xs);
+}
+
+.team-page .team-detail__body .shared-input {
+  min-height: 64px;
+  margin-bottom: var(--dw-space-4);
+}
+
+.team-page .team-detail__body .share-toggle {
+  margin-bottom: var(--dw-space-4);
+}
+
+.team-page .team-detail__body .invite-row {
+  gap: var(--dw-gap);
+}
+
+.team-page .team-detail__body .invite-code {
+  padding: var(--dw-space-2) var(--dw-space-4);
+  font-size: var(--dw-text-md);
+}
+
+.team-page .team-detail__body .shared-access-list,
+.team-page .team-detail__body .on-call-list {
+  gap: 0;
+  margin-bottom: var(--dw-space-4);
+  border: 1px solid var(--dw-border-light);
+  border-radius: var(--dw-panel-radius);
+  overflow: hidden;
+}
+
+.team-page .team-detail__body .shared-access-row,
+.team-page .team-detail__body .on-call-row {
+  gap: var(--dw-space-4);
+  padding: var(--dw-space-2) var(--dw-space-4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: var(--dw-text-sm);
+}
+
+.team-page .team-detail__body .shared-access-row + .shared-access-row,
+.team-page .team-detail__body .on-call-row + .on-call-row {
+  border-top: 1px solid var(--dw-border-light);
+}
+
+.team-page .team-detail__body .shared-access-list__hint {
+  padding: var(--dw-space-2) var(--dw-space-4);
+  border-bottom: 1px solid var(--dw-border-light);
+  background: var(--dw-bg-muted);
+  font-size: var(--dw-text-xs);
+}
+
+/* 卡片 / 双栏：只收紧间距，结构保持各自语义 */
+.team-page .team-detail__body .shared-query-cards {
+  gap: var(--mp-gap);
+}
+
+.team-page .team-detail__body .shared-query-card__main {
+  padding: var(--dw-space-4) var(--dw-space-5);
+}
+
+.team-page .team-detail__body .shared-query-card__actions {
+  padding: 0 var(--dw-space-5) var(--dw-space-5);
+}
+
+.team-page .team-detail__body .ai-sessions-layout {
+  gap: var(--mp-gap);
+  min-height: 280px;
+}
+
+/* The session list keeps its own scroll; the shared baseline uses hidden. */
+.team-page .team-detail__body .ai-sessions-list {
+  overflow: auto;
+}
+
+.team-page .team-detail__body .ai-sessions-detail {
+  padding: var(--dw-space-4);
 }
 </style>

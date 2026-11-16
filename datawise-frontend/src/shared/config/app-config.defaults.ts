@@ -63,6 +63,8 @@ export const DEFAULT_LAYOUT_PREFERENCES: LayoutPreferences = {
     lastShortcutPanel: null,
     workbenchMode: 'query',
     openHttpLinksIn: 'builtin',
+    showProjectDocsRoot: true,
+    showProjectScriptsRoot: true,
     dockPlacement: null,
     dockTerminalFloat: null,
     dockExplorerFloat: null,

@@ -32,6 +32,16 @@ const leftBottomItems = computed(() =>
     appConfig.sideRailItems.filter((item) => item.section === 'bottom'),
 )
 
+const showProjectDocsRoot = computed(() => appConfig.preferences.showProjectDocsRoot !== false)
+const showProjectScriptsRoot = computed(() => appConfig.preferences.showProjectScriptsRoot !== false)
+
+function onToggleProjectFileRoot(root: 'docs' | 'scripts', visible: boolean) {
+  if (denyIfReadOnly()) return
+  appConfig.setProjectFileRootVisible(root, visible)
+  // 根节点由树重建时注入，切换后立即刷新一次即可生效。
+  void explorer.refreshTree()
+}
+
 const leftVisibleCount = computed(
     () => appConfig.sideRailItems.filter((item) => item.visible).length,
 )
@@ -207,6 +217,29 @@ async function onFileChange(event: Event) {
               :caption="t('settings.layout.explorerAlsoInToolbar')"
               :active="explorer.showSemanticLayer"
               @toggle="explorer.showSemanticLayer = !explorer.showSemanticLayer"
+          />
+        </div>
+      </SettingsSectionCard>
+
+      <SettingsSectionCard
+          id="settings-layout-project-file-roots"
+          :title="t('settings.layout.projectFileRoots')"
+          :hint="t('settings.layout.projectFileRootsHint')"
+          icon="file"
+          tone="violet"
+      >
+        <div class="toggle-grid">
+          <LayoutToggleChip
+              :label="t('settings.layout.projectDocsRoot')"
+              :caption="t('settings.layout.projectDocsRootCaption')"
+              :active="showProjectDocsRoot"
+              @toggle="onToggleProjectFileRoot('docs', !showProjectDocsRoot)"
+          />
+          <LayoutToggleChip
+              :label="t('settings.layout.projectScriptsRoot')"
+              :caption="t('settings.layout.projectScriptsRootCaption')"
+              :active="showProjectScriptsRoot"
+              @toggle="onToggleProjectFileRoot('scripts', !showProjectScriptsRoot)"
           />
         </div>
       </SettingsSectionCard>

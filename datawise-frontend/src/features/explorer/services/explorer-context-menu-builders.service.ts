@@ -39,14 +39,37 @@ export function resolveExplorerContextMenuType(node: Pick<TreeNode, 'id' | 'type
     if (node.type === 'folder' && node.label === 'tables') return 'folder-tables'
     if (node.type === 'sql_file' && node.id.startsWith('project-file:')) return 'project-file'
     if (node.type === 'project-files-hint') {
-        if (node.id.includes('project-scripts')) return 'project-scripts'
-        if (node.id.includes('project-docs')) return 'project-docs'
-        // nested folder hint: prefer scripts/docs from path segment
-        if (node.id.includes(':scripts:')) return 'project-scripts'
-        if (node.id.includes(':docs:')) return 'project-docs'
+        // 两个虚拟根 + 嵌套目录：命中 scripts 语义才给脚本菜单，其余按文档菜单。
+        if (node.id.includes('project-scripts') || node.id.includes(':scripts:')) {
+            return 'project-scripts'
+        }
         return 'project-docs'
     }
     return node.type
+}
+
+/**
+ * 给自己私有区里的目录注入「共享到项目 / 取消共享」。
+ * 只有真实目录节点才会调用；共享引用节点、虚拟根都不会出现这两个动作。
+ */
+export function injectProjectFolderShareMenuItem(
+    items: ContextMenuItem[],
+    actionId: 'share-project-folder' | 'unshare-project-folder',
+    label: string,
+): ContextMenuItem[] {
+    const item: ContextMenuItem = {
+        id: actionId,
+        label,
+        icon: actionId === 'share-project-folder' ? 'list-plus' : 'list-minus',
+    }
+    const next = [...items]
+    const refreshIdx = next.findIndex((entry) => entry.id === 'refresh-project-files')
+    if (refreshIdx >= 0) {
+        next.splice(refreshIdx, 0, item)
+    } else {
+        next.push(item)
+    }
+    return next
 }
 
 /** Disable the CSV import action and attach a capability hint. */

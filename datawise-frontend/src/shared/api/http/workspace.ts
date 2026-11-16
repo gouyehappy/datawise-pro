@@ -18,7 +18,8 @@ import {API_PATHS} from '@/shared/api/http/paths'
 
 export function createHttpWorkspaceApi(): WorkspaceApi {
     return {
-        fetchSqlLogs: () => getJson<SqlLogEntry[]>(API_PATHS.workspace.sqlLogs),
+        fetchSqlLogs: () =>
+            getJson<SqlLogEntry[]>(API_PATHS.workspace.sqlLogs, undefined, {background: true}),
 
         appendSqlLog: (entry, connectionId) =>
             postJson<SqlLogEntry>(
@@ -31,7 +32,8 @@ export function createHttpWorkspaceApi(): WorkspaceApi {
                 {silent: true},
             ),
 
-        fetchSavedConsoles: () => getJson<SavedConsole[]>(API_PATHS.workspace.savedConsoles),
+        fetchSavedConsoles: () =>
+            getJson<SavedConsole[]>(API_PATHS.workspace.savedConsoles, undefined, {background: true}),
 
         saveConsole: (payload) =>
             postJson<SavedConsole>(API_PATHS.workspace.savedConsoles, payload),
@@ -144,7 +146,8 @@ export function createHttpWorkspaceApi(): WorkspaceApi {
 
         fetchWorkspaceSettings: () => getJson<WorkspaceSettings>(API_PATHS.workspace.settings),
 
-        fetchExportTasks: () => getJson<ExportTask[]>(API_PATHS.workspace.exportTasks),
+        fetchExportTasks: () =>
+            getJson<ExportTask[]>(API_PATHS.workspace.exportTasks, undefined, {background: true}),
 
         createExportTask: (fileName, options) =>
             postJson<ExportTask>(API_PATHS.workspace.exportTasks, {

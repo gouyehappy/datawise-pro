@@ -4,10 +4,18 @@ import {useProjectStore} from '@/features/project/stores/project'
 import {
     buildProjectFileNodeId,
     buildProjectFileUri,
+    isDocsProjectFileRoot,
+    isProjectFileRoot,
+    isScriptsProjectFileRoot,
+    isSharedRefPath,
     parseProjectFileUri,
+    PROJECT_FILE_ROOTS,
     projectFilesApi,
+    SHARED_REF_PREFIX,
+    type ProjectFileEntryDto,
     type ProjectFileRoot,
 } from '@/features/project/services/project-files-api'
+import {getVisibleProjectFileRoots} from '@/features/project/services/project-file-root-visibility'
 import {HTTP_NOT_READY, HTTP_TIMEOUT} from '@/shared/api/http/request'
 import {isLocalSqlFileName, localFileBaseName} from '@/features/local-files/services/local-files-path'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
@@ -21,12 +29,36 @@ export const PROJECT_FILES_HINT_PREFIX = 'project-files-hint:'
 export const PROJECT_FILES_DRAFT_ID = 'project-files-draft'
 export const GROUP_DRAFT_ID = 'explorer-group-draft'
 
+export const PROJECT_FILE_ROOT_NODE_IDS: string[] = [
+    PROJECT_DOCS_ROOT_ID,
+    PROJECT_SCRIPTS_ROOT_ID,
+]
+
+const ROOT_NODE_ID_BY_ROOT: Record<ProjectFileRoot, string> = {
+    docs: PROJECT_DOCS_ROOT_ID,
+    scripts: PROJECT_SCRIPTS_ROOT_ID,
+}
+
+const ROOT_BY_NODE_ID: Record<string, ProjectFileRoot> = {
+    [PROJECT_DOCS_ROOT_ID]: 'docs',
+    [PROJECT_SCRIPTS_ROOT_ID]: 'scripts',
+}
+
+export function isProjectFilesVirtualRootId(nodeId: string): boolean {
+    return nodeId in ROOT_BY_NODE_ID
+}
+
+/** 虚拟根节点 → root；非虚拟根返回 null。 */
+export function projectFileRootFromNodeId(nodeId: string): ProjectFileRoot | null {
+    return ROOT_BY_NODE_ID[nodeId] ?? null
+}
+
 export function projectFileNodeId(projectId: string, root: ProjectFileRoot, relativePath: string): string {
     return buildProjectFileNodeId(projectId, root, relativePath)
 }
 
 export function projectFilesRootNodeId(root: ProjectFileRoot): string {
-    return root === 'docs' ? PROJECT_DOCS_ROOT_ID : PROJECT_SCRIPTS_ROOT_ID
+    return ROOT_NODE_ID_BY_ROOT[root]
 }
 
 /** Ancestor folder node ids that must be loaded before revealing a project file. */
@@ -36,7 +68,13 @@ export function listProjectFileAncestorFolderIds(uri: string): string[] {
     const ids = [projectFilesRootNodeId(parsed.root)]
     const parts = parsed.path.replace(/\\/g, '/').split('/').filter(Boolean)
     let accum = ''
-    for (let i = 0; i < parts.length - 1; i++) {
+    let startIndex = 0
+    if (parts[0] === SHARED_REF_PREFIX && parts.length > 1) {
+        // `@shared/u{id}` 只是引用前缀，树里没有对应节点；从共享目录本体开始建祖先。
+        accum = `${parts[0]}/${parts[1]}`
+        startIndex = 2
+    }
+    for (let i = startIndex; i < parts.length - 1; i++) {
         accum = accum ? `${accum}/${parts[i]}` : parts[i]!
         ids.push(buildProjectFileNodeId(parsed.projectId, parsed.root, accum))
     }
@@ -55,7 +93,7 @@ export function parseProjectFileNodeId(
     const projectId = rest.slice(0, first)
     const rootRaw = rest.slice(first + 1, second)
     const path = rest.slice(second + 1)
-    if (rootRaw !== 'docs' && rootRaw !== 'scripts') return null
+    if (!isProjectFileRoot(rootRaw)) return null
     return {projectId, root: rootRaw, path}
 }
 
@@ -75,6 +113,30 @@ export function isProjectFilesHintNode(node: TreeNode | null | undefined): boole
 
 export function isProjectFilesDraftNode(node: TreeNode | null | undefined): boolean {
     return Boolean(node && (node.type === 'project-files-draft' || node.id === PROJECT_FILES_DRAFT_ID))
+}
+
+/** 节点是否落在 `@shared/u{id}/...` 引用路径里（别人共享出来的目录）。 */
+export function isSharedReferenceNode(node: TreeNode | null | undefined): boolean {
+    if (!node) return false
+    const parsed = parseProjectFileNodeId(node.id)
+    return Boolean(parsed && isSharedRefPath(parsed.path))
+}
+
+/** 只有自己私有区里的真实目录可以共享/取消共享（排除虚拟根、提示节点、共享引用）。 */
+export function isShareableProjectFolder(node: TreeNode | null | undefined): boolean {
+    if (!node || !isProjectFilesFolderNode(node) || isProjectFilesVirtualRootId(node.id)) {
+        return false
+    }
+    const parsed = parseProjectFileNodeId(node.id)
+    return Boolean(parsed?.path && !isSharedRefPath(parsed.path))
+}
+
+/** 设置页开关决定注入哪些根节点；显式传参便于回归测试覆盖。 */
+export function resolveVisibleProjectFileRoots(
+    visibleRoots?: ProjectFileRoot[],
+): ProjectFileRoot[] {
+    const roots = visibleRoots ?? getVisibleProjectFileRoots()
+    return PROJECT_FILE_ROOTS.filter((root) => roots.includes(root))
 }
 
 export function removeProjectFilesDraft(folder: TreeNode): void {
@@ -129,11 +191,9 @@ export function resolveProjectFilesFolderContext(
         target = parent
     }
 
-    if (target.id === PROJECT_DOCS_ROOT_ID) {
-        return {projectId, root: 'docs', folderPath: '', folderNodeId: target.id}
-    }
-    if (target.id === PROJECT_SCRIPTS_ROOT_ID) {
-        return {projectId, root: 'scripts', folderPath: '', folderNodeId: target.id}
+    const virtualRoot = projectFileRootFromNodeId(target.id)
+    if (virtualRoot) {
+        return {projectId, root: virtualRoot, folderPath: '', folderNodeId: target.id}
     }
     if (isProjectFilesFolderNode(target) && target.id.startsWith('project-file:')) {
         const parsed = parseProjectFileNodeId(target.id)
@@ -151,22 +211,35 @@ export function resolveProjectFilesFolderContext(
 function mapEntryToNode(
     projectId: string,
     root: ProjectFileRoot,
-    entry: {name: string; path: string; directory: boolean},
+    entry: ProjectFileEntryDto,
 ): TreeNode {
     const id = projectFileNodeId(projectId, root, entry.path)
+    const shared = Boolean(entry.shared)
+    const isRefPath = isSharedRefPath(entry.path)
+    // 只有根层的引用节点带 sharedBy；引用目录内部的文件不重复挂来源说明。
+    // 用 comment 展示，避免占用 meta（meta 是 lazy-load 内部标记）。
+    const comment = entry.sharedBy && isRefPath
+        ? t('explorer.projectFiles.sharedFrom', {name: entry.sharedBy})
+        : (shared && !isRefPath ? t('explorer.projectFiles.sharedToTeam') : undefined)
     if (entry.directory) {
         return {
             id,
             label: entry.name,
-            type: root === 'docs' ? 'project-docs' : 'project-scripts',
+            type: isDocsProjectFileRoot(root) ? 'project-docs' : 'project-scripts',
             children: [],
             meta: 'lazy',
+            shared,
+            sharedBy: entry.sharedBy ?? undefined,
+            comment,
         }
     }
     return {
         id,
         label: entry.name,
         type: isLocalSqlFileName(entry.name) ? 'sql_file' : 'project-file',
+        shared,
+        sharedBy: entry.sharedBy ?? undefined,
+        comment,
     }
 }
 
@@ -188,27 +261,36 @@ function resolveActiveProjectIdForTree(): string | null {
     return localStorage.getItem('dw-cli-active-project-id')?.trim() || null
 }
 
-export function injectProjectFileRoots(connectionRoots: TreeNode[]): TreeNode[] {
+function projectFileVirtualRoot(root: ProjectFileRoot, label: string): TreeNode {
+    return {
+        id: projectFilesRootNodeId(root),
+        label,
+        type: isDocsProjectFileRoot(root) ? 'project-docs' : 'project-scripts',
+        children: [],
+        meta: 'lazy',
+    }
+}
+
+/**
+ * 只注入「项目文档 / 项目脚本」两个私有根（可在设置页分别隐藏）。
+ * 团队共享不再是大目录：别人共享的私有目录会作为引用节点挂在对应根下。
+ */
+export function injectProjectFileRoots(
+    connectionRoots: TreeNode[],
+    visibleRoots?: ProjectFileRoot[],
+): TreeNode[] {
     const projectId = resolveActiveProjectIdForTree()
     if (!projectId) return connectionRoots
-    const withoutProjectRoots = connectionRoots.filter(
-        (n) => n.id !== PROJECT_DOCS_ROOT_ID && n.id !== PROJECT_SCRIPTS_ROOT_ID,
-    )
-    const docsRoot: TreeNode = {
-        id: PROJECT_DOCS_ROOT_ID,
-        label: t('explorer.projectDocs'),
-        type: 'project-docs',
-        children: [],
-        meta: 'lazy',
+    const rootIds = new Set(PROJECT_FILE_ROOT_NODE_IDS)
+    const withoutProjectRoots = connectionRoots.filter((n) => !rootIds.has(n.id))
+    const labels: Record<ProjectFileRoot, string> = {
+        docs: t('explorer.projectDocs'),
+        scripts: t('explorer.projectScripts'),
     }
-    const scriptsRoot: TreeNode = {
-        id: PROJECT_SCRIPTS_ROOT_ID,
-        label: t('explorer.projectScripts'),
-        type: 'project-scripts',
-        children: [],
-        meta: 'lazy',
-    }
-    return [docsRoot, scriptsRoot, ...withoutProjectRoots]
+    return [
+        ...resolveVisibleProjectFileRoots(visibleRoots).map((root) => projectFileVirtualRoot(root, labels[root])),
+        ...withoutProjectRoots,
+    ]
 }
 
 export async function loadProjectFilesChildren(node: TreeNode): Promise<TreeNode[]> {
@@ -218,11 +300,9 @@ export async function loadProjectFilesChildren(node: TreeNode): Promise<TreeNode
 
     let root: ProjectFileRoot
     let path = ''
-    if (node.id === PROJECT_DOCS_ROOT_ID) {
-        root = 'docs'
-        path = ''
-    } else if (node.id === PROJECT_SCRIPTS_ROOT_ID) {
-        root = 'scripts'
+    const virtualRoot = projectFileRootFromNodeId(node.id)
+    if (virtualRoot) {
+        root = virtualRoot
         path = ''
     } else {
         const parsed = parseProjectFileNodeId(node.id)
@@ -245,6 +325,28 @@ export async function refreshProjectFilesFolder(folderNodeId: string): Promise<v
     folder.children = []
     folder.expanded = true
     await explorer.ensureChildrenLoaded(folderNodeId, {notify: false})
+}
+
+/** 把自己私有区里的目录共享给项目内其它账号，并刷新父目录以更新「已共享」标记。 */
+export async function shareProjectFolderNode(node: TreeNode): Promise<boolean> {
+    if (!isShareableProjectFolder(node)) return false
+    const parsed = parseProjectFileNodeId(node.id)
+    if (!parsed?.path) return false
+    await projectFilesApi.share(parsed.projectId, {root: parsed.root, path: parsed.path})
+    node.shared = true
+    await refreshProjectFilesFolder(parentFolderNodeId(parsed))
+    return true
+}
+
+/** 取消共享（只影响共享引用，私有目录本身不动）。 */
+export async function unshareProjectFolderNode(node: TreeNode): Promise<boolean> {
+    if (!isShareableProjectFolder(node)) return false
+    const parsed = parseProjectFileNodeId(node.id)
+    if (!parsed?.path) return false
+    await projectFilesApi.unshare(parsed.projectId, {root: parsed.root, path: parsed.path})
+    node.shared = false
+    await refreshProjectFilesFolder(parentFolderNodeId(parsed))
+    return true
 }
 
 export async function createProjectTextFile(options: {
@@ -283,7 +385,7 @@ export async function createProjectSqlFile(
     folderNode: TreeNode,
 ): Promise<{nodeId: string; uri: string; name: string} | null> {
     const ctx = resolveProjectFilesFolderContext(folderNode)
-    if (!ctx || ctx.root !== 'scripts') return null
+    if (!ctx || !isScriptsProjectFileRoot(ctx.root)) return null
     let existing: string[] = []
     try {
         const entries = await projectFilesApi.list(ctx.projectId, ctx.root, ctx.folderPath)
@@ -454,9 +556,9 @@ export async function moveProjectFileNode(
     if (!parsed?.path?.trim()) return null
 
     let targetPath = ''
-    if (targetFolder.id === PROJECT_DOCS_ROOT_ID || targetFolder.id === PROJECT_SCRIPTS_ROOT_ID) {
-        const expectedRoot = targetFolder.id === PROJECT_DOCS_ROOT_ID ? 'docs' : 'scripts'
-        if (parsed.root !== expectedRoot) return null
+    const targetVirtualRoot = projectFileRootFromNodeId(targetFolder.id)
+    if (targetVirtualRoot) {
+        if (parsed.root !== targetVirtualRoot) return null
         targetPath = ''
     } else {
         const targetParsed = parseProjectFileNodeId(targetFolder.id)
@@ -510,7 +612,7 @@ function parentFolderNodeId(parsed: {
 }): string {
     const slash = parsed.path.lastIndexOf('/')
     if (slash < 0) {
-        return parsed.root === 'docs' ? PROJECT_DOCS_ROOT_ID : PROJECT_SCRIPTS_ROOT_ID
+        return projectFilesRootNodeId(parsed.root)
     }
     return projectFileNodeId(parsed.projectId, parsed.root, parsed.path.slice(0, slash))
 }

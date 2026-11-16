@@ -47,6 +47,10 @@ export interface LayoutPreferences {
      * or the OS default browser.
      */
     openHttpLinksIn?: OpenHttpLinksIn
+    /** 是否在 Explorer 树顶部显示「项目文档」私有根节点。 */
+    showProjectDocsRoot?: boolean
+    /** 是否在 Explorer 树顶部显示「项目脚本」私有根节点。 */
+    showProjectScriptsRoot?: boolean
     /** Panel dock placement; null/undefined = classic (explorer left, terminal bottom). */
     dockPlacement?: DockPlacement | null
     /** Floating terminal rect; null/undefined = default float geometry. */

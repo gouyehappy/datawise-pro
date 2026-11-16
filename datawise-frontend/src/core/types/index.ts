@@ -164,6 +164,10 @@ export interface TreeNode {
     expanded?: boolean
     /** 文件夹子项数量（懒加载未展开时由后端或同步逻辑填充） */
     childCount?: number
+    /** 项目文件目录已共享给项目内其它账号，或本身是别人共享出来的引用节点 */
+    shared?: boolean
+    /** 共享引用节点的来源账号名 */
+    sharedBy?: string
 }
 
 /** 控制台上下文：数据源及其下属实例（库/Schema） */

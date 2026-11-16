@@ -432,7 +432,7 @@ watch(
     if (!id) return
     try {
       const config = await fetchConnectionConfig(id)
-      connectionWriteGuard.value = Boolean(config.writeGuard)
+      connectionWriteGuard.value = Boolean(config?.writeGuard)
     } catch {
       connectionWriteGuard.value = false
     }
@@ -968,7 +968,7 @@ function resolveEditorAskBinding(): AiConversationBinding | undefined {
   const node = explorer.findNode(connId)
   return {
     connectionId: connId,
-    connectionName: props.tab.connectionName || source.value?.label || undefined,
+    connectionName: source.value?.label || explorer.findNode(connId)?.label || undefined,
     database: databaseName.value || undefined,
     dialect: typeof dbDialect.value === 'string' ? dbDialect.value : undefined,
     environment: normalizeConnectionEnvironment(node?.env, node?.envCustom).env || undefined,

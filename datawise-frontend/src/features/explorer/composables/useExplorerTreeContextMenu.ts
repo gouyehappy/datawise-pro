@@ -20,10 +20,12 @@ import {
 } from '@/features/explorer/services/explorer-favorites.actions'
 import {resolveConnectionDbType} from '@/features/explorer/services/explorer-lazy-load'
 import {
+    injectProjectFolderShareMenuItem,
     prependJdbcSshTunnelMenuItems,
     resolveExplorerContextMenuType,
     withCsvImportMenuDisabled,
 } from '@/features/explorer/services/explorer-context-menu-builders.service'
+import {isShareableProjectFolder} from '@/features/project/services/project-explorer-files'
 import {
     buildExplorerConnectionMenuItems as buildExplorerConnectionMenuItemsForTree,
     buildExplorerGroupMenuItems as buildExplorerGroupMenuItemsForTree,
@@ -104,7 +106,8 @@ export function useExplorerTreeContextMenu(deps: ExplorerTreeContextMenuDeps) {
         if (isExplorerFavoritesTreeNode(node)) return
         if (node.type === 'project-files-draft' || node.type === 'group-draft') return
         explorer.selectNode(node.id)
-        let items = getContextMenuForNodeType(resolveExplorerContextMenuType(node), t)
+        const menuType = resolveExplorerContextMenuType(node)
+        let items = getContextMenuForNodeType(menuType, t)
         // 仅真实项目文件/子目录可重命名；根节点与空目录提示除外
         items = filterRenameProjectFileMenuItems(node, items)
         if (isProjectSandboxMovableNode(node)) {
@@ -113,6 +116,14 @@ export function useExplorerTreeContextMenu(deps: ExplorerTreeContextMenuDeps) {
                 items,
                 targets,
                 t('explorer.context.moveProjectFile'),
+            )
+        }
+        if (isShareableProjectFolder(node)) {
+            const shared = Boolean(node.shared)
+            items = injectProjectFolderShareMenuItem(
+                items,
+                shared ? 'unshare-project-folder' : 'share-project-folder',
+                t(shared ? 'explorer.context.unshareProjectFolder' : 'explorer.context.shareProjectFolder'),
             )
         }
         if (node.type === 'table') {
@@ -158,7 +169,7 @@ export function useExplorerTreeContextMenu(deps: ExplorerTreeContextMenuDeps) {
             items = buildGroupMenuItems(node)
         }
         const connectionDbType = resolveConnectionDbType(explorer.tree, node.id)
-        if (node.type === 'database' || node.type === 'table' || node.type === 'folder-tables') {
+        if (node.type === 'database' || node.type === 'table' || menuType === 'folder-tables') {
             items = filterExplorerCapabilityMenuItems(items, connectionDbType, catalogStore.items)
         }
         if (node.type === 'database') {

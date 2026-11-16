@@ -43,6 +43,13 @@ import {resolveDisplayApiErrorMessage} from '@/shared/api/http/api-error-message
 import {ApiError} from '@/shared/api/http/api-error'
 import {useToastStore} from '@/features/layout/stores/toast-store'
 import {shouldSuppressApiErrorToast} from '@/features/layout/services/api-error-toast-policy.service'
+import {showGuestFeatureHint} from '@/features/layout/services/guest-feature-hint.service'
+import {isGuestOrAnonymousSession} from '@/features/auth/services/user-access-policy'
+import {resolveAuthErrorToastPlan} from '@/shared/api/http/auth-error-scenario'
+import {
+    isApiSessionBlocked,
+    isUnauthorizedRecoveryInProgress,
+} from '@/shared/api/http/session-guard'
 import {markBackendOffline} from '@/features/layout/services/backend-health.service'
 import {installUnauthorizedSessionRecovery} from '@/features/auth/services/auth-session-recovery.service'
 import {useAuthStore} from '@/features/auth/stores/auth-store'
@@ -82,7 +89,7 @@ const pinia = createPinia()
 setActivePinia(pinia)
 installUnauthorizedSessionRecovery()
 
-registerApiErrorNotifier((message, error) => {
+registerApiErrorNotifier((message, error, requestOptions) => {
     if (error instanceof ApiError && error.data && typeof error.data === 'object') {
         const data = error.data as {errorCode?: unknown; packId?: unknown}
         const code = typeof data.errorCode === 'string' ? data.errorCode : null
@@ -93,6 +100,18 @@ registerApiErrorNotifier((message, error) => {
         if (code) {
             useEntitlementStore().handlePackEntitlementError(code, packId)
         }
+    }
+    // 同一份 403 按身份/场景分流：游客给「登录后可解锁」引导，后台任务静默，
+    // 已登录用户权限不足才保留原来的错误提示。
+    const plan = resolveAuthErrorToastPlan(error, {
+        isGuest: isGuestOrAnonymousSession(),
+        recovering: isApiSessionBlocked() || isUnauthorizedRecoveryInProgress(),
+        background: requestOptions?.background === true,
+    })
+    if (plan.kind === 'silent') return
+    if (plan.kind === 'guest-hint') {
+        showGuestFeatureHint(plan.messageKey)
+        return
     }
     if (shouldSuppressApiErrorToast(error)) return
     if (message === HTTP_NOT_READY || message.startsWith('HTTP API request failed')) {

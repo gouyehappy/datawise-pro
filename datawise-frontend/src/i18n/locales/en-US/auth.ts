@@ -67,6 +67,8 @@ export default {
     unauthorized: 'Not signed in or session expired. Please sign in again.',
     serviceUnavailable: 'Sign in to use this feature',
     permissionDenied: 'Your account does not have permission for this action',
+    guestFeatureLocked: 'You are in guest mode. Sign in to unlock this feature; querying and browsing still work.',
+    guestHintLoginAction: 'Sign in',
     guestNotAllowed: 'Guests cannot perform this action. Sign in with an account.',
     adminRequired: 'Administrator permission is required',
     platformAdminRequired: 'Platform administrator permission is required',

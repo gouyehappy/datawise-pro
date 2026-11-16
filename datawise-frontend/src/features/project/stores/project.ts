@@ -1,8 +1,10 @@
 import {defineStore} from 'pinia'
 import {computed, ref} from 'vue'
 import {projectsApi, type ProjectDto} from '@/features/project/services/project-api'
+import {projectFilesApi} from '@/features/project/services/project-files-api'
 import {ApiError} from '@/shared/api/http/api-error'
 import {touchRecentProject} from '@/features/project/services/project-recent'
+import {isGuestOrAnonymousSession} from '@/features/auth/services/user-access-policy'
 
 const PROJECT_HEADER = 'X-DataWise-Project-Id'
 const LS_ACTIVE_KEY = 'dw-cli-active-project-id'
@@ -67,9 +69,35 @@ export const useProjectStore = defineStore('project', () => {
         ready.value = true
     }
 
+    /**
+     * 访客同样落在后端默认项目 `proj_default`，但项目列表 / 切换属于注册用户能力，
+     * 直接本地合成即可，避免启动阶段对 `/api/projects*` 打出 401/403。
+     */
+    function applyGuestDefaultProject() {
+        const fallback = syntheticDefaultProject()
+        projects.value = [fallback]
+        activeProjectId.value = fallback.id
+        cacheActiveId(fallback.id)
+        apiUnavailable.value = false
+        ready.value = true
+    }
+
+    /**
+     * 登录 / 切换项目后让后端建好目录骨架：当前账号私有 docs|scripts 两个空目录。
+     * 只是空目录，不含任何别人的文件；纯后台 fire-and-forget，失败不影响启动。
+     */
+    function ensureProjectFileRoots(projectId: string | null) {
+        if (!projectId || apiUnavailable.value || isGuestOrAnonymousSession()) return
+        void projectFilesApi.ensureRoots(projectId).catch(() => {})
+    }
+
     async function load() {
         loading.value = true
         try {
+            if (isGuestOrAnonymousSession()) {
+                applyGuestDefaultProject()
+                return
+            }
             const [list, active] = await Promise.all([
                 projectsApi.list(false),
                 projectsApi.getActive(),
@@ -80,6 +108,7 @@ export const useProjectStore = defineStore('project', () => {
             touchRecentProject(active.projectId)
             apiUnavailable.value = false
             ready.value = true
+            ensureProjectFileRoots(active.projectId)
         } catch (error) {
             if (isProjectsApiUnavailable(error)) {
                 applyLegacyFallback()
@@ -114,6 +143,8 @@ export const useProjectStore = defineStore('project', () => {
         projects.value = [created, ...projects.value.filter((p) => p.id !== created.id)]
         if (options?.switchTo !== false) {
             await switchProject(created.id)
+        } else {
+            ensureProjectFileRoots(created.id)
         }
         return created
     }
@@ -186,6 +217,7 @@ export const useProjectStore = defineStore('project', () => {
         }
         const created = await projectsApi.importPackage(file, name)
         projects.value = [created, ...projects.value.filter((p) => p.id !== created.id)]
+        ensureProjectFileRoots(created.id)
         return created
     }
 
@@ -203,6 +235,7 @@ export const useProjectStore = defineStore('project', () => {
             const idx = projects.value.findIndex((p) => p.id === active.projectId)
             if (idx >= 0) projects.value[idx] = active.project
             else projects.value.unshift(active.project)
+            ensureProjectFileRoots(active.projectId)
             return active.project
         } finally {
             switching.value = false

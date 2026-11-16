@@ -63,15 +63,23 @@ export async function resetUserScopedState(): Promise<void> {
             auth.isGuest ? Promise.resolve() : teamStore.load().catch(() => {}),
             auth.isGuest ? Promise.resolve() : projectStore.load().catch(() => {}),
         ])
-        await explorer.refreshTree()
+        // 恢复流程中的任何加载失败都不能冒泡成 unhandled rejection
+        // （此前 shortcutPanel.load 的 PERMISSION_DENIED 会一路抛到 401 recovery）。
+        await explorer.refreshTree().catch(() => {})
         if (import.meta.env.VITE_DATAWISE_EDITION !== 'standard') {
             const {useAiAssistantChatStore, useAiChatStore} = await import('@/features/ai/stores/ai-chat')
             useAiChatStore().reloadForCurrentScope()
             useAiAssistantChatStore().reloadForCurrentScope()
             syncAiPreferences(appConfig.aiPreferences)
         }
-        await useShortcutPanelStore().load()
-        await useNotificationStore().load()
+        if (auth.isGuest) {
+            // 访客没有这些服务端数据，清空即可，不再打登录专属接口。
+            useShortcutPanelStore().resetForGuest()
+            useNotificationStore().resetForGuest()
+        } else {
+            await useShortcutPanelStore().load().catch(() => {})
+            await useNotificationStore().load().catch(() => {})
+        }
     } finally {
         setServerConfigSyncEnabled(true)
     }

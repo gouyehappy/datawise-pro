@@ -96,9 +96,11 @@ public class ProjectPackageService {
             zip.putNextEntry(new ZipEntry("project.json"));
             zip.write(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(meta));
             zip.closeEntry();
-            Path root = configDirectory.resolve(ConfigPaths.tenantProjectDir(tenantId, id));
-            addDirectoryToZip(zip, root.resolve("docs"), "docs/");
-            addDirectoryToZip(zip, root.resolve("scripts"), "scripts/");
+            // 只导出当前账号创建的项目文件；共享是「引用」而非副本，不打包别人的私有文件。
+            Path privateRoot = configDirectory.resolve(
+                    ConfigPaths.tenantProjectUserDir(tenantId, id, UserContext.requireUserId()));
+            addDirectoryToZip(zip, privateRoot.resolve("docs"), "docs/");
+            addDirectoryToZip(zip, privateRoot.resolve("scripts"), "scripts/");
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to export project " + id, ex);
         }
@@ -120,7 +122,9 @@ public class ProjectPackageService {
                     continue;
                 }
                 String name = entry.getName().replace('\\', '/');
-                if ("project.json".equals(name) || name.startsWith("docs/") || name.startsWith("scripts/")) {
+                if ("project.json".equals(name)
+                        || name.startsWith("docs/")
+                        || name.startsWith("scripts/")) {
                     files.put(name, zip.readAllBytes());
                 }
             }
@@ -153,14 +157,20 @@ public class ProjectPackageService {
                 stringOrNull(projectMeta.get("defaultEnv"))));
 
         String tenantId = TenantIds.normalizeOrDefault(UserContext.getTenantId());
-        Path root = configDirectory.resolve(ConfigPaths.tenantProjectDir(tenantId, created.id()));
+        // 导入的文件归属执行导入的账号，其它账号不可见。
+        Path root = configDirectory.resolve(
+                ConfigPaths.tenantProjectUserDir(tenantId, created.id(), UserContext.requireUserId()))
+                .toAbsolutePath().normalize();
         try {
             for (Map.Entry<String, byte[]> file : files.entrySet()) {
                 if ("project.json".equals(file.getKey())) {
                     continue;
                 }
-                Path target = root.resolve(file.getKey()).normalize();
-                if (!target.startsWith(root)) {
+                String entryName = file.getKey();
+                Path base = root;
+                String relative = entryName;
+                Path target = base.resolve(relative).normalize();
+                if (!target.startsWith(base)) {
                     continue;
                 }
                 Files.createDirectories(target.getParent());

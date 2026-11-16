@@ -11,6 +11,7 @@ import {dispatchSlowQueryAlertIfNeeded} from '@/features/layout/services/app-ale
 import {useEditorSettingsStore} from '@/features/settings/stores/editor-settings'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {resolveSharedConnectionRefs} from '@/features/team/services/team-shared-explorer.service'
+import {isGuestOrAnonymousSession} from '@/features/auth/services/user-access-policy'
 
 const EMPTY_EXPLORER_INFO: ExplorerNodeInfo = {
     kind: 'empty',
@@ -28,7 +29,21 @@ export const useShortcutPanelStore = defineStore('shortcut-panel', () => {
     const lastSyncedNodeId = ref<string | null>(null)
     const ready = ref(false)
 
+    /** 访客没有服务端 SQL 日志 / 已存控制台 / 导出任务，直接落空态，不发 403 请求。 */
+    function resetForGuest() {
+        sqlLogs.value = []
+        savedConsoles.value = []
+        exportTasks.value = []
+        explorerInfo.value = {...EMPTY_EXPLORER_INFO}
+        lastSyncedNodeId.value = null
+        ready.value = true
+    }
+
     async function load() {
+        if (isGuestOrAnonymousSession()) {
+            resetForGuest()
+            return
+        }
         const [logs, consoles, tasks] = await Promise.all([
             workspacePanelApi.fetchSqlLogs(),
             workspacePanelApi.fetchSavedConsoles(),
@@ -134,6 +149,7 @@ export const useShortcutPanelStore = defineStore('shortcut-panel', () => {
         lastSyncedNodeId,
         ready,
         load,
+        resetForGuest,
         appendSqlLog,
         saveConsole,
         addExportTask,

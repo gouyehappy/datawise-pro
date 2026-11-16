@@ -18,6 +18,7 @@ import {
     usesPeriodicConnectionHealthProbe,
 } from '@/features/explorer/services/explorer-connection-state.service'
 import {useLayoutStore} from '@/features/layout/stores/layout'
+import {isGuestOrAnonymousSession} from '@/features/auth/services/user-access-policy'
 import {
     disposeSshTerminalsForConnection,
     reconnectSshTerminalsForConnection,
@@ -212,6 +213,11 @@ export function createExplorerConnectionDomain(deps: ExplorerConnectionDomainDep
     }
 
     async function syncPooledConnectionState(options?: {notifyIdleDisconnect?: boolean}) {
+        // 连接池状态只对注册用户会话有意义；访客/未登录直接落空态，别打 401/403。
+        if (isGuestOrAnonymousSession()) {
+            pooledConnectionIds.value = new Set<string>()
+            return
+        }
         try {
             const pooled = await explorerApi.listPooledConnections()
             const prevPooled = pooledConnectionIds.value

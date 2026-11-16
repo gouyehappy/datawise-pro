@@ -109,7 +109,7 @@ let diagnosticTimer: ReturnType<typeof setTimeout> | null = null
 let statementFrameTimer: ReturnType<typeof setTimeout> | null = null
 let formatAsYouTypeBusy = false
 let vimModeController: {dispose: () => void} | null = null
-let vimStatusNode: HTMLDivElement | null = null
+let vimStatusNode: HTMLElement | null = null
 let vimAttachGeneration = 0
 
 const COLUMN_DIAGNOSTIC_OWNER = 'sql-column-diagnostics'
