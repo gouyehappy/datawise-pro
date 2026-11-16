@@ -59,7 +59,12 @@ export type DataGridViewConfig = {
   columnDensity?: 'compact' | 'standard' | 'relaxed'
   numericAlign?: 'left' | 'right'
   hideNullColumns?: boolean
+  hideEmptyColumns?: boolean
   typeColoring?: boolean
+  freezeFirstColumn?: boolean
+  hideToolbarLabels?: boolean
+  csvWithoutBom?: boolean
+  tableFontSize?: number
 }
 
 export type DataGridGroupedProps = {
@@ -105,7 +110,12 @@ export const DATA_GRID_VIEW_DEFAULTS: Required<DataGridViewConfig> = {
   columnDensity: 'standard',
   numericAlign: 'right',
   hideNullColumns: false,
+  hideEmptyColumns: false,
   typeColoring: false,
+  freezeFirstColumn: false,
+  hideToolbarLabels: false,
+  csvWithoutBom: false,
+  tableFontSize: 13,
 }
 
 /** Flatten grouped configs for internal grid logic / legacy call sites. */

@@ -38,6 +38,7 @@ export interface DataGridExportDeps {
         exportBaseName: string
         exportTableName?: string
         truncatedAtCap: boolean
+        csvWithoutBom?: boolean
     }
     displayColumns: Ref<TableColumn[]>
     gridRows: Ref<TableRow[]>
@@ -117,6 +118,7 @@ export function useDataGridExport(deps: DataGridExportDeps) {
                         || props.truncatedAtCap === true
                         || freeResolution.capped,
                     watermarkFooter: entitlement.watermarkFooter,
+                    csvWithoutBom: props.csvWithoutBom,
                 },
             )
             emit('exported', resolved.fileName, resolved.path)
