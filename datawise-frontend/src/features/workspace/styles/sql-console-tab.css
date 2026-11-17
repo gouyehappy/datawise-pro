@@ -18,33 +18,7 @@
   display: inline-flex;
 }
 
-.dw-console-toolbar__context {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--dw-gap-xs);
-  min-width: 0;
-}
-
-.dw-console-toolbar__controls {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--dw-gap-xs);
-  flex-shrink: 0;
-}
-
-.dw-console-toolbar__info {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  min-width: 0;
-}
-
-.dw-console-toolbar__ctx {
-  min-width: 0;
-}
+/* Toolbar context layout lives on SqlConsoleToolbar.vue (child scoped). */
 
 .split {
   /* classic：有缝+圆角；ide：panel-radius=0 / panel-gap≈半缝 → 直角 */

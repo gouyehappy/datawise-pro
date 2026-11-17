@@ -52,14 +52,11 @@ public class JdbcSessionManager {
         session.lock.lock();
         try {
             if (autocommit) {
-                if (session.pending && session.connection != null) {
-                    session.connection.commit();
-                    session.pending = false;
-                }
-                if (session.connection != null) {
-                    session.connection.setAutoCommit(true);
-                }
-                session.autocommit = true;
+                // Leaving manual mode must always succeed for the UI toggle. Engines like
+                // Trino+Kudu reject writes outside autocommit and leave the JDBC connection
+                // in "transaction aborted / unknown txn id" — commit/setAutoCommit then fail.
+                // Prefer rollback + discard the connection over failing the mode switch.
+                recoverAndLeaveManual(session);
                 closeSession(userId, sessionKey);
                 return SqlSessionStatus.idle(entity.getId(), database);
             }
@@ -70,6 +67,34 @@ public class JdbcSessionManager {
             return session.toStatus();
         } finally {
             session.lock.unlock();
+        }
+    }
+
+    /**
+     * Best-effort clear of an open/aborted manual transaction, then mark session autocommit.
+     * Never throws — caller closes/discards the JDBC connection afterward.
+     */
+    private static void recoverAndLeaveManual(ManagedSession session) {
+        session.pending = false;
+        session.autocommit = true;
+        if (session.connection == null) {
+            return;
+        }
+        try {
+            if (!session.connection.getAutoCommit()) {
+                try {
+                    session.connection.rollback();
+                } catch (SQLException ignored) {
+                    // Aborted/expired txn (e.g. Trino "Unknown transaction ID") — drop connection.
+                }
+                try {
+                    session.connection.setAutoCommit(true);
+                } catch (SQLException ignored) {
+                    // Connection may already be unusable; closeSession discards it.
+                }
+            }
+        } catch (SQLException ignored) {
+            // getAutoCommit can fail on a dead connection.
         }
     }
 

@@ -117,23 +117,30 @@ defineExpose({
       >
         <ConsoleToolbarIcon name="explainPlan"/>
       </IconButton>
+      <!-- Only show while armed — same glyphs as txn commit/rollback would double up. -->
       <IconButton
-          v-if="can(FeaturePermission.WorkbenchConsoleDangerousSql)"
-          :disabled="!dangerousSqlPending"
-          :variant="dangerousSqlPending ? 'accent' : undefined"
+          v-if="can(FeaturePermission.WorkbenchConsoleDangerousSql) && dangerousSqlPending"
+          variant="accent"
           :title="dangerousSqlSubmitTitle"
           @click="emit('submit-dangerous')"
       >
         <ConsoleToolbarIcon name="submit"/>
       </IconButton>
       <IconButton
-          v-if="can(FeaturePermission.WorkbenchConsoleDangerousSql)"
-          :disabled="!dangerousSqlPending"
+          v-if="can(FeaturePermission.WorkbenchConsoleDangerousSql) && dangerousSqlPending"
           :title="t('console.dangerousSql.rollback')"
           @click="emit('rollback-dangerous')"
       >
         <ConsoleToolbarIcon name="rollback"/>
       </IconButton>
+      <ConsoleTransactionBar
+          v-if="can(FeaturePermission.WorkbenchConsoleTransaction)"
+          ref="transactionBarRef"
+          :tab-id="tabId"
+          :connection-id="connectionId || tabConnectionId"
+          :database="databaseName"
+          :can-manage="canManageTransactions"
+      />
       <IconButton
           v-if="running && can(FeaturePermission.WorkbenchConsoleRun)"
           class="console-disconnect-btn"
@@ -250,14 +257,6 @@ defineExpose({
     <div class="dw-console-toolbar__context">
       <div class="dw-console-toolbar__controls">
         <SqlExecutionLimitHint/>
-        <ConsoleTransactionBar
-            v-if="can(FeaturePermission.WorkbenchConsoleTransaction)"
-            ref="transactionBarRef"
-            :tab-id="tabId"
-            :connection-id="connectionId || tabConnectionId"
-            :database="databaseName"
-            :can-manage="canManageTransactions"
-        />
       </div>
       <span class="dw-console-divider" aria-hidden="true"/>
       <div class="dw-console-toolbar__info">
@@ -277,3 +276,39 @@ defineExpose({
     </div>
   </div>
 </template>
+
+<style scoped>
+/*
+ * Toolbar was extracted from SqlConsoleTab; parent scoped CSS no longer reaches
+ * these nodes. Keep limit / autocommit / connection on one row.
+ */
+.dw-console-toolbar__context {
+  display: flex;
+  flex: 1;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--dw-gap-xs);
+  min-width: 0;
+}
+
+.dw-console-toolbar__controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dw-gap-xs);
+  flex-shrink: 0;
+}
+
+.dw-console-toolbar__info {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dw-console-toolbar__ctx {
+  min-width: 0;
+  max-width: 100%;
+}
+</style>

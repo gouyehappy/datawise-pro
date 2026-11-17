@@ -675,7 +675,7 @@ onMounted(async () => {
 .dw-console-toolbar__context {
   display: flex;
   flex: 1;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--dw-gap);
