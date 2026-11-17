@@ -32,7 +32,24 @@ public class ConnectionAccessService {
         this.writeUnlockService = writeUnlockService;
     }
 
+    /**
+     * Access for SQL / data writes. Owners with {@code writeGuard} stay READONLY until
+     * the UI unlock window is active (T-SAFE-1).
+     */
     public ConnectionAccessLevel resolveAccess(Long userId, String connectionId) {
+        return resolveAccess(userId, connectionId, true);
+    }
+
+    /**
+     * Access for connection-catalog mutations (save / rename / reorder / delete).
+     * Ignores writeGuard so owners are not locked out of editing the connection itself
+     * (including turning writeGuard off).
+     */
+    public ConnectionAccessLevel resolveCatalogAccess(Long userId, String connectionId) {
+        return resolveAccess(userId, connectionId, false);
+    }
+
+    private ConnectionAccessLevel resolveAccess(Long userId, String connectionId, boolean applyWriteGuard) {
         if (connectionId == null || connectionId.isBlank()) {
             return ConnectionAccessLevel.DDL;
         }
@@ -55,8 +72,10 @@ public class ConnectionAccessService {
         // Owners keep full DDL on their own connections even when the same id is shared
         // into a team with a tighter member/viewer policy — unless writeGuard is on and
         // there is no UI unlock window (T-SAFE-1). API tokens never see unlock elevation.
+        // Catalog paths pass applyWriteGuard=false so soft-lock never blocks connection edits.
         if (fromOwnership == ConnectionAccessLevel.DDL) {
-            if (ownedConnection != null
+            if (applyWriteGuard
+                    && ownedConnection != null
                     && ownedConnection.isWriteGuard()
                     && !writeUnlockService.isUnlockedForCurrentUiSession(userId, connectionId)) {
                 return ConnectionAccessLevel.READONLY;
@@ -100,6 +119,8 @@ public class ConnectionAccessService {
      * T-CAP-1 / MetaForge S1: refuse when the product capability matrix says the engine
      * cannot do {@code feature}. Unknown dbTypes (no matrix profile) are fail-open so
      * experimental connectors are not locked out before they are registered.
+     * Owners may opt in via {@link ConnectionEntity#isAllowEngineWrites()} for
+     * {@code tableDataEdit} / {@code tableStructureEdit} on query-only engines.
      */
     public void requireEngineFeature(Long userId, String connectionId, String feature) {
         if (feature == null || feature.isBlank()) {
@@ -112,9 +133,23 @@ public class ConnectionAccessService {
         if (ConnectionCapabilityMatrix.get().profile(connection.getDbType()).isEmpty()) {
             return;
         }
-        if (!ConnectionCapabilityMatrix.get().supports(connection.getDbType(), feature)) {
-            deny(userId, connectionId, feature, ConnectionAccessLevel.READONLY, "capability:" + feature);
+        if (ConnectionCapabilityMatrix.get().supports(connection.getDbType(), feature)) {
+            return;
         }
+        if (isOwnerEngineWriteOverride(userId, connection, feature)) {
+            return;
+        }
+        deny(userId, connectionId, feature, ConnectionAccessLevel.READONLY, "capability:" + feature);
+    }
+
+    private static boolean isOwnerEngineWriteOverride(Long userId, ConnectionEntity connection, String feature) {
+        if (!"tableDataEdit".equals(feature) && !"tableStructureEdit".equals(feature)) {
+            return false;
+        }
+        if (!connection.isAllowEngineWrites()) {
+            return false;
+        }
+        return userId != null && userId.equals(connection.getUserId());
     }
 
     /** Legacy name: full DDL access required (migrations, etc.). */
@@ -123,13 +158,14 @@ public class ConnectionAccessService {
     }
 
     /**
-     * Catalog metadata writes (reorder / rename / delete / move) need the owner's DDL-level
-     * grant but must not consult the engine capability matrix: {@code tableStructureEdit=false}
-     * for mongo/redis/kafka/ssh-style connections would otherwise block arranging the tree.
-     * Engine capabilities stay enforced on the real SQL/DDL paths via {@link #requireDdlAccess}.
+     * Catalog metadata writes (save / reorder / rename / delete / move) need the owner's
+     * DDL-level grant but must not consult the engine capability matrix or writeGuard soft-lock:
+     * {@code tableStructureEdit=false} / locked writeGuard would otherwise block arranging the
+     * tree or saving connection settings. Engine capabilities and writeGuard stay enforced on
+     * the real SQL/DDL paths via {@link #requireDdlAccess} / {@link #requireSqlWriteAccess}.
      */
     public void requireCatalogWriteAccess(Long userId, String connectionId) {
-        ConnectionAccessLevel actual = resolveAccess(userId, connectionId);
+        ConnectionAccessLevel actual = resolveCatalogAccess(userId, connectionId);
         if (!actual.allowsDdl()) {
             deny(userId, connectionId, "DDL", actual, "requireCatalogWriteAccess");
         }

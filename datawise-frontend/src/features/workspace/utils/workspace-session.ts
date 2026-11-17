@@ -1,9 +1,33 @@
-import type {WorkspaceTab} from '@/core/types'
+import type {WorkspaceTab, WorkspaceTabParams, WorkspaceTabType} from '@/core/types'
 import type {WorkspaceTabSnapshot} from '@/shared/config/app-config.types'
 import {isLocalAbsolutePath} from '@/features/local-files/services/local-files-path'
 import {isProjectFileUri} from '@/features/project/services/project-files-api'
 
-const RESTORABLE_TAB_TYPES = new Set<WorkspaceTab['type']>(['console', 'table', 'terminal', 'local-text'])
+const BASE_RESTORABLE_TAB_TYPES = new Set<WorkspaceTabType>([
+    'console',
+    'table',
+    'terminal',
+    'local-text',
+    'community-workbench',
+    'ssh-terminal',
+])
+
+const K8S_RESTORABLE_TAB_TYPES = new Set<WorkspaceTabType>([
+    'k8s-pods',
+    'k8s-deployments',
+    'k8s-services',
+    'k8s-events',
+    'k8s-configmaps',
+    'k8s-secrets',
+    'k8s-apply',
+    'k8s-crds',
+    'k8s-helm',
+    'k8s-exec',
+])
+
+export function isRestorableWorkspaceTabType(type: WorkspaceTab['type']): boolean {
+    return BASE_RESTORABLE_TAB_TYPES.has(type) || K8S_RESTORABLE_TAB_TYPES.has(type)
+}
 
 /** Cap embedded SQL/text bodies in session snapshots (chars across sql+savedSql+savedContent). */
 export const MAX_SESSION_TAB_BODY_CHARS = 256_000
@@ -94,9 +118,46 @@ function bodyFieldsForRestore(snap: WorkspaceTabSnapshot): Pick<WorkspaceTab, 's
     }
 }
 
+/**
+ * Drop secrets from plugin host context. Keep ids + non-secret connection summary
+ * (name/host/port/user) so restored workbench cards do not fall back to raw conn-*.
+ */
+export function sanitizePluginHostContext(
+    ctx: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+    if (!ctx) return undefined
+    const out: Record<string, unknown> = {}
+    if (typeof ctx.connectionId === 'string') out.connectionId = ctx.connectionId
+    if (typeof ctx.connectionName === 'string') out.connectionName = ctx.connectionName
+    if (typeof ctx.workbenchId === 'string') out.workbenchId = ctx.workbenchId
+    if (typeof ctx.pluginId === 'string') out.pluginId = ctx.pluginId
+    if (typeof ctx.locale === 'string') out.locale = ctx.locale
+    const connection = ctx.connection
+    if (connection && typeof connection === 'object' && connection !== null) {
+        const raw = connection as Record<string, unknown>
+        const summary: Record<string, unknown> = {}
+        if (raw.id != null && String(raw.id).trim()) summary.id = String(raw.id)
+        if (typeof raw.name === 'string') summary.name = raw.name
+        if (typeof raw.host === 'string') summary.host = raw.host
+        if (raw.port != null && String(raw.port).trim()) summary.port = raw.port
+        if (typeof raw.user === 'string') summary.user = raw.user
+        if (Object.keys(summary).length) out.connection = summary
+    }
+    return Object.keys(out).length ? out : undefined
+}
+
+function cloneParams(params: WorkspaceTabParams | undefined): WorkspaceTabParams | undefined {
+    if (!params) return undefined
+    try {
+        return JSON.parse(JSON.stringify(params)) as WorkspaceTabParams
+    } catch {
+        return {...params}
+    }
+}
+
 export function captureWorkspaceTabs(tabs: WorkspaceTab[]): WorkspaceTabSnapshot[] {
     return tabs
-        .filter((tab) => RESTORABLE_TAB_TYPES.has(tab.type))
+        .filter((tab) => isRestorableWorkspaceTabType(tab.type))
         .map((tab) => ({
             type: tab.type,
             title: tab.title,
@@ -113,12 +174,24 @@ export function captureWorkspaceTabs(tabs: WorkspaceTab[]): WorkspaceTabSnapshot
             tableSection: tab.tableSection,
             tabGroupId: tab.tabGroupId,
             teamSharedQuery: tab.teamSharedQuery,
+            pluginId: tab.pluginId,
+            pluginContributionId: tab.pluginContributionId,
+            pluginFilesystemProviderId: tab.pluginFilesystemProviderId,
+            pluginFilesystemRootUri: tab.pluginFilesystemRootUri,
+            pluginHostContext: sanitizePluginHostContext(tab.pluginHostContext),
+            params: cloneParams(tab.params),
+            sshTerminalIndex: tab.sshTerminalIndex,
         }))
 }
 
+/**
+ * Active index among tabs that will actually be persisted (restorable only).
+ * Avoids skew when ephemeral tabs sit between restorable ones.
+ */
 export function resolveActiveTabIndex(tabs: WorkspaceTab[], activeTabId: string | null): number {
-    if (!activeTabId || !tabs.length) return 0
-    const index = tabs.findIndex((tab) => tab.id === activeTabId)
+    const restorable = tabs.filter((tab) => isRestorableWorkspaceTabType(tab.type))
+    if (!activeTabId || !restorable.length) return 0
+    const index = restorable.findIndex((tab) => tab.id === activeTabId)
     return index >= 0 ? index : 0
 }
 
@@ -127,29 +200,38 @@ export function buildWorkspaceTabsFromSnapshots(
     createId: (prefix: string) => string,
     resolvePrefix: (type: WorkspaceTab['type']) => string,
 ): WorkspaceTab[] {
-    return snapshots.map((snap) => {
-        const id = createId(resolvePrefix(snap.type))
-        const body = bodyFieldsForRestore(snap)
-        return {
-            id,
-            title: snap.title,
-            type: snap.type,
-            closable: true,
-            ...body,
-            sqlFile: snap.sqlFile,
-            localFilePath: snap.localFilePath,
-            tableName: snap.tableName,
-            connectionId: snap.connectionId,
-            instanceId: snap.instanceId,
-            database: snap.database,
-            explorerNodeId: snap.explorerNodeId,
-            dbType: snap.dbType,
-            tableView: snap.tableView ?? (snap.type === 'table' ? 'properties' : undefined),
-            tableSection: snap.tableSection ?? (snap.type === 'table' ? 'columns' : undefined),
-            tabGroupId: snap.tabGroupId,
-            teamSharedQuery: snap.teamSharedQuery,
-        }
-    })
+    return snapshots
+        .filter((snap) => isRestorableWorkspaceTabType(snap.type))
+        .map((snap) => {
+            const id = createId(resolvePrefix(snap.type))
+            const body = bodyFieldsForRestore(snap)
+            return {
+                id,
+                title: snap.title,
+                type: snap.type,
+                closable: true,
+                ...body,
+                sqlFile: snap.sqlFile,
+                localFilePath: snap.localFilePath,
+                tableName: snap.tableName,
+                connectionId: snap.connectionId,
+                instanceId: snap.instanceId,
+                database: snap.database,
+                explorerNodeId: snap.explorerNodeId,
+                dbType: snap.dbType,
+                tableView: snap.tableView ?? (snap.type === 'table' ? 'properties' : undefined),
+                tableSection: snap.tableSection ?? (snap.type === 'table' ? 'columns' : undefined),
+                tabGroupId: snap.tabGroupId,
+                teamSharedQuery: snap.teamSharedQuery,
+                pluginId: snap.pluginId,
+                pluginContributionId: snap.pluginContributionId,
+                pluginFilesystemProviderId: snap.pluginFilesystemProviderId,
+                pluginFilesystemRootUri: snap.pluginFilesystemRootUri,
+                pluginHostContext: sanitizePluginHostContext(snap.pluginHostContext),
+                params: cloneParams(snap.params),
+                sshTerminalIndex: snap.sshTerminalIndex,
+            }
+        })
 }
 
 export function resolveRestoredActiveTabId(tabs: WorkspaceTab[], activeTabIndex = 0): string | null {

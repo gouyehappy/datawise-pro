@@ -28,6 +28,10 @@ public class ConnectionConfig {
     private Boolean sshEnabled;
     /** Soft write guard for owners — see ConnectionEntity.writeGuard. */
     private Boolean writeGuard;
+    /**
+     * Owner-only override for query-only engines — see ConnectionEntity.allowEngineWrites.
+     */
+    private Boolean allowEngineWrites;
     private String sshHost;
     private String sshPort;
     private String sshUser;
@@ -96,6 +100,14 @@ public class ConnectionConfig {
 
     public void setWriteGuard(Boolean writeGuard) {
         this.writeGuard = writeGuard;
+    }
+
+    public Boolean getAllowEngineWrites() {
+        return allowEngineWrites;
+    }
+
+    public void setAllowEngineWrites(Boolean allowEngineWrites) {
+        this.allowEngineWrites = allowEngineWrites;
     }
 
     public String getSshHost() {

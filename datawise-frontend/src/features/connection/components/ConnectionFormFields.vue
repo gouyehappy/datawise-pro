@@ -56,6 +56,7 @@ import {
 } from '@/features/connection/utils/kafka-security'
 import {applyKuduMasters, readKuduMasters} from '@/features/connection/utils/kudu-masters'
 import type {ConnectionConfig, DbType} from '@/core/types'
+import {needsEngineWriteOverrideOption} from '@/shared/capabilities/supports-connection-feature'
 
 const form = defineModel<ConnectionConfig>('form', {required: true})
 
@@ -396,10 +397,13 @@ const k8sAuthOptions = computed(() => [
 
 /** MetaForge S1: JDBC/standard/redis/oracle/mongo packs; specialized types stay below. */
 const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(props.dbType))
+const showAllowEngineWrites = computed(() => needsEngineWriteOverrideOption(props.dbType))
 </script>
 
 <template>
   <div class="conn-grid">
+    <div class="conn-section-title" role="heading" aria-level="2">{{ t('connection.sectionBasic') }}</div>
+
     <ConnectionFormField wide :label="t('connection.name')" :hint="t('connection.hints.name')">
       <DwInput
           v-model="form.name"
@@ -428,6 +432,7 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
       <SettingsSelect v-model="form.storage" size="sm" :disabled="readOnly" :options="storageOptions"/>
     </ConnectionFormField>
     <ConnectionFormField
+        wide
         :label="t('connection.writeGuard')"
         :hint="t('connection.hints.writeGuard')"
     >
@@ -441,6 +446,24 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
         <span>{{ t('connection.writeGuardEnable') }}</span>
       </label>
     </ConnectionFormField>
+    <ConnectionFormField
+        v-if="showAllowEngineWrites"
+        wide
+        :label="t('connection.allowEngineWrites')"
+        :hint="t('connection.hints.allowEngineWrites')"
+    >
+      <label class="connection-write-guard">
+        <input
+            type="checkbox"
+            :checked="!!form.allowEngineWrites"
+            :disabled="readOnly"
+            @change="form.allowEngineWrites = ($event.target as HTMLInputElement).checked"
+        />
+        <span>{{ t('connection.allowEngineWritesEnable') }}</span>
+      </label>
+    </ConnectionFormField>
+
+    <div class="conn-section-title" role="heading" aria-level="2">{{ t('connection.sectionConnection') }}</div>
 
     <PluginConnectionFields
         v-if="dbType === 'plugin'"
@@ -857,8 +880,45 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
 <style scoped>
 .conn-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--dw-space-6) var(--dw-space-7);
+  width: 100%;
+  max-width: 500px;
+}
+
+.conn-section-title {
+  grid-column: 1 / -1;
+  margin: var(--dw-space-2) 0 0;
+  padding-top: var(--dw-space-4);
+  border-top: 1px solid var(--dw-border-light);
+  color: var(--dw-text-muted);
+  font-size: var(--dw-text-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: var(--dw-leading-tight);
+}
+
+.conn-section-title:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.connection-write-guard {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--dw-space-3);
+  min-height: var(--dw-input-height-sm);
+  color: var(--dw-text-secondary);
+  font-size: var(--dw-text-sm);
+  line-height: var(--dw-leading);
+  cursor: pointer;
+}
+
+.connection-write-guard input {
+  margin-top: 0.2em;
+  flex-shrink: 0;
 }
 
 .url-input {

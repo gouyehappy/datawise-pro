@@ -9,6 +9,7 @@ import {
 } from '@/features/community-plugin/lib/pluginHostBridge'
 import {
   buildCommunityPluginHostContext,
+  ensureCommunityPluginSidecarConnection,
   type CommunityPluginWorkbenchConnection,
 } from '@/features/community-plugin/lib/connectCommunityPluginWorkbench'
 import {
@@ -208,6 +209,35 @@ function scheduleReveal(delayMs = 0) {
   }, delayMs)
 }
 
+function resolveWorkbenchConnectionId(): string {
+  return String(
+    props.connectionId
+    || (typeof props.hostContext?.connectionId === 'string' ? props.hostContext.connectionId : '')
+    || (props.connection?.id ?? '')
+    || '',
+  ).trim()
+}
+
+/**
+ * Replay connection/connect before the iframe boots. Session restore also does this
+ * in prepareCommunityWorkbenchSnapshotsForRestore; Host-side ensure covers plugins
+ * that never call host.reopenConnection (Nacos/Polaris/HTTP Client/…) and backend
+ * restart races where the sidecar registry was cleared.
+ */
+async function ensureSidecarConnection(): Promise<void> {
+  const connectionId = resolveWorkbenchConnectionId()
+  if (!connectionId) return
+  try {
+    await ensureCommunityPluginSidecarConnection(connectionId, props.pluginId)
+  } catch (e) {
+    console.warn('[community-plugin] ensure sidecar connection failed', {
+      connectionId,
+      pluginId: props.pluginId,
+      error: e,
+    })
+  }
+}
+
 async function refreshUiTicket() {
   error.value = ''
   uiTicket.value = null
@@ -216,6 +246,7 @@ async function refreshUiTicket() {
   paintAppearance.value = collectPluginHostTheme().appearance
   if (props.tabId) beginCommunityWorkbenchPaint(props.tabId)
   try {
+    await ensureSidecarConnection()
     const issued = await postJson<{ticket: string; expiresInSec: number}>(
       API_PATHS.communityPlugins.uiTicket(props.pluginId),
       {},

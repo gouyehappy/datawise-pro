@@ -29,6 +29,10 @@ export default {
     storage: '存储',
     writeGuard: '写入保护',
     writeGuardEnable: '写入前需临时解锁（所有者软锁，防手滑）',
+    allowEngineWrites: '允许引擎写操作',
+    allowEngineWritesEnable: '放开本连接的结构/数据写入能力门禁（仅所有者；默认 query-only 引擎如 Trino）',
+    sectionBasic: '基本信息',
+    sectionConnection: '连接参数',
     writeUnlock1m: '解锁 1 分钟',
     writeUnlock5m: '解锁 5 分钟',
     writeUnlockEnd: '结束解锁',
@@ -200,6 +204,8 @@ export default {
         env: '选择连接环境，用于区分开发、预发与生产',
         writeGuard:
             '开启后，本连接默认只读；在控制台临时解锁 1/5 分钟后方可写入。CLI/MCP 不会继承解锁。',
+        allowEngineWrites:
+            '产品默认将部分引擎标为仅查询。开启后，所有者可在本连接执行 DDL/DML（如 CREATE SCHEMA）。团队共享成员不受此开关提升。',
         envCustom: '选择「自定义」时填写简短标签，显示在连接树中',
         storage: '连接存储类型，支持本地 (LOCAL) 与云端 (CLOUD)',
         host: '服务器地址，可以是 IP 或域名',

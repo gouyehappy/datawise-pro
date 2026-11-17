@@ -8,6 +8,7 @@ import type {WorkspaceTabSnapshot} from '@/shared/config/app-config.types'
 import {
     buildWorkspaceTabsFromSnapshots,
     captureWorkspaceTabs,
+    resolveActiveTabIndex,
     resolveRestoredActiveTabId,
 } from '@/features/workspace/utils/workspace-session'
 import {
@@ -275,7 +276,7 @@ export function createWorkspaceTabChromeDomain(deps: WorkspaceTabChromeDomainDep
     function captureSession() {
         return {
             tabs: captureWorkspaceTabs(deps.tabs.value),
-            activeTabIndex: deps.tabs.value.findIndex((tab) => tab.id === deps.activeTabId.value),
+            activeTabIndex: resolveActiveTabIndex(deps.tabs.value, deps.activeTabId.value),
             tabGroups: deps.tabGroups.value.map((group) => ({
                 id: group.id,
                 title: group.title,

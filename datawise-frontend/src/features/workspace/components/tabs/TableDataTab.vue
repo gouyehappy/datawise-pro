@@ -114,13 +114,7 @@ async function onImportTableData() {
       return
     }
     const statements = buildInsertStatementsFromCsv(
-        {
-          connectionId,
-          database,
-          tableName,
-          nodeId: props.tab.explorerNodeId ?? props.tab.id,
-          dbType,
-        },
+        {database, tableName, dbType},
         parsed.headers,
         parsed.rows,
     )

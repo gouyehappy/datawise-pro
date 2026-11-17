@@ -11,14 +11,31 @@ const props = defineProps<{
   active?: boolean
 }>()
 
-const pluginId = computed(() => props.tab.pluginId || '')
+const pluginId = computed(() => {
+  const fromTab = props.tab.pluginId?.trim()
+  if (fromTab) return fromTab
+  const fromCtx = props.tab.pluginHostContext?.pluginId
+  return typeof fromCtx === 'string' ? fromCtx.trim() : ''
+})
+const connectionId = computed(() => {
+  const fromTab = props.tab.connectionId?.trim()
+  if (fromTab) return fromTab
+  const ctx = props.tab.pluginHostContext
+  if (typeof ctx?.connectionId === 'string' && ctx.connectionId.trim()) return ctx.connectionId.trim()
+  const raw = ctx?.connection
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const id = (raw as CommunityPluginWorkbenchConnection).id
+    return typeof id === 'string' ? id.trim() : ''
+  }
+  return ''
+})
 const connection = computed<CommunityPluginWorkbenchConnection | undefined>(() => {
   const ctx = props.tab.pluginHostContext
   const raw = ctx?.connection
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     return raw as CommunityPluginWorkbenchConnection
   }
-  return props.tab.connectionId ? {id: props.tab.connectionId} : undefined
+  return connectionId.value ? {id: connectionId.value} : undefined
 })
 const workbenchInstanceId = computed(() => {
   const id = props.tab.pluginHostContext?.workbenchId
@@ -37,7 +54,7 @@ const workbenchInstanceId = computed(() => {
       :tab-id="tab.id"
       :plugin-id="pluginId"
       :contribution-id="tab.pluginContributionId"
-      :connection-id="tab.connectionId"
+      :connection-id="connectionId || undefined"
       :connection="connection"
       :workbench-instance-id="workbenchInstanceId"
       :host-context="tab.pluginHostContext"

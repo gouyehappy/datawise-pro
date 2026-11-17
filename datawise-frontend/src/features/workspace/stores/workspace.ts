@@ -662,6 +662,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         resetAllTabFloats()
         const result = restoreSessionBase(...args)
         contentDirtyByTabId.value = {}
+        const communityTabs = tabs.value.filter((tab) => tab.type === 'community-workbench')
+        if (communityTabs.length) {
+            ensureCommunityWorkbenchIframeCapacity({
+                tabs: tabs.value,
+                activeTabId: activeTabId.value,
+                closeTab: (tabId) => closeTabImpl(tabId),
+            })
+            for (const tab of communityTabs) {
+                beginCommunityWorkbenchPaint(tab.id)
+                touchCommunityWorkbenchFocus(tab.id)
+            }
+        }
         for (const tab of tabs.value) syncContentDirtyFlag(tab)
         return result
     }

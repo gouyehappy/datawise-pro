@@ -59,7 +59,8 @@ async function toggle() {
 }
 
 function run(action: 'ask' | 'summary') {
-  emit(action)
+  if (action === 'ask') emit('ask')
+  else emit('summary')
   open.value = false
 }
 

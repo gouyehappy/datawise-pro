@@ -97,7 +97,7 @@ const {t} = useI18n()
   justify-content: space-between;
   gap: var(--dw-space-6);
   flex-shrink: 0;
-  padding: var(--dw-space-6) var(--dw-space-10) var(--dw-space-7);
+  padding: var(--dw-space-6) var(--dw-space-5) var(--dw-space-7);
   border-top: 1px solid var(--dw-border-light);
   background: var(--dw-bg-panel);
 }

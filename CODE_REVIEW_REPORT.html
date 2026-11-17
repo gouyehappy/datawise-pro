@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DataWise 全产品代码审查报告</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2b303b;
+    --tx:#e6e8eb; --tx2:#a7adb9; --tx3:#767d8c;
+    --p0:#e24b4a; --p1:#ef8b3c; --p2:#e3b23c; --p3:#4f9ee3;
+    --ok:#3fb27f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.65;font-size:14px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px 80px}
+  header{padding:54px 0 30px;border-bottom:1px solid var(--line)}
+  h1{font-size:28px;font-weight:600;margin:0 0 10px;letter-spacing:.3px}
+  .sub{color:var(--tx2);font-size:14px;margin:0}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+  .chip{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:5px 13px;font-size:12px;color:var(--tx2)}
+  .metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:30px 0}
+  .metric{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .metric .n{font-size:30px;font-weight:600;line-height:1}
+  .metric .l{color:var(--tx2);font-size:12px;margin-top:8px}
+  .m0 .n{color:var(--p0)} .m1 .n{color:var(--p1)} .m2 .n{color:var(--p2)} .m3 .n{color:var(--p3)} .mall .n{color:var(--tx)}
+  section{margin-top:44px}
+  h2{font-size:19px;font-weight:600;margin:0 0 6px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+  .lead{color:var(--tx2);margin:14px 0 22px}
+  .verdict{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--p1);border-radius:10px;padding:20px 24px;margin:22px 0}
+  .verdict h3{margin:0 0 8px;font-size:15px;font-weight:600}
+  .verdict p{margin:6px 0;color:var(--tx2)}
+  .bar{height:10px;border-radius:6px;overflow:hidden;display:flex;background:var(--panel2);margin:8px 0}
+  .bar span{display:block;height:100%}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--tx2);margin:8px 0 0}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+  .filters{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 16px}
+  .filter{background:var(--panel2);border:1px solid var(--line);color:var(--tx2);border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;user-select:none}
+  .filter.on{color:var(--tx);border-color:var(--tx3)}
+  .mod{margin-top:26px}
+  .modhd{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .modhd h3{font-size:16px;font-weight:600;margin:0}
+  .modhd .cnt{color:var(--tx3);font-size:12px}
+  .badge{font-size:11px;padding:2px 9px;border-radius:6px;font-weight:600;color:#0f1115}
+  .b0{background:var(--p0)} .b1{background:var(--p1)} .b2{background:var(--p2)} .b3{background:var(--p3)}
+  .def{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:10px}
+  .def.hidden{display:none}
+  .dth{display:flex;align-items:flex-start;gap:10px;cursor:pointer}
+  .dth .id{color:var(--tx3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;min-width:44px;padding-top:2px}
+  .dth .ttl{flex:1;font-weight:500}
+  .dth .tag{font-size:10px;padding:1px 7px;border-radius:5px;font-weight:600;color:#0f1115;white-space:nowrap}
+  .tbody{margin:12px 0 2px 54px;display:none;border-left:2px solid var(--line);padding-left:16px}
+  .def.open .tbody{display:block}
+  .loc{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--p3);background:var(--panel2);padding:6px 10px;border-radius:6px;word-break:break-all}
+  .pb{margin:10px 0 4px}
+  .pb b{color:var(--tx2);font-size:12px;font-weight:600;letter-spacing:.3px}
+  .pb p{margin:3px 0;color:var(--tx2)}
+  .pb.fix p{color:#c8d3c2}
+  table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}
+  th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--tx2);font-weight:600;font-size:12px}
+  td .yes{color:var(--p0)} td .no{color:var(--ok)} td .part{color:var(--p2)}
+  .road{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}
+  .phase{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .phase .ph{font-size:12px;color:var(--tx3);margin-bottom:6px}
+  .phase .pt{font-size:15px;font-weight:600;margin-bottom:10px}
+  .phase ul{margin:0;padding-left:16px;color:var(--tx2);font-size:12px}
+  .phase li{margin:5px 0}
+  footer{margin-top:50px;padding-top:20px;border-top:1px solid var(--line);color:var(--tx3);font-size:12px}
+  @media(max-width:820px){.metrics,.road{grid-template-columns:repeat(2,1fr)}.tbody{margin-left:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>DataWise 全产品代码审查报告</h1>
+  <p class="sub">覆盖后端 15 个 Maven 模块、前端、桌面端及生态组件 · 静态只读审查 · 含可定位缺陷与修复建议</p>
+  <div class="meta">
+    <span class="chip">后端 ≈ 25.6 万行 Java</span>
+    <span class="chip">前端 ≈ 33.8 万行 TS/Vue</span>
+    <span class="chip">审查核心类 180+</span>
+    <span class="chip">Java 17 / Spring Boot 3</span>
+    <span class="chip">Vue 3 / TS / Vite / Pinia</span>
+    <span class="chip">生成日期 2026-11-17</span>
+  </div>
+</header>
+
+<div style="background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--p3);border-radius:10px;padding:14px 20px;margin-top:26px;font-size:13px;color:var(--tx2)">
+  本页为审查概览与重构路线图。<b style="color:var(--tx)">完整 76 项缺陷清单与状态跟踪</b>请见同目录的
+  <a href="CODE_REVIEW_DEFECTS.md" style="color:var(--p3)">CODE_REVIEW_DEFECTS.md</a>（逐条含问题描述与修复建议）与
+  <a href="CODE_REVIEW_DEFECTS.csv" style="color:var(--p3)">CODE_REVIEW_DEFECTS.csv</a>（可用表格工具筛选、批量改状态）。
+</div>
+
+<div class="metrics" id="metrics"></div>
+
+<section>
+  <h2>总体结论</h2>
+  <div class="lead">逐个模块深度审查并交叉验证后，得出三点核心判断：</div>
+  <div class="verdict">
+    <h3>1. 工程底座健康，但存在一组可被组合利用的高危缺陷</h3>
+    <p>各模块普遍具备生产级设计意识：RBAC 分层、密码学用法、XSS/SSRF/路径遍历防护、SQL 参数化、AST 优先的 SQL 改写、资源生命周期管理都到位。未发现大面积失控或核心鉴权失守。但少数"边界与纵深防御"缺陷可被串联成真实攻击链，必须优先处理。</p>
+  </div>
+  <div class="verdict" style="border-left-color:var(--p0)">
+    <h3>2. 三个架构级问题需要重构，其余为专项加固</h3>
+    <p><b style="color:var(--tx)">需要重构：</b>桌面端 JCEF 桥接层（信任模型缺陷，可组合成持久化 RCE）；DataAgent 的授权/并发治理（授权与实际执行 SQL 未绑定）；全产品"黑名单正则做安全决策 + 失败回退拼接"的反模式。其余模块点状修复即可。</p>
+  </div>
+  <div class="verdict" style="border-left-color:var(--ok)">
+    <h3>3. 不建议推倒重来</h3>
+    <p>缺陷高度集中在可收敛的几个点：URL/日志凭据泄露、动态 SQL 校验、token 膨胀、竞态与缓存治理。点状替换 + 配置默认值调整即可覆盖大部分，投入产出比高。若规划公有云 / 多租户部署，SSRF 与凭据泄露类问题的定级需整体上调。</p>
+  </div>
+
+  <h3 style="margin-top:26px;font-size:15px;font-weight:600">缺陷严重度分布（按模块）</h3>
+  <div id="distbars"></div>
+  <div class="legend">
+    <span><i style="background:var(--p0)"></i>P0 危急</span>
+    <span><i style="background:var(--p1)"></i>P1 高危</span>
+    <span><i style="background:var(--p2)"></i>P2 中危</span>
+    <span><i style="background:var(--p3)"></i>P3 低危</span>
+  </div>
+</section>
+
+<section>
+  <h2>缺陷清单（可筛选）</h2>
+  <div class="lead">点击标题展开问题说明与修复建议。已交叉验证关键 P0/P1 缺陷的真实存在性。</div>
+  <div class="filters" id="filters"></div>
+  <div id="modules"></div>
+</section>
+
+<section>
+  <h2>重构与升级决策矩阵</h2>
+  <table>
+    <thead><tr><th style="width:20%">模块</th><th style="width:14%">架构健康度</th><th style="width:14%">是否重构</th><th>核心理由</th></tr></thead>
+    <tbody>
+      <tr><td>桌面端 JCEF 桥接层</td><td><span class="yes">弱</span></td><td><span class="yes">必须重构</span></td><td>信任模型不成立：把文件系统、JRE 路径、进程重启等原生高权限能力以字符串通道无条件暴露给 Web 渲染层且不校验来源，可组合成"外部页面 → 任意文件读写 → 恶意 java.exe → 持久化 RCE"完整链条。</td></tr>
+      <tr><td>DataAgent (datawise-ai)</td><td><span class="part">中</span></td><td><span class="part">定向重构</span></td><td>工作流骨架优秀应保留，但授权体系（grant 未绑定 SQL、客户端可控跳过确认、TOCTOU 竞态）动摇写操作安全模型；熔断/缓存/grant 并发治理各自为政，缺统一租户隔离抽象。</td></tr>
+      <tr><td>动态 SQL 校验机制</td><td><span class="part">中</span></td><td><span class="part">专项替换</span></td><td>关键词黑名单 + 解析失败回退字符串拼接，在 AI 模块、鉴权门禁、连接器三处重复出现，均存在绕过/误杀。应统一改为 SQL Parser + AST 白名单，禁用字符串回退。</td></tr>
+      <tr><td>后端安全 / 鉴权</td><td><span class="no">强</span></td><td><span class="part">安全加固</span></td><td>架构成熟可控，无结构性缺陷；2 项凭据经 URL/日志泄露为 P1，改造成本低收益高，一个迭代内完成专项整改即可。</td></tr>
+      <tr><td>连接器 / 数据库层</td><td><span class="no">强</span></td><td><span class="part">安全加固</span></td><td>SPI 插件化 + 方言隔离设计健康；问题集中在凭据散落泄露、驱动下载无校验、默认无超时 + 大结果集全量入堆，均为点状替换 + 配置默认值调整。</td></tr>
+      <tr><td>前端</td><td><span class="no">中上</span></td><td><span class="part">增量修复</span></td><td>XSS 双重过滤、资源生命周期管理规范；真正要改的是异步错误处理一致性、竞态防护（重复提交、ECharts 白屏）、巨型组件拆分。无需整体重构。</td></tr>
+      <tr><td>生态（CLI/MCP/VSCode/插件）</td><td><span class="no">强</span></td><td><span class="no">无需重构</span></td><td>工程质量与安全意识高，插件宿主边界是本项目质量最高部分之一；仅 token 传递、API URL 校验等点状修补。</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>分阶段修复路线图</h2>
+  <div class="road">
+    <div class="phase"><div class="ph">阶段一 · 立即</div><div class="pt">止血（P0）</div><ul>
+      <li>桌面桥接层加 origin 白名单 + 来源二次校验</li>
+      <li>移除/收敛 fs:registerRoot 与 JRE 路径字符串设置</li>
+      <li>更新器补签名/哈希校验、固定更新源</li>
+      <li>JDBC 驱动坐标白名单 + 禁跟随重定向 + SHA256</li>
+      <li>登录密码改请求体、OIDC session 改 fragment、日志 query 脱敏</li>
+      <li>AI grant 与 threadId/SQL 强绑定、关闭客户端 skip 开关</li>
+      <li>迁移 WHERE / 排序列改 AST 白名单</li>
+    </ul></div>
+    <div class="phase"><div class="ph">阶段二 · 短期</div><div class="pt">加固（P1）</div><ul>
+      <li>JDBC URL 统一脱敏管道（日志 + 响应）</li>
+      <li>默认 License 密钥外部注入 + 强制 fail-fast</li>
+      <li>SQL 写权限判定改解析器</li>
+      <li>AI 关键词黑名单 + JSON 贪婪截取替换</li>
+      <li>迁移 SSE / AI 发送竞态防护</li>
+      <li>熔断器按租户隔离</li>
+    </ul></div>
+    <div class="phase"><div class="ph">阶段三 · 中期</div><div class="pt">治理（P2）</div><ul>
+      <li>统一缓存/限流/去重的租户隔离抽象</li>
+      <li>查询超时默认值 + 大结果集流式导出</li>
+      <li>凭据外发面收敛（CLI token、MCP URL、代理头）</li>
+      <li>异常信息统一过滤、尝错误码化</li>
+      <li>前端异步容错规范化</li>
+    </ul></div>
+    <div class="phase"><div class="ph">阶段四 · 持续</div><div class="pt">质量（P3 + 债务）</div><ul>
+      <li>巨型组件 / Store 按 composable 拆分</li>
+      <li>TypeScript as any 清零、JWT claims 补全</li>
+      <li>静默降级补可观测性日志</li>
+      <li>安全回归用例固化，防止迭代回退</li>
+    </ul></div>
+  </div>
+</section>
+
+<footer>
+  本报告基于静态只读审查生成，缺陷位置经关键词与文件内容交叉验证。严重度定级为综合判断，实际优先级请结合部署形态（桌面本地 / 私有化 / 公有云多租户）调整。审查未修改任何源代码文件。
+</footer>
+</div>
+
+<script>
+const P={0:{n:'P0',c:'var(--p0)'},1:{n:'P1',c:'var(--p1)'},2:{n:'P2',c:'var(--p2)'},3:{n:'P3',c:'var(--p3)'}};
+const DATA=[
+ {mod:'DataAgent · datawise-ai',short:'DataAgent',items:[
+  {id:'DA-01',p:0,t:'一次性写入授权未与实际执行 SQL 绑定，可"张冠李戴"越权执行',loc:'AgentWriteGrantService.java:63-91 · AiAnalysisGraphRunner.java:88-131',desc:'consume() 只校验请求中的 confirmedSql 字符串等于发授权时的字符串且用户一致，但从不校验该 threadId 对应检查点里的 SAFE_SQL 是否等于 confirmedSql，也不校验 grant 的 connectionId/database 与会话作用域一致。可先为无害 SQL_A 申请授权，再在 resume 时对会话 B 执行危险 SQL_B。',fix:'resume 中用 compiledGraph.getState(config) 取出 SAFE_SQL 与 confirmedSql 规范化后严格比对；IssueRequest 携带 threadId；grant 由服务端在 detectInterrupt 时结合 threadId/checkpointId 直接签发。'},
+  {id:'DA-02',p:0,t:'skipSqlConfirmation 由客户端可控，可绕过 HITL 与写授权',loc:'AiAnalysisGraphRunner.java:73-75 · AiChatRequest.java:13 · AnalysisCanvasPipelineService.java:57-66',desc:'/api/ai/analyze/stream 是 Human-in-the-loop 路径，但 skipSqlConfirmation 是请求体里的布尔字段；客户端传 true 即可让服务直接 resumeConfirmed，跳过任何 SQL 确认与 grant 消费。服务端无基于权限/模式的二次判定。',fix:'改为服务端派生值（根据 Ask/Agent 模式、租户配置、用户权限计算），禁止信任客户端布尔；内部画布流水线走独立服务端白名单，不复用该字段。'},
+  {id:'DA-03',p:1,t:'一次性授权的消费存在 TOCTOU 竞态，可并发重放',loc:'AgentWriteGrantService.java:68-87',desc:'get → 检查 consumed → put 非原子。两个并发 resume 使用同一 grantId 时都能读到 consumed=false，都通过校验并各自消费成功，破坏"一次性"语义。',fix:'改为原子 CAS：grants.computeIfPresent(...) 中校验并消费，或成功消费后直接 grants.remove(grantId) 一击即弃。'},
+  {id:'DA-04',p:1,t:'LLM 路由 JSON 用 lastIndexOf 贪婪截断，尾部文本吞掉 JSON',loc:'AiAnalysisStepRouteService.java:161-169',desc:'indexOf(\'{\') + lastIndexOf(\'}\') 截取，LLM 输出带尾部文本或多个 JSON 对象时 substring 含非法字符，readTree 抛异常被静默降级为 mockRoute，问题不可观测。这正是"贪婪匹配吞掉尾部 JSON"缺陷模式。',fix:'用 Jackson JsonParser 顺序解析首个完整对象（FAIL_ON_TRAILING_TOKENS=false），或实现括号配对扫描；降级时打 WARN 并记录原始响应片段。'},
+  {id:'DA-05',p:1,t:'SQL 只读校验用关键词正则，误杀大量合法 SQL',loc:'AiSqlSafetyChecker.java:13-18,46',desc:'正则在含字符串字面量的整个 SQL 上匹配：SELECT REPLACE(col,...) 中的标准函数、WHERE status=\'delete\' 中的字面量、名为 call/exec 的列都会被判为写操作，触发无意义的 LLM 重试，浪费配额并降低成功率。stripped 用于校验但返回 normalized，两者不一致。',fix:'先剥离字符串字面量再匹配；移除 REPLACE/CALL/EXEC 等合法函数名；更彻底用项目已有 SQL Parser 解析语句类型（是否 SELECT/WITH）。'},
+  {id:'DA-06',p:2,t:'Prompt 模板对失败 SQL / 错误日志 / 历史代码未限长，token 膨胀',loc:'AiSqlPromptTemplates.java:127-134,166 · AiAnalysisPromptTemplates.java:75-80',desc:'previousSql/failedSql/executionError/failedCode 原样拼接，无上限。同文件其它位置都用了 PromptDataSanitizer.block(...,8000)，唯独重试路径漏掉；checkpoint 可达 32MB，重试又放大消耗。',fix:'所有外部/派生文本统一经 PromptDataSanitizer.block(value,N) 限长后再拼 prompt。'},
+  {id:'DA-07',p:1,t:'全局 LLM 熔断器跨租户共享，单个用户坏配置阻断所有用户',loc:'AiLlmCallPolicy.java:25-26,100-130',desc:'单例 Bean 的单一计数器不区分租户与 LLM profile。一个用户配错 API Key（401 NonTransient）连续 5 次后打开全局熔断 30 秒，期间所有租户所有 profile 均被拒绝，形成跨租户 DoS。',fix:'熔断键按 tenantId + profileId 隔离；NonTransientAiException 不计入瞬态熔断；用带 TTL 的并发 Map 实现。'},
+  {id:'DA-08',p:2,t:'grant Map 无过期/已消费项清理，内存泄漏',loc:'AgentWriteGrantService.java:28,56,86-87',desc:'ConcurrentHashMap 无界增长。TTL 仅在 consume 命中时惰性清理；从未被消费的 grant（用户取消/关页）与所有已消费 grant 永久驻留。',fix:'消费成功直接 remove；增加定时 purge expiresAt < now 的清理任务。'},
+  {id:'DA-09',p:2,t:'AiSchemaCache.getOrLoad 非原子，缓存击穿且可能覆盖新值',loc:'AiSchemaCache.java:30-43',desc:'并发 miss 时所有线程都执行 loader（重复拉取 DDL/RPC），后写入的旧结果还可能覆盖较新结果。',fix:'用 computeIfAbsent 或 CompletableFuture 占位实现 single-flight。'},
+  {id:'DA-10',p:2,t:'RAG 索引重建 inFlight 判定非原子，可重复重建',loc:'AiKnowledgeIndexRebuildCoordinator.java:51,69',desc:'get 与 put 之间无原子保护，两个并发 schedule 同一 scope 都可能提交重建任务，浪费资源并可能写冲突。',fix:'if (inFlight.putIfAbsent(scopeKey,true)!=null) return inProgress(...)。'},
+  {id:'DA-11',p:2,t:'LLM 响应体无上限读取，存在 OOM 面',loc:'AiLlmGateway.java:203-209',desc:'用 stream.readAllBytes() 把整个上游响应读入内存且无大小上限；上游异常返回超大 body 会打满堆内存。流式路径已有裁剪，非流式未对齐。',fix:'用 readNBytes(MAX_BYTES) 并截断，超限抛业务异常。'},
+  {id:'DA-12',p:2,t:'推理模型兜底可能把思维链当作最终答案',loc:'AiChatCompletionTextExtractor.java:41-55,124-134',desc:'当 content 为空而 reasoning 有内容时，推理文本（甚至 reasoning 原样）被选为最终答案；对把答案放在 reasoning、content 被 max_tokens 截断的模型，会把 CoT 当 SQL/摘要返回。',fix:'仅当 reasoning 形态符合预期（SQL/JSON）才启用兜底，并设长度上限 + 告警。'},
+  {id:'DA-13',p:2,t:'重试路由 off-by-one，实际重试次数比配置多一次',loc:'AiAnalysisValidateRouter.java:27-31 · AiAnalysisPythonRouter.java:27-31',desc:'校验失败节点先把计数加 1 再从 1 起判断 <=max，导致实际额外重试 max+1 次，各层重试叠加放大 token 消耗。',fix:'改为 retryCount < maxRetries，统一计数语义。'},
+  {id:'DA-14',p:3,t:'SQL 规范化强制"行首 SELECT/WITH"，边界脆弱',loc:'AiSqlNormalizer.java:32-72',desc:'LLM 常见输出 (SELECT ...)、EXPLAIN SELECT、/*+ hint */ SELECT 会被判空串，触发无谓重试。',fix:'用 tokenizer 找首个 SELECT/WITH 关键字位置，而非要求行首。'},
+  {id:'DA-17',p:3,t:'语义校验在别名无法解析时静默跳过列检查',loc:'AiSqlSemanticChecker.java:96-106',desc:'columnIndex.get(table) 为 null 时 continue，别名映射构建失败的列完全不校验，静默放行。',fix:'别名无法解析时退化为按引用表列集合校验，或至少记 warning。'},
+  {id:'DA-18',p:3,t:'checkpoint 旧格式兼容分支数组越界边界',loc:'AiAnalysisGsonStateSerializer.java:137-145',desc:'legacyEnvelope[3] 在 utfLength==1（校验条件为 >0 可通过）时越界；remaining 为负时逻辑未定义。',fix:'合法长度下限改为 >=2，对边界做防御。'}
+ ]},
+ {mod:'后端安全 / 鉴权 · server / common / config',short:'安全鉴权',items:[
+  {id:'SE-01',p:0,t:'登录密码经 URL query 传递并被访问日志记录为明文',loc:'AuthController.java:49-55 · RequestLoggingFilter.java:177-181,218-227',desc:'userPassword 作为 @RequestParam，客户端通常放 URL query；POST /login 被判为 INFO 必定落访问日志，脱敏函数只处理 JSON body 不处理 query。明文密码进入应用日志、代理日志、浏览器历史。',fix:'改为 @RequestBody LoginRequest（body 已有脱敏）；requestPath() 中对 userPassword/password 等 query key 统一脱敏；生产禁用 query 传密码。'},
+  {id:'SE-02',p:1,t:'OIDC 登录成功后 sessionId 经重定向 URL query 传递',loc:'AuthController.java:91-94',desc:'sessionId 是等同密码的 bearer 凭据，通过 302 Location query 传给前端，会被历史、代理日志、Referer 外泄。项目别处已明确"避免把长会话 id 放进查询串"，此处自相矛盾。',fix:'改用 URL fragment（#oidcSession=）、一次性 ticket 兑换或 HttpOnly+Secure+SameSite Cookie；前端收到后立即 history.replaceState 清除。'},
+  {id:'SE-03',p:1,t:'SQL 写权限判定依赖关键词黑名单，可绕过越权执行 DML/DDL',loc:'FeaturePermissionAccess.java:33-35,58-63,308-313 · ContentFeatureGateAspect.java:41-44',desc:'用正则判断是否要求 dangerous SQL 权限。注释/空白拆分关键字（UPD/**/ATE）或 WITH...AS DELETE 可绕过，使低权限用户绕过门禁。切面按参数名 "sql" 提取，不匹配时取首个 String 参数，可能校验错对象。',fix:'用 SQL Parser（项目已依赖 JSqlParser）判定语句类型；规范化多语句与注释；鉴权基于语句实际类型而非文本匹配。'},
+  {id:'SE-04',p:2,t:'登录失败锁定仅按用户名，可被用于锁定任意账号（DoS）',loc:'LoginAttemptGuard.java:30-77',desc:'normalize 只做 trim+lowercase，锁定键只有用户名。知道用户名即可故意输错 8 次锁 15 分钟；也无法抑制分布式撞库。',fix:'采用(username, IP)复合键 + IP 维度滑动窗口；引入渐进延迟/验证码；区分"用户不存在"与"密码错误"。'},
+  {id:'SE-05',p:0,t:'默认 License 签名密钥硬编码于公开配置文件',loc:'application.yml:57 · EntitlementSigningSecretValidator.java:20-21',desc:'signing-secret: datawise-dev-pack-signing-secret-change-me 用于 License/dpk 的 HMAC 签名。默认 mode=open 不 fail-fast，任何基于默认配置的自建部署均可被伪造授权包；默认值提交公开仓库等同公开密钥。',fix:'主配置改为 ${DATAWISE_ENTITLEMENT_SIGNING_SECRET} 必填；将 fail-fast 提升为默认行为，不依赖 mode。'},
+  {id:'SE-06',p:2,t:'社区插件安装接受任意本地文件路径',loc:'CommunityPluginController.java:237-245',desc:'path 由请求体完全控制，管理员被攻陷或存在 CSRF 链时可让服务读取任意本地路径文件解析。虽需 requireAdminUser，但缺"路径必须在允许目录"约束。',fix:'限制 path 落在配置的暂存/白名单目录，做 toRealPath().startsWith(allowedRoot) 校验。'},
+  {id:'SE-07',p:2,t:'文件会话存储并发 renew/upsert 无锁，读写竞争',loc:'FileSessionStore.java:49-107',desc:'authenticate 调用 renew→save→sessions.upsert，多个并发请求同时续期或增删，read-modify-write 非原子，可能丢失更新或写坏文件（对比 JdbcSqlHistoryStore.save 用了 synchronized）。',fix:'对 JsonListFile 读写加锁或串行化续期；高并发/多实例改用 JDBC 存储后端（项目已支持）。'},
+  {id:'SE-08',p:2,t:'JWT id_token 校验缺 nbf/iat/nonce，kid 缺失回退首 key',loc:'OidcIdTokenVerifier.java:88-108,127-162',desc:'仅校验 iss/aud/exp；无 kid 时选 JWKS 首个 RSA key，不符 OIDC 规范，密钥轮换期可能验签混乱。',fix:'补齐 nbf/iat（含 skew）与 nonce 校验；kid 缺失时拒绝而非回退首 key。'},
+  {id:'SE-09',p:2,t:'CORS 通配 Origin 模式配合 allowCredentials(true)',loc:'WebConfig.java:34-37 · AuthSecurityProperties.java:54-60',desc:'默认 app://*、http://localhost:* 等 pattern 配合 allowCredentials。鉴权用自定义头而非 Cookie，直接 CSRF 影响有限，但宽泛 app://* 扩大攻击面。',fix:'云 profile 收紧为同源或显式白名单；桌面端移除 app://* 通配改固定 scheme+host。'}
+ ]},
+ {mod:'连接器 / 数据库层',short:'连接器/DB',items:[
+  {id:'DB-01',p:0,t:'迁移 WHERE 子句黑名单校验后直接字符串拼接，可绕过注入',loc:'MigrationWhereSupport.java:11-41 · SqlTransformOps.java:26-35',desc:'validate() 用黑名单正则拦截 ;、注释、select/union 等，appendWhere() 把用户输入原样拼进 SQL。可用 1=1 OR \'a\'<>\'b\' 等无关键字恒真式改变迁移取数语义；更关键的是 JSqlParser 解析失败时回退 return sql+" WHERE "+condition.trim()，无任何转义。',fix:'放弃黑名单；用 JSqlParser 解析为 Expression 后白名单校验 AST 节点（仅比较/逻辑/字面量，禁子查询/函数/变量），解析失败即拒绝而非回退拼接。'},
+  {id:'DB-02',p:0,t:'迁移水印列与排序列未加引号直接拼入 SQL',loc:'MigrationOrderBySupport.java:98-105 · SqlTransformOps.java:37-53,158-171',desc:'watermarkColumn 完全未做标识符引用或合法性校验直接拼接；orderByColumns 解析失败走 legacyAppendOrderByAsc 直接拼列名。字段来自用户可填的增量同步/迁移配置，构成注入面。',fix:'所有标识符经方言 quoteIdentifier + 对照表元数据白名单校验；AST 失败时拒绝执行，禁用 legacy 字符串回退。'},
+  {id:'DB-03',p:1,t:'完整 JDBC URL（含明文密码）被回显给用户错误消息',loc:'JdbcErrorMessageFormatter.java:111-133',desc:'describeTarget() 无 host 时直接 return entity.getJdbcUrl()，被 formatNetworkFailure 等调用后拼进面向前端的消息。用户自定义 URL 常带 password=、truststorePassword= 等，导致凭据通过 API 响应泄露。',fix:'展示前统一 redactJdbcUrl，仅保留 scheme://host:port/database，移除所有 query 参数。'},
+  {id:'DB-04',p:1,t:'JDBC URL 被写入异常消息与日志',loc:'JdbcConnectionPoolManager.java:209-227 · ClassLoaderDriverDataSource.java:55',desc:'throw new SQLException("Driver rejected URL: "+url) 与 log.error("...url="+url,ex)，URL 可能含明文凭据，形成"日志 + 响应"双通道泄露。另有 ManagedJdbcPool.java:120 记录 url= 到 info 日志。',fix:'异常消息只带 dbType/connectionId；日志传脱敏值。'},
+  {id:'DB-05',p:0,t:'JDBC 驱动下载坐标未校验，存在路径穿越 / SSRF / 无完整性校验',loc:'JdbcMavenCoordinate.java:8-33 · JdbcDriverLoader.java:349-398',desc:'parse() 仅 split(":")+trim()，未拒绝 ..、/、\\。fileName()/repositoryPath() 直接参与路径拼接与 URI.create(repository+"/"+path)，配合 setInstanceFollowRedirects(true) 且无 SHA256 校验，可越界写、诱导请求任意仓库、下载恶意 JAR 后被加载执行。对比插件安装的严格清洗 + SHA256，此处明显不对称。',fix:'坐标三段做 [A-Za-z0-9_.-]+ 白名单并拒绝 ..；禁跟随重定向或逐跳校验私网；强制 SHA256；target.normalize() 后确认仍在 drivers 目录内。'},
+  {id:'DB-06',p:2,t:'默认无查询超时，慢查询可长期占用连接与请求线程',loc:'JdbcStatementExecutor.java:28-34,198-203 · QueryOperationBudget.java:22-34',desc:'默认 timeout-seconds:0 等于无限，准入服务只限并发不限时长。一条锁等待/笛卡尔积 SQL 可占住 Hikari 连接直到客户端断开，池耗尽后全局 429。',fix:'交互查询设置有界默认值（30-60s）并保留请求级覆盖；把 wall-clock deadline 下推到 setQueryTimeout。'},
+  {id:'DB-08',p:2,t:'Elasticsearch 客户端可全局安装 trust-all 的 X509TrustManager',loc:'ElasticsearchRestClient.java:34-40,144-168',desc:'insecureSkipTlsVerify 为真时 checkServerTrusted/checkClientTrusted 为空实现、getAcceptedIssuers 返回空数组，完全信任任意证书，Authorization 头与查询数据暴露给中间人。',fix:'改用可配置 CA；若保留跳过校验，限定 loopback/测试环境并强制审计告警。'},
+  {id:'DB-09',p:2,t:'ES REST 客户端跟随重定向，path 来自用户控制台输入',loc:'ElasticsearchRestClient.java:34-36,55-63,76-97',desc:'followRedirects(NORMAL)，而 request(method,path,...) 的 path 来自 Kibana 控制台用户输入。服务端返回 302 时客户端跟随到任意 Location（含内网），跨主机重定向可能转发 Authorization 头，构成 SSRF 与凭据外带。',fix:'改为 Redirect.NEVER，需跳转时逐跳校验主机白名单；重定向剥离 Authorization 头。'},
+  {id:'DB-10',p:2,t:'批量写入器擅自切换 autoCommit，破坏共享/手动事务边界',loc:'JdbcPreparedBatchWriter.java:43-54,73-115',desc:'构造函数 setAutoCommit(false)、close 中 setAutoCommit(true)，若传入调用方持有的手动事务连接会意外提交/回滚其未完成事务；flush 失败 rollback 也是吞异常处理。',fix:'由调用方决定是否管理事务；写入器只保存并恢复原 autoCommit 值；明确独占连接约束并在构造时校验来源。'},
+  {id:'DB-11',p:2,t:'连接归还池时 schema/catalog 恢复失败被静默吞掉，跨请求污染',loc:'JdbcConnectionAccessor.java:92-95,115-129',desc:'restoreScope() 在 catch(SQLException ignored) 后 best-effort 返回，代码注释承认"next borrow may still be polluted"。USE/setSchema 切换失败的连接仍被归还池，下个请求可能落在错误的库/schema，造成串库查询或数据泄露。',fix:'恢复失败直接驱逐该池连接，不复用；计入指标并告警。'},
+  {id:'DB-12',p:2,t:'无界读取把最多 10 万行全量载入堆内存',loc:'JdbcResultSetMapper.java:23,32-52 · JdbcTableDataReader.java:286-294',desc:'SAFETY_MAX_ROWS=100_000，mapAll() 把结果全读进 List<Map>；含大字段时单请求可占数百 MB，多并发 OOM 面明显。项目已有真流式的 JdbcResultStreamer 但导出路径未复用。',fix:'导出/元数据路径统一走 JdbcResultStreamer 流式写盘或响应流；下调硬上限并支持游标分页。'},
+  {id:'DB-13',p:2,t:'底层 JDBC 原始异常经 "Details:" 回显前端',loc:'JdbcErrorMessageFormatter.java:45-64,78-109 · SqlExecuteService.java:217-229',desc:'多个分支把原始 SQLException.getMessage() 直接拼进用户可见消息，含完整 SQL、库名、表名、主机、用户名甚至连接串；原样写入事件信号。',fix:'面向用户只返回分类描述 + errorCode/requestId；完整堆栈仅写服务端日志；消息入库前脱敏。'},
+  {id:'DB-14',p:2,t:'SSH 首次连接默认自动接受主机密钥（TOFU），存在 MITM',loc:'SshTunnelProperties.java:12-18 · SshKnownHostsSupport.java:38-56',desc:'strictHostKeyChecking=true 但 acceptNewHostKeys=true，返回 accept-new 并持久化新密钥。首次连接任意主机不校验身份即接受，DNS 劫持/不可信网络下可被中间人。',fix:'默认 accept-new=false（即 yes）；仅对可信来源自动录入；已存在 key 变更硬失败并告警。'},
+  {id:'DB-15',p:2,t:'自定义 JDBC URL 无白名单校验，构成 SSRF 面',loc:'JdbcUrlBuilder.java:12-29,101-108',desc:'用户提供 jdbcUrl 时直接采用；GENERIC/OTHER 分支用 "jdbc:"+dbType.id()+"://"+host+":"+port 拼接。可构造指向内网或异常协议驱动的 URL，借"测试连接/查询"探测内网。',fix:'scheme 白名单 + 目标主机 IP 校验（拒私网/回环/元数据地址）；dbType.id() 枚举校验；连接发起前统一出站策略检查。'}
+ ]},
+ {mod:'前端 · datawise-frontend',short:'前端',items:[
+  {id:'FE-01',p:1,t:'迁移 SSE 单条畸形事件摧毁整个迁移流',loc:'migration-stream.ts:103-135 · migration-job-stream.ts:70-115',desc:'dispatchMigrationSseBlock 每个分支直接 JSON.parse(parsed.data) 无任何 try/catch。数据迁移场景大量表/批次数据，一条脏数据或截断帧即抛错冒泡，导致整个 streamMigrationBatch Promise reject、迁移中断且进度可能丢失。对比 analysis-sse-consumer.ts:66-71 明确做了单条坏事件防护，此处是疏漏。',fix:'每个 dispatch 内对 JSON.parse 包 try/catch，失败 onError 上报并 return null 跳过该事件。'},
+  {id:'FE-05',p:1,t:'AI 发送存在重复提交竞态，可重复扣减额度',loc:'useAiChatSend.ts:212-248',desc:'215 行检查 isSending，直到 248 行才 setSending(true)，中间有 buildPrompt（读附件文本）、scrollToBottom 等多个 await 让出点。用户快速双击，两次调用都通过检查，同一消息发送两次、产生两条回复、重复扣减 AI 额度。',fix:'校验通过后同步立即 setSending(true)（在第一个 await 前），失败再回滚；或用 sessionId 级同步发送锁。'},
+  {id:'FE-02',p:2,t:'saveConsole 的 .then() 无 .catch()，保存失败静默',loc:'useSqlEditorActions.ts:601-605 · workspace.ts:369-418',desc:'void saveConsoleTab(...).then(...) 只处理成功分支；saveConsoleTab 内动态 import、resolveNextConsoleScriptFile、persistConsoleTabSql 均不在 try/catch。失败时未捕获 rejection 且用户点保存后无任何失败提示。',fix:'补 .catch(e=>notifyActionIssue(...))，或底层全函数 try/catch 统一返回 boolean。'},
+  {id:'FE-03',p:2,t:'危险 SQL 确认链路 .then() 无 .catch()，失败静默',loc:'SqlConsoleTab.vue:711-741',desc:'armDangerousSqlWithReview(resolved).then(...) 无 .catch()；armDangerousSqlPending 抛错时未捕获，危险 SQL 既不执行也无提示。',fix:'追加 .catch()，提示用户并回滚危险确认条状态。'},
+  {id:'FE-06',p:2,t:'ECharts 实例与 DOM 生命周期失配，option 置空后恢复白屏',loc:'EchartsPanel.vue:21-30,68-70',desc:'v-if="option" 控制 chartRef 的 DOM，option 变 null 时 DOM 销毁但 chart 实例未 dispose 仍持有已卸载 DOM 引用。option 恢复时 chart ??= 因实例非 null 跳过重新 init，继续对脱离文档的旧实例 setOption → 白屏。',fix:'watch option 为 null 时 dispose() 并置 chart=null；或改 v-show 保持 DOM 常驻。'},
+  {id:'FE-07',p:2,t:'多个巨型组件违反单一职责',loc:'SqlConsoleTab.vue(2085行) · WelcomeTab.vue(1886行) · IntegrationsSettingsPanel.vue(1789行) · DataGrid.vue(1666行) · DesktopTitleBarMenu.vue(1662行)',desc:'SqlConsoleTab 单文件承担编辑器、危险 SQL 确认、生产审批、事务、取消、AI、快捷键、全屏、计时器等 10+ 职责，散落大量响应式状态与 watch，是竞态与回归缺陷的温床，改动成本高。',fix:'按职责拆分 composable，沿袭项目已有的 useSqlEditorActions/useConsoleSqlCancel 范式，目标单文件 <500 行。'},
+  {id:'FE-10',p:2,t:'终端 WebSocket create() Promise 无超时',loc:'websocket-terminal.bridge.ts:81-143',desc:'create() 仅在收到 created/error/close 时 settle。若服务端建立连接后既不回 created 也不关闭，Promise 永久 pending，loading 悬挂，socket 及 4 个匿名监听器持续驻留。ssh-terminal.bridge.ts 有 timeoutId 而此 bridge 没有。',fix:'为 create 增加超时定时器与 settle(TIMEOUT)，超时后 socket.close() 清理；与 ssh bridge 对齐。'},
+  {id:'FE-08',p:3,t:'defineAsyncComponent 普遍用 as any 绕过类型检查',loc:'ShortcutPanelDrawer.vue:51,57 · WorkspaceTabs.vue:60 · SqlConsoleTab.vue:131 等',desc:'(()=>import(...)) as any 掩盖 loader 返回类型，edition 条件分支的 stub/真实组件 props 契约不一致时编译器无法校验，运行时 props 错配难排查。全库非测试代码至少 8 处。',fix:'统一 props 类型，用 defineAsyncComponent<typeof Component>() 泛型，去掉 as any。'},
+  {id:'FE-11',p:3,t:'JSON.parse 导入配置无容错',loc:'app-config.service.ts:1068 · elasticsearch-profile.ts:142 · plugin-store.ts:210',desc:'对用户导入文件/外部文本直接 JSON.parse 无 try/catch，导入损坏配置时抛未捕获异常且无友好提示（同文件其它读取路径有防护，导入路径是缺口）。',fix:'外部输入解析统一 try/catch，捕获后 toast 提示"文件格式错误"。'}
+ ]},
+ {mod:'桌面端与生态 · desktop / mcp / cli / plugin',short:'桌面/生态',items:[
+  {id:'DT-01',p:0,t:'桥接脚本无条件注入所有主 frame 且无 origin 校验（RCE 根因）',loc:'DesktopMainFrame.java:108-125 · DesktopBridgeRouter.java:92-134 · DatawiseDesktopApp.java:172-180',desc:'onLoadStart/onLoadEnd 只要 frame.isMain() 就 executeJavaScript 注入桥接脚本，不校验 URL 是否受信本地 origin；addHandler 与 onQuery 也不检查来源 frame URL；DATAWISE_RENDERER_URL 环境变量可把 renderer 指向任意外部 URL 且无校验。一旦主 frame 加载攻击者可控页面，即获得 window.__datawiseDesktopBridge 全部原生能力：任意文件读写、剪贴板、shell.openExternal、JRE 配置、重启、devtools。',fix:'仅在 frame.getURL() 属白名单 origin 时注入并二次校验；移除或强校验 DATAWISE_RENDERER_URL（限定 scheme+host+端口为回环）；高敏通道按 fs:/config:/shell: 分级授权。'},
+  {id:'DT-02',p:0,t:'fs:registerRoot 无来源校验，路径沙箱形同虚设',loc:'DesktopBridgeRouter.java:286,380-396 · DesktopPathSandbox.java:33-55',desc:'registerRoot 接受渲染进程传入任意路径直接注册为根，isAllowed() 一旦注册即放行整棵目录树。任何能调用 bridge 的脚本可 registerRoot("C:\\") 后任意读写删除本地文件，"必须由用户文件选择器授权"的约束被完全绕过。另 fs:revealInExplorer 直接 Path.of 入参，完全未经过 requireAllowed，可探测任意路径。',fix:'删除 registerRoot 公开通道或限定仅由宿主 pickDirectoryAsync 内部调用；revealInExplorer 补 pathSandbox.requireAllowed。'},
+  {id:'DT-03',p:0,t:'自定义 JRE 路径 + 配置重启 = 任意可执行文件启动链',loc:'DesktopBridgeRouter.java:208-210,711-746,212-223 · BackendProcessService.java:465-476,261-280',desc:'渲染进程可通过 config:setJrePreferences 设置任意 customHome；重启后 resolveJavaExecutable 执行 <customHome>/bin/java -jar。结合 DT-02 的任意目录可写，攻击者可写入恶意 java.exe 目录、设为 customHome、触发重启，实现以桌面应用权限持久化执行任意代码。',fix:'JRE 路径只接受用户通过系统文件对话框选定的路径，或做签名/白名单校验；禁止渲染进程以纯字符串设定可执行文件路径。'},
+  {id:'DT-04',p:0,t:'更新器下载安装包无签名/哈希校验即执行',loc:'DesktopUpdaterService.java:39-46,274-298,217-235',desc:'下载走 browser_download_url 完成后直接执行，全程无 checksum/签名验证；repo slug 可由环境变量 DATAWISE_GITHUB_REPO 覆盖。DNS/TLS 被中间人、配置污染或 Release 资产被篡改即执行任意安装包。asset.name() 直接作落盘文件名缺净化。',fix:'复用项目已有 Ed25519 基础设施校验签名或至少 SHA-256；固定更新源禁环境变量覆盖；落盘文件名白名单净化。'},
+  {id:'DT-05',p:2,t:'deep link 参数无长度与内容校验，直接推送渲染器',loc:'DeepLinkParser.java:18-57 · DesktopBridgeRouter.java:978-994 · DatawiseDesktopApp.java:121-129',desc:'datawise:// 是注册的外部协议处理器，parse 把所有查询参数原样透传，sql/connectionId 无长度上限与白名单；异常分支还把原始 rawUrl 完整返回。若前端对 deep-link:open 事件中的 sql 自动填充/执行，形成数据操作诱导面。',fix:'参数设长度上限、字符白名单与 SQL 用途校验；前端不得因深链自动执行 SQL，必须用户确认；异常分支不回显 rawUrl。'},
+  {id:'DT-06',p:2,t:'Windows 协议注册命令用 %1 拼入 cmd.exe /c，URL 未净化',loc:'WindowsProtocolRegistrar.java:31-42',desc:'当 launcher 为 .cmd/.bat 时注册命令为 cmd.exe /c ""path" "%1""，%1 是浏览器传入的深链 URL，含 &、|、^、" 等字符时经 cmd 解析可能造成命令注入或参数截断。',fix:'协议处理器优先注册 .exe；必须用 cmd 包装时对 %1 严格转义，或经注册表 Application 值传递避免内嵌命令行。'},
+  {id:'DT-07',p:2,t:'CLI --token 命令行参数导致 token 泄露',loc:'headless-cli/src/main.ts:18 · config.ts:18-22',desc:'--token <token> 使 token 出现在进程命令行（ps/任务管理器/shell 历史/CI 日志）。CI 自动化场景极易泄露。',fix:'优先仅用 DATAWISE_API_TOKEN 环境变量或 stdin/token 文件；保留 --token 则文档标注风险并支持从文件读取。'},
+  {id:'DT-08',p:2,t:'MCP server 的 API Token 随被覆写的 DATAWISE_API_URL 外发',loc:'datawise-mcp/src/create-server.ts:8-10,45-53',desc:'BASE_URL 可由环境变量 DATAWISE_API_URL 任意覆写，buildAuthHeaders 会把 X-DW-Api-Token 加到每个请求。环境变量被污染为攻击者服务器时，token 与全部查询内容外泄（SSRF + 凭据外带）。',fix:'校验 DATAWISE_API_URL 为受信回环地址或 HTTPS 白名单；token 不发送到非预期主机。'},
+  {id:'DT-09',p:2,t:'本地静态服务器 CORS 通配且反向代理转发全部认证头',loc:'RendererStaticServer.java:141-142,163-190 · DatawiseDesktopApp.java:55',desc:'静态服务器设置 Access-Control-Allow-Origin:*，/api/** 代理几乎转发所有头（含认证头）到 apiProxyBase；DATAWISE_API_BASE_URL 可被环境变量覆写。存在把带认证头请求导向恶意上游的风险。',fix:'移除 CORS 通配；代理仅白名单转发必要头；校验代理目标为固定回环地址。'},
+  {id:'DT-10',p:2,t:'JSON-RPC sidecar 单条畸形输入导致整个会话终止',loc:'StdioJsonRpcSidecar.java:84-111 · CommunityPluginSidecarSession.java:336',desc:'readTree(line) 在循环体内无 try-catch，插件输出任意一行非法 JSON 即抛异常跳出 while，sidecar 进程退出、所有 pending 请求失败。',fix:'每行解析单独 try-catch，跳过畸形行并返回标准 JSON-RPC parse error(-32700)，保持进程存活。'},
+  {id:'DT-11',p:2,t:'agent setup --target 递归删除任意目录，缺少防护',loc:'headless-cli/src/commands/agent-setup.ts:56-67',desc:'fs.rmSync(dest,{recursive:true,force:true}) 对用户 --target 指定的任意路径递归删除。误传 --target ~ 或系统目录后果严重。',fix:'限制 target 必须为预期 skills 子目录结构；删除前二次确认或熔丝检查，拒绝删除非本工具创建的目录。'},
+  {id:'DT-13',p:3,t:'copilot-kit 不可信数据进 prompt + 危险命令黑名单可绕过',loc:'composePrompt.ts:16-22 · destructive.ts:2-14 · cards.ts:122-167',desc:'composeUserPrompt 把整个 session context 以 JSON 直接拼进 prompt，外部数据可携带提示注入；looksDestructiveCommand 用关键词黑名单判断危险命令，可被 $(...)、变量拼接、编码、路径别名绕过；SDK 本身不提供强制执行白名单。',fix:'对进入 prompt 的上下文定界与可信标记；危险命令判断改"默认拒绝 + 显式白名单"；SDK 层提供强制工具白名单与风险分级默认值。'}
+ ]}
+];
+
+const counts={0:0,1:0,2:0,3:0};
+DATA.forEach(m=>m.items.forEach(d=>counts[d.p]++));
+const total=DATA.reduce((s,m)=>s+m.items.length,0);
+document.getElementById('metrics').innerHTML=
+ `<div class="metric m0"><div class="n">${counts[0]}</div><div class="l">P0 危急 · 立即止血</div></div>`+
+ `<div class="metric m1"><div class="n">${counts[1]}</div><div class="l">P1 高危 · 短期加固</div></div>`+
+ `<div class="metric m2"><div class="n">${counts[2]}</div><div class="l">P2 中危 · 中期治理</div></div>`+
+ `<div class="metric m3"><div class="n">${counts[3]}</div><div class="l">P3 低危 · 持续改进</div></div>`+
+ `<div class="metric mall"><div class="n">${total}</div><div class="l">缺陷总数（已验证）</div></div>`;
+
+const dc={0:0,1:0,2:0,3:0};
+DATA.forEach(m=>m.items.forEach(d=>dc[d.p]++));
+document.getElementById('distbars').innerHTML=DATA.map(m=>{
+  const c={0:0,1:0,2:0,3:0};m.items.forEach(d=>c[d.p]++);
+  const seg=[[0,c[0]],[1,c[1]],[2,c[2]],[3,c[3]]].map(([p,n])=>n?`<span style="width:${n/m.items.length*100}%;background:${P[p].c}" title="${P[p].n}: ${n}"></span>`:'').join('');
+  return `<div style="margin:14px 0"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--tx2);margin-bottom:5px"><span>${m.mod}</span><span>${m.items.length} 项</span></div><div class="bar">${seg}</div></div>`;
+}).join('');
+
+const filters=[{k:'all',t:'全部'},{k:0,t:'仅 P0'},{k:1,t:'仅 P1'},{k:2,t:'仅 P2'},{k:3,t:'仅 P3'}];
+document.getElementById('filters').innerHTML=filters.map((f,i)=>`<div class="filter ${i===0?'on':''}" data-k="${f.k}">${f.t}</div>`).join('');
+
+document.getElementById('modules').innerHTML=DATA.map((m,mi)=>{
+  const rows=m.items.map(d=>{
+    const cls=d.p===0?'b0':d.p===1?'b1':d.p===2?'b2':'b3';
+    const tag=d.p===0?'tag b0':d.p===1?'tag b1':d.p===2?'tag b2':'tag b3';
+    return `<div class="def" data-p="${d.p}">
+      <div class="dth" onclick="this.parentElement.classList.toggle('open')">
+        <span class="id">${d.id}</span><span class="ttl">${d.t}</span><span class="${tag}">${P[d.p].n}</span>
+      </div>
+      <div class="tbody">
+        <div class="loc">${d.loc}</div>
+        <div class="pb"><b>问题</b><p>${d.desc}</p></div>
+        <div class="pb fix"><b>修复建议</b><p>${d.fix}</p></div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="mod"><div class="modhd"><h3>${m.mod}</h3><span class="cnt">${m.items.length} 项缺陷</span></div>${rows}</div>`;
+}).join('');
+
+document.getElementById('filters').addEventListener('click',e=>{
+  const el=e.target.closest('.filter');if(!el)return;
+  document.querySelectorAll('.filter').forEach(f=>f.classList.remove('on'));el.classList.add('on');
+  const k=el.dataset.k;
+  document.querySelectorAll('.def').forEach(d=>{
+    d.classList.toggle('hidden',k!=='all'&&d.dataset.p!==k);
+    if(k!=='all')d.classList.add('hidden');
+    else d.classList.remove('hidden');
+  });
+  document.querySelectorAll('.def').forEach(d=>{ if(k!=='all'&&d.dataset.p===k){} });
+  if(k!=='all')document.querySelectorAll(`.def[data-p="${k}"]`).forEach(d=>d.classList.remove('hidden'));
+});
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@ import {
     filterExplorerCapabilityMenuItems,
     getConnectionCapabilityProfile,
     isSpecializedSurface,
+    needsEngineWriteOverrideOption,
     supportsConnectionFeature,
 } from '@/shared/capabilities/supports-connection-feature'
 import {buildConnectionCapabilities} from '@/shared/capabilities/db-type-capabilities'
@@ -49,5 +50,24 @@ describe('connection capability matrix (T-CAP-1)', () => {
         assert.equal(redis.visualQueryBuilder, false)
         assert.equal(redis.specializedSurface, true)
         assert.equal(redis.sqlExecute, false)
+    })
+
+    it('trino is query-only until allowEngineWrites widens write features', () => {
+        assert.equal(needsEngineWriteOverrideOption('trino'), true)
+        assert.equal(needsEngineWriteOverrideOption('mysql'), false)
+        assert.equal(supportsConnectionFeature({dbType: 'trino'}, 'tableStructureEdit'), false)
+        assert.equal(supportsConnectionFeature({dbType: 'trino'}, 'tableDataEdit'), false)
+        assert.equal(
+            supportsConnectionFeature({dbType: 'trino', allowEngineWrites: true}, 'tableStructureEdit'),
+            true,
+        )
+        assert.equal(
+            supportsConnectionFeature({dbType: 'trino', allowEngineWrites: true}, 'tableDataEdit'),
+            true,
+        )
+        assert.equal(
+            supportsConnectionFeature({dbType: 'trino', allowEngineWrites: true}, 'diagram'),
+            false,
+        )
     })
 })

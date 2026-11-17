@@ -622,6 +622,10 @@ export const useAppConfigStore = defineStore('app-config', () => {
         }
         const session = await fetchWorkspaceSessionFromServer()
         if (session?.tabs?.length) {
+            const {prepareCommunityWorkbenchSnapshotsForRestore} = await import(
+                '@/features/community-plugin/lib/connectCommunityPluginWorkbench'
+            )
+            await prepareCommunityWorkbenchSnapshotsForRestore(session.tabs)
             workspace.restoreSession(session.tabs, session.activeTabIndex, session.tabGroups ?? [])
         } else {
             workspace.closeAllClosable()

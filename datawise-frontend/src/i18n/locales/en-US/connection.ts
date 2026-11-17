@@ -29,6 +29,11 @@ export default {
     storage: 'Storage',
     writeGuard: 'Write guard',
     writeGuardEnable: 'Require temporary unlock before writes (owner soft lock)',
+    allowEngineWrites: 'Allow engine writes',
+    allowEngineWritesEnable:
+        'Lift structure/data write gates on this connection (owner only; for query-only engines like Trino)',
+    sectionBasic: 'Basics',
+    sectionConnection: 'Connection',
     writeUnlock1m: 'Unlock 1m',
     writeUnlock5m: 'Unlock 5m',
     writeUnlockEnd: 'End unlock',
@@ -200,6 +205,8 @@ export default {
         env: 'Environment label shown in the connection tree',
         writeGuard:
             'When on, this connection stays read-only until you unlock writes for 1 or 5 minutes in the console. CLI/MCP never inherit the unlock.',
+        allowEngineWrites:
+            'Some engines are query-only by default. When on, the owner may run DDL/DML on this connection (e.g. CREATE SCHEMA). Team share members are not elevated by this switch.',
         envCustom: 'Short label when environment is Custom',
         storage: 'LOCAL or CLOUD storage',
         host: 'Server IP or hostname',

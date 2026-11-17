@@ -186,6 +186,11 @@ export interface ConnectionConfig {
     envCustom?: string
     /** Soft write guard for owners (T-SAFE-1); unlock via UI timed window. */
     writeGuard?: boolean
+    /**
+     * Owner-only: allow tableDataEdit / tableStructureEdit even when the product
+     * capability matrix marks the engine query-only (e.g. Trino).
+     */
+    allowEngineWrites?: boolean
     storage: string
     host: string
     port: string
@@ -434,6 +439,7 @@ export type ContextMenuIcon =
     | 'ai'
     | 'bot'
     | 'dices'
+    | 'layers'
     | 'help'
     | 'save'
     | 'database'

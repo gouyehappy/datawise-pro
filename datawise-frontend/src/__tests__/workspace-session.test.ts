@@ -4,7 +4,10 @@ import {
     buildWorkspaceTabsFromSnapshots,
     captureWorkspaceTabs,
     isDiskBackedTabSnapshot,
+    isRestorableWorkspaceTabType,
+    resolveActiveTabIndex,
     resolveRestoredActiveTabId,
+    sanitizePluginHostContext,
     tabNeedsDiskContentHydration,
 } from '@/features/workspace/utils/workspace-session'
 import type {WorkspaceTab} from '@/core/types'
@@ -232,6 +235,129 @@ describe('workspace-session', () => {
                 sql: '',
             }),
             true,
+        )
+    })
+
+    it('persists community-workbench, ssh-terminal, and k8s tabs with metadata', () => {
+        assert.equal(isRestorableWorkspaceTabType('community-workbench'), true)
+        assert.equal(isRestorableWorkspaceTabType('ssh-terminal'), true)
+        assert.equal(isRestorableWorkspaceTabType('k8s-pods'), true)
+        assert.equal(isRestorableWorkspaceTabType('connection'), false)
+
+        const tabs: WorkspaceTab[] = [
+            {
+                id: 'console-1',
+                title: 'SQL',
+                type: 'console',
+                closable: true,
+                connectionId: 'c-sql',
+                sql: 'select 1',
+            },
+            {
+                id: 'welcome-1',
+                title: 'Welcome',
+                type: 'welcome',
+                closable: false,
+            },
+            {
+                id: 'http-1',
+                title: 'HTTP Client',
+                type: 'community-workbench',
+                closable: true,
+                pluginId: 'io.datawise.community.httpclient',
+                pluginContributionId: 'main',
+                connectionId: 'c-http',
+                pluginHostContext: {
+                    connectionId: 'c-http',
+                    workbenchId: 'wb-1',
+                    pluginId: 'io.datawise.community.httpclient',
+                    connection: {id: 'c-http', password: 'secret'},
+                },
+            },
+            {
+                id: 'k8s-1',
+                title: 'Kubernetes cluster',
+                type: 'k8s-pods',
+                closable: true,
+                connectionId: 'c-k8s',
+                dbType: 'kubernetes',
+                params: {k8sNamespace: 'default'},
+            },
+            {
+                id: 'ssh-1',
+                title: 'SSH 192.0.2.32',
+                type: 'ssh-terminal',
+                closable: true,
+                connectionId: 'c-ssh',
+                dbType: 'ssh',
+                sshTerminalIndex: 1,
+            },
+        ]
+
+        const snapshots = captureWorkspaceTabs(tabs)
+        assert.equal(snapshots.length, 4)
+        assert.deepEqual(
+            snapshots.map((s) => s.type),
+            ['console', 'community-workbench', 'k8s-pods', 'ssh-terminal'],
+        )
+        assert.equal(snapshots[1]?.pluginId, 'io.datawise.community.httpclient')
+        assert.deepEqual(snapshots[1]?.pluginHostContext, {
+            connectionId: 'c-http',
+            workbenchId: 'wb-1',
+            pluginId: 'io.datawise.community.httpclient',
+            connection: {id: 'c-http'},
+        })
+        assert.equal(snapshots[2]?.params?.k8sNamespace, 'default')
+        assert.equal(snapshots[3]?.sshTerminalIndex, 1)
+
+        assert.equal(resolveActiveTabIndex(tabs, 'http-1'), 1)
+        assert.equal(resolveActiveTabIndex(tabs, 'welcome-1'), 0)
+
+        const restored = buildWorkspaceTabsFromSnapshots(snapshots, createId, resolvePrefix)
+        assert.equal(restored.length, 4)
+        assert.equal(restored[1]?.type, 'community-workbench')
+        assert.equal(restored[1]?.pluginContributionId, 'main')
+        assert.equal(
+            (restored[1]?.pluginHostContext?.connection as {password?: string} | undefined)?.password,
+            undefined,
+        )
+        assert.equal(restored[2]?.params?.k8sNamespace, 'default')
+        assert.equal(restored[3]?.type, 'ssh-terminal')
+    })
+
+    it('sanitizes plugin host context keeping display fields without secrets', () => {
+        assert.deepEqual(
+            sanitizePluginHostContext({
+                connectionId: 'c1',
+                connectionName: 'SSH box',
+                workbenchId: 'w1',
+                pluginId: 'p1',
+                locale: 'zh-CN',
+                connection: {
+                    id: 'c1',
+                    name: 'SSH box',
+                    host: '192.0.2.32',
+                    port: '22',
+                    user: 'root',
+                    token: 'x',
+                    password: 'secret',
+                },
+                extra: 'drop-me',
+            }),
+            {
+                connectionId: 'c1',
+                connectionName: 'SSH box',
+                workbenchId: 'w1',
+                pluginId: 'p1',
+                locale: 'zh-CN',
+                connection: {
+                    id: 'c1',
+                    name: 'SSH box',
+                    host: '192.0.2.32',
+                    port: '22',
+                    user: 'root',
+                },
+            },
         )
     })
 })

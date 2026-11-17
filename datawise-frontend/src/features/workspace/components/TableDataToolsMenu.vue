@@ -60,7 +60,9 @@ async function toggle() {
 }
 
 function run(action: 'generate-data' | 'import-data' | 'export-data') {
-  emit(action)
+  if (action === 'generate-data') emit('generate-data')
+  else if (action === 'import-data') emit('import-data')
+  else emit('export-data')
   open.value = false
 }
 
