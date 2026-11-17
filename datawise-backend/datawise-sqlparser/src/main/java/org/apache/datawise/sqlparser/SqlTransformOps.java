@@ -15,8 +15,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * One-shot SQL transform helpers for connector / sync / database modules. Parses via AST handlers
- * when possible and falls back to legacy string assembly on parse failure.
+ * One-shot SQL transform helpers for connector / sync / database modules. Parses via AST handlers.
+ * Row-filter / order-by transforms fail closed on parse failure (no legacy string assembly).
  */
 public final class SqlTransformOps {
 
@@ -29,8 +29,8 @@ public final class SqlTransformOps {
         }
         try {
             return SqlTransform.of(sql, DbType.MYSQL).appendWhere(condition.trim()).toSql();
-        } catch (JSQLParserException ignored) {
-            return sql + " WHERE " + condition.trim();
+        } catch (JSQLParserException ex) {
+            throw new IllegalArgumentException("Failed to append WHERE clause: SQL parse failed", ex);
         }
     }
 
@@ -47,8 +47,8 @@ public final class SqlTransformOps {
         }
         try {
             return SqlTransform.of(sql, DbType.MYSQL).orderByAsc(columnArray).toSql();
-        } catch (JSQLParserException ignored) {
-            return legacyAppendOrderByAsc(sql, columnArray);
+        } catch (JSQLParserException ex) {
+            throw new IllegalArgumentException("Failed to append ORDER BY: SQL parse failed", ex);
         }
     }
 
@@ -63,8 +63,8 @@ public final class SqlTransformOps {
             return SqlTransform.of(sql, DbType.MYSQL)
                     .apply(new KeysetSeekHandler(orderByColumns, lastValues))
                     .toSql();
-        } catch (JSQLParserException | IllegalArgumentException ignored) {
-            return legacyAppendAndPredicate(sql, KeysetSeekHandler.buildLexicographicGreaterPredicate(orderByColumns, lastValues));
+        } catch (JSQLParserException ex) {
+            throw new IllegalArgumentException("Failed to append keyset seek: SQL parse failed", ex);
         }
     }
 
@@ -153,29 +153,5 @@ public final class SqlTransformOps {
         } catch (JSQLParserException ignored) {
             return sql.replaceFirst("(?i)SELECT\\s+\\*", "SELECT " + String.join(", ", columns));
         }
-    }
-
-    private static String legacyAppendOrderByAsc(String sql, String... columns) {
-        String lower = sql.toLowerCase();
-        if (lower.contains(" order by ")) {
-            return sql;
-        }
-        StringBuilder orderBy = new StringBuilder(" ORDER BY ");
-        for (int i = 0; i < columns.length; i++) {
-            if (i > 0) {
-                orderBy.append(", ");
-            }
-            orderBy.append(columns[i]).append(" ASC");
-        }
-        return sql + orderBy;
-    }
-
-    private static String legacyAppendAndPredicate(String sql, String predicate) {
-        String lower = sql.toLowerCase();
-        int orderByIndex = lower.lastIndexOf(" order by ");
-        String head = orderByIndex >= 0 ? sql.substring(0, orderByIndex) : sql;
-        String tail = orderByIndex >= 0 ? sql.substring(orderByIndex) : "";
-        String separator = head.toLowerCase().contains(" where ") ? " AND " : " WHERE ";
-        return head + separator + predicate + tail;
     }
 }

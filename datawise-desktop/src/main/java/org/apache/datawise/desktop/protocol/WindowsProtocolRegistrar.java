@@ -3,6 +3,7 @@ package org.apache.datawise.desktop.protocol;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -28,17 +29,30 @@ public final class WindowsProtocolRegistrar {
         }
     }
 
-    private static String buildCommand(Path launcher) {
-        String path = launcher.toAbsolutePath().normalize().toString().replace("\"", "\\\"");
+    static String buildCommand(Path launcher) {
+        Path absolute = launcher.toAbsolutePath().normalize();
+        String path = absolute.toString().replace("\"", "");
         String lower = path.toLowerCase();
         if (lower.endsWith(".jar")) {
-            String java = Path.of(System.getProperty("java.home"), "bin", "javaw.exe").toString();
-            return "\"" + java + "\" -jar \"" + path + "\" \"%1\"";
+            String java = Path.of(System.getProperty("java.home"), "bin", "javaw.exe")
+                    .toAbsolutePath()
+                    .normalize()
+                    .toString()
+                    .replace("\"", "");
+            // Prefer CreateProcess-friendly quoting; URL stays a single "%1" argument.
+            return "\"" + java + "\" -jar \"" + path + "\" -- \"%1\"";
         }
         if (lower.endsWith(".cmd") || lower.endsWith(".bat")) {
-            return "cmd.exe /c \"\"" + path + "\" \"%1\"\"";
+            // Prefer sibling .exe to avoid cmd.exe /c URL metacharacter injection (DT-06).
+            String withoutExt = path.substring(0, path.length() - 4);
+            Path siblingExe = Path.of(withoutExt + ".exe");
+            if (Files.isRegularFile(siblingExe)) {
+                return "\"" + siblingExe.toAbsolutePath().normalize().toString().replace("\"", "") + "\" -- \"%1\"";
+            }
+            // Fallback: invoke via cmd with /d /s and a single quoted call; still prefer shipping .exe.
+            return "cmd.exe /d /s /c \"call \"" + path + "\" -- \"%1\"\"";
         }
-        return "\"" + path + "\" \"%1\"";
+        return "\"" + path + "\" -- \"%1\"";
     }
 
     private static void runReg(String... args) throws Exception {

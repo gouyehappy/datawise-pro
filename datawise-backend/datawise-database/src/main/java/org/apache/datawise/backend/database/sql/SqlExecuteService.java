@@ -12,6 +12,7 @@ import org.apache.datawise.backend.database.ddlhistory.DdlHistoryService;
 import org.apache.datawise.backend.event.SchemaStructureChangedEvent;
 import org.apache.datawise.backend.domain.ExecuteSqlRequest;
 import org.apache.datawise.backend.domain.ExecuteSqlResult;
+import org.apache.datawise.backend.jdbc.error.JdbcConnectionErrors;
 import org.apache.datawise.backend.jdbc.support.QueryTimeoutOverride;
 import org.apache.datawise.backend.model.ConnectionEntity;
 import org.apache.datawise.backend.security.UserContext;
@@ -219,11 +220,12 @@ public class SqlExecuteService {
                     request.connectionId(),
                     database,
                     ex.getMessage());
+            String clientMessage = JdbcConnectionErrors.toUserMessage(entity, ex);
             outboundEventSignals.sqlExecutionFailed(
                     request.connectionId(),
                     entity.getName() != null ? entity.getName() : "",
                     database != null ? database : "",
-                    ex.getMessage() != null ? ex.getMessage() : "",
+                    clientMessage,
                     userId
             );
             throw SqlExecutionSupport.toSqlExecutionException(entity, ex, sqlToExecute);

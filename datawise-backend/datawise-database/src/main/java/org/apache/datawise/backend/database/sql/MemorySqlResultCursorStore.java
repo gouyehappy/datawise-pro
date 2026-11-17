@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Process-local cursor store (desktop / single-node default). */
 public class MemorySqlResultCursorStore implements SqlResultCursorStore {
@@ -52,19 +53,34 @@ public class MemorySqlResultCursorStore implements SqlResultCursorStore {
 
     @Override
     public CursorEntry require(long userId, String cursorId) {
-        CursorEntry entry = entries.get(cursorId);
-        if (entry == null) {
+        AtomicReference<CursorEntry> held = new AtomicReference<>();
+        CursorEntry updated = entries.computeIfPresent(cursorId, (id, entry) -> {
+            if (entry.userId() != userId) {
+                held.set(null);
+                return entry;
+            }
+            if (System.currentTimeMillis() - entry.lastAccessedAtMs() > TTL_MS) {
+                held.set(null);
+                return null;
+            }
+            CursorEntry touched = new CursorEntry(
+                    entry.userId(),
+                    entry.connectionId(),
+                    entry.database(),
+                    entry.sql(),
+                    entry.sessionKey(),
+                    entry.pageSize(),
+                    entry.nextOffset(),
+                    entry.columns(),
+                    System.currentTimeMillis()
+            );
+            held.set(touched);
+            return touched;
+        });
+        if (updated == null || held.get() == null) {
             throw new SqlCursorGoneException();
         }
-        if (entry.userId() != userId) {
-            throw new SqlCursorGoneException();
-        }
-        if (System.currentTimeMillis() - entry.lastAccessedAtMs() > TTL_MS) {
-            entries.remove(cursorId);
-            throw new SqlCursorGoneException();
-        }
-        touch(cursorId, entry);
-        return entries.get(cursorId);
+        return held.get();
     }
 
     @Override
@@ -112,19 +128,5 @@ public class MemorySqlResultCursorStore implements SqlResultCursorStore {
                         right.getValue().lastAccessedAtMs()
                 ))
                 .ifPresent(oldest -> entries.remove(oldest.getKey()));
-    }
-
-    private void touch(String cursorId, CursorEntry entry) {
-        entries.put(cursorId, new CursorEntry(
-                entry.userId(),
-                entry.connectionId(),
-                entry.database(),
-                entry.sql(),
-                entry.sessionKey(),
-                entry.pageSize(),
-                entry.nextOffset(),
-                entry.columns(),
-                System.currentTimeMillis()
-        ));
     }
 }

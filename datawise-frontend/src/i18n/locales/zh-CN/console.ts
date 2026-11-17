@@ -243,6 +243,7 @@ export default {
         riskLow: '低风险：可直接执行',
         riskHint: '低风险指非生产环境、命中 WHERE 且影响行数 ≤ 200。',
         pendingRunBlocked: '危险 SQL 待确认：请先提交执行或回退',
+        armFailed: '危险 SQL 确认准备失败',
         statement: '待执行语句',
         copy: '复制',
         copied: '已复制',

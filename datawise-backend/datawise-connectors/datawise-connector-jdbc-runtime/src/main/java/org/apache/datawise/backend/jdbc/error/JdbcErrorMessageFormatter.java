@@ -1,6 +1,7 @@
 package org.apache.datawise.backend.jdbc.error;
 
 import org.apache.datawise.backend.jdbc.ssh.SshTunnelException;
+import org.apache.datawise.backend.jdbc.support.JdbcUrlRedactor;
 import org.apache.datawise.backend.model.ConnectionEntity;
 
 /** JDBC 异常用户可读消息格式化。 */
@@ -17,15 +18,15 @@ public final class JdbcErrorMessageFormatter {
         String lower = message.toLowerCase();
 
         if (JdbcErrorClassifier.isPoolAcquireTimeout(lower)) {
-            return formatPoolAcquireTimeout(entity, message);
+            return formatPoolAcquireTimeout(entity);
         }
 
         if (JdbcErrorClassifier.isPostgresqlIoFailure(lower)) {
-            return formatPostgresqlIoFailure(entity, message);
+            return formatPostgresqlIoFailure(entity);
         }
 
         if (JdbcErrorClassifier.isTransientConnectionFailure(lower)) {
-            return formatTransientConnectionFailure(entity, message);
+            return formatTransientConnectionFailure(entity);
         }
 
         if (lower.contains("communications link failure")
@@ -33,7 +34,7 @@ public final class JdbcErrorMessageFormatter {
                 || lower.contains("connect timed out")
                 || lower.contains("unknown host")
                 || lower.contains("network is unreachable")) {
-            return formatNetworkFailure(entity, message);
+            return formatNetworkFailure(entity);
         }
 
         if (lower.contains("driverclass is required")
@@ -44,8 +45,7 @@ public final class JdbcErrorMessageFormatter {
 
         if (JdbcErrorClassifier.isLocalLoadFailure(lower)) {
             return "JDBC driver failed to load from local cache (config/drivers/). "
-                    + "The jar may exist on disk but could not be loaded — restart the backend or check connection settings. "
-                    + "Details: " + message;
+                    + "The jar may exist on disk but could not be loaded — restart the backend or check connection settings.";
         }
 
         if (lower.contains("no suitable driver")) {
@@ -59,8 +59,7 @@ public final class JdbcErrorMessageFormatter {
                 || lower.contains("failed to download driver")) {
             return "Failed to download JDBC driver from Maven repositories. "
                     + "Check network access, configure datawise.jdbc.maven.repositories "
-                    + "(e.g. Aliyun mirror), or place the JAR under config/drivers/. "
-                    + "Details: " + message;
+                    + "(e.g. Aliyun mirror), or place the JAR under config/drivers/.";
         }
 
         if (lower.contains("connection reset") && entity != null
@@ -68,44 +67,47 @@ public final class JdbcErrorMessageFormatter {
             String target = describeTarget(entity);
             return "HiveServer2 closed the connection during the JDBC handshake"
                     + (target.isBlank() ? "" : " (" + target + ")")
-                    + ". Check auth=LDAP or Kerberos settings and TLS (ssl=true) in advanced config. "
-                    + "Details: " + message;
+                    + ". Check auth=LDAP or Kerberos settings and TLS (ssl=true) in advanced config.";
         }
 
-        return message;
+        // Interactive SQL diagnostics stay useful, but never echo secrets embedded in URLs (DB-13).
+        return sanitizeForClient(message);
     }
 
-    private static String formatPostgresqlIoFailure(ConnectionEntity entity, String rawMessage) {
+    private static String formatPostgresqlIoFailure(ConnectionEntity entity) {
         String target = describeTarget(entity);
         return "PostgreSQL connection dropped while switching schema"
                 + (target.isBlank() ? "" : " (" + target + ")")
                 + ". The server may have closed an idle connection, or the network was interrupted. "
-                + "Retry the operation; if it persists, check PostgreSQL service, firewall/VPN, and pooler (PgBouncer) settings. "
-                + "Details: " + rawMessage;
+                + "Retry the operation; if it persists, check PostgreSQL service, firewall/VPN, and pooler (PgBouncer) settings.";
     }
 
-    private static String formatTransientConnectionFailure(ConnectionEntity entity, String rawMessage) {
+    private static String formatTransientConnectionFailure(ConnectionEntity entity) {
         String target = describeTarget(entity);
         return "Database connection was lost"
                 + (target.isBlank() ? "" : " (" + target + ")")
-                + ". Retry the operation; if it persists, check network stability and database availability. "
-                + "Details: " + rawMessage;
+                + ". Retry the operation; if it persists, check network stability and database availability.";
     }
 
-    private static String formatPoolAcquireTimeout(ConnectionEntity entity, String rawMessage) {
+    private static String formatPoolAcquireTimeout(ConnectionEntity entity) {
         String target = describeTarget(entity);
         return "Database connection timed out after 10s"
                 + (target.isBlank() ? "" : " (" + target + ")")
-                + ". Check host/port, credentials, firewall/VPN, and that the database service is running. "
-                + "Details: " + rawMessage;
+                + ". Check host/port, credentials, firewall/VPN, and that the database service is running.";
     }
 
-    private static String formatNetworkFailure(ConnectionEntity entity, String rawMessage) {
+    private static String formatNetworkFailure(ConnectionEntity entity) {
         String target = describeTarget(entity);
         return "Cannot reach database"
                 + (target.isBlank() ? "" : " at " + target)
-                + ". Check network, firewall, and that the service is listening. "
-                + "Details: " + rawMessage;
+                + ". Check network, firewall, and that the service is listening.";
+    }
+
+    static String sanitizeForClient(String message) {
+        if (message == null || message.isBlank()) {
+            return "";
+        }
+        return JdbcUrlRedactor.redactJdbcUrl(message);
     }
 
     private static String describeTarget(ConnectionEntity entity) {
@@ -124,7 +126,18 @@ public final class JdbcErrorMessageFormatter {
             return endpoint + (dbType != null ? " (" + dbType + ")" : "");
         }
         if (entity.getJdbcUrl() != null && !entity.getJdbcUrl().isBlank()) {
-            return entity.getJdbcUrl();
+            // DB-03: never echo raw jdbcUrl (may embed password= / trustStorePassword=).
+            String redacted = JdbcUrlRedactor.redactJdbcUrl(entity.getJdbcUrl());
+            if (name != null && !name.isBlank()) {
+                return name + " @ " + redacted + (dbType != null ? " (" + dbType + ")" : "");
+            }
+            String connectionId = entity.getId();
+            if (connectionId != null && !connectionId.isBlank()) {
+                return "connectionId=" + connectionId
+                        + (dbType != null ? " dbType=" + dbType : "")
+                        + " url=" + redacted;
+            }
+            return redacted + (dbType != null ? " (" + dbType + ")" : "");
         }
         if (name != null && !name.isBlank()) {
             return name;

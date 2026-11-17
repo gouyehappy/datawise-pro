@@ -38,6 +38,10 @@ final class OidcIdTokenVerifier {
     }
 
     JsonNode verify(String jwt, String issuer, String clientId, String jwksUri) {
+        return verify(jwt, issuer, clientId, jwksUri, null);
+    }
+
+    JsonNode verify(String jwt, String issuer, String clientId, String jwksUri, String expectedNonce) {
         if (jwt == null || jwt.isBlank()) {
             throw new IllegalArgumentException("OIDC_ID_TOKEN_MISSING");
         }
@@ -61,6 +65,9 @@ final class OidcIdTokenVerifier {
             throw new IllegalArgumentException("OIDC_ID_TOKEN_ALG_UNSUPPORTED");
         }
         String kid = text(header, "kid");
+        if (kid == null || kid.isBlank()) {
+            throw new IllegalArgumentException("OIDC_ID_TOKEN_KID_MISSING");
+        }
         PublicKey key = resolveKey(jwksUri, kid);
         byte[] signature;
         try {
@@ -81,11 +88,11 @@ final class OidcIdTokenVerifier {
         } catch (Exception ex) {
             throw new IllegalArgumentException("OIDC_ID_TOKEN_SIGNATURE_INVALID");
         }
-        validateClaims(payload, issuer, clientId);
+        validateClaims(payload, issuer, clientId, expectedNonce);
         return payload;
     }
 
-    private void validateClaims(JsonNode payload, String issuer, String clientId) {
+    private void validateClaims(JsonNode payload, String issuer, String clientId, String expectedNonce) {
         String iss = text(payload, "iss");
         if (issuer != null && !issuer.isBlank()) {
             String normalizedIssuer = issuer.endsWith("/") ? issuer.substring(0, issuer.length() - 1) : issuer;
@@ -97,13 +104,31 @@ final class OidcIdTokenVerifier {
         if (clientId != null && !clientId.isBlank() && !audienceContains(payload.get("aud"), clientId)) {
             throw new IllegalArgumentException("OIDC_ID_TOKEN_AUD_MISMATCH");
         }
+        Instant now = Instant.now();
         if (!payload.has("exp") || payload.get("exp").isNull()) {
             throw new IllegalArgumentException("OIDC_ID_TOKEN_EXPIRED");
         }
-        long exp = payload.get("exp").asLong();
-        Instant expiresAt = Instant.ofEpochSecond(exp);
-        if (Instant.now().isAfter(expiresAt.plus(CLOCK_SKEW))) {
+        Instant expiresAt = Instant.ofEpochSecond(payload.get("exp").asLong());
+        if (now.isAfter(expiresAt.plus(CLOCK_SKEW))) {
             throw new IllegalArgumentException("OIDC_ID_TOKEN_EXPIRED");
+        }
+        if (payload.has("nbf") && !payload.get("nbf").isNull()) {
+            Instant nbf = Instant.ofEpochSecond(payload.get("nbf").asLong());
+            if (now.isBefore(nbf.minus(CLOCK_SKEW))) {
+                throw new IllegalArgumentException("OIDC_ID_TOKEN_NBF");
+            }
+        }
+        if (payload.has("iat") && !payload.get("iat").isNull()) {
+            Instant iat = Instant.ofEpochSecond(payload.get("iat").asLong());
+            if (now.isBefore(iat.minus(CLOCK_SKEW))) {
+                throw new IllegalArgumentException("OIDC_ID_TOKEN_IAT");
+            }
+        }
+        if (expectedNonce != null && !expectedNonce.isBlank()) {
+            String nonce = text(payload, "nonce");
+            if (nonce == null || !expectedNonce.equals(nonce)) {
+                throw new IllegalArgumentException("OIDC_ID_TOKEN_NONCE_MISMATCH");
+            }
         }
     }
 
@@ -130,35 +155,33 @@ final class OidcIdTokenVerifier {
         if (keys == null || !keys.isArray() || keys.isEmpty()) {
             throw new IllegalArgumentException("OIDC_JWKS_EMPTY");
         }
-        JsonNode match = null;
-        for (JsonNode key : keys) {
-            if (!"RSA".equalsIgnoreCase(text(key, "kty"))) {
-                continue;
-            }
-            String keyKid = text(key, "kid");
-            if (kid == null || kid.isBlank() || kid.equals(keyKid)) {
-                match = key;
-                if (kid != null && kid.equals(keyKid)) {
-                    break;
-                }
-            }
-        }
+        JsonNode match = findRsaKeyByKid(keys, kid);
         if (match == null) {
             // kid miss — refresh once in case of rotation
             jwksCache.remove(jwksUri);
             jwks = loadJwks(jwksUri);
             keys = jwks.get("keys");
-            for (JsonNode key : keys) {
-                if (kid != null && kid.equals(text(key, "kid"))) {
-                    match = key;
-                    break;
-                }
-            }
+            match = findRsaKeyByKid(keys, kid);
         }
         if (match == null) {
             throw new IllegalArgumentException("OIDC_JWKS_KEY_NOT_FOUND");
         }
         return toRsaPublicKey(match);
+    }
+
+    private static JsonNode findRsaKeyByKid(JsonNode keys, String kid) {
+        if (keys == null || !keys.isArray() || kid == null || kid.isBlank()) {
+            return null;
+        }
+        for (JsonNode key : keys) {
+            if (!"RSA".equalsIgnoreCase(text(key, "kty"))) {
+                continue;
+            }
+            if (kid.equals(text(key, "kid"))) {
+                return key;
+            }
+        }
+        return null;
     }
 
     private JsonNode loadJwks(String jwksUri) {

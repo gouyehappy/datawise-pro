@@ -9,7 +9,7 @@ import org.apache.datawise.backend.backup.model.BackupStatsDocument;
 import org.apache.datawise.backend.backup.model.BackupTableStat;
 import org.apache.datawise.backend.backup.model.RestoreJob;
 import org.apache.datawise.backend.common.support.ConnectionEnvironmentSupport;
-import org.apache.datawise.backend.connector.api.support.SqlWriteClassifier;
+import org.apache.datawise.sqlparser.support.SqlWriteClassifier;
 import org.apache.datawise.backend.database.context.ConnectionExecutionContext;
 import org.apache.datawise.backend.database.sql.SqlReviewService;
 import org.apache.datawise.backend.database.sql.SqlService;

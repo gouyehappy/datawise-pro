@@ -46,6 +46,8 @@ public class AiLlmGateway {
 
     private static final Logger log = LoggerFactory.getLogger(AiLlmGateway.class);
     private static final ObjectMapper JSON = new ObjectMapper();
+    /** Hard cap on buffered LLM HTTP bodies (complete + stream error paths). */
+    static final int MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
     private final AiLlmCallPolicy callPolicy;
     private final AiDeliveryProperties deliveryProperties;
@@ -129,6 +131,7 @@ public class AiLlmGateway {
         try {
             String reply = callPolicy.execute(
                     phase + "-stream",
+                    circuitKey(profile),
                     () -> streamOpenAi(profile, systemPrompt, userPrompt, phase, safe)
             );
             AiCallLogger.logLlmSuccess(log, phase + "-stream", System.currentTimeMillis() - started, reply.length());
@@ -158,7 +161,11 @@ public class AiLlmGateway {
                 userPrompt != null ? userPrompt.length() : 0
         );
         try {
-            String reply = callPolicy.execute(phase, () -> callOpenAi(profile, systemPrompt, userPrompt, phase));
+            String reply = callPolicy.execute(
+                    phase,
+                    circuitKey(profile),
+                    () -> callOpenAi(profile, systemPrompt, userPrompt, phase)
+            );
             AiCallLogger.logLlmSuccess(log, phase, System.currentTimeMillis() - started, reply.length());
             return reply;
         } catch (NonTransientAiException ex) {
@@ -202,8 +209,7 @@ public class AiLlmGateway {
                         .requestFactory(requestFactory)
                         .requestInterceptor((request, body, execution) -> {
                             ClientHttpResponse response = execution.execute(request, body);
-                            InputStream stream = response.getBody();
-                            byte[] bytes = stream == null ? new byte[0] : stream.readAllBytes();
+                            byte[] bytes = readCapped(response.getBody(), MAX_RESPONSE_BYTES);
                             rawBody.set(new String(bytes, StandardCharsets.UTF_8));
                             return new ReplayClientHttpResponse(response, bytes);
                         }))
@@ -309,7 +315,7 @@ public class AiLlmGateway {
         if (status < 200 || status >= 300) {
             String errBody;
             try (InputStream err = response.body()) {
-                errBody = new String(err.readAllBytes(), StandardCharsets.UTF_8);
+                errBody = new String(readCapped(err, MAX_RESPONSE_BYTES), StandardCharsets.UTF_8);
             } catch (IOException ex) {
                 errBody = "";
             }
@@ -319,6 +325,9 @@ public class AiLlmGateway {
 
         StringBuilder full = new StringBuilder();
         StringBuilder thinkingFull = new StringBuilder();
+        // AI-15: strip a leading markdown fence from early deltas so SSE clients do not see ```sql.
+        boolean leadingFencePending = true;
+        StringBuilder leadingFenceBuf = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
             String line;
@@ -354,7 +363,20 @@ public class AiLlmGateway {
                 }
                 if (content != null) {
                     full.append(content);
-                    listener.onContent(content);
+                    String emit = content;
+                    if (leadingFencePending) {
+                        leadingFenceBuf.append(content);
+                        String stripped = stripLeadingCodeFenceDelta(leadingFenceBuf.toString());
+                        if (stripped == null) {
+                            continue;
+                        }
+                        leadingFencePending = false;
+                        leadingFenceBuf.setLength(0);
+                        emit = stripped;
+                    }
+                    if (!emit.isEmpty()) {
+                        listener.onContent(emit);
+                    }
                 }
                 if (thinking != null) {
                     thinkingFull.append(thinking);
@@ -490,6 +512,35 @@ public class AiLlmGateway {
         }
     }
 
+    /** Isolate LLM circuit breakers per tenant + profile endpoint identity. */
+    static String circuitKey(AiLlmProfileDto profile) {
+        String profileId = nullToEmpty(profile != null ? profile.provider() : null)
+                + "|"
+                + nullToEmpty(profile != null ? profile.baseUrl() : null)
+                + "|"
+                + nullToEmpty(profile != null ? profile.model() : null);
+        return AiLlmCallPolicy.circuitKeyForCurrentTenant(profileId);
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    /**
+     * Read at most {@code maxBytes}; throw if the stream would exceed the cap (AI-11).
+     */
+    static byte[] readCapped(InputStream stream, int maxBytes) throws IOException {
+        if (stream == null) {
+            return new byte[0];
+        }
+        int cap = Math.max(1, maxBytes);
+        byte[] bytes = stream.readNBytes(cap + 1);
+        if (bytes.length > cap) {
+            throw new IllegalArgumentException("LLM response exceeds " + cap + " bytes");
+        }
+        return bytes;
+    }
+
     /**
      * Strip a single leading/trailing markdown code fence only (does not touch fences in the body).
      */
@@ -510,5 +561,31 @@ public class AiLlmGateway {
             trimmed = trimmed.substring(0, trimmed.length() - 3);
         }
         return trimmed.trim();
+    }
+
+    /**
+     * Incremental helper for streaming: strip a leading {@code ```} fence line once enough
+     * bytes have arrived. Returns {@code null} when more deltas are needed to decide.
+     */
+    static String stripLeadingCodeFenceDelta(String buffered) {
+        if (buffered == null) {
+            return null;
+        }
+        int i = 0;
+        while (i < buffered.length() && Character.isWhitespace(buffered.charAt(i))) {
+            i++;
+        }
+        if (i >= buffered.length()) {
+            return null;
+        }
+        if (!buffered.startsWith("```", i)) {
+            return buffered;
+        }
+        int newline = buffered.indexOf('\n', i);
+        if (newline < 0) {
+            // Incomplete fence opener — wait a little, then give up and emit raw.
+            return buffered.length() - i > 64 ? buffered : null;
+        }
+        return buffered.substring(newline + 1);
     }
 }

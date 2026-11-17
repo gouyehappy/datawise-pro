@@ -47,9 +47,7 @@ public final class TableMigrationRequestPolicy {
             if (watermarkColumn == null || watermarkColumn.isBlank()) {
                 throw new IllegalArgumentException("watermarkColumn is required for INCR_APPEND");
             }
-            if (!watermarkColumn.trim().matches("[A-Za-z0-9_$.]+")) {
-                throw new IllegalArgumentException("watermarkColumn is invalid");
-            }
+            MigrationOrderBySupport.validateWatermarkColumn(watermarkColumn);
         }
     }
 

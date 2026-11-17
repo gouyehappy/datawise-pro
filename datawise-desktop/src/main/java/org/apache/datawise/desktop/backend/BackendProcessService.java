@@ -10,6 +10,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -376,12 +377,13 @@ public final class BackendProcessService {
 
     private void drainAsync(Process proc, Path configDir) {
         Thread t = new Thread(() -> {
-            try (InputStream in = proc.getInputStream()) {
-                byte[] buf = new byte[4096];
-                int n;
-                while ((n = in.read(buf)) >= 0) {
-                    if (n > 0) {
-                        appendLog(configDir, new String(buf, 0, n).trim());
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8)
+            )) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.isBlank()) {
+                        appendLog(configDir, line);
                     }
                 }
             } catch (Exception ignored) {

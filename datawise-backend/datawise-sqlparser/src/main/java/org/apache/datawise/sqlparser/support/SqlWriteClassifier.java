@@ -1,7 +1,6 @@
-package org.apache.datawise.backend.connector.api.support;
+package org.apache.datawise.sqlparser.support;
 
 import org.apache.datawise.sqlparser.SqlTransformOps;
-import org.apache.datawise.sqlparser.support.SqlTextSupport;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.DescribeStatement;
 import net.sf.jsqlparser.statement.ExplainStatement;

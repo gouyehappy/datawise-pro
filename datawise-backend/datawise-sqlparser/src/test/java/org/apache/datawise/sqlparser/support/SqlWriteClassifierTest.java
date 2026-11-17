@@ -1,4 +1,4 @@
-package org.apache.datawise.backend.connector.api.support;
+package org.apache.datawise.sqlparser.support;
 
 import org.junit.jupiter.api.Test;
 
@@ -98,5 +98,12 @@ class SqlWriteClassifierTest {
         assertTrue(SqlWriteClassifier.requiresDangerousSqlConfirmation("WITH x AS (SELECT 1) DELETE FROM t"));
         assertTrue(SqlWriteClassifier.requiresDangerousSqlConfirmation("WITH x AS (SELECT 1) DROP TABLE t"));
         assertFalse(SqlWriteClassifier.requiresDangerousSqlConfirmation("WITH x AS (SELECT 1) SELECT * FROM x"));
+    }
+
+    @Test
+    void failClosedOnCommentObfuscatedWriteKeywords() {
+        // After comment strip: "UPD ATE …" — unparseable as UPDATE; must still require write.
+        assertTrue(SqlWriteClassifier.requiresWriteAccess("UPD/**/ATE t SET a = 1"));
+        assertTrue(SqlWriteClassifier.requiresWriteAccess("DEL/**/ETE FROM t"));
     }
 }

@@ -3,7 +3,7 @@ package org.apache.datawise.backend.service;
 import org.apache.datawise.backend.common.ProductionWriteBlockedException;
 import org.apache.datawise.backend.common.support.ConnectionEnvironmentSupport;
 import org.apache.datawise.backend.configstore.TeamStore;
-import org.apache.datawise.backend.connector.api.support.SqlWriteClassifier;
+import org.apache.datawise.sqlparser.support.SqlWriteClassifier;
 import org.apache.datawise.backend.domain.OutboundEventType;
 import org.apache.datawise.backend.model.ConnectionEntity;
 import org.apache.datawise.backend.model.TeamEntity;

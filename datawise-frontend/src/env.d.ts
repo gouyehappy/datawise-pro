@@ -110,6 +110,7 @@ declare global {
                     }
                 }>
                 pickDirectory: () => Promise<string | null>
+                pickJreHome?: () => Promise<string | null>
                 applyAndRestart: (configDir: string | null) => Promise<boolean>
                 switchWorkspace: (resolvedPath: string | null) => Promise<boolean>
                 removeRecentWorkspace: (resolvedPath: string) => Promise<Array<{

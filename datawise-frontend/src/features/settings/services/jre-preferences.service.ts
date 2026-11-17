@@ -21,6 +21,10 @@ export async function saveJrePreferences(prefs: Partial<JrePreferences>): Promis
 }
 
 export async function browseJreHome(): Promise<string | null> {
+    // Host-approved picker only — setJrePreferences rejects raw customHome strings.
+    if (window.datawise?.config?.pickJreHome) {
+        return window.datawise.config.pickJreHome()
+    }
     if (window.datawise?.config?.pickDirectory) {
         return window.datawise.config.pickDirectory()
     }

@@ -4,14 +4,52 @@ import org.apache.datawise.backend.common.DbType;
 import org.apache.datawise.backend.domain.ConnectionConfig;
 import org.apache.datawise.backend.model.ConnectionEntity;
 
+import java.util.Locale;
+import java.util.Set;
+
 public final class JdbcUrlBuilder {
+
+    /**
+     * Subprotocols already produced by this builder / db-type profiles (DB-15).
+     * Matched as a prefix after {@code jdbc:}; next char must be {@code :}, {@code /}, or {@code ;}.
+     */
+    private static final Set<String> ALLOWED_JDBC_SUBPROTOCOLS = Set.of(
+            "mysql",
+            "mariadb",
+            "postgresql",
+            "oracle:thin",
+            "sqlserver",
+            "db2",
+            "dm",
+            "kingbase8",
+            "oscar",
+            "gbase",
+            "highgo",
+            "sybase:tds",
+            "hive2",
+            "sqlite",
+            "opengauss",
+            "clickhouse",
+            "es",
+            "kylin",
+            "oceanbase",
+            "taos-rs",
+            "trino",
+            "presto",
+            "flink",
+            "cache",
+            "phoenix",
+            "h2",
+            "hsqldb",
+            "gaussdb"
+    );
 
     private JdbcUrlBuilder() {
     }
 
     public static String buildJdbcUrl(ConnectionEntity entity) {
         if (entity.getJdbcUrl() != null && !entity.getJdbcUrl().isBlank()) {
-            return Hive2JdbcUrlSupport.finalizeUrl(entity, entity.getJdbcUrl().trim());
+            return Hive2JdbcUrlSupport.finalizeUrl(entity, requireAllowedCustomJdbcUrl(entity.getJdbcUrl().trim()));
         }
         return buildJdbcUrlWithEndpoint(
                 entity,
@@ -22,9 +60,10 @@ public final class JdbcUrlBuilder {
 
     public static String buildJdbcUrlWithEndpoint(ConnectionEntity entity, String host, int port) {
         if (entity.getJdbcUrl() != null && !entity.getJdbcUrl().isBlank()) {
+            String validated = requireAllowedCustomJdbcUrl(entity.getJdbcUrl().trim());
             return Hive2JdbcUrlSupport.finalizeUrl(
                     entity,
-                    rewriteJdbcUrlHostPort(entity.getJdbcUrl().trim(), host, port)
+                    rewriteJdbcUrlHostPort(validated, host, port)
             );
         }
         DbType dbType = DbType.parse(entity.getDbType());
@@ -45,8 +84,9 @@ public final class JdbcUrlBuilder {
                     + "&serverTimezone=Asia/Shanghai&tinyInt1isBit=false&rewriteBatchedStatements=true&useCompression=true";
         }
         if (DbType.isMysqlProtocol(dbType.id())) {
+            // allowPublicKeyRetrieval stays off by default (DB-07); enable explicitly in advanced JDBC URL if needed.
             return "jdbc:mysql://" + host + ":" + port + "/" + database
-                    + "?sslMode=PREFERRED&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+                    + "?sslMode=REQUIRED&allowPublicKeyRetrieval=false&serverTimezone=UTC";
         }
         if (DbType.KINGBASE.matches(dbType.id())) {
             String db = database.isBlank() ? "test" : database;
@@ -123,6 +163,40 @@ public final class JdbcUrlBuilder {
             }
             default -> throw new IllegalArgumentException("Unsupported db type: " + dbType.id());
         };
+    }
+
+    /**
+     * Whitelist custom {@code jdbc:} schemes already used by DataWise; reject file/ldap/rmi/jndi (DB-15).
+     */
+    static String requireAllowedCustomJdbcUrl(String jdbcUrl) {
+        if (jdbcUrl == null || jdbcUrl.isBlank()) {
+            throw new IllegalArgumentException("JDBC URL is required");
+        }
+        String trimmed = jdbcUrl.trim();
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (!lower.startsWith("jdbc:")) {
+            throw new IllegalArgumentException("JDBC URL must start with jdbc:");
+        }
+        String rest = lower.substring("jdbc:".length());
+        if (rest.startsWith("file:")
+                || rest.startsWith("ldap:")
+                || rest.startsWith("rmi:")
+                || rest.startsWith("jndi:")
+                || rest.startsWith("nio:")) {
+            throw new IllegalArgumentException("JDBC URL scheme is not allowed");
+        }
+        for (String allowed : ALLOWED_JDBC_SUBPROTOCOLS) {
+            if (rest.startsWith(allowed)) {
+                if (rest.length() == allowed.length()) {
+                    return trimmed;
+                }
+                char next = rest.charAt(allowed.length());
+                if (next == ':' || next == '/' || next == ';') {
+                    return trimmed;
+                }
+            }
+        }
+        throw new IllegalArgumentException("JDBC URL scheme is not allowed");
     }
 
     private static String rewriteJdbcUrlHostPort(String jdbcUrl, String host, int port) {

@@ -127,11 +127,11 @@ public final class AiSqlPromptTemplates {
         if (context != null && context.previousSql() != null && !context.previousSql().isBlank()) {
             lines.add("");
             lines.add("Previous analysis SQL (for context):");
-            lines.add(context.previousSql());
+            lines.add(PromptDataSanitizer.block(context.previousSql(), 8_000));
         }
         lines.add("");
         lines.add("The following SQL failed read-only / semantic validation:");
-        lines.add(failedSql != null ? failedSql : "");
+        lines.add(PromptDataSanitizer.block(failedSql, 8_000));
         lines.add("");
         lines.add("Validation error:");
         String safeError = PromptDataSanitizer.block(validationError, 1_000);
@@ -156,14 +156,15 @@ public final class AiSqlPromptTemplates {
         if (context != null && context.previousSql() != null && !context.previousSql().isBlank()) {
             lines.add("");
             lines.add("Previous analysis SQL (for context):");
-            lines.add(context.previousSql());
+            lines.add(PromptDataSanitizer.block(context.previousSql(), 8_000));
         }
         lines.add("");
         lines.add("The following SQL failed when executed against the database:");
-        lines.add(failedSql != null ? failedSql : "");
+        lines.add(PromptDataSanitizer.block(failedSql, 8_000));
         lines.add("");
         lines.add("Database error:");
-        lines.add(executionError != null ? executionError : "unknown error");
+        String safeError = PromptDataSanitizer.block(executionError, 1_000);
+        lines.add(safeError.isEmpty() ? "unknown error" : safeError);
         if (errorLine != null && errorLine > 0) {
             lines.add("Error near SQL line: " + errorLine);
         }

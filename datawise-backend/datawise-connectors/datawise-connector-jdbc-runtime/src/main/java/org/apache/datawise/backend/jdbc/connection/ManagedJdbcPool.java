@@ -10,6 +10,7 @@ import org.apache.datawise.backend.jdbc.error.JdbcConnectionErrors;
 import org.apache.datawise.backend.jdbc.support.JdbcDriverDefaultsProvider;
 import org.apache.datawise.backend.jdbc.support.JdbcDriverLoader;
 import org.apache.datawise.backend.jdbc.support.JdbcPoolSizeResolver;
+import org.apache.datawise.backend.jdbc.support.JdbcUrlRedactor;
 import org.apache.datawise.backend.jdbc.metrics.JdbcPoolMicrometerSupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
@@ -117,7 +118,11 @@ public final class ManagedJdbcPool {
                 dataSource.close();
                 throw new SQLException(JdbcConnectionErrors.toUserMessage(entity, ex), ex);
             }
-            log.info("Created JDBC pool connectionId={} url={}", entity.getId(), jdbcUrl);
+            log.info(
+                    "Created JDBC pool connectionId={} dbType={} url={}",
+                    entity.getId(),
+                    entity.getDbType(),
+                    JdbcUrlRedactor.redactJdbcUrl(jdbcUrl));
             return new ManagedJdbcPool(fingerprint, dataSource);
         } catch (RuntimeException ex) {
             SQLException sqlEx = unwrapSqlException(ex);

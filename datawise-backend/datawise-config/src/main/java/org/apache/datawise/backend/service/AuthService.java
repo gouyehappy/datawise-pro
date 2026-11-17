@@ -87,18 +87,22 @@ public class AuthService {
     }
 
     public LoginResult login(String userName, String password) {
+        return login(userName, password, null);
+    }
+
+    public LoginResult login(String userName, String password, String clientIp) {
         if (!oidcConfigStore.current().localLoginEnabled) {
             throw new IllegalArgumentException("LOCAL_LOGIN_DISABLED");
         }
-        loginAttemptGuard.assertNotLocked(userName);
+        loginAttemptGuard.assertNotLocked(userName, clientIp);
         UserEntity user = userStore.findByUsername(userName.trim())
                 .orElse(null);
         if (user == null || user.isGuest() || user.getPasswordHash() == null
                 || !passwordEncoder.matches(password, user.getPasswordHash())) {
-            loginAttemptGuard.recordFailure(userName);
+            loginAttemptGuard.recordFailure(userName, clientIp);
             throw new IllegalArgumentException("INVALID_CREDENTIALS");
         }
-        loginAttemptGuard.clearFailures(userName);
+        loginAttemptGuard.clearFailures(userName, clientIp);
         invalidateCurrentSessionIfPresent();
         return createSessionForUser(user, "LOCAL");
     }

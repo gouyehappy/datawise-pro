@@ -15,16 +15,27 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Desktop updater (About panel check / download / quit-and-install):
  * check GitHub Releases → download installer asset → quitAndInstall opens/runs it.
  * Current version prefers packaged {@code local_version.json} when present.
+ *
+ * <p>Path traversal on asset names is rejected; download targets must stay under the updates dir.
+ * {@code DATAWISE_GITHUB_REPO} / {@code -Ddatawise.github.repo} are accepted only when they match
+ * {@code owner/repo}. When a release provides a SHA-256 digest (asset {@code digest} or body text),
+ * the downloaded file must match before install/execute.
+ *
+ * <p>TODO(DT-04): add Ed25519 / release-signature verification once signed artifacts ship.
  */
 public final class DesktopUpdaterService {
     /** Build-time fallback when {@code local_version.json} is absent (dev / unpackaged). */
@@ -32,17 +43,35 @@ public final class DesktopUpdaterService {
 
     /**
      * Canonical update channel (must stay stable so installed clients keep receiving Releases).
-     * Override with {@code DATAWISE_GITHUB_REPO} or {@code -Ddatawise.github.repo=owner/name}.
+     * Override with {@code DATAWISE_GITHUB_REPO} or {@code -Ddatawise.github.repo=owner/name}
+     * only when the value matches {@link #GITHUB_SLUG_PATTERN}.
      */
     private static final String DEFAULT_GITHUB_SLUG = "gouyehappy/datawise-cli";
+    private static final Pattern GITHUB_SLUG_PATTERN = Pattern.compile("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$");
+    private static final Pattern BODY_SHA256_PATTERN = Pattern.compile(
+            "(?i)(?:sha[-_ ]?256|checksum)\\s*[:=]\\s*`?([a-f0-9]{64})`?");
 
-    private static String githubSlug() {
-        String env = System.getenv("DATAWISE_GITHUB_REPO");
-        if (env != null && !env.isBlank()) {
-            return env.trim();
+    public static String githubSlug() {
+        String candidate = firstNonBlank(System.getenv("DATAWISE_GITHUB_REPO"),
+                System.getProperty("datawise.github.repo", ""));
+        if (candidate != null && GITHUB_SLUG_PATTERN.matcher(candidate).matches()) {
+            return candidate;
         }
-        String prop = System.getProperty("datawise.github.repo", "").trim();
-        return prop.isEmpty() ? DEFAULT_GITHUB_SLUG : prop;
+        if (candidate != null) {
+            System.err.println("[datawise-desktop] ignoring invalid github repo override; using "
+                    + DEFAULT_GITHUB_SLUG);
+        }
+        return DEFAULT_GITHUB_SLUG;
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a.trim();
+        }
+        if (b != null && !b.isBlank()) {
+            return b.trim();
+        }
+        return null;
     }
 
     private static String releasesApi() {
@@ -60,6 +89,7 @@ public final class DesktopUpdaterService {
     private final AtomicReference<JsonObject> latestRelease = new AtomicReference<>();
     private final AtomicReference<Path> downloadedInstaller = new AtomicReference<>();
     private final AtomicReference<String> downloadedKind = new AtomicReference<>("installer");
+    private final AtomicReference<String> expectedSha256 = new AtomicReference<>();
     private final List<Consumer<JsonObject>> listeners = new CopyOnWriteArrayList<>();
     private volatile boolean notifyOnUpdate = true;
     private volatile boolean autoDownload = false;
@@ -170,10 +200,23 @@ public final class DesktopUpdaterService {
         emitPhase("downloading", latest, 0.0, null);
 
         try {
-            Path dir = DesktopPaths.userDataDir().resolve("updates");
+            Path dir = DesktopPaths.userDataDir().resolve("updates").toAbsolutePath().normalize();
             Files.createDirectories(dir);
-            Path target = dir.resolve(asset.name());
+            Path target = resolveSafeDownloadTarget(dir, asset.name());
             downloadFile(asset.url(), target, latest);
+            String expected = resolveExpectedSha256(release, asset);
+            if (expected != null) {
+                String actual = sha256Hex(target);
+                if (!expected.equalsIgnoreCase(actual)) {
+                    Files.deleteIfExists(target);
+                    expectedSha256.set(null);
+                    return publishError("Update checksum mismatch (SHA-256)");
+                }
+            } else {
+                System.err.println("[datawise-desktop] update asset has no SHA-256 digest; "
+                        + "install will proceed without hash verify (TODO: release signatures)");
+            }
+            expectedSha256.set(expected);
             downloadedInstaller.set(target);
             downloadedKind.set(asset.kind());
             JsonObject status = baseStatus(true, false, null);
@@ -195,6 +238,7 @@ public final class DesktopUpdaterService {
         String kind = downloadedKind.get();
         try {
             if (installer != null && Files.isRegularFile(installer)) {
+                verifyDownloadedIntegrity(installer);
                 String fileName = installer.getFileName().toString();
                 if (DesktopFrontendDistUpdater.isFrontendDistZipName(fileName)) {
                     DesktopFrontendDistUpdater.apply(installer);
@@ -215,8 +259,9 @@ public final class DesktopUpdaterService {
                 }
             }
             if (installer != null && Files.isRegularFile(installer)) {
+                verifyDownloadedIntegrity(installer);
                 String name = installer.getFileName().toString().toLowerCase(Locale.ROOT);
-                String abs = installer.toAbsolutePath().toString();
+                String abs = installer.toAbsolutePath().normalize().toString();
                 if (name.endsWith(".zip")) {
                     openExplorer(installer.getParent());
                     return true;
@@ -229,7 +274,7 @@ public final class DesktopUpdaterService {
                     new ProcessBuilder("xdg-open", abs).start();
                     return true;
                 }
-                // Windows Setup.exe / .msi
+                // Windows Setup.exe / .msi — only after optional SHA-256 gate above.
                 new ProcessBuilder(abs).start();
                 return true;
             }
@@ -312,28 +357,35 @@ public final class DesktopUpdaterService {
             if (!el.isJsonObject()) continue;
             JsonObject obj = el.getAsJsonObject();
             if (!obj.has("name") || !obj.has("browser_download_url")) continue;
-            String name = obj.get("name").getAsString();
+            String rawName = obj.get("name").getAsString();
+            String name;
+            try {
+                name = sanitizeAssetFileName(rawName);
+            } catch (IllegalArgumentException ex) {
+                continue;
+            }
             String url = obj.get("browser_download_url").getAsString();
+            String digest = assetDigestSha256(obj);
             String lower = name.toLowerCase(Locale.ROOT);
             if (DesktopFrontendDistUpdater.isFrontendDistZipName(name)) {
-                frontendDist = new Asset(name, url, "frontend-dist");
+                frontendDist = new Asset(name, url, "frontend-dist", digest);
                 continue;
             }
             if (DesktopServerJarUpdater.isServerJarUpdateName(name)) {
-                serverJar = new Asset(name, url, "server-jar");
+                serverJar = new Asset(name, url, "server-jar", digest);
                 continue;
             }
             if (!lower.contains(osToken) && !isBareInstallerName(lower, osToken)) {
                 continue;
             }
-            Asset asset = new Asset(name, url, "installer");
+            Asset asset = new Asset(name, url, "installer", digest);
             if (isPreferredInstaller(lower, osToken)) {
                 preferredInstaller = asset;
                 // keep scanning for incremental assets
             } else if (isInstallerAsset(lower, osToken) && otherInstaller == null) {
                 otherInstaller = asset;
             } else if (lower.endsWith(".zip") && lower.contains(osToken) && zipFallback == null) {
-                zipFallback = new Asset(name, url, "portable-zip");
+                zipFallback = new Asset(name, url, "portable-zip", digest);
             }
         }
         // Prefer incremental patches over full installer (D-04).
@@ -516,6 +568,109 @@ public final class DesktopUpdaterService {
         return out;
     }
 
-    private record Asset(String name, String url, String kind) {
+    /**
+     * Basename-only asset names; rejects empty, separators, and {@code ..} segments.
+     */
+    static String sanitizeAssetFileName(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalArgumentException("empty_asset_name");
+        }
+        String normalized = raw.trim().replace('\\', '/');
+        int slash = normalized.lastIndexOf('/');
+        String base = slash >= 0 ? normalized.substring(slash + 1) : normalized;
+        // Reject path-segment traversal names only (basename may still contain dots).
+        if (base.isBlank() || ".".equals(base) || "..".equals(base)) {
+            throw new IllegalArgumentException("unsafe_asset_name");
+        }
+        if (base.indexOf('/') >= 0 || base.indexOf('\\') >= 0) {
+            throw new IllegalArgumentException("unsafe_asset_name");
+        }
+        return base;
+    }
+
+    static Path resolveSafeDownloadTarget(Path updatesDir, String assetName) {
+        Path dir = updatesDir.toAbsolutePath().normalize();
+        String safeName = sanitizeAssetFileName(assetName);
+        Path target = dir.resolve(safeName).normalize();
+        if (!target.startsWith(dir)) {
+            throw new IllegalArgumentException("download_path_escape");
+        }
+        return target;
+    }
+
+    private void verifyDownloadedIntegrity(Path installer) throws Exception {
+        String expected = expectedSha256.get();
+        if (expected == null || expected.isBlank()) {
+            return;
+        }
+        String actual = sha256Hex(installer);
+        if (!expected.equalsIgnoreCase(actual)) {
+            throw new IllegalStateException("Update checksum mismatch (SHA-256)");
+        }
+    }
+
+    private static String resolveExpectedSha256(JsonObject release, Asset asset) {
+        if (asset != null && asset.sha256() != null && !asset.sha256().isBlank()) {
+            return asset.sha256().toLowerCase(Locale.ROOT);
+        }
+        if (release == null || !release.has("body") || release.get("body").isJsonNull()) {
+            return null;
+        }
+        String body = release.get("body").getAsString();
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        Matcher matcher = BODY_SHA256_PATTERN.matcher(body);
+        if (matcher.find()) {
+            return matcher.group(1).toLowerCase(Locale.ROOT);
+        }
+        // Also accept a bare 64-hex line mentioning the asset name nearby.
+        if (asset != null && asset.name() != null) {
+            Pattern named = Pattern.compile(
+                    "(?i)" + Pattern.quote(asset.name()) + "[^\\n]{0,120}?([a-f0-9]{64})"
+                            + "|([a-f0-9]{64})[^\\n]{0,120}?" + Pattern.quote(asset.name()));
+            Matcher namedMatcher = named.matcher(body);
+            if (namedMatcher.find()) {
+                String hex = namedMatcher.group(1) != null ? namedMatcher.group(1) : namedMatcher.group(2);
+                return hex.toLowerCase(Locale.ROOT);
+            }
+        }
+        return null;
+    }
+
+    private static String assetDigestSha256(JsonObject assetObj) {
+        if (assetObj == null || !assetObj.has("digest") || assetObj.get("digest").isJsonNull()) {
+            return null;
+        }
+        String digest = assetObj.get("digest").getAsString();
+        if (digest == null || digest.isBlank()) {
+            return null;
+        }
+        digest = digest.trim();
+        int colon = digest.indexOf(':');
+        String algo = colon > 0 ? digest.substring(0, colon).trim() : "sha256";
+        String hex = colon > 0 ? digest.substring(colon + 1).trim() : digest.trim();
+        if (!"sha256".equalsIgnoreCase(algo) && !"sha-256".equalsIgnoreCase(algo)) {
+            return null;
+        }
+        if (!hex.matches("(?i)[a-f0-9]{64}")) {
+            return null;
+        }
+        return hex.toLowerCase(Locale.ROOT);
+    }
+
+    static String sha256Hex(Path file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (InputStream in = Files.newInputStream(file)) {
+            byte[] buf = new byte[64 * 1024];
+            int n;
+            while ((n = in.read(buf)) >= 0) {
+                digest.update(buf, 0, n);
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private record Asset(String name, String url, String kind, String sha256) {
     }
 }

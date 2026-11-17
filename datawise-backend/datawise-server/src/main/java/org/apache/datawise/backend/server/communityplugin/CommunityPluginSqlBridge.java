@@ -1,6 +1,6 @@
 package org.apache.datawise.backend.server.communityplugin;
 
-import org.apache.datawise.backend.connector.api.support.SqlWriteClassifier;
+import org.apache.datawise.sqlparser.support.SqlWriteClassifier;
 import org.apache.datawise.backend.database.sql.SqlService;
 import org.apache.datawise.backend.domain.ExecuteSqlRequest;
 import org.apache.datawise.backend.domain.ExecuteSqlResult;

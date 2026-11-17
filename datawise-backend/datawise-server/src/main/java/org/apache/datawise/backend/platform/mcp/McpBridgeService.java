@@ -11,7 +11,7 @@ import org.apache.datawise.backend.common.pack.AiAccessGate;
 import org.apache.datawise.backend.common.pack.AiTableTagFilter;
 import org.apache.datawise.backend.common.pack.AnalysisCanvasRerun;
 import org.apache.datawise.backend.common.pack.SemanticMetricQuery;
-import org.apache.datawise.backend.connector.api.support.SqlWriteClassifier;
+import org.apache.datawise.sqlparser.support.SqlWriteClassifier;
 import org.apache.datawise.backend.connector.facade.ConnectorFacade;
 import org.apache.datawise.backend.jdbc.support.SqlExecutionTracker;
 import org.apache.datawise.backend.database.drift.SchemaDriftService;

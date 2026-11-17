@@ -36,10 +36,18 @@ public class AiSchemaCache {
             T value = (T) existing.value;
             return value;
         }
-        T loaded = loader.get();
-        entries.put(key, new CacheEntry<>(loaded, now + ttlMs));
-        evictExpired(now);
-        return loaded;
+        // Single-flight: ConcurrentHashMap.compute serializes loaders for the same key.
+        @SuppressWarnings("unchecked")
+        CacheEntry<T> entry = (CacheEntry<T>) entries.compute(key, (ignored, prev) -> {
+            long t = System.currentTimeMillis();
+            if (prev != null && !prev.expired(t)) {
+                return prev;
+            }
+            T loaded = loader.get();
+            return new CacheEntry<>(loaded, t + ttlMs);
+        });
+        evictExpired(System.currentTimeMillis());
+        return entry.value;
     }
 
     public void invalidate(String keyPrefix) {

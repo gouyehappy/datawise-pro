@@ -243,6 +243,7 @@ export default {
         riskLow: 'Low risk: safe to run',
         riskHint: 'Low risk = non-production, WHERE present, affected rows ≤ 200.',
         pendingRunBlocked: 'Destructive SQL pending — submit to run or rollback to cancel',
+        armFailed: 'Failed to prepare destructive SQL confirmation',
         statement: 'Statement',
         copy: 'Copy',
         copied: 'Copied',

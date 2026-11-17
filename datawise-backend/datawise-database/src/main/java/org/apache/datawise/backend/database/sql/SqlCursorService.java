@@ -7,6 +7,7 @@ import org.apache.datawise.backend.common.SqlDeepOffsetException;
 import org.apache.datawise.backend.config.DatawiseQueryProperties;
 import org.apache.datawise.backend.connector.facade.ConnectorFacade;
 import org.apache.datawise.backend.domain.ExecuteSqlResult;
+import org.apache.datawise.backend.jdbc.error.JdbcConnectionErrors;
 import org.apache.datawise.backend.model.ConnectionEntity;
 import org.apache.datawise.backend.service.outbound.OutboundEventSignals;
 import org.springframework.stereotype.Service;
@@ -187,7 +188,7 @@ public class SqlCursorService {
                 entity.getId() != null ? entity.getId() : "",
                 entity.getName() != null ? entity.getName() : "",
                 database != null ? database : "",
-                ex.getMessage() != null ? ex.getMessage() : "",
+                JdbcConnectionErrors.toUserMessage(entity, ex),
                 userId
         );
     }

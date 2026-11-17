@@ -46,7 +46,7 @@ public class JdbcTableDataReader {
             JdbcConnectionAccessor connectionAccessor,
             JdbcPoolProperties poolProperties,
             @Autowired(required = false) SqlPaginationService paginationService,
-            @Value("${datawise.query.timeout-seconds:0}") int queryTimeoutSeconds,
+            @Value("${datawise.query.timeout-seconds:60}") int queryTimeoutSeconds,
             @Value("${datawise.query.max-cursor-offset:100000}") int maxCursorOffset
     ) {
         this.connectionAccessor = connectionAccessor;

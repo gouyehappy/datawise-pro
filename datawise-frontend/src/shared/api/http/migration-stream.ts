@@ -107,29 +107,41 @@ function dispatchMigrationSseBlock(
     const parsed = parseSseBlock(block.trim())
     if (!parsed) return null
 
+    let data: unknown
+    try {
+        data = JSON.parse(parsed.data)
+    } catch {
+        // Single bad event must not tear down the whole migration stream.
+        console.warn('[migration-stream] Skipping malformed SSE event JSON', {
+            event: parsed.event,
+        })
+        handlers.onError?.('Malformed migration SSE event JSON')
+        return null
+    }
+
     if (parsed.event === 'table_start') {
-        handlers.onTableStart(JSON.parse(parsed.data) as TableMigrationTableStartEvent)
+        handlers.onTableStart(data as TableMigrationTableStartEvent)
         return null
     }
     if (parsed.event === 'table_result') {
-        handlers.onTableResult(JSON.parse(parsed.data) as TableMigrationTableResultEvent)
+        handlers.onTableResult(data as TableMigrationTableResultEvent)
         return null
     }
     if (parsed.event === 'batch_progress') {
-        handlers.onBatchProgress?.(JSON.parse(parsed.data) as TableMigrationTableBatchProgressEvent)
+        handlers.onBatchProgress?.(data as TableMigrationTableBatchProgressEvent)
         return null
     }
     if (parsed.event === 'table_phase') {
-        handlers.onTablePhase?.(JSON.parse(parsed.data) as TableMigrationTablePhaseEvent)
+        handlers.onTablePhase?.(data as TableMigrationTablePhaseEvent)
         return null
     }
     if (parsed.event === 'done') {
-        const result = JSON.parse(parsed.data) as TableMigrationBatchResult
+        const result = data as TableMigrationBatchResult
         handlers.onDone(result)
         return result
     }
     if (parsed.event === 'error') {
-        const payload = JSON.parse(parsed.data) as {message?: string}
+        const payload = data as {message?: string}
         handlers.onError?.(payload.message ?? 'Migration failed')
     }
     return null

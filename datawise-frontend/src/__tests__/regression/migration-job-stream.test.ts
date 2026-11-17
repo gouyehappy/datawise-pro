@@ -47,4 +47,31 @@ describe('migration-job-stream', () => {
         const outcome = await consumeMigrationJobSseStreamForTest(encodeMigrationJobSseText(sse), {})
         assert.equal(outcome.view.status, 'paused')
     })
+
+    it('skips malformed JSON events without aborting the stream', async () => {
+        const sse = [
+            'event: job_snapshot',
+            'data: {"id":"job-3","status":"running","tablesPlanned":["users"],"tables":{},"results":[],"createdAt":"2026-06-01T00:00:00Z","updatedAt":"2026-06-01T00:00:01Z"}',
+            '',
+            'event: batch_progress',
+            'data: {not-json',
+            '',
+            'event: job_done',
+            'data: {"id":"job-3","status":"completed","tablesPlanned":["users"],"tables":{},"results":[{"tableName":"users","rowsMigrated":1,"batches":1,"durationMs":10,"status":"success"}],"createdAt":"2026-06-01T00:00:00Z","updatedAt":"2026-06-01T00:00:02Z"}',
+            '',
+        ].join('\n')
+
+        const batches: string[] = []
+        const errors: string[] = []
+
+        const outcome = await consumeMigrationJobSseStreamForTest(encodeMigrationJobSseText(sse), {
+            onBatchProgress: (event) => batches.push(event.tableName),
+            onError: (message) => errors.push(message),
+        })
+
+        assert.deepEqual(batches, [])
+        assert.ok(errors.some((message) => message.includes('Malformed')))
+        assert.equal(outcome.view.status, 'completed')
+        assert.equal(outcome.results.length, 1)
+    })
 })

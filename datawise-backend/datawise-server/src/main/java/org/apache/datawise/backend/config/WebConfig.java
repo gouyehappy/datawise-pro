@@ -28,9 +28,12 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowCredentials(false)
                 .maxAge(3600);
         if (allowlist.isEmpty()) {
-            // Same-origin only (typical cloud SaaS behind one host)
+            // SEC-09: empty patterns = same-origin only (cloud profile default).
+            // Do not register credentialed CORS with wildcards for SaaS.
             return;
         }
+        // Desktop/dev: loopback + app://local only (see AuthSecurityProperties). Credentials OK
+        // because patterns are narrow — never combine allowCredentials with "*" origins.
         registry.addMapping("/**")
                 .allowedOriginPatterns(allowlist.springOriginPatterns())
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")

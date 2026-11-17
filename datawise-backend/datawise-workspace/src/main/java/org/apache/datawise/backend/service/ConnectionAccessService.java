@@ -9,7 +9,7 @@ import org.apache.datawise.backend.model.TeamEntity;
 import org.apache.datawise.backend.model.TeamMemberEntity;
 import org.apache.datawise.backend.common.support.ConnectionAccessLevel;
 import org.apache.datawise.backend.common.support.ConnectionAccessLevelSupport;
-import org.apache.datawise.backend.connector.api.support.SqlWriteClassifier;
+import org.apache.datawise.sqlparser.support.SqlWriteClassifier;
 import org.apache.datawise.backend.common.support.TeamRoleSupport;
 import org.springframework.stereotype.Service;
 

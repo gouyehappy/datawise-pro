@@ -6,7 +6,7 @@ import {
 
 const updateCount = ref(0)
 let timer: ReturnType<typeof setInterval> | null = null
-let started = false
+let subscribers = 0
 
 async function refreshConnectorUpdateCount() {
     try {
@@ -19,16 +19,21 @@ async function refreshConnectorUpdateCount() {
 
 export function useConnectorUpdateBadge() {
     onMounted(() => {
-        if (started) return
-        started = true
+        subscribers += 1
         void refreshConnectorUpdateCount()
-        timer = setInterval(() => {
-            void refreshConnectorUpdateCount()
-        }, 5 * 60_000)
+        if (subscribers === 1) {
+            timer = setInterval(() => {
+                void refreshConnectorUpdateCount()
+            }, 5 * 60_000)
+        }
     })
 
     onUnmounted(() => {
-        // Keep shared timer for app lifetime; AppSideRail stays mounted.
+        subscribers = Math.max(0, subscribers - 1)
+        if (subscribers === 0 && timer != null) {
+            clearInterval(timer)
+            timer = null
+        }
     })
 
     return {

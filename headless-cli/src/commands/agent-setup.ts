@@ -19,6 +19,49 @@ function defaultTargetDir(): string {
     return path.join(os.homedir(), '.agents', 'skills', 'datawise')
 }
 
+/** Allowed roots for --target installs (and subsequent rmSync). */
+function allowedInstallRoots(): string[] {
+    return [
+        path.resolve(path.join(os.homedir(), '.agents', 'skills')),
+        path.resolve(process.cwd()),
+    ]
+}
+
+/**
+ * Restrict recursive deletes to a subdirectory under cwd or known agent dirs.
+ * Refuses filesystem roots and `..` escapes.
+ */
+export function assertSafeInstallTarget(destInput: string): string {
+    const trimmed = destInput.trim()
+    if (!trimmed) {
+        throw new Error('--target must not be empty')
+    }
+    if (trimmed === '/' || /^[A-Za-z]:[\\/]?$/.test(trimmed)) {
+        throw new Error('Refusing --target filesystem root')
+    }
+    if (trimmed.split(/[\\/]/).includes('..')) {
+        throw new Error('Refusing --target path that contains ".."')
+    }
+
+    const dest = path.resolve(trimmed)
+    const root = path.parse(dest).root
+    if (dest === root) {
+        throw new Error('Refusing --target filesystem root')
+    }
+
+    const underAllowed = allowedInstallRoots().some((allowedRoot) => {
+        const rel = path.relative(allowedRoot, dest)
+        return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)
+    })
+    if (!underAllowed) {
+        throw new Error(
+            `Refusing --target outside allowed install roots (${allowedInstallRoots().join(', ')}). ` +
+                'Use a subdirectory under the current working directory or ~/.agents/skills.',
+        )
+    }
+    return dest
+}
+
 function copyDirRecursive(src: string, dest: string): void {
     fs.mkdirSync(dest, {recursive: true})
     for (const entry of fs.readdirSync(src, {withFileTypes: true})) {
@@ -54,7 +97,7 @@ export function registerAgentSetupCommand(program: Command): void {
                 throw new Error(`Skill source not found: ${src}`)
             }
             const dest = options.target?.trim()
-                ? path.resolve(options.target.trim())
+                ? assertSafeInstallTarget(options.target)
                 : defaultTargetDir()
 
             if (fs.existsSync(dest) && dirHasUserEdits(dest, src) && !options.force) {
@@ -75,7 +118,7 @@ export function registerAgentSetupCommand(program: Command): void {
         .action((options: {target?: string}) => {
             const src = resolveRepoSkillsDir()
             const dest = options.target?.trim()
-                ? path.resolve(options.target.trim())
+                ? assertSafeInstallTarget(options.target)
                 : defaultTargetDir()
             const lines = [
                 `source: ${src} (${fs.existsSync(path.join(src, 'SKILL.md')) ? 'ok' : 'missing'})`,

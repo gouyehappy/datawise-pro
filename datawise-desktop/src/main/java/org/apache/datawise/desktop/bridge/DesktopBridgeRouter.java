@@ -19,6 +19,7 @@ import org.apache.datawise.desktop.ui.WindowChromeController;
 import org.apache.datawise.desktop.util.DesktopFsUtil;
 import org.apache.datawise.desktop.util.DesktopGitUtil;
 import org.apache.datawise.desktop.util.DesktopPathSandbox;
+import org.apache.datawise.desktop.util.DesktopRendererTrust;
 import org.apache.datawise.desktop.util.SystemThemeUtil;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
@@ -35,6 +36,9 @@ import java.awt.datatransfer.StringSelection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -51,6 +55,8 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
     private final AtomicReference<CefBrowser> browserRef = new AtomicReference<>();
     private final WindowChromeController chrome;
     private final DesktopPathSandbox pathSandbox = new DesktopPathSandbox();
+    /** JRE homes approved via {@code config:pickJreHome} or already persisted as custom. */
+    private final Set<Path> approvedJreHomes = ConcurrentHashMap.newKeySet();
     private volatile boolean quitting;
     private final Runnable refocusBrowser;
     private volatile CountDownLatch sessionFlushLatch;
@@ -71,6 +77,7 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
                 push("datawise:window:maximize-changed", maximized));
         this.backend.addListener(event -> push("datawise:backend:startup-progress", gson.toJsonTree(event).getAsJsonObject()));
         this.updater.addListener(event -> push("datawise:updater:status", event));
+        seedApprovedJreHomeFromPrefs();
     }
 
     public void bindBrowser(CefBrowser browser) {
@@ -99,6 +106,9 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
             CefQueryCallback callback
     ) {
         try {
+            if (!isTrustedBridgeOrigin(browser, frame)) {
+                throw new IllegalArgumentException("untrusted_renderer_origin");
+            }
             JsonObject body = JsonParser.parseString(request).getAsJsonObject();
             String channel = body.get("channel").getAsString();
             JsonArray args = body.has("args") && body.get("args").isJsonArray()
@@ -107,11 +117,15 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
 
             // Folder picker must NOT block the CEF thread (modal + latch deadlocks / never returns).
             if ("config:pickDirectory".equals(channel)) {
-                pickDirectoryAsync(callback, false);
+                pickDirectoryAsync(callback, false, false);
+                return true;
+            }
+            if ("config:pickJreHome".equals(channel)) {
+                pickDirectoryAsync(callback, false, true);
                 return true;
             }
             if ("fs:selectDirectory".equals(channel)) {
-                pickDirectoryAsync(callback, true);
+                pickDirectoryAsync(callback, true, false);
                 return true;
             }
             if ("fs:selectFile".equals(channel)) {
@@ -131,6 +145,15 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
             callback.success(gson.toJson(err));
         }
         return true;
+    }
+
+    private boolean isTrustedBridgeOrigin(CefBrowser browser, CefFrame frame) {
+        String frameUrl = frame != null ? frame.getURL() : null;
+        if (DesktopRendererTrust.isTrustedRendererUrl(frameUrl)) {
+            return true;
+        }
+        String browserUrl = browser != null ? browser.getURL() : null;
+        return DesktopRendererTrust.isTrustedRendererUrl(browserUrl);
     }
 
     private Object dispatch(String channel, JsonArray args) throws Exception {
@@ -209,6 +232,7 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
                     args.size() > 0 && args.get(0).isJsonObject() ? args.get(0).getAsJsonObject() : new JsonObject()
             );
             case "config:pickDirectory" -> throw new IllegalStateException("handled async");
+            case "config:pickJreHome" -> throw new IllegalStateException("handled async");
             case "config:applyAndRestart" -> {
                 String configDir = argString(args, 0);
                 applyConfigDir(configDir);
@@ -283,7 +307,8 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
             case "fs:rename" -> renamePath(argString(args, 0), argString(args, 1));
             case "fs:delete" -> deletePath(argString(args, 0), argBool(args, 1, false));
             case "fs:openInTerminal" -> openInTerminal(argString(args, 0));
-            case "fs:registerRoot" -> registerRoot(argString(args, 0));
+            case "fs:registerRoot" -> throw new UnsupportedOperationException(
+                    "fs:registerRoot is host-internal only; use fs:selectDirectory");
             case "browser:setZoomLevel" -> {
                 setBrowserZoom(argDouble(args, 0, 0.0));
                 yield true;
@@ -377,24 +402,6 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
         push("datawise:shell:external-uri", payload);
     }
 
-    private JsonObject registerRoot(String pathStr) {
-        JsonObject out = new JsonObject();
-        if (pathStr == null || pathStr.isBlank()) {
-            out.addProperty("ok", false);
-            out.addProperty("error", "empty_path");
-            return out;
-        }
-        try {
-            Path root = pathSandbox.registerRoot(Path.of(pathStr));
-            out.addProperty("ok", true);
-            out.addProperty("path", root.toString());
-        } catch (Exception e) {
-            out.addProperty("ok", false);
-            out.addProperty("error", e.getMessage() == null ? "register_failed" : e.getMessage());
-        }
-        return out;
-    }
-
     private JsonObject revealInExplorer(String pathStr) {
         JsonObject out = new JsonObject();
         if (pathStr == null || pathStr.isBlank()) {
@@ -403,7 +410,8 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
             return out;
         }
         try {
-            DesktopFsUtil.revealInExplorer(Path.of(pathStr));
+            Path path = pathSandbox.requireAllowed(Path.of(pathStr));
+            DesktopFsUtil.revealInExplorer(path);
             out.addProperty("ok", true);
         } catch (Exception e) {
             out.addProperty("ok", false);
@@ -708,6 +716,31 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
         return jre;
     }
 
+    private void seedApprovedJreHomeFromPrefs() {
+        try {
+            JsonObject prefs = effectiveJrePrefs(backend.resolveRuntimeConfigDir());
+            if (prefs.has("customHome") && !prefs.get("customHome").isJsonNull()) {
+                String home = prefs.get("customHome").getAsString();
+                if (home != null && !home.isBlank()) {
+                    approvedJreHomes.add(Path.of(home.trim()).toAbsolutePath().normalize());
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private boolean isApprovedJreHome(String customHome) {
+        if (customHome == null || customHome.isBlank()) {
+            return false;
+        }
+        try {
+            Path normalized = Path.of(customHome.trim()).toAbsolutePath().normalize();
+            return approvedJreHomes.contains(normalized);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private JsonObject setJrePreferences(JsonObject patch) {
         Path configDir = backend.resolveRuntimeConfigDir();
         JsonObject current = effectiveJrePrefs(configDir);
@@ -730,7 +763,19 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
         if (source == null || source.isBlank()) {
             source = "bundled";
         }
-        source = source.trim().toLowerCase();
+        source = source.trim().toLowerCase(Locale.ROOT);
+        if ("custom".equals(source)) {
+            if (customHome == null || customHome.isBlank()) {
+                throw new IllegalArgumentException("custom_jre_home_required");
+            }
+            if (!isApprovedJreHome(customHome)) {
+                throw new IllegalArgumentException("custom_jre_home_not_approved");
+            }
+            customHome = Path.of(customHome.trim()).toAbsolutePath().normalize().toString();
+        } else {
+            // Bundled / system must not carry an arbitrary customHome from the renderer.
+            customHome = null;
+        }
         DesktopPreferencesStore.setJre(source, customHome);
         JsonObject runtimePatch = new JsonObject();
         JsonObject jre = new JsonObject();
@@ -745,10 +790,10 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
         return effectiveJrePrefs(configDir);
     }
 
-    private void pickDirectoryAsync(CefQueryCallback callback, boolean registerAsFilesRoot) {
+    private void pickDirectoryAsync(CefQueryCallback callback, boolean registerAsFilesRoot, boolean approveAsJreHome) {
         SwingUtilities.invokeLater(() -> {
             try {
-                String os = System.getProperty("os.name", "").toLowerCase();
+                String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
                 String path;
                 if (os.contains("mac")) {
                     path = pickDirectoryNative();
@@ -759,8 +804,15 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
                     // Windows/Linux: directory-mode JFileChooser (async; never block CEF thread).
                     path = pickDirectorySwing();
                 }
-                if (registerAsFilesRoot && path != null && !path.isBlank()) {
-                    pathSandbox.registerRoot(Path.of(path));
+                if (path != null && !path.isBlank()) {
+                    Path normalized = Path.of(path).toAbsolutePath().normalize();
+                    path = normalized.toString();
+                    if (registerAsFilesRoot) {
+                        pathSandbox.registerRoot(normalized);
+                    }
+                    if (approveAsJreHome) {
+                        approvedJreHomes.add(normalized);
+                    }
                 }
                 callback.success(gson.toJson(path));
             } catch (Exception e) {

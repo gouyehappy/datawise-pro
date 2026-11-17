@@ -30,19 +30,46 @@ public final class ElasticsearchRestExecutor {
         }
         ArrayNode batch = MAPPER.createArrayNode();
         int lastStatus = 200;
+        int failureCount = 0;
         String lastError = null;
         ElasticsearchRequestRisk.Level worstRisk = ElasticsearchRequestRisk.Level.READ;
         for (ElasticsearchRestRequestParser.ParsedRequest parsed : requests) {
-            ElasticsearchRestResultDto one = executeOne(entity, parsed, System.currentTimeMillis());
+            ElasticsearchRestResultDto one;
+            try {
+                one = executeOne(entity, parsed, System.currentTimeMillis());
+            } catch (Exception ex) {
+                failureCount++;
+                lastError = "request failed: " + ex.getClass().getSimpleName();
+                lastStatus = 500;
+                ObjectNode item = MAPPER.createObjectNode();
+                item.put("method", parsed.method());
+                item.put("path", parsed.path());
+                item.put("status", 500);
+                item.put("risk", ElasticsearchRequestRisk.toApiValue(
+                        ElasticsearchRequestRisk.classify(parsed.method(), parsed.path())));
+                item.put("error", lastError);
+                batch.add(item);
+                ElasticsearchRequestRisk.Level risk = ElasticsearchRequestRisk.classify(parsed.method(), parsed.path());
+                if (risk.ordinal() > worstRisk.ordinal()) {
+                    worstRisk = risk;
+                }
+                continue;
+            }
             ObjectNode item = MAPPER.createObjectNode();
             item.put("method", one.method());
             item.put("path", one.path());
             item.put("status", one.status());
             item.put("risk", one.risk());
             item.put("durationMs", one.durationMs());
-            if (one.error() != null) {
-                item.put("error", one.error());
-                lastError = one.error();
+            if (one.error() != null || one.status() < 200 || one.status() >= 300) {
+                failureCount++;
+                if (one.error() != null) {
+                    item.put("error", one.error());
+                    lastError = one.error();
+                } else {
+                    lastError = "HTTP " + one.status();
+                    item.put("error", lastError);
+                }
             }
             try {
                 item.set("body", MAPPER.readTree(one.rawBody() == null || one.rawBody().isBlank() ? "null" : one.rawBody()));
@@ -57,17 +84,28 @@ public final class ElasticsearchRestExecutor {
             }
         }
         long duration = System.currentTimeMillis() - start;
+        boolean partialFailure = failureCount > 0 && failureCount < requests.size();
+        boolean allFailed = failureCount >= requests.size();
+        int batchStatus = allFailed
+                ? (lastStatus >= 400 ? lastStatus : 500)
+                : (partialFailure ? 207 : lastStatus);
+        String batchError = failureCount == 0
+                ? null
+                : (partialFailure
+                        ? "partialFailure: " + failureCount + " of " + requests.size() + " failed"
+                                + (lastError != null ? "; last=" + lastError : "")
+                        : lastError);
         return new ElasticsearchRestResultDto(
                 "BATCH",
                 "/" + requests.size() + "-requests",
-                lastStatus,
+                batchStatus,
                 ElasticsearchRequestRisk.toApiValue(worstRisk),
                 MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(batch),
                 false,
                 List.of(),
                 List.of(),
                 duration,
-                lastError
+                batchError
         );
     }
 

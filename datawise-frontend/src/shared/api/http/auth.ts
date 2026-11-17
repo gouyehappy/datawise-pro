@@ -118,10 +118,14 @@ function resolveHttpUserProfile(userName: string, isGuest: boolean): AuthUserPro
  */
 export function createHttpAuthApi(): AuthApi {
     return {
-        login: async (userName, userPassword) => {
-            const body = new URLSearchParams({userName, userPassword})
-            return mapLogin(await postForm<LoginWire>(API_PATHS.auth.login, body, {authBypass: true}))
-        },
+        login: async (userName, userPassword) =>
+            mapLogin(
+                await postJson<LoginWire>(
+                    API_PATHS.auth.login,
+                    {userName, userPassword},
+                    {authBypass: true},
+                ),
+            ),
 
         loginAsGuest: async () =>
             mapLogin(

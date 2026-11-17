@@ -25,7 +25,8 @@ public final class AiAnalysisValidateRouter {
             return AiAnalysisGraphKeys.ROUTE_VALIDATE_OK;
         }
         int retryCount = state.value(AiAnalysisGraphKeys.SQL_RETRY_COUNT, 0);
-        if (retryCount <= maxSqlRetries) {
+        // Count is incremented on failure before routing; compare with < to avoid one extra retry.
+        if (retryCount < maxSqlRetries) {
             return AiAnalysisGraphKeys.ROUTE_VALIDATE_RETRY;
         }
         return AiAnalysisGraphKeys.ROUTE_VALIDATE_FAILED;

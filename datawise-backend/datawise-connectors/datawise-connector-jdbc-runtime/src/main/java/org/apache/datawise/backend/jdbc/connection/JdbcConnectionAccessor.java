@@ -5,6 +5,8 @@ import org.apache.datawise.backend.jdbc.support.DatabaseScopeSwitcher;
 import org.apache.datawise.backend.jdbc.support.JdbcConnectionCallback;
 import org.apache.datawise.backend.jdbc.error.JdbcConnectionErrors;
 import org.apache.datawise.backend.jdbc.support.JdbcDriverConnectionFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
@@ -15,6 +17,8 @@ import java.sql.SQLException;
  */
 @Component
 public class JdbcConnectionAccessor {
+
+    private static final Logger log = LoggerFactory.getLogger(JdbcConnectionAccessor.class);
 
     private final JdbcDriverConnectionFactory connectionFactory;
     private final ConnectionActivityRegistry activityRegistry;
@@ -91,7 +95,7 @@ public class JdbcConnectionAccessor {
                 return callback.apply(connection);
             } finally {
                 // Restore pool-borrowed connection so USE/setCatalog does not leak across requests.
-                restoreScope(connection, entity.getDbType(), previousCatalog, previousSchema);
+                restoreScope(connection, entity, previousCatalog, previousSchema);
             }
         }
     }
@@ -112,20 +116,30 @@ public class JdbcConnectionAccessor {
         }
     }
 
-    private static void restoreScope(
+    private void restoreScope(
             Connection connection,
-            String dbType,
+            ConnectionEntity entity,
             String previousCatalog,
             String previousSchema
     ) {
         try {
             if (previousCatalog != null && !previousCatalog.isBlank()) {
-                DatabaseScopeSwitcher.apply(connection, dbType, previousCatalog);
+                DatabaseScopeSwitcher.apply(connection, entity.getDbType(), previousCatalog);
             } else if (previousSchema != null && !previousSchema.isBlank()) {
                 connection.setSchema(previousSchema);
             }
-        } catch (SQLException ignored) {
-            // Best-effort restore; next borrow may still be polluted — prefer eviction on hard failure.
+        } catch (SQLException ex) {
+            log.warn(
+                    "Failed to restore JDBC catalog/schema for connectionId={}; evicting pool: {}",
+                    entity.getId(),
+                    ex.getMessage()
+            );
+            try {
+                connection.close();
+            } catch (SQLException ignored) {
+                // continue with eviction
+            }
+            connectionFactory.evictPool(entity.getId());
         }
     }
 

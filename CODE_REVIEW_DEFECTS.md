@@ -11,16 +11,16 @@
 
 ## 一、状态总览
 
-所有缺陷初始状态为 **待修复**。状态变更后，请同步修改本表与下方明细表，以及配套 CSV。
+状态以本表与配套 CSV 为准；本轮易修项与既有 P0/P1/P2 修复已标为 **已修复**。仍待处理：FE-07 / FE-09 / FE-10 / FE-13。
 
 | 模块 | 总数 | P0 | P1 | P2 | P3 | 待修复 | 修复中 | 已修复 | 已验证 | 暂缓 | 不修复 |
 |------|------|----|----|----|----|--------|--------|--------|--------|------|--------|
-| DataAgent（AI-xx） | 19 | 2 | 4 | 8 | 5 | 19 | 0 | 0 | 0 | 0 | 0 |
-| 安全鉴权（SEC-xx） | 13 | 2 | 2 | 5 | 4 | 13 | 0 | 0 | 0 | 0 | 0 |
-| 连接器/数据库（DB-xx） | 17 | 3 | 2 | 10 | 2 | 17 | 0 | 0 | 0 | 0 | 0 |
-| 前端（FE-xx） | 13 | 0 | 2 | 6 | 5 | 13 | 0 | 0 | 0 | 0 | 0 |
-| 桌面/生态（DT-xx） | 14 | 4 | 0 | 7 | 3 | 14 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | **76** | **11** | **10** | **36** | **19** | **76** | **0** | **0** | **0** | **0** | **0** |
+| DataAgent（AI-xx） | 19 | 2 | 4 | 8 | 5 | 0 | 0 | 19 | 0 | 0 | 0 |
+| 安全鉴权（SEC-xx） | 13 | 2 | 2 | 5 | 4 | 0 | 0 | 13 | 0 | 0 | 0 |
+| 连接器/数据库（DB-xx） | 17 | 3 | 2 | 10 | 2 | 0 | 0 | 17 | 0 | 0 | 0 |
+| 前端（FE-xx） | 13 | 0 | 2 | 6 | 5 | 4 | 0 | 9 | 0 | 0 | 0 |
+| 桌面/生态（DT-xx） | 14 | 4 | 0 | 7 | 3 | 0 | 0 | 14 | 0 | 0 | 0 |
+| **合计** | **76** | **11** | **10** | **36** | **19** | **4** | **0** | **72** | **0** | **0** | **0** |
 
 ## 二、状态定义
 
@@ -43,25 +43,25 @@
 
 | ID | 严重度 | 状态 | 缺陷标题 | 代码位置 |
 |----|--------|------|----------|----------|
-| AI-01 | P0 | 待修复 | 一次性写入授权未与实际执行 SQL 绑定，可"张冠李戴"越权执行 | AgentWriteGrantService.java:63-91 · AiAnalysisGraphRunner.java:88-131 |
-| AI-02 | P0 | 待修复 | skipSqlConfirmation 由客户端可控，可绕过 HITL 与写授权 | AiAnalysisGraphRunner.java:73-75 · AiChatRequest.java:13 · AnalysisCanvasPipelineService.java:57-66 |
-| AI-03 | P1 | 待修复 | 一次性授权消费存在 TOCTOU 竞态，可并发重放 | AgentWriteGrantService.java:68-87 |
-| AI-04 | P1 | 待修复 | LLM 路由 JSON 用 lastIndexOf 贪婪截断，尾部文本吞掉 JSON | AiAnalysisStepRouteService.java:161-169 |
-| AI-05 | P1 | 待修复 | SQL 只读校验用关键词正则，误杀大量合法 SQL | AiSqlSafetyChecker.java:13-18,46 |
-| AI-06 | P2 | 待修复 | Prompt 模板对失败 SQL/错误日志未限长，token 膨胀 | AiSqlPromptTemplates.java:127-134,166 · AiAnalysisPromptTemplates.java:75-80 |
-| AI-07 | P1 | 待修复 | 全局 LLM 熔断器跨租户共享，单个用户坏配置阻断所有用户 | AiLlmCallPolicy.java:25-26,100-130 |
-| AI-08 | P2 | 待修复 | grant Map 无过期/已消费清理，内存泄漏 | AgentWriteGrantService.java:28,56,86-87 |
-| AI-09 | P2 | 待修复 | AiSchemaCache.getOrLoad 非原子，缓存击穿且可覆盖新值 | AiSchemaCache.java:30-43 |
-| AI-10 | P2 | 待修复 | RAG 索引重建 inFlight 判定非原子，可重复重建 | AiKnowledgeIndexRebuildCoordinator.java:51,69 |
-| AI-11 | P2 | 待修复 | LLM 响应体无上限读取，存在 OOM 面 | AiLlmGateway.java:203-209 |
-| AI-12 | P2 | 待修复 | 推理模型兜底可能把思维链当作最终答案 | AiChatCompletionTextExtractor.java:41-55,124-134 |
-| AI-13 | P2 | 待修复 | 重试路由 off-by-one，实际重试次数比配置多一次 | AiAnalysisValidateRouter.java:27-31 · AiAnalysisPythonRouter.java:27-31 |
-| AI-14 | P3 | 待修复 | SQL 规范化强制"行首 SELECT/WITH"，边界脆弱 | AiSqlNormalizer.java:32-72 |
-| AI-15 | P3 | 待修复 | 流式响应未对 delta 去 markdown 代码围栏 | AiLlmGateway.java:355-357,368 |
-| AI-16 | P3 | 待修复 | Python 代码生成 jsonString 转义不完整 | AnalysisPythonGenerator.java:49-54 |
-| AI-17 | P3 | 待修复 | 语义校验在别名无法解析时静默跳过列检查 | AiSqlSemanticChecker.java:96-106 |
-| AI-18 | P3 | 待修复 | checkpoint 旧格式兼容分支数组越界 | AiAnalysisGsonStateSerializer.java:137-145 |
-| AI-19 | P2 | 待修复 | grant issue 与 consume 的会话一致性缺口 | AgentWriteGrantService.java:30-61 |
+| AI-01 | P0 | 已修复 | 一次性写入授权未与实际执行 SQL 绑定，可"张冠李戴"越权执行 | AgentWriteGrantService.java:63-91 · AiAnalysisGraphRunner.java:88-131 |
+| AI-02 | P0 | 已修复 | skipSqlConfirmation 由客户端可控，可绕过 HITL 与写授权 | AiAnalysisGraphRunner.java:73-75 · AiChatRequest.java:13 · AnalysisCanvasPipelineService.java:57-66 |
+| AI-03 | P1 | 已修复 | 一次性授权消费存在 TOCTOU 竞态，可并发重放 | AgentWriteGrantService.java:68-87 |
+| AI-04 | P1 | 已修复 | LLM 路由 JSON 用 lastIndexOf 贪婪截断，尾部文本吞掉 JSON | AiAnalysisStepRouteService.java:161-169 |
+| AI-05 | P1 | 已修复 | SQL 只读校验用关键词正则，误杀大量合法 SQL | AiSqlSafetyChecker.java:13-18,46 |
+| AI-06 | P2 | 已修复 | Prompt 模板对失败 SQL/错误日志未限长，token 膨胀 | AiSqlPromptTemplates.java:127-134,166 · AiAnalysisPromptTemplates.java:75-80 |
+| AI-07 | P1 | 已修复 | 全局 LLM 熔断器跨租户共享，单个用户坏配置阻断所有用户 | AiLlmCallPolicy.java:25-26,100-130 |
+| AI-08 | P2 | 已修复 | grant Map 无过期/已消费清理，内存泄漏 | AgentWriteGrantService.java:28,56,86-87 |
+| AI-09 | P2 | 已修复 | AiSchemaCache.getOrLoad 非原子，缓存击穿且可覆盖新值 | AiSchemaCache.java:30-43 |
+| AI-10 | P2 | 已修复 | RAG 索引重建 inFlight 判定非原子，可重复重建 | AiKnowledgeIndexRebuildCoordinator.java:51,69 |
+| AI-11 | P2 | 已修复 | LLM 响应体无上限读取，存在 OOM 面 | AiLlmGateway.java:203-209 |
+| AI-12 | P2 | 已修复 | 推理模型兜底可能把思维链当作最终答案 | AiChatCompletionTextExtractor.java:41-55,124-134 |
+| AI-13 | P2 | 已修复 | 重试路由 off-by-one，实际重试次数比配置多一次 | AiAnalysisValidateRouter.java:27-31 · AiAnalysisPythonRouter.java:27-31 |
+| AI-14 | P3 | 已修复 | SQL 规范化强制"行首 SELECT/WITH"，边界脆弱 | AiSqlNormalizer.java:32-72 |
+| AI-15 | P3 | 已修复 | 流式响应未对 delta 去 markdown 代码围栏 | AiLlmGateway.java:355-357,368 |
+| AI-16 | P3 | 已修复 | Python 代码生成 jsonString 转义不完整 | AnalysisPythonGenerator.java:49-54 |
+| AI-17 | P3 | 已修复 | 语义校验在别名无法解析时静默跳过列检查 | AiSqlSemanticChecker.java:96-106 |
+| AI-18 | P3 | 已修复 | checkpoint 旧格式兼容分支数组越界 | AiAnalysisGsonStateSerializer.java:137-145 |
+| AI-19 | P2 | 已修复 | grant issue 与 consume 的会话一致性缺口 | AgentWriteGrantService.java:30-61 |
 
 **问题与修复建议**
 
@@ -89,19 +89,19 @@
 
 | ID | 严重度 | 状态 | 缺陷标题 | 代码位置 |
 |----|--------|------|----------|----------|
-| SEC-01 | P0 | 待修复 | 登录密码经 URL query 传递并被访问日志记录为明文 | AuthController.java:49-55 · RequestLoggingFilter.java:177-181,218-227 |
-| SEC-02 | P1 | 待修复 | OIDC 登录成功后 sessionId 经重定向 URL query 传递 | AuthController.java:91-94 |
-| SEC-03 | P1 | 待修复 | SQL 写权限判定依赖关键词黑名单正则，可绕过越权执行 DML/DDL | FeaturePermissionAccess.java:33-35,58-63 · ContentFeatureGateAspect.java:41-44 |
-| SEC-04 | P2 | 待修复 | 登录失败锁定仅按用户名，可被用于锁定任意账号（DoS） | LoginAttemptGuard.java:30-77 |
-| SEC-05 | P0 | 待修复 | 默认 License 签名密钥硬编码于公开配置文件 | application.yml:57 · EntitlementSigningSecretValidator.java:20-21 |
-| SEC-06 | P2 | 待修复 | 社区插件安装接受任意本地文件路径 | CommunityPluginController.java:237-245 |
-| SEC-07 | P2 | 待修复 | 文件会话存储并发 renew/upsert 无锁，读写竞争 | FileSessionStore.java:49-107 |
-| SEC-08 | P2 | 待修复 | JWT id_token 校验缺 nbf/iat/nonce，kid 缺失回退首个 JWKS key | OidcIdTokenVerifier.java:88-108,127-162 |
-| SEC-09 | P2 | 待修复 | CORS 通配 Origin 模式配合 allowCredentials(true) | WebConfig.java:34-37 · AuthSecurityProperties.java:54-60 |
-| SEC-10 | P3 | 待修复 | 部分异常 message 直接回显前端 | GlobalExceptionHandler.java:50-99 |
-| SEC-11 | P3 | 待修复 | WebSocket/UI 仍保留 ?dwSession= 会话 ID 走 URL | WebSocketSessionAuthSupport.java:42-51 · SessionAuthFilter.java:238-246 |
-| SEC-12 | P3 | 待修复 | Secure Cookie 标志由客户端可控的 X-Forwarded-Proto 决定 | SessionAuthFilter.java:281-282 |
-| SEC-13 | P3 | 待修复 | 配置解密失败信息含原始异常文本 | SecretValueCodec.java:90 · OidcAuthService.java:474 |
+| SEC-01 | P0 | 已修复 | 登录密码经 URL query 传递并被访问日志记录为明文 | AuthController.java:49-55 · RequestLoggingFilter.java:177-181,218-227 |
+| SEC-02 | P1 | 已修复 | OIDC 登录成功后 sessionId 经重定向 URL query 传递 | AuthController.java:91-94 |
+| SEC-03 | P1 | 已修复 | SQL 写权限判定依赖关键词黑名单正则，可绕过越权执行 DML/DDL | FeaturePermissionAccess.java:33-35,58-63 · ContentFeatureGateAspect.java:41-44 |
+| SEC-04 | P2 | 已修复 | 登录失败锁定仅按用户名，可被用于锁定任意账号（DoS） | LoginAttemptGuard.java:30-77 |
+| SEC-05 | P0 | 已修复 | 默认 License 签名密钥硬编码于公开配置文件 | application.yml:57 · EntitlementSigningSecretValidator.java:20-21 |
+| SEC-06 | P2 | 已修复 | 社区插件安装接受任意本地文件路径 | CommunityPluginController.java:237-245 |
+| SEC-07 | P2 | 已修复 | 文件会话存储并发 renew/upsert 无锁，读写竞争 | FileSessionStore.java:49-107 |
+| SEC-08 | P2 | 已修复 | JWT id_token 校验缺 nbf/iat/nonce，kid 缺失回退首个 JWKS key | OidcIdTokenVerifier.java:88-108,127-162 |
+| SEC-09 | P2 | 已修复 | CORS 通配 Origin 模式配合 allowCredentials(true) | WebConfig.java:34-37 · AuthSecurityProperties.java:54-60 |
+| SEC-10 | P3 | 已修复 | 部分异常 message 直接回显前端 | GlobalExceptionHandler.java:50-99 |
+| SEC-11 | P3 | 已修复 | WebSocket/UI 仍保留 ?dwSession= 会话 ID 走 URL | WebSocketSessionAuthSupport.java:42-51 · SessionAuthFilter.java:238-246 |
+| SEC-12 | P3 | 已修复 | Secure Cookie 标志由客户端可控的 X-Forwarded-Proto 决定 | SessionAuthFilter.java:281-282 |
+| SEC-13 | P3 | 已修复 | 配置解密失败信息含原始异常文本 | SecretValueCodec.java:90 · OidcAuthService.java:474 |
 
 **问题与修复建议**
 
@@ -123,23 +123,23 @@
 
 | ID | 严重度 | 状态 | 缺陷标题 | 代码位置 |
 |----|--------|------|----------|----------|
-| DB-01 | P0 | 待修复 | 迁移 WHERE 子句黑名单校验后直接字符串拼接，可绕过注入 | MigrationWhereSupport.java:11-41 · SqlTransformOps.java:26-35 |
-| DB-02 | P0 | 待修复 | 迁移水印列与排序列未加引号直接拼入 SQL | MigrationOrderBySupport.java:98-105 · SqlTransformOps.java:37-53,158-171 |
-| DB-03 | P1 | 待修复 | 完整 JDBC URL（含明文密码）回显给用户错误消息 | JdbcErrorMessageFormatter.java:111-133 |
-| DB-04 | P1 | 待修复 | JDBC URL 被写入异常消息与日志 | JdbcConnectionPoolManager.java:209-227 · ClassLoaderDriverDataSource.java:55 |
-| DB-05 | P0 | 待修复 | JDBC 驱动下载坐标未校验，路径穿越/SSRF/无完整性校验 | JdbcMavenCoordinate.java:8-33 · JdbcDriverLoader.java:349-398 |
-| DB-06 | P2 | 待修复 | 默认无查询超时，慢查询可长期占用连接与请求线程 | JdbcStatementExecutor.java:28-34 · QueryOperationBudget.java:22-34 |
-| DB-07 | P2 | 待修复 | MySQL URL 硬编码 allowPublicKeyRetrieval=true | JdbcUrlBuilder.java:47-50 |
-| DB-08 | P2 | 待修复 | Elasticsearch 客户端可全局安装 trust-all 的 X509TrustManager | ElasticsearchRestClient.java:34-40,144-168 |
-| DB-09 | P2 | 待修复 | ES REST 客户端跟随重定向，method/path 来自用户输入 | ElasticsearchRestClient.java:34-36,55-63,76-97 |
-| DB-10 | P2 | 待修复 | 批量写入器擅自切换 autoCommit，破坏共享/手动事务边界 | JdbcPreparedBatchWriter.java:43-54,73-115 |
-| DB-11 | P2 | 待修复 | 连接归还池时 schema/catalog 恢复失败被静默吞掉，跨请求污染 | JdbcConnectionAccessor.java:92-95,115-129 |
-| DB-12 | P2 | 待修复 | 无界读取把最多 10 万行全量载入堆内存 | JdbcResultSetMapper.java:23,32-52 · JdbcTableDataReader.java:286-294 |
-| DB-13 | P2 | 待修复 | 底层 JDBC 原始异常经 "Details:" 回显前端 | JdbcErrorMessageFormatter.java:45-64,78-109 · SqlExecuteService.java:217-229 |
-| DB-14 | P2 | 待修复 | SSH 首次连接默认自动接受主机密钥（TOFU），存在 MITM | SshTunnelProperties.java:12-18 · SshKnownHostsSupport.java:38-56 |
-| DB-15 | P2 | 待修复 | 自定义 JDBC URL 无白名单校验，构成 SSRF 面 | JdbcUrlBuilder.java:12-29,101-108 |
-| DB-16 | P3 | 待修复 | 内存游标读取存在并发竞态，可能返回 null 触发 NPE | MemorySqlResultCursorStore.java:53-68,117-129 |
-| DB-17 | P3 | 待修复 | ES 批量请求部分失败仅记 lastError，整体仍按成功返回 | ElasticsearchRestExecutor.java:31-71 |
+| DB-01 | P0 | 已修复 | 迁移 WHERE 子句黑名单校验后直接字符串拼接，可绕过注入 | MigrationWhereSupport.java:11-41 · SqlTransformOps.java:26-35 |
+| DB-02 | P0 | 已修复 | 迁移水印列与排序列未加引号直接拼入 SQL | MigrationOrderBySupport.java:98-105 · SqlTransformOps.java:37-53,158-171 |
+| DB-03 | P1 | 已修复 | 完整 JDBC URL（含明文密码）回显给用户错误消息 | JdbcErrorMessageFormatter.java:111-133 |
+| DB-04 | P1 | 已修复 | JDBC URL 被写入异常消息与日志 | JdbcConnectionPoolManager.java:209-227 · ClassLoaderDriverDataSource.java:55 |
+| DB-05 | P0 | 已修复 | JDBC 驱动下载坐标未校验，路径穿越/SSRF/无完整性校验 | JdbcMavenCoordinate.java:8-33 · JdbcDriverLoader.java:349-398 |
+| DB-06 | P2 | 已修复 | 默认无查询超时，慢查询可长期占用连接与请求线程 | JdbcStatementExecutor.java:28-34 · QueryOperationBudget.java:22-34 |
+| DB-07 | P2 | 已修复 | MySQL URL 硬编码 allowPublicKeyRetrieval=true | JdbcUrlBuilder.java:47-50 |
+| DB-08 | P2 | 已修复 | Elasticsearch 客户端可全局安装 trust-all 的 X509TrustManager | ElasticsearchRestClient.java:34-40,144-168 |
+| DB-09 | P2 | 已修复 | ES REST 客户端跟随重定向，method/path 来自用户输入 | ElasticsearchRestClient.java:34-36,55-63,76-97 |
+| DB-10 | P2 | 已修复 | 批量写入器擅自切换 autoCommit，破坏共享/手动事务边界 | JdbcPreparedBatchWriter.java:43-54,73-115 |
+| DB-11 | P2 | 已修复 | 连接归还池时 schema/catalog 恢复失败被静默吞掉，跨请求污染 | JdbcConnectionAccessor.java:92-95,115-129 |
+| DB-12 | P2 | 已修复 | 无界读取把最多 10 万行全量载入堆内存 | JdbcResultSetMapper.java:23,32-52 · JdbcTableDataReader.java:286-294 |
+| DB-13 | P2 | 已修复 | 底层 JDBC 原始异常经 "Details:" 回显前端 | JdbcErrorMessageFormatter.java:45-64,78-109 · SqlExecuteService.java:217-229 |
+| DB-14 | P2 | 已修复 | SSH 首次连接默认自动接受主机密钥（TOFU），存在 MITM | SshTunnelProperties.java:12-18 · SshKnownHostsSupport.java:38-56 |
+| DB-15 | P2 | 已修复 | 自定义 JDBC URL 无白名单校验，构成 SSRF 面 | JdbcUrlBuilder.java:12-29,101-108 |
+| DB-16 | P3 | 已修复 | 内存游标读取存在并发竞态，可能返回 null 触发 NPE | MemorySqlResultCursorStore.java:53-68,117-129 |
+| DB-17 | P3 | 已修复 | ES 批量请求部分失败仅记 lastError，整体仍按成功返回 | ElasticsearchRestExecutor.java:31-71 |
 
 **问题与修复建议**
 
@@ -165,18 +165,18 @@
 
 | ID | 严重度 | 状态 | 缺陷标题 | 代码位置 |
 |----|--------|------|----------|----------|
-| FE-01 | P1 | 待修复 | 迁移 SSE 单条畸形事件摧毁整个迁移流 | migration-stream.ts:103-135 · migration-job-stream.ts:70-115 |
-| FE-02 | P2 | 待修复 | saveConsole 的 .then() 无 .catch()，保存失败静默 | useSqlEditorActions.ts:601-605 · workspace.ts:369-418 |
-| FE-03 | P2 | 待修复 | 危险 SQL 确认链路 .then() 无 .catch()，失败静默 | SqlConsoleTab.vue:711-741 |
-| FE-04 | P2 | 待修复 | ai-chat SSE 的 JSON.parse 未容错 | ai-chat-stream.ts:69,81 |
-| FE-05 | P1 | 待修复 | AI 发送存在重复提交竞态，可重复扣减额度 | useAiChatSend.ts:212-248 |
-| FE-06 | P2 | 待修复 | ECharts 实例与 DOM 生命周期失配，option 恢复后白屏 | EchartsPanel.vue:21-30,68-70 |
+| FE-01 | P1 | 已修复 | 迁移 SSE 单条畸形事件摧毁整个迁移流 | migration-stream.ts:103-135 · migration-job-stream.ts:70-115 |
+| FE-02 | P2 | 已修复 | saveConsole 的 .then() 无 .catch()，保存失败静默 | useSqlEditorActions.ts:601-605 · workspace.ts:369-418 |
+| FE-03 | P2 | 已修复 | 危险 SQL 确认链路 .then() 无 .catch()，失败静默 | SqlConsoleTab.vue:711-741 |
+| FE-04 | P2 | 已修复 | ai-chat SSE 的 JSON.parse 未容错 | ai-chat-stream.ts:69,81 |
+| FE-05 | P1 | 已修复 | AI 发送存在重复提交竞态，可重复扣减额度 | useAiChatSend.ts:212-248 |
+| FE-06 | P2 | 已修复 | ECharts 实例与 DOM 生命周期失配，option 恢复后白屏 | EchartsPanel.vue:21-30,68-70 |
 | FE-07 | P2 | 待修复 | 多个巨型组件违反单一职责（最大 2085 行） | SqlConsoleTab.vue:2085 · WelcomeTab.vue:1886 · IntegrationsSettingsPanel.vue:1789 等 |
-| FE-08 | P2 | 待修复 | 终端 WebSocket create() Promise 无超时，永久 pending | websocket-terminal.bridge.ts:81-143 |
+| FE-08 | P2 | 已修复 | 终端 WebSocket create() Promise 无超时，永久 pending | websocket-terminal.bridge.ts:81-143 |
 | FE-09 | P3 | 待修复 | defineAsyncComponent 普遍用 as any 绕过类型检查 | ShortcutPanelDrawer.vue:51,57 · WorkspaceTabs.vue:60 等 |
 | FE-10 | P3 | 待修复 | 模板 v-bind="xxx as any" 绕过绑定类型校验 | DataGridMainViews.vue:22,27 |
-| FE-11 | P3 | 待修复 | 共享定时器永不清理，onUnmounted 空实现 | useConnectorUpdateBadge.ts:8-9,30-32 |
-| FE-12 | P3 | 待修复 | JSON.parse 导入配置无容错 | app-config.service.ts:1068 · elasticsearch-profile.ts:142 · plugin-store.ts:210 |
+| FE-11 | P3 | 已修复 | 共享定时器永不清理，onUnmounted 空实现 | useConnectorUpdateBadge.ts:8-9,30-32 |
+| FE-12 | P3 | 已修复 | JSON.parse 导入配置无容错 | app-config.service.ts:1068 · elasticsearch-profile.ts:142 · plugin-store.ts:210 |
 | FE-13 | P3 | 待修复 | Store 直接暴露可变 ref 供外部修改，巨型 store | ai-chat.ts · app-config-store.ts:1322 |
 
 **问题与修复建议**
@@ -199,20 +199,20 @@
 
 | ID | 严重度 | 状态 | 缺陷标题 | 代码位置 |
 |----|--------|------|----------|----------|
-| DT-01 | P0 | 待修复 | 桥接脚本无条件注入所有主 frame 且无 origin 校验（RCE 根因） | DesktopMainFrame.java:108-125 · DesktopBridgeRouter.java:92-134 · DatawiseDesktopApp.java:172-180 |
-| DT-02 | P0 | 待修复 | fs:registerRoot 无来源校验，路径沙箱形同虚设 | DesktopBridgeRouter.java:286,380-396 · DesktopPathSandbox.java:33-55 |
-| DT-03 | P0 | 待修复 | 自定义 JRE 路径 + 配置重启 = 任意可执行文件启动链 | DesktopBridgeRouter.java:208-210,711-746 · BackendProcessService.java:465-476 |
-| DT-04 | P0 | 待修复 | 更新器下载安装包无签名/哈希校验即执行 | DesktopUpdaterService.java:39-46,274-298,217-235 |
-| DT-05 | P2 | 待修复 | deep link 参数无长度与内容校验，直接推送渲染器 | DeepLinkParser.java:18-57 · DesktopBridgeRouter.java:978-994 |
-| DT-06 | P2 | 待修复 | Windows 协议注册命令用 %1 拼入 cmd.exe /c，URL 未净化 | WindowsProtocolRegistrar.java:31-42 |
-| DT-07 | P2 | 待修复 | CLI --token 命令行参数导致 token 泄露 | headless-cli/src/main.ts:18 · config.ts:18-22 |
-| DT-08 | P2 | 待修复 | MCP API Token 随被覆写的 DATAWISE_API_URL 外发 | datawise-mcp/src/create-server.ts:8-10,45-53 |
-| DT-09 | P2 | 待修复 | 本地静态服务器 CORS 通配且反向代理转发全部认证头 | RendererStaticServer.java:141-142,163-190 |
-| DT-10 | P2 | 待修复 | JSON-RPC sidecar 单条畸形输入导致整个会话终止 | StdioJsonRpcSidecar.java:84-111 · CommunityPluginSidecarSession.java:336 |
-| DT-11 | P2 | 待修复 | agent setup --target 递归删除任意目录，缺少防护 | headless-cli/src/commands/agent-setup.ts:56-67 |
-| DT-12 | P3 | 待修复 | openInTerminal 的 Windows/macOS 分支命令字符串拼接 | DesktopFsUtil.java:242-265 |
-| DT-13 | P3 | 待修复 | copilot-kit 不可信数据进 prompt + 危险命令黑名单可绕过 | composePrompt.ts:16-22 · destructive.ts:2-14 · cards.ts:122-167 |
-| DT-14 | P3 | 待修复 | 后端日志抽取按字节边界解码导致乱码/行错乱 | BackendProcessService.java:377-392 |
+| DT-01 | P0 | 已修复 | 桥接脚本无条件注入所有主 frame 且无 origin 校验（RCE 根因） | DesktopMainFrame.java:108-125 · DesktopBridgeRouter.java:92-134 · DatawiseDesktopApp.java:172-180 |
+| DT-02 | P0 | 已修复 | fs:registerRoot 无来源校验，路径沙箱形同虚设 | DesktopBridgeRouter.java:286,380-396 · DesktopPathSandbox.java:33-55 |
+| DT-03 | P0 | 已修复 | 自定义 JRE 路径 + 配置重启 = 任意可执行文件启动链 | DesktopBridgeRouter.java:208-210,711-746 · BackendProcessService.java:465-476 |
+| DT-04 | P0 | 已修复 | 更新器下载安装包无签名/哈希校验即执行 | DesktopUpdaterService.java:39-46,274-298,217-235 |
+| DT-05 | P2 | 已修复 | deep link 参数无长度与内容校验，直接推送渲染器 | DeepLinkParser.java:18-57 · DesktopBridgeRouter.java:978-994 |
+| DT-06 | P2 | 已修复 | Windows 协议注册命令用 %1 拼入 cmd.exe /c，URL 未净化 | WindowsProtocolRegistrar.java:31-42 |
+| DT-07 | P2 | 已修复 | CLI --token 命令行参数导致 token 泄露 | headless-cli/src/main.ts:18 · config.ts:18-22 |
+| DT-08 | P2 | 已修复 | MCP API Token 随被覆写的 DATAWISE_API_URL 外发 | datawise-mcp/src/create-server.ts:8-10,45-53 |
+| DT-09 | P2 | 已修复 | 本地静态服务器 CORS 通配且反向代理转发全部认证头 | RendererStaticServer.java:141-142,163-190 |
+| DT-10 | P2 | 已修复 | JSON-RPC sidecar 单条畸形输入导致整个会话终止 | StdioJsonRpcSidecar.java:84-111 · CommunityPluginSidecarSession.java:336 |
+| DT-11 | P2 | 已修复 | agent setup --target 递归删除任意目录，缺少防护 | headless-cli/src/commands/agent-setup.ts:56-67 |
+| DT-12 | P3 | 已修复 | openInTerminal 的 Windows/macOS 分支命令字符串拼接 | DesktopFsUtil.java:242-265 |
+| DT-13 | P3 | 已修复 | copilot-kit 不可信数据进 prompt + 危险命令黑名单可绕过 | composePrompt.ts:16-22 · destructive.ts:2-14 · cards.ts:122-167 |
+| DT-14 | P3 | 已修复 | 后端日志抽取按字节边界解码导致乱码/行错乱 | BackendProcessService.java:377-392 |
 
 **问题与修复建议**
 

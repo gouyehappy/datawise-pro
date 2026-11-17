@@ -20,6 +20,7 @@ public final class JdbcPreparedBatchWriter implements JdbcBatchWriter {
     private final List<String> columnKeys;
     private final int batchSize;
     private final boolean transactional;
+    private final boolean previousAutoCommit;
     private int buffered;
 
     public JdbcPreparedBatchWriter(
@@ -41,6 +42,7 @@ public final class JdbcPreparedBatchWriter implements JdbcBatchWriter {
         this.columnKeys = List.copyOf(columnKeys);
         this.batchSize = Math.max(1, batchSize);
         this.statement = connection.prepareStatement(preparedInsertSql);
+        this.previousAutoCommit = connection.getAutoCommit();
         boolean tx;
         try {
             tx = connection.getMetaData().supportsTransactions();
@@ -48,7 +50,7 @@ public final class JdbcPreparedBatchWriter implements JdbcBatchWriter {
             tx = false;
         }
         this.transactional = tx;
-        if (transactional) {
+        if (transactional && previousAutoCommit) {
             connection.setAutoCommit(false);
         }
     }
@@ -107,7 +109,7 @@ public final class JdbcPreparedBatchWriter implements JdbcBatchWriter {
             statement.close();
             if (transactional) {
                 try {
-                    connection.setAutoCommit(true);
+                    connection.setAutoCommit(previousAutoCommit);
                 } catch (SQLException ignored) {
                     // best-effort restore
                 }

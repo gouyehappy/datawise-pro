@@ -42,27 +42,27 @@ class JdbcLoginAttemptStoreTest {
     @Test
     void locksAcrossSharedStoreAfterMaxFailures() {
         for (int i = 0; i < LoginAttemptGuard.MAX_FAILURES; i++) {
-            guard.recordFailure("Alice");
+            guard.recordFailure("Alice", "10.0.0.8");
         }
         IllegalArgumentException locked = assertThrows(
                 IllegalArgumentException.class,
-                () -> guard.assertNotLocked("alice"));
+                () -> guard.assertNotLocked("alice", "10.0.0.8"));
         assertEquals(LoginAttemptGuard.LOGIN_LOCKED, locked.getMessage());
 
         // Second guard instance sharing the same JDBC table still sees the lock.
         LoginAttemptGuard other = new LoginAttemptGuard(new JdbcLoginAttemptStore(new JdbcTemplate(dataSource)));
         IllegalArgumentException stillLocked = assertThrows(
                 IllegalArgumentException.class,
-                () -> other.assertNotLocked("ALICE"));
+                () -> other.assertNotLocked("ALICE", "10.0.0.8"));
         assertEquals(LoginAttemptGuard.LOGIN_LOCKED, stillLocked.getMessage());
     }
 
     @Test
     void clearFailuresRemovesSharedRow() {
         for (int i = 0; i < LoginAttemptGuard.MAX_FAILURES; i++) {
-            guard.recordFailure("bob");
+            guard.recordFailure("bob", "10.0.0.9");
         }
-        guard.clearFailures("bob");
-        guard.assertNotLocked("bob");
+        guard.clearFailures("bob", "10.0.0.9");
+        guard.assertNotLocked("bob", "10.0.0.9");
     }
 }

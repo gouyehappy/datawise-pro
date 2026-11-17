@@ -107,4 +107,17 @@ class AiChatCompletionTextExtractorTest {
         assertFalse(extracted.hasText());
         assertFalse(extracted.usedReasoningFallback());
     }
+
+    @Test
+    void rejectsPureChainOfThoughtReasoningFallback() {
+        String json = """
+                {"choices":[{"message":{
+                  "content":"",
+                  "reasoning_content":"I should think step by step about what the user wants and then decide."
+                }}]}
+                """;
+        AiChatCompletionTextExtractor.Extracted extracted = AiChatCompletionTextExtractor.extract(null, json);
+        assertFalse(extracted.hasText());
+        assertFalse(extracted.usedReasoningFallback());
+    }
 }

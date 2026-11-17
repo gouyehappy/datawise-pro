@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import java.awt.Desktop;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -244,33 +245,48 @@ public final class DesktopFsUtil {
         if (!Files.isDirectory(target)) {
             throw new IOException("not a directory: " + target);
         }
-        String abs = target.toAbsolutePath().normalize().toString();
+        Path absPath = target.toAbsolutePath().normalize();
+        String abs = absPath.toString();
+        File cwd = absPath.toFile();
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("win")) {
-            new ProcessBuilder("cmd.exe", "/c", "start", "cmd.exe", "/k", "cd /d \"" + abs + "\"").start();
+            // Working directory carries the path — avoid embedding abs in a shell string.
+            new ProcessBuilder("cmd.exe", "/c", "start", "cmd.exe", "/k")
+                    .directory(cwd)
+                    .start();
             return;
         }
         if (os.contains("mac")) {
-            String escaped = abs.replace("\\", "\\\\").replace("\"", "\\\"");
-            String script = "tell application \"Terminal\" to do script \"cd \\\"" + escaped + "\\\"\"";
-            new ProcessBuilder("osascript", "-e", script).start();
+            // Pass the directory as an argv item; AppleScript uses quoted form of argv.
+            new ProcessBuilder(
+                    "osascript",
+                    "-e", "on run argv",
+                    "-e", "tell application \"Terminal\" to do script \"cd \" & quoted form of (item 1 of argv)",
+                    "-e", "end run",
+                    abs
+            ).start();
             return;
         }
         List<String[]> candidates = List.of(
                 new String[]{"x-terminal-emulator", "--working-directory", abs},
                 new String[]{"gnome-terminal", "--working-directory", abs},
                 new String[]{"konsole", "--workdir", abs},
-                new String[]{"xfce4-terminal", "--working-directory", abs},
-                new String[]{"xterm", "-e", "bash", "-lc", "cd '" + abs.replace("'", "'\\''") + "'; exec bash"}
+                new String[]{"xfce4-terminal", "--working-directory", abs}
         );
         IOException last = null;
         for (String[] cmd : candidates) {
             try {
-                new ProcessBuilder(cmd).start();
+                new ProcessBuilder(cmd).directory(cwd).start();
                 return;
             } catch (IOException ex) {
                 last = ex;
             }
+        }
+        try {
+            new ProcessBuilder("xterm").directory(cwd).start();
+            return;
+        } catch (IOException ex) {
+            last = ex;
         }
         throw last != null ? last : new IOException("no terminal found");
     }

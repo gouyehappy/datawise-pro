@@ -602,6 +602,8 @@ export function useSqlEditorActions(options: SqlEditorActionsOptions) {
             if (!ok) {
                 notifyActionIssue(t('console.saveFailed'))
             }
+        }).catch((error) => {
+            notifyActionIssue(formatRunError(error) || t('console.saveFailed'))
         })
     }
 

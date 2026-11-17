@@ -1,18 +1,24 @@
 package org.apache.datawise.backend.migration;
 
+import org.apache.datawise.backend.common.DbType;
 import org.apache.datawise.backend.jdbc.support.MigrationWhereSupport;
 import org.apache.datawise.sqlparser.SqlTransformOps;
+import org.apache.datawise.sqlparser.support.IdentifierQuoteSupport;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /** 迁移分页：稳定 ORDER BY 解析与 SQL 拼装（避免 OFFSET 重复读行）。 */
 public final class MigrationOrderBySupport {
 
-    private static final String COLUMN_NAME_PATTERN = "[A-Za-z0-9_$.]+";
+    /** Safe SQL identifier: {@code [A-Za-z_][A-Za-z0-9_$]*} with optional dotted parts. */
+    private static final Pattern SAFE_IDENTIFIER = Pattern.compile(
+            "^[A-Za-z_][A-Za-z0-9_$]*(?:\\.[A-Za-z_][A-Za-z0-9_$]*)*$"
+    );
 
     private MigrationOrderBySupport() {
     }
@@ -56,10 +62,20 @@ public final class MigrationOrderBySupport {
             if (column == null || column.isBlank()) {
                 continue;
             }
-            if (!column.trim().matches(COLUMN_NAME_PATTERN)) {
-                throw new IllegalArgumentException("orderByColumns is invalid: " + column);
-            }
+            requireSafeIdentifier(column.trim(), "orderByColumns");
         }
+    }
+
+    /** Same identifier rules as {@link #validateOrderByColumns(List)}. */
+    public static void validateWatermarkColumn(String watermarkColumn) {
+        if (watermarkColumn == null || watermarkColumn.isBlank()) {
+            return;
+        }
+        requireSafeIdentifier(watermarkColumn.trim(), "watermarkColumn");
+    }
+
+    public static boolean isSafeIdentifier(String identifier) {
+        return identifier != null && SAFE_IDENTIFIER.matcher(identifier.trim()).matches();
     }
 
     public static String buildSignatureSql(
@@ -68,12 +84,14 @@ public final class MigrationOrderBySupport {
                                            String mode,
                                            String watermarkColumn,
                                            List<String> orderByColumns) {
+        validateOrderByColumns(orderByColumns);
         String sql = MigrationWhereSupport.appendWhere(baseSelectSql, whereClause);
         String normalizedMode = normalizeMode(mode);
         if ("INCR_APPEND".equals(normalizedMode)) {
             if (watermarkColumn == null || watermarkColumn.isBlank()) {
                 throw new IllegalArgumentException("watermarkColumn is required for INCR_APPEND");
             }
+            validateWatermarkColumn(watermarkColumn);
             return sql + " /*INCR_APPEND watermark=" + watermarkColumn.trim()
                     + orderBySignatureSuffix(orderByColumns) + "*/";
         }
@@ -90,15 +108,18 @@ public final class MigrationOrderBySupport {
                                            String watermarkColumn,
                                            String lastWatermark,
                                            List<String> orderByColumns) {
+        validateOrderByColumns(orderByColumns);
         String normalizedMode = normalizeMode(mode);
         if ("INCR_APPEND".equals(normalizedMode)) {
             if (watermarkColumn == null || watermarkColumn.isBlank()) {
                 throw new IllegalArgumentException("watermarkColumn is required for INCR_APPEND");
             }
+            validateWatermarkColumn(watermarkColumn);
+            String quotedWatermark = quoteIdentifierParts(watermarkColumn.trim());
             String base = signatureSql;
-            String predicate = watermarkColumn.trim() + " IS NOT NULL";
+            String predicate = quotedWatermark + " IS NOT NULL";
             if (lastWatermark != null && !lastWatermark.isBlank()) {
-                predicate += " AND " + watermarkColumn.trim() + " > " + sqlLiteral(lastWatermark);
+                predicate += " AND " + quotedWatermark + " > " + sqlLiteral(lastWatermark);
             }
             return appendOrderByAsc(SqlTransformOps.appendWhere(base, predicate), orderByColumns);
         }
@@ -116,6 +137,7 @@ public final class MigrationOrderBySupport {
         if (orderByColumns.size() != lastValues.size()) {
             throw new IllegalArgumentException("orderByColumns size mismatch with seek key");
         }
+        validateOrderByColumns(orderByColumns);
         return SqlTransformOps.appendKeysetSeek(sql, orderByColumns, lastValues);
     }
 
@@ -253,7 +275,31 @@ public final class MigrationOrderBySupport {
     }
 
     public static String appendOrderByAsc(String sql, List<String> columns) {
+        validateOrderByColumns(columns);
         return SqlTransformOps.appendOrderByAsc(sql, columns);
+    }
+
+    private static void requireSafeIdentifier(String identifier, String fieldName) {
+        if (!isSafeIdentifier(identifier)) {
+            throw new IllegalArgumentException(fieldName + " is invalid: " + identifier);
+        }
+    }
+
+    /**
+     * Quote each dotted identifier part via dialect helper (MySQL backticks match
+     * {@link SqlTransformOps} AST transforms used on the migration path).
+     */
+    static String quoteIdentifierParts(String identifier) {
+        requireSafeIdentifier(identifier, "identifier");
+        String[] parts = identifier.split("\\.");
+        StringBuilder quoted = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                quoted.append('.');
+            }
+            quoted.append(IdentifierQuoteSupport.quoteIdentifier(parts[i], DbType.MYSQL));
+        }
+        return quoted.toString();
     }
 
     private static String orderBySignatureSuffix(List<String> orderByColumns) {

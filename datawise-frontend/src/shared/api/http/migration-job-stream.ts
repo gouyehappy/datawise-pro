@@ -75,41 +75,53 @@ function dispatchMigrationJobSseBlock(
     const parsed = parseSseBlock(block.trim())
     if (!parsed) return null
 
+    let data: unknown
+    try {
+        data = JSON.parse(parsed.data)
+    } catch {
+        // Single bad event must not tear down the whole migration job stream.
+        console.warn('[migration-job-stream] Skipping malformed SSE event JSON', {
+            event: parsed.event,
+        })
+        handlers.onError?.('Malformed migration SSE event JSON')
+        return latestView
+    }
+
     if (parsed.event === 'job_snapshot') {
-        const view = JSON.parse(parsed.data) as MigrationJobView
+        const view = data as MigrationJobView
         handlers.onJobSnapshot?.(view)
         return view
     }
     if (parsed.event === 'table_start') {
-        handlers.onTableStart?.(JSON.parse(parsed.data) as TableMigrationTableStartEvent)
+        handlers.onTableStart?.(data as TableMigrationTableStartEvent)
         return latestView
     }
     if (parsed.event === 'table_result') {
-        handlers.onTableResult?.(JSON.parse(parsed.data) as TableMigrationTableResultEvent)
+        handlers.onTableResult?.(data as TableMigrationTableResultEvent)
         return latestView
     }
     if (parsed.event === 'batch_progress') {
-        handlers.onBatchProgress?.(JSON.parse(parsed.data) as TableMigrationTableBatchProgressEvent)
+        handlers.onBatchProgress?.(data as TableMigrationTableBatchProgressEvent)
         return latestView
     }
     if (parsed.event === 'table_phase') {
-        handlers.onTablePhase?.(JSON.parse(parsed.data) as TableMigrationTablePhaseEvent)
+        handlers.onTablePhase?.(data as TableMigrationTablePhaseEvent)
         return latestView
     }
     if (parsed.event === 'job_paused') {
-        const view = JSON.parse(parsed.data) as MigrationJobView
+        const view = data as MigrationJobView
         handlers.onJobPaused?.(view)
         handlers.onJobSnapshot?.(view)
         return view
     }
     if (parsed.event === 'job_done') {
-        const view = JSON.parse(parsed.data) as MigrationJobView
+        const view = data as MigrationJobView
         handlers.onJobDone?.(view)
         handlers.onJobSnapshot?.(view)
         return view
     }
     if (parsed.event === 'error') {
-        const payload = JSON.parse(parsed.data) as {message?: string}
+        const payload = data as {message?: string}
         handlers.onError?.(payload.message ?? 'Migration failed')
     }
     return latestView

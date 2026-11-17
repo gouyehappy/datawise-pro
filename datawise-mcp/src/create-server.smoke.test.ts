@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url'
 import {describe, it} from 'node:test'
 import {
     API_TOKEN_HEADER,
+    assertSafeDatawiseApiUrl,
     createDatawiseMcpServer,
     MCP_TOOL_NAMES,
     MCP_VERSION,
@@ -13,6 +14,13 @@ import {
 } from './create-server.js'
 
 describe('datawise-mcp smoke', () => {
+    it('allows loopback DATAWISE_API_URL and rejects remote http', () => {
+        assert.equal(assertSafeDatawiseApiUrl('http://localhost:18421'), 'http://localhost:18421')
+        assert.equal(assertSafeDatawiseApiUrl('http://127.0.0.1:18421/'), 'http://127.0.0.1:18421')
+        assert.throws(() => assertSafeDatawiseApiUrl('http://evil.example'), /loopback|ALLOWLIST/)
+        assert.throws(() => assertSafeDatawiseApiUrl('https://evil.example'), /ALLOWLIST/)
+    })
+
     it('package version matches MCP_VERSION', () => {
         const pkg = JSON.parse(
             readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8'),

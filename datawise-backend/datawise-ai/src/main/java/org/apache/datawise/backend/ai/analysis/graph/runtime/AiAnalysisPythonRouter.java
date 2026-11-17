@@ -25,7 +25,8 @@ public class AiAnalysisPythonRouter {
             return AiAnalysisGraphKeys.ROUTE_PYTHON_OK;
         }
         int retryCount = state.value(AiAnalysisGraphKeys.PYTHON_RETRY_COUNT, 0);
-        if (retryCount <= maxRetries) {
+        // Count is incremented on failure before routing; compare with < to avoid one extra retry.
+        if (retryCount < maxRetries) {
             return AiAnalysisGraphKeys.ROUTE_PYTHON_RETRY;
         }
         return AiAnalysisGraphKeys.ROUTE_PYTHON_FAILED;

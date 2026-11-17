@@ -1,16 +1,17 @@
 package org.apache.datawise.backend.ai.analysis.python;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.datawise.backend.ai.support.AiLlmGateway;
 import org.apache.datawise.backend.ai.support.AiPromptTemplates;
 import org.apache.datawise.backend.ai.domain.AiLlmProfileDto;
 import org.apache.datawise.backend.domain.ExecuteSqlResult;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Map;
-
 @Component
 public class AnalysisPythonGenerator {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final AiLlmGateway aiLlmGateway;
 
@@ -46,10 +47,12 @@ public class AnalysisPythonGenerator {
                 """.formatted(jsonString(prompt));
     }
 
+    /** Jackson JSON string literal — valid in Python and escapes backslash/newline/quotes. */
     private static String jsonString(String value) {
-        if (value == null) {
-            return "''";
+        try {
+            return JSON.writeValueAsString(value == null ? "" : value);
+        } catch (JsonProcessingException ex) {
+            return "\"\"";
         }
-        return "'" + value.replace("'", "\\'") + "'";
     }
 }

@@ -241,8 +241,9 @@ public class CommunityPluginController {
             throw new CommunityPluginException("path is required");
         }
         CommunityPluginInstallPolicy policy = resolveInstallPolicy(Boolean.TRUE.equals(request.allowUnsigned()));
+        Path packagePath = requireAllowedInstallPath(Path.of(request.path()));
         return ApiResponse.ok(CommunityPluginInstallResponseDto.from(
-                installer.installFile(java.nio.file.Path.of(request.path()), policy)));
+                installer.installFile(packagePath, policy)));
     }
 
     @PostMapping(value = "/install-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -731,6 +732,51 @@ public class CommunityPluginController {
             );
         }
         return CommunityPluginInstallPolicy.DEVELOPMENT;
+    }
+
+    /**
+     * SEC-06: install-from-path may only read under community-plugins root, config root, or java.io.tmpdir.
+     */
+    Path requireAllowedInstallPath(Path candidate) {
+        return requireAllowedInstallPath(candidate, installer.rootDir(), System.getProperty("java.io.tmpdir"));
+    }
+
+    static Path requireAllowedInstallPath(Path candidate, Path communityPluginsRoot, String tempDirProperty) {
+        if (candidate == null) {
+            throw new CommunityPluginException("path is required");
+        }
+        try {
+            Path real = resolveExistingOrAbsolute(candidate);
+            Path pluginsRoot = resolveExistingOrAbsolute(communityPluginsRoot);
+            Path configRoot = pluginsRoot.getParent() != null
+                    ? resolveExistingOrAbsolute(pluginsRoot.getParent())
+                    : pluginsRoot;
+            Path tempRoot = resolveExistingOrAbsolute(Path.of(
+                    tempDirProperty != null && !tempDirProperty.isBlank()
+                            ? tempDirProperty
+                            : System.getProperty("java.io.tmpdir")));
+            if (isUnderRoot(real, pluginsRoot) || isUnderRoot(real, configRoot) || isUnderRoot(real, tempRoot)) {
+                return real;
+            }
+            throw new CommunityPluginException(
+                    "Install path must be under community-plugins, config, or temp directories");
+        } catch (CommunityPluginException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new CommunityPluginException("Invalid install path: " + ex.getMessage(), ex);
+        }
+    }
+
+    private static Path resolveExistingOrAbsolute(Path path) throws java.io.IOException {
+        Path absolute = path.toAbsolutePath().normalize();
+        if (Files.exists(absolute)) {
+            return absolute.toRealPath();
+        }
+        return absolute;
+    }
+
+    private static boolean isUnderRoot(Path real, Path root) {
+        return real.startsWith(root);
     }
 
     private static com.fasterxml.jackson.databind.ObjectMapper objectMapper() {

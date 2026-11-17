@@ -33,7 +33,7 @@ npm run build
 | 选项 | 环境变量 | 默认 |
 |------|----------|------|
 | `--server` | `DATAWISE_SERVER` | `http://localhost:18421` |
-| `--token` | `DATAWISE_API_TOKEN` | （必填，除本地校验类命令外） |
+| `--token` / `--token-file` | `DATAWISE_TOKEN`（优先）/ `DATAWISE_API_TOKEN` / `DATAWISE_TOKEN_FILE` | （必填，除本地校验类命令外）。避免把 token 写在命令行；`--token` 会告警 |
 
 任意命令可加 `--json` 输出机器可读结果。
 

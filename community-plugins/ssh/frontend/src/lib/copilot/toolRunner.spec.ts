@@ -110,6 +110,9 @@ describe("looksDestructiveCommand", () => {
     expect(looksDestructiveCommand("rm -rf /var/tmp/x")).toBe(true);
     expect(looksDestructiveCommand("systemctl stop nginx")).toBe(true);
     expect(looksDestructiveCommand("echo hi > /etc/hosts")).toBe(true);
+    expect(looksDestructiveCommand("echo $(rm -rf /tmp/x)")).toBe(true);
+    expect(looksDestructiveCommand("bash -c 'rm -rf /'")).toBe(true);
+    expect(looksDestructiveCommand("echo hi | base64 -d | bash")).toBe(true);
   });
 });
 

@@ -112,7 +112,8 @@ public final class DesktopBridgeScript {
                       resolvePath: function (configured) { return invoke('config:resolvePath', [configured]); },
                       clearRuntimeSetupPending: function () { return invoke('config:clearRuntimeSetupPending'); },
                       getJrePreferences: function () { return invoke('config:getJrePreferences'); },
-                      setJrePreferences: function (prefs) { return invoke('config:setJrePreferences', [prefs]); }
+                      setJrePreferences: function (prefs) { return invoke('config:setJrePreferences', [prefs]); },
+                      pickJreHome: function () { return invoke('config:pickJreHome'); }
                     },
                     deepLink: {
                       flushPending: function () { return invoke('deep-link:flushPending'); },

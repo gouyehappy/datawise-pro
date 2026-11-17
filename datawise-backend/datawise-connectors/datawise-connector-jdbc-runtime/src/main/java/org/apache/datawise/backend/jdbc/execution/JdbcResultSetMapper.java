@@ -19,8 +19,9 @@ public final class JdbcResultSetMapper {
      * Absolute heap-safety ceiling when callers request unbounded reads ({@code maxRows <= 0}).
      * Prefer {@link org.apache.datawise.backend.config.DatawiseQueryProperties#getAbsoluteMaxResultRows()}
      * at the service layer; this constant defends lower JDBC paths.
+     * Kept intentionally below the historical 100k default to limit heap blow-ups on wide rows.
      */
-    public static final int SAFETY_MAX_ROWS = 100_000;
+    public static final int SAFETY_MAX_ROWS = 20_000;
 
     private JdbcResultSetMapper() {
     }

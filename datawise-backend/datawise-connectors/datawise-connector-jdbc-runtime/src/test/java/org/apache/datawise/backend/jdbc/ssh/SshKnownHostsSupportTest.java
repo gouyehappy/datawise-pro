@@ -22,4 +22,9 @@ class SshKnownHostsSupportTest {
         disabled.setStrictHostKeyChecking(false);
         assertEquals("no", SshKnownHostsSupport.strictHostKeyCheckingMode(disabled));
     }
+
+    @Test
+    void acceptNewHostKeysDefaultsToFalse() {
+        assertEquals(false, new SshTunnelProperties().isAcceptNewHostKeys());
+    }
 }

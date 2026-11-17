@@ -36,9 +36,10 @@ class AiAnalysisValidateRouterTest {
 
     @Test
     void routesToFailedAfterMaxRetries() {
+        // Default maxSqlValidationRetries=2; count is pre-incremented on failure, so count==max fails.
         OverAllState state = new OverAllState(java.util.Map.of(
                 AiAnalysisGraphKeys.VALIDATION_OK, false,
-                AiAnalysisGraphKeys.SQL_RETRY_COUNT, 3
+                AiAnalysisGraphKeys.SQL_RETRY_COUNT, 2
         ));
         assertEquals(AiAnalysisGraphKeys.ROUTE_VALIDATE_FAILED, router.route(state));
     }

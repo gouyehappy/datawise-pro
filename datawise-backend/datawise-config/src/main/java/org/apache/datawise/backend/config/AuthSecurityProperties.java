@@ -48,16 +48,22 @@ public class AuthSecurityProperties {
     private List<String> allowedHosts = new ArrayList<>();
 
     /**
-     * Spring CORS {@code allowedOriginPatterns}. Desktop/dev keep loopback + {@code app://};
-     * cloud profile should set empty (same-origin only) or an explicit SaaS frontend list.
+     * Spring CORS {@code allowedOriginPatterns}. Desktop/dev keep loopback + exact {@code app://local}
+     * (no {@code app://*} wildcard — SEC-09). Cloud profile sets empty (same-origin only) or an
+     * explicit SaaS frontend list; never pair {@code allowCredentials(true)} with overly broad patterns.
      */
     private List<String> allowedOriginPatterns = new ArrayList<>(List.of(
             "http://localhost:*",
             "http://127.0.0.1:*",
             "https://localhost:*",
             "https://127.0.0.1:*",
-            "app://local",
-            "app://*"));
+            "app://local"));
+
+    /**
+     * When non-empty, {@code X-Forwarded-Proto} (and related forwarded headers) are trusted only if
+     * the direct peer {@code remoteAddr} matches this list. Empty = never trust client-supplied proto.
+     */
+    private List<String> trustedProxyIps = new ArrayList<>();
 
     public boolean isRequireAuthentication() {
         return requireAuthentication;
@@ -91,6 +97,14 @@ public class AuthSecurityProperties {
         this.allowedOriginPatterns = allowedOriginPatterns != null
                 ? new ArrayList<>(allowedOriginPatterns)
                 : new ArrayList<>();
+    }
+
+    public List<String> getTrustedProxyIps() {
+        return trustedProxyIps;
+    }
+
+    public void setTrustedProxyIps(List<String> trustedProxyIps) {
+        this.trustedProxyIps = trustedProxyIps != null ? new ArrayList<>(trustedProxyIps) : new ArrayList<>();
     }
 
     /** {@code true} when Host enforcement is configured. */

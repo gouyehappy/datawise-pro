@@ -1,5 +1,6 @@
 package org.apache.datawise.desktop.ui;
 
+import org.apache.datawise.desktop.updater.DesktopUpdaterService;
 import org.cef.OS;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
@@ -129,13 +130,10 @@ public final class DesktopMenuBar {
         return item;
     }
 
-    /** Defaults to {@code gouyehappy/datawise-cli}; override via env / {@code -Ddatawise.github.repo}. */
+    /** Defaults to pinned slug; env / sysprop override only when {@code owner/repo} format is valid. */
     private static String resolveGithubRepoUrl() {
-        String env = System.getenv("DATAWISE_GITHUB_REPO");
-        String slug = (env != null && !env.isBlank())
-                ? env.trim()
-                : System.getProperty("datawise.github.repo", "gouyehappy/datawise-cli").trim();
-        return slug.isEmpty() ? "" : "https://github.com/" + slug;
+        String slug = DesktopUpdaterService.githubSlug();
+        return slug == null || slug.isEmpty() ? "" : "https://github.com/" + slug;
     }
 
     private static int menuShortcutMask() {

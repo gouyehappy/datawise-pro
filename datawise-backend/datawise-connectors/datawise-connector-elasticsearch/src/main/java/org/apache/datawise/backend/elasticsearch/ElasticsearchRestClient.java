@@ -2,11 +2,14 @@ package org.apache.datawise.backend.elasticsearch;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -22,6 +25,7 @@ import java.util.Objects;
 /** Minimal Elasticsearch HTTP client (direct or Kibana/OSD console proxy). */
 public final class ElasticsearchRestClient {
 
+    private static final Logger log = LoggerFactory.getLogger(ElasticsearchRestClient.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
     private static final String KIBANA_PROXY_STATUS_HEADER = "x-console-proxy-status-code";
@@ -33,11 +37,40 @@ public final class ElasticsearchRestClient {
         this.config = Objects.requireNonNull(config, "config");
         HttpClient.Builder builder = HttpClient.newBuilder()
                 .connectTimeout(TIMEOUT)
-                .followRedirects(HttpClient.Redirect.NORMAL);
+                // Never follow redirects: path/method come from user input; 302 could leak Authorization.
+                .followRedirects(HttpClient.Redirect.NEVER);
         if (config.insecureSkipTlsVerify()) {
+            requireLoopbackForInsecureTls(config);
+            log.warn(
+                    "Elasticsearch TLS verification disabled (insecureSkipTlsVerify) for {}; Authorization may be exposed to MITM",
+                    config.describeTarget()
+            );
             builder.sslContext(insecureSslContext());
         }
         this.httpClient = builder.build();
+    }
+
+    private static void requireLoopbackForInsecureTls(ElasticsearchConnectionConfig config) {
+        try {
+            URI uri = URI.create(config.clusterBaseUrl());
+            String host = uri.getHost();
+            if (host == null || host.isBlank()) {
+                throw new IllegalArgumentException("insecureSkipTlsVerify requires a loopback Elasticsearch host");
+            }
+            InetAddress address = InetAddress.getByName(host);
+            if (!address.isLoopbackAddress()) {
+                throw new IllegalArgumentException(
+                        "insecureSkipTlsVerify is only allowed for loopback hosts, got: " + host
+                );
+            }
+        } catch (IllegalArgumentException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalArgumentException(
+                    "insecureSkipTlsVerify host check failed: " + ex.getMessage(),
+                    ex
+            );
+        }
     }
 
     public ElasticsearchConnectionConfig config() {

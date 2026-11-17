@@ -85,29 +85,62 @@ public abstract class StdioJsonRpcSidecar {
             if (line.isBlank()) {
                 continue;
             }
-            JsonNode request = mapper.readTree(line);
-            if (!request.has("id")) {
-                continue;
+            try {
+                handleLine(writer, line);
+            } catch (Exception e) {
+                // Bad JSON / unexpected failures must not kill the stdio session.
+                writeParseError(writer, e);
             }
+        }
+    }
+
+    private void handleLine(BufferedWriter writer, String line) throws Exception {
+        JsonNode request;
+        try {
+            request = mapper.readTree(line);
+        } catch (Exception e) {
+            writeParseError(writer, e);
+            return;
+        }
+        if (request == null || !request.has("id")) {
+            return;
+        }
+        ObjectNode response = mapper.createObjectNode();
+        response.put("jsonrpc", "2.0");
+        response.put("id", request.get("id").asLong());
+        try {
+            response.set("result", handle(request.path("method").asText(), request.path("params")));
+        } catch (UnknownMethodException e) {
+            ObjectNode error = response.putObject("error");
+            error.put("code", -32601);
+            error.put("message", e.getMessage());
+        } catch (Exception e) {
+            ObjectNode error = response.putObject("error");
+            error.put("code", -32000);
+            error.put("message", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+        }
+        synchronized (outLock) {
+            writer.write(mapper.writeValueAsString(response));
+            writer.newLine();
+            writer.flush();
+        }
+    }
+
+    private void writeParseError(BufferedWriter writer, Exception e) {
+        try {
             ObjectNode response = mapper.createObjectNode();
             response.put("jsonrpc", "2.0");
-            response.put("id", request.get("id").asLong());
-            try {
-                response.set("result", handle(request.path("method").asText(), request.path("params")));
-            } catch (UnknownMethodException e) {
-                ObjectNode error = response.putObject("error");
-                error.put("code", -32601);
-                error.put("message", e.getMessage());
-            } catch (Exception e) {
-                ObjectNode error = response.putObject("error");
-                error.put("code", -32000);
-                error.put("message", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
-            }
+            response.putNull("id");
+            ObjectNode error = response.putObject("error");
+            error.put("code", -32700);
+            error.put("message", e.getMessage() != null ? e.getMessage() : "Parse error");
             synchronized (outLock) {
                 writer.write(mapper.writeValueAsString(response));
                 writer.newLine();
                 writer.flush();
             }
+        } catch (Exception ignored) {
+            // keep session alive even if error write fails
         }
     }
 

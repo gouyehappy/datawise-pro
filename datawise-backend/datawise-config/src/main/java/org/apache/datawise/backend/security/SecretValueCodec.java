@@ -87,7 +87,10 @@ public class SecretValueCodec {
             try {
                 return referenceResolver.resolve(stored);
             } catch (RuntimeException ex) {
-                log.warn("Failed to resolve secret reference; treating field as unavailable: {}", ex.toString());
+                log.warn(
+                        "Failed to resolve secret reference; treating field as unavailable: {}",
+                        ex.getClass().getName()
+                );
                 return null;
             }
         }
@@ -103,7 +106,7 @@ public class SecretValueCodec {
                         "Failed to decrypt secret(s) (wrong DATAWISE_MASTER_KEY / missing .datawise-master-key, "
                                 + "or corrupted ciphertext); clearing affected fields so the app can start. "
                                 + "Re-enter passwords after startup. Further decrypt failures are suppressed. Cause: {}",
-                        ex.toString());
+                        ex.getClass().getName());
             }
             return null;
         }

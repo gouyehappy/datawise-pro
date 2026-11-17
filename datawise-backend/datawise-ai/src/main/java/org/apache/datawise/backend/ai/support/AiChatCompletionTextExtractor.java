@@ -2,6 +2,8 @@ package org.apache.datawise.backend.ai.support;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -18,9 +20,16 @@ import java.util.regex.Pattern;
  */
 public final class AiChatCompletionTextExtractor {
 
+    private static final Logger log = LoggerFactory.getLogger(AiChatCompletionTextExtractor.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    /** Hard cap so a long chain-of-thought cannot become the "answer". */
+    private static final int MAX_REASONING_FALLBACK_CHARS = 8_192;
     private static final Pattern THINK_BLOCK = Pattern.compile(
             "(?is)<think\\b[^>]*>.*?</think>|<thinking\\b[^>]*>.*?</thinking>"
+    );
+    private static final Pattern ANSWER_LIKE = Pattern.compile(
+            "(?is)(?:^|\\n)\\s*(?:```|SELECT\\b|WITH\\b|INSERT\\b|UPDATE\\b|DELETE\\b|CREATE\\b|"
+                    + "DROP\\b|EXPLAIN\\b|SHOW\\b|import\\s+\\w+|def\\s+\\w+|print\\s*\\(|\\{|\\[)"
     );
     private static final List<String> REASONING_MESSAGE_FIELDS = List.of(
             "reasoning_content",
@@ -42,16 +51,64 @@ public final class AiChatCompletionTextExtractor {
         String content = firstNonBlank(contentFromResponse(response), contentFromJson(rawJson));
         String reasoning = firstNonBlank(reasoningFromResponse(response), reasoningFromJson(rawJson));
         String refusal = firstNonBlank(refusalFromJson(rawJson));
-        String chosen = firstNonBlank(visibleAnswer(content), visibleAnswer(reasoning), content, reasoning);
-        boolean usedReasoning = hasText(chosen)
-                && !hasText(visibleAnswer(content))
-                && !hasText(content)
-                && hasText(reasoning);
+        String contentVisible = visibleAnswer(content);
+        String reasoningFallback = reasoningFallbackCandidate(reasoning);
+        String chosen = firstNonBlank(contentVisible, reasoningFallback);
+        boolean usedReasoning = hasText(chosen) && !hasText(contentVisible) && hasText(reasoningFallback);
+        if (usedReasoning) {
+            log.warn(
+                    "Using reasoning-content fallback as assistant answer (chars={}); prefer models that fill content",
+                    chosen.length()
+            );
+        }
         return new Extracted(
                 chosen == null ? "" : chosen.trim(),
                 usedReasoning,
                 refusal == null ? "" : refusal.trim()
         );
+    }
+
+    /**
+     * Only promote reasoning text when it looks like a concrete answer (SQL/code/JSON),
+     * stays under {@link #MAX_REASONING_FALLBACK_CHARS}, and is not a bare chain-of-thought.
+     */
+    static String reasoningFallbackCandidate(String reasoning) {
+        if (!hasText(reasoning)) {
+            return "";
+        }
+        String visible = visibleAnswer(reasoning);
+        if (!hasText(visible)) {
+            return "";
+        }
+        if (visible.length() > MAX_REASONING_FALLBACK_CHARS) {
+            return "";
+        }
+        if (!looksLikeAnswer(visible)) {
+            return "";
+        }
+        return visible;
+    }
+
+    static boolean looksLikeAnswer(String text) {
+        if (!hasText(text)) {
+            return false;
+        }
+        String trimmed = text.trim();
+        // Short structured snippets are usually the final answer, not CoT prose.
+        if (trimmed.length() <= 256 && !looksLikePureProse(trimmed)) {
+            return true;
+        }
+        return ANSWER_LIKE.matcher(trimmed).find();
+    }
+
+    private static boolean looksLikePureProse(String text) {
+        String lower = text.toLowerCase(Locale.ROOT);
+        return !ANSWER_LIKE.matcher(text).find()
+                && (lower.contains("i should")
+                || lower.contains("i need")
+                || lower.contains("let me")
+                || lower.contains("thinking")
+                || lower.contains("step by step"));
     }
 
     public record Extracted(String text, boolean usedReasoningFallback, String refusal) {

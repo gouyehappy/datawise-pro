@@ -48,9 +48,6 @@ public class AiKnowledgeIndexRebuildCoordinator {
         }
 
         String scopeKey = scopeKey(connectionId, database);
-        if (Boolean.TRUE.equals(inFlight.get(scopeKey))) {
-            return RebuildDecision.inProgress("Rebuild already running for this scope");
-        }
 
         long minIntervalMs = ragProperties.getIndex().getMinRebuildIntervalSeconds() * 1000L;
         long now = System.currentTimeMillis();
@@ -60,13 +57,23 @@ public class AiKnowledgeIndexRebuildCoordinator {
         }
 
         if (!ragProperties.getIndex().isAsyncRebuild()) {
-            lastRebuildEpochMs.put(scopeKey, now);
-            int synced = indexService.rebuildIndex(connectionId, database);
-            return RebuildDecision.completed(synced, "Synced " + synced + " knowledge entries to pgvector");
+            // Synchronous path: still gate on inFlight so a concurrent async rebuild cannot overlap.
+            if (inFlight.putIfAbsent(scopeKey, Boolean.TRUE) != null) {
+                return RebuildDecision.inProgress("Rebuild already running for this scope");
+            }
+            try {
+                lastRebuildEpochMs.put(scopeKey, now);
+                int synced = indexService.rebuildIndex(connectionId, database);
+                return RebuildDecision.completed(synced, "Synced " + synced + " knowledge entries to pgvector");
+            } finally {
+                inFlight.remove(scopeKey);
+            }
         }
 
+        if (inFlight.putIfAbsent(scopeKey, Boolean.TRUE) != null) {
+            return RebuildDecision.inProgress("Rebuild already running for this scope");
+        }
         lastRebuildEpochMs.put(scopeKey, now);
-        inFlight.put(scopeKey, true);
         executor.submit(() -> runRebuild(scopeKey, connectionId, database));
         return RebuildDecision.accepted("Rebuild accepted; running in background");
     }

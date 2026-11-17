@@ -1,6 +1,8 @@
 package org.apache.datawise.backend.ai.support;
 
 import org.apache.datawise.backend.ai.schema.AiSqlSchemaContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -13,6 +15,8 @@ import java.util.Set;
  * 轻量 SQL 语义校验：表引用与列名（基于 DDL）检查。
  */
 public final class AiSqlSemanticChecker {
+
+    private static final Logger log = LoggerFactory.getLogger(AiSqlSemanticChecker.class);
 
     private AiSqlSemanticChecker() {
     }
@@ -97,6 +101,11 @@ public final class AiSqlSemanticChecker {
             String table = AiSqlAliasMap.resolveTable(ref.tableOrAlias(), aliasToTable);
             Set<String> columns = columnIndex.get(table);
             if (columns == null || columns.isEmpty()) {
+                log.warn(
+                        "AI SQL semantic check: unresolved table/alias '{}' for column '{}' — skipping qualified check",
+                        ref.tableOrAlias(),
+                        ref.column()
+                );
                 continue;
             }
             String column = ref.column().toLowerCase(Locale.ROOT);

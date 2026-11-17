@@ -5,7 +5,47 @@ import {fileURLToPath} from 'node:url'
 import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js'
 import {z} from 'zod'
 
-const BASE_URL = (process.env.DATAWISE_API_URL ?? 'http://localhost:18421').replace(/\/$/, '')
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+
+/**
+ * Allow API traffic (and auth headers) only to loopback http(s) or HTTPS hosts listed in
+ * {@code DATAWISE_API_HOST_ALLOWLIST} (comma-separated). Prevents token exfil via a hijacked URL.
+ */
+export function assertSafeDatawiseApiUrl(rawUrl: string): string {
+    const trimmed = rawUrl.trim().replace(/\/$/, '')
+    let url: URL
+    try {
+        url = new URL(trimmed)
+    } catch {
+        throw new Error(`DATAWISE_API_URL is not a valid URL: ${trimmed}`)
+    }
+    const protocol = url.protocol.toLowerCase()
+    const host = (url.hostname || '').toLowerCase()
+    if (!host) {
+        throw new Error('DATAWISE_API_URL must include a host')
+    }
+    const loopback = LOOPBACK_HOSTS.has(host)
+    if (loopback && (protocol === 'http:' || protocol === 'https:')) {
+        return trimmed
+    }
+    if (protocol !== 'https:') {
+        throw new Error(
+            'DATAWISE_API_URL must be loopback http(s) or https:// with a host in DATAWISE_API_HOST_ALLOWLIST',
+        )
+    }
+    const allowlist = (process.env.DATAWISE_API_HOST_ALLOWLIST ?? '')
+        .split(',')
+        .map((part) => part.trim().toLowerCase())
+        .filter(Boolean)
+    if (!allowlist.includes(host)) {
+        throw new Error(
+            `DATAWISE_API_URL host "${host}" is not loopback and not in DATAWISE_API_HOST_ALLOWLIST`,
+        )
+    }
+    return trimmed
+}
+
+const BASE_URL = assertSafeDatawiseApiUrl(process.env.DATAWISE_API_URL ?? 'http://localhost:18421')
 const SESSION_ID = process.env.DATAWISE_SESSION_ID ?? ''
 const API_TOKEN = process.env.DATAWISE_API_TOKEN ?? ''
 

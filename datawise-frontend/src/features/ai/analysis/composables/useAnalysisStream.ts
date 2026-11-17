@@ -202,6 +202,7 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
                     threadId: payload.threadId,
                     checkpointId: payload.checkpointId,
                     sql: payload.sql,
+                    grantId: payload.grantId ?? null,
                 }
                 // Keep the same analysis turn visible while waiting for SQL confirm.
                 const messageId = ensureStreamingMessage(sessionId)
@@ -301,8 +302,8 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
         syncLiveProgress(sessionId)
 
         try {
-            let grantId: string | undefined
-            if (approved) {
+            let grantId: string | undefined = pending.grantId || undefined
+            if (approved && !grantId) {
                 const binding = session?.binding
                 const connectionId = binding?.connectionId
                     || session?.selectedTargetIds?.[0]?.split(':')[0]
@@ -318,6 +319,7 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
                     database: binding?.database,
                     schema: binding?.schema,
                     confirmedSql: pending.sql,
+                    threadId: pending.threadId,
                 })
                 grantId = grant.grantId
             }

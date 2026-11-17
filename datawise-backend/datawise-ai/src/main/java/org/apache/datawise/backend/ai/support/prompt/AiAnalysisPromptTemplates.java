@@ -75,9 +75,10 @@ public final class AiAnalysisPromptTemplates {
         if (failedCode != null && !failedCode.isBlank()) {
             lines.add("");
             lines.add("Previous Python code failed:");
-            lines.add(failedCode);
+            lines.add(PromptDataSanitizer.block(failedCode, 8_000));
             lines.add("Error:");
-            lines.add(errorMessage != null ? errorMessage : "unknown");
+            String safeError = PromptDataSanitizer.block(errorMessage, 1_000);
+            lines.add(safeError.isEmpty() ? "unknown" : safeError);
             lines.add("Fix the code and print actionable analysis to stdout.");
         }
         return String.join("\n", lines);
@@ -93,7 +94,7 @@ public final class AiAnalysisPromptTemplates {
     public static String renderPythonAnalyzeUserPrompt(String prompt, String pythonStdout) {
         return String.join("\n\n", List.of(
                 "User question: " + (prompt != null ? prompt : ""),
-                "Python stdout:\n" + (pythonStdout != null ? pythonStdout : "")));
+                "Python stdout:\n" + PromptDataSanitizer.block(pythonStdout, 8_000)));
     }
 
     public static String renderStepRouteSystemPrompt() {

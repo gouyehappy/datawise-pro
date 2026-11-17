@@ -738,6 +738,11 @@ function executeSql(executableOverride?: unknown, runOptions?: SqlRunOptions) {
           }
           // 低风险已预演：跳过确认直接执行
           executeSql(executableOverride, {...runOptions, skipDangerousCheck: true})
+        }).catch((error) => {
+          disarmDangerousSqlPending()
+          const message = resolveCaughtApiErrorMessage(error) || t('console.dangerousSql.armFailed')
+          workspace.setStatus(message)
+          layout.showErrorToast(message)
         })
         return
       }

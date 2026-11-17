@@ -163,9 +163,14 @@ const desktopApp = isDesktopApp()
 
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
-  const oidcSession = params.get('oidcSession')
-  const oidcError = params.get('oidcError')
-  const oidcUser = params.get('oidcUser')
+  // SEC-02: OIDC session is delivered in the URL fragment (not query) so proxies/Referer
+  // never see the bearer session id. Clear the hash immediately after reading.
+  const hashParams = new URLSearchParams(
+    window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash,
+  )
+  const oidcSession = hashParams.get('oidcSession')
+  const oidcError = hashParams.get('oidcError')
+  const oidcUser = hashParams.get('oidcUser')
   if (oidcError) {
     toast.error(t('auth.oidcFailed', {error: oidcError}))
   } else if (oidcSession) {
@@ -176,10 +181,11 @@ onMounted(async () => {
     }
   }
   if (oidcSession || oidcError || oidcUser) {
-    params.delete('oidcSession')
-    params.delete('oidcError')
-    params.delete('oidcUser')
-    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`
+    hashParams.delete('oidcSession')
+    hashParams.delete('oidcError')
+    hashParams.delete('oidcUser')
+    const nextHash = hashParams.toString()
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${nextHash ? `#${nextHash}` : ''}`
     window.history.replaceState({}, '', next)
   }
 

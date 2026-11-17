@@ -47,14 +47,14 @@ public final class TerminalClientIpSupport {
         return remoteAddr;
     }
 
-    static boolean shouldTrustForwardedHeaders(String remoteAddr, List<String> trustedProxyIps) {
+    public static boolean shouldTrustForwardedHeaders(String remoteAddr, List<String> trustedProxyIps) {
         if (trustedProxyIps == null || trustedProxyIps.isEmpty()) {
             return false;
         }
         return TerminalIpWhitelistSupport.isAllowed(remoteAddr, trustedProxyIps);
     }
 
-    static String normalizeHost(String host) {
+    public static String normalizeHost(String host) {
         if (host == null || host.isBlank()) {
             return null;
         }

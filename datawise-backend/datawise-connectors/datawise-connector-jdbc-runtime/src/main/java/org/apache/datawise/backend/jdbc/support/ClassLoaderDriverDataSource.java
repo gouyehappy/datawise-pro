@@ -52,7 +52,8 @@ public final class ClassLoaderDriverDataSource implements DataSource {
     private Connection connect(Properties properties) throws SQLException {
         Connection connection = driver.connect(jdbcUrl, properties);
         if (connection == null) {
-            throw new SQLException("Driver rejected URL: " + jdbcUrl);
+            // DB-04: never put the raw jdbcUrl (may contain password) into the exception message.
+            throw new SQLException("Driver rejected URL: " + JdbcUrlRedactor.redactJdbcUrl(jdbcUrl));
         }
         return connection;
     }

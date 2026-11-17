@@ -177,7 +177,49 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     private static String requestPath(HttpServletRequest request) {
         String uri = request.getRequestURI();
         String query = request.getQueryString();
-        return query == null || query.isBlank() ? uri : uri + "?" + query;
+        if (query == null || query.isBlank()) {
+            return uri;
+        }
+        return uri + "?" + redactSensitiveQuery(query);
+    }
+
+    /**
+     * Redact password-like query keys so legacy {@code ?userPassword=} never hits access logs.
+     * Package-visible for tests.
+     */
+    static String redactSensitiveQuery(String query) {
+        if (query == null || query.isBlank()) {
+            return query == null ? "" : query;
+        }
+        StringBuilder out = new StringBuilder(query.length());
+        int start = 0;
+        while (start <= query.length()) {
+            int amp = query.indexOf('&', start);
+            String pair = amp < 0 ? query.substring(start) : query.substring(start, amp);
+            if (!pair.isEmpty()) {
+                if (out.length() > 0) {
+                    out.append('&');
+                }
+                int eq = pair.indexOf('=');
+                String rawKey = eq < 0 ? pair : pair.substring(0, eq);
+                String keyForMatch = rawKey;
+                try {
+                    keyForMatch = java.net.URLDecoder.decode(rawKey, StandardCharsets.UTF_8);
+                } catch (IllegalArgumentException ignored) {
+                    // keep raw key
+                }
+                if (SENSITIVE_KEYS.contains(keyForMatch.toLowerCase(Locale.ROOT))) {
+                    out.append(rawKey).append("=***");
+                } else {
+                    out.append(pair);
+                }
+            }
+            if (amp < 0) {
+                break;
+            }
+            start = amp + 1;
+        }
+        return out.toString();
     }
 
     private String readBodyPreview(ContentCachingRequestWrapper request) {
