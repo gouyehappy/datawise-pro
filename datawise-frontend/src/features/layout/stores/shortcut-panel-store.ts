@@ -12,6 +12,7 @@ import {useEditorSettingsStore} from '@/features/settings/stores/editor-settings
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {resolveSharedConnectionRefs} from '@/features/team/services/team-shared-explorer.service'
 import {isGuestOrAnonymousSession} from '@/features/auth/services/user-access-policy'
+import type {ConnectionHealthPreferences} from '@/shared/config/app-config.types'
 
 const EMPTY_EXPLORER_INFO: ExplorerNodeInfo = {
     kind: 'empty',
@@ -80,7 +81,7 @@ export const useShortcutPanelStore = defineStore('shortcut-panel', () => {
         const editorSettings = useEditorSettingsStore()
         const layout = useLayoutStore()
         const notifications = useNotificationStore()
-        const prefs = appConfig.connectionHealthPreferences
+        const prefs = appConfig.connectionHealthPreferences as ConnectionHealthPreferences
         const thresholdMs = editorSettings.settings.slowQueryThresholdMs
         await dispatchSlowQueryAlertIfNeeded(
             saved,

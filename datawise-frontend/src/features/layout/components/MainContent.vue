@@ -3,7 +3,8 @@
  * 主内容区：根据 layout.activeModule 切换数据库三栏 / AI 工作台 / 其它模块页
  * Dock：仅重排 Explorer / Terminal / Shortcut / Workspace 位置，不改面板内部样式。
  */
-import {computed, defineAsyncComponent, ref, watch} from 'vue'
+import {computed, ref, watch} from 'vue'
+import {defineEditionAsyncComponent} from '@/features/pack/define-edition-async-component'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import DatabaseExplorer from '@/features/explorer/components/DatabaseExplorer.vue'
@@ -23,10 +24,9 @@ import {resolveWorkbenchModule} from '@/features/layout/module-registry'
 import {MODULE_PAGE_KEEPALIVE_MAX} from '@/features/layout/services/module-page-keepalive.policy'
 import {useSidePanelResizeBounds, EXPLORER_PANEL_RESIZE_MIN} from '@/core/composables/useSidePanelResizeBounds'
 
-const AiWorkbench = defineAsyncComponent(() =>
-    import.meta.env.VITE_DATAWISE_EDITION === 'standard'
-        ? import('@/features/pack/stubs/AiWorkbenchStub.vue')
-        : import('@/features/ai/AiWorkbench.vue'),
+const AiWorkbench = defineEditionAsyncComponent(
+    () => import('@/features/ai/AiWorkbench.vue'),
+    () => import('@/features/pack/stubs/AiWorkbenchStub.vue'),
 )
 
 const layout = useLayoutStore()

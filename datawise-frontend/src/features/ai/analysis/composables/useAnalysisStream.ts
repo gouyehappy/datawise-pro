@@ -34,6 +34,7 @@ import {
     toAiLlmProfilePayload,
 } from '@/api'
 import {isAbortError} from '@/shared/api/http/ai-analysis-stream'
+import type {AiPreferences} from '@/shared/config/app-config.types'
 
 interface UseAnalysisStreamOptions {
     scrollToBottom: (opts?: {force?: boolean}) => Promise<void>
@@ -240,7 +241,8 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
         sessionId: string,
         analysisContext?: AiAnalysisContextPayload,
     ) {
-        const profile = resolveWorkbenchAiLlmProfile(appConfig.aiPreferences)
+        const aiPrefs = appConfig.aiPreferences as AiPreferences
+        const profile = resolveWorkbenchAiLlmProfile(aiPrefs)
         logAiChatRequest(text, targets.length)
         const started = performance.now()
         const signal = beginStreamSignal()
@@ -254,13 +256,13 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
                     prompt: text,
                     targets: targets.map(toAiDatabaseTargetPayload),
                     llm: toAiLlmProfilePayload(profile),
-                    stepLlms: buildAnalysisStepLlms(appConfig.aiPreferences),
+                    stepLlms: buildAnalysisStepLlms(aiPrefs),
                     analysisContext,
-                    skipSqlConfirmation: appConfig.aiPreferences.skipSqlConfirmation === true,
-                    analysisMode: appConfig.aiPreferences.analysisMode ?? 'smart',
+                    skipSqlConfirmation: aiPrefs.skipSqlConfirmation === true,
+                    analysisMode: aiPrefs.analysisMode ?? 'smart',
                     disabledAnalysisSteps:
-                        (appConfig.aiPreferences.analysisMode ?? 'smart') === 'custom'
-                            ? (appConfig.aiPreferences.disabledAnalysisSteps ?? [])
+                        (aiPrefs.analysisMode ?? 'smart') === 'custom'
+                            ? [...(aiPrefs.disabledAnalysisSteps ?? [])]
                             : [],
                 },
                 buildStreamHandlers(sessionId, started),

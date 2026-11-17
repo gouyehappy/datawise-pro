@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import {computed, defineAsyncComponent, nextTick, ref, watch} from 'vue'
+import {computed, nextTick, ref, watch} from 'vue'
+import {defineEditionAsyncComponent} from '@/features/pack/define-edition-async-component'
 import {useI18n} from 'vue-i18n'
 import {ContextMenuHost} from '@/core/context-menu'
 import TabAddButton from '@/core/components/TabAddButton.vue'
@@ -53,11 +54,10 @@ const props = withDefaults(
 
 const isStandardEdition = import.meta.env.VITE_DATAWISE_EDITION === 'standard'
 
-const FakeDataDialog = defineAsyncComponent((() =>
-    isStandardEdition
-        ? import('@/features/pack/stubs/DatagenFakeDataStub.vue')
-        : import('@/features/workspace/components/FakeDataDialog.vue')
-) as any)
+const FakeDataDialog = defineEditionAsyncComponent(
+    () => import('@/features/workspace/components/FakeDataDialog.vue'),
+    () => import('@/features/pack/stubs/DatagenFakeDataStub.vue'),
+)
 
 const {t} = useI18n()
 const workspace = useWorkspaceStore()

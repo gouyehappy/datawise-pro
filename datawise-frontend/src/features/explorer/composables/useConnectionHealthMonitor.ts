@@ -12,6 +12,7 @@ import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useNotificationStore} from '@/features/layout/stores/notification-store'
+import type {ConnectionHealthPreferences} from '@/shared/config/app-config.types'
 
 /**
  * 定时同步已温热连接池状态，并仅探测「当前已连接」的数据源健康。
@@ -28,7 +29,7 @@ export function useConnectionHealthMonitor() {
     let timer: ReturnType<typeof setInterval> | null = null
 
     function notifyAlerts(before: Record<string, 'ok' | 'error'>) {
-        const prefs = appConfig.connectionHealthPreferences
+        const prefs = appConfig.connectionHealthPreferences as ConnectionHealthPreferences
         if (!prefs) return
         const rows = extractDashboardConnections(explorer.tree, explorer.connectionDisplayHealthById)
         const alerts = collectConnectionHealthAlerts(

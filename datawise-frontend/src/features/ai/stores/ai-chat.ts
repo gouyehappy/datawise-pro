@@ -1,5 +1,5 @@
 import {defineStore} from 'pinia'
-import {computed, ref, watch} from 'vue'
+import {computed, readonly, ref, watch} from 'vue'
 import {
     buildSessionTitle,
     createWelcomeMessages,
@@ -291,8 +291,8 @@ function createAiChatStore(
         }
 
         return {
-            sessions,
-            activeSessionId,
+            sessions: readonly(sessions),
+            activeSessionId: readonly(activeSessionId),
             activeSession,
             sortedSessions,
             ensureInitialized,

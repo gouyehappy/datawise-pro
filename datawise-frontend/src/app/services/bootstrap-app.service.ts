@@ -311,7 +311,7 @@ export async function bootstrapApp(): Promise<void> {
         await useDatasourceCatalogStore().reload().catch(() => undefined)
         await useProjectStore().load().catch(() => {})
         const expandedNodeIds = useAppConfigStore().config.explorer?.expandedNodeIds ?? []
-        await explorer.loadTree({restoreExpandedIds: expandedNodeIds})
+        await explorer.loadTree({restoreExpandedIds: [...expandedNodeIds]})
         const {useWorkspaceStore} = await import('@/features/workspace/stores/workspace')
         const {hydrateDiskBackedTabIfNeeded} = await import(
             '@/features/local-files/services/local-files-tab-hydrate'
@@ -354,7 +354,7 @@ async function bootstrapDesktopDeferredSteps(
     await safeLoad(async () => {
         await useProjectStore().load().catch(() => {})
         const expandedNodeIds = useAppConfigStore().config.explorer?.expandedNodeIds ?? []
-        await explorer.loadTree({restoreExpandedIds: expandedNodeIds})
+        await explorer.loadTree({restoreExpandedIds: [...expandedNodeIds]})
     })
     // Session restore may have hydrated before project files were ready; retry active disk-backed tab.
     await safeLoad(async () => {

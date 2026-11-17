@@ -12,6 +12,7 @@ import {buildTableAskPrompt, requestAiAsk} from '@/features/ai/shared/services/a
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
+import type {AiPreferences} from '@/shared/config/app-config.types'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {usePluginStore} from '@/features/plugin/stores/plugin-store'
 import {useFeaturePermission} from '@/features/auth/composables/useFeaturePermission'
@@ -228,7 +229,7 @@ const {
   getDbType: () => explorer.findNode(props.tab.connectionId ?? '')?.dbType,
   getConnectionLabel: () =>
       explorer.findNode(props.tab.connectionId ?? '')?.label ?? t('common.unnamedConnection'),
-  resolveAiPrefs: () => appConfig.aiPreferences,
+  resolveAiPrefs: () => appConfig.aiPreferences as AiPreferences,
 })
 
 const tableResultSnapshot = computed<QueryResultItem>(() => ({

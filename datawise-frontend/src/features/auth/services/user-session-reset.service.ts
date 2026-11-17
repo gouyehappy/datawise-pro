@@ -11,6 +11,7 @@ import {createDefaultAppConfig} from '@/shared/config/app-config.defaults'
 import {normalizeAppConfig} from '@/shared/config/app-config.service'
 import {readUserId} from '@/shared/auth/session'
 import {syncAiPreferences} from '@/api'
+import type {AiPreferences} from '@/shared/config/app-config.types'
 
 /** 从 auth store 同步 localStorage 命名空间（登录/切换租户等完整会话态已就绪时）。 */
 export function syncAppConfigStorageScopeFromAuth(): void {
@@ -70,7 +71,7 @@ export async function resetUserScopedState(): Promise<void> {
             const {useAiAssistantChatStore, useAiChatStore} = await import('@/features/ai/stores/ai-chat')
             useAiChatStore().reloadForCurrentScope()
             useAiAssistantChatStore().reloadForCurrentScope()
-            syncAiPreferences(appConfig.aiPreferences)
+            syncAiPreferences(appConfig.aiPreferences as AiPreferences)
         }
         if (auth.isGuest) {
             // 访客没有这些服务端数据，清空即可，不再打登录专属接口。

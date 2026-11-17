@@ -7,6 +7,7 @@ import type {WorkspaceTab, DbType} from '@/core/types'
 import type {SqlEditorExpose} from '@datawise/sql-editor'
 import type {QueryResultItem} from '@/features/workspace/types'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
+import type {AiPreferences} from '@/shared/config/app-config.types'
 import {useAiPromptPanel} from '@/features/workspace/composables/useAiPromptPanel'
 import {useAiSqlFix} from '@/features/workspace/composables/useAiSqlFix'
 import {useAiIndexSuggest} from '@/features/workspace/composables/useAiIndexSuggest'
@@ -57,7 +58,7 @@ async function resolveAiSqlRequest() {
     return {
         connectionId: connId,
         database: db,
-        prefs: appConfig.aiPreferences,
+        prefs: appConfig.aiPreferences as AiPreferences,
     }
 }
 
@@ -110,7 +111,7 @@ const {
     getDbType: () => props.dbDialect,
     getConnectionLabel: () => props.sourceLabel || t('common.unnamedConnection'),
     getSelection: () => props.getEditor()?.getSelectedText()?.trim() || selectionSql.value || undefined,
-    resolveAiPrefs: () => appConfig.aiPreferences,
+    resolveAiPrefs: () => appConfig.aiPreferences as AiPreferences,
 })
 
 const {
@@ -125,7 +126,7 @@ const {
     getDatabase: () => props.databaseName,
     getDbType: () => props.dbDialect,
     getConnectionLabel: () => props.sourceLabel || t('common.unnamedConnection'),
-    resolveAiPrefs: () => appConfig.aiPreferences,
+    resolveAiPrefs: () => appConfig.aiPreferences as AiPreferences,
     openConsole: (options) => workspace.openConsole(options),
     buildConsoleTitle: () => t('queryResult.indexSuggestConsoleTitle'),
 })
@@ -141,7 +142,7 @@ const {
     getDatabase: () => props.databaseName,
     getDbType: () => props.dbDialect,
     getConnectionLabel: () => props.sourceLabel || t('common.unnamedConnection'),
-    resolveAiPrefs: () => appConfig.aiPreferences,
+    resolveAiPrefs: () => appConfig.aiPreferences as AiPreferences,
 })
 
 const {
@@ -155,7 +156,7 @@ const {
     getDatabase: () => props.databaseName,
     getDbType: () => props.dbDialect,
     getConnectionLabel: () => props.sourceLabel || t('common.unnamedConnection'),
-    resolveAiPrefs: () => appConfig.aiPreferences,
+    resolveAiPrefs: () => appConfig.aiPreferences as AiPreferences,
 })
 
 const aiContextLabel = computed(

@@ -32,6 +32,7 @@ import {resolveProductionApprovalTeams} from '@/features/team/services/productio
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useAuthStore} from '@/features/auth/stores/auth-store'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
+import type {AiPreferences} from '@/shared/config/app-config.types'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import {
     isGovernancePreviewLimited,
@@ -248,7 +249,7 @@ const {
     getBaselineDdl: () => selectedDdl.value,
     getSelectedTables: () => selectedTables.value,
     getSelectedColumnsByTable: () => selectedColumnsByTable.value,
-    resolveAiPrefs: () => appConfig.aiPreferences,
+    resolveAiPrefs: () => appConfig.aiPreferences as AiPreferences,
 })
 
 const effectiveDdl = computed(() => appliedUpDdl.value ?? selectedDdl.value)

@@ -48,6 +48,7 @@ import {
     buildTeamAiSessionSharePayload,
     serializeTeamAiSessionSharePayload,
 } from '@/features/ai/chat/services/ai-session-share.service'
+import type {AiChatSession} from '@/features/ai/types/session'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import {useAppToast} from '@/features/layout/composables/useAppToast'
@@ -522,7 +523,7 @@ async function shareSessionToTeam(sessionId: string) {
   const session = aiChat.sessions.find((item) => item.id === sessionId)
   if (!session) return
   try {
-    const payload = buildTeamAiSessionSharePayload(session)
+    const payload = buildTeamAiSessionSharePayload(session as AiChatSession)
     await teamStore.shareAiSession(
         teamId,
         session.title,

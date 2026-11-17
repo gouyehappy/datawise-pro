@@ -11,7 +11,7 @@
  * 设置页「导入/导出配置」亦经此 Store。
  */
 import {defineStore} from 'pinia'
-import {computed, ref, toRaw, watch} from 'vue'
+import {computed, readonly, ref, toRaw, watch} from 'vue'
 import type {SettingsSection, ShortcutPanel} from '@/core/types'
 import {currentLocale, hydrateLocaleFromEnvelope, setLocale, type AppLocale} from '@/i18n'
 import {hydrateThemePreferencesFromEnvelope} from '@/shared/config/theme-preferences-storage'
@@ -1245,14 +1245,14 @@ export const useAppConfigStore = defineStore('app-config', () => {
     }
 
     return {
-        config,
-        preferences,
-        aiPreferences,
-        connectionHealthPreferences,
+        config: readonly(config),
+        preferences: readonly(preferences),
+        aiPreferences: readonly(aiPreferences),
+        connectionHealthPreferences: readonly(connectionHealthPreferences),
         patchConnectionHealth,
-        dangerousSqlPreferences,
+        dangerousSqlPreferences: readonly(dangerousSqlPreferences),
         patchDangerousSql,
-        dashboardPreferences,
+        dashboardPreferences: readonly(dashboardPreferences),
         patchDashboardPreferences,
         resetDashboardPreferences,
         defaultLlmProfile,
@@ -1269,7 +1269,7 @@ export const useAppConfigStore = defineStore('app-config', () => {
         shortcutPanelWidth,
         shortcutPanelMaxHeight,
         consoleEditorHeight,
-        showConsoleResultPanel,
+        showConsoleResultPanel: readonly(showConsoleResultPanel),
         sideRailItems,
         shortcutRailItems,
         isSideRailVisible,

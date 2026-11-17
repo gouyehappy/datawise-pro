@@ -46,7 +46,7 @@ function readFromAppConfig(): LocalFilesPreferences {
     try {
         const store = useAppConfigStore()
         if (store.config?.localFiles) {
-            return normalizeLocalFiles(store.config.localFiles)
+            return normalizeLocalFiles(store.config.localFiles as LocalFilesPreferences)
         }
     } catch {
         /* pinia not ready — fall through */

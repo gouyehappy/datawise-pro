@@ -11,16 +11,16 @@
 
 ## 一、状态总览
 
-状态以本表与配套 CSV 为准；本轮易修项与既有 P0/P1/P2 修复已标为 **已修复**。仍待处理：FE-07 / FE-09 / FE-10 / FE-13。
+状态以本表与配套 CSV 为准；本轮易修项与既有 P0/P1/P2 修复已标为 **已修复**。本轮已处理全部剩余前端项（FE-07/09/10/13）；巨型组件已拆分，store 对外只读。
 
 | 模块 | 总数 | P0 | P1 | P2 | P3 | 待修复 | 修复中 | 已修复 | 已验证 | 暂缓 | 不修复 |
 |------|------|----|----|----|----|--------|--------|--------|--------|------|--------|
 | DataAgent（AI-xx） | 19 | 2 | 4 | 8 | 5 | 0 | 0 | 19 | 0 | 0 | 0 |
 | 安全鉴权（SEC-xx） | 13 | 2 | 2 | 5 | 4 | 0 | 0 | 13 | 0 | 0 | 0 |
 | 连接器/数据库（DB-xx） | 17 | 3 | 2 | 10 | 2 | 0 | 0 | 17 | 0 | 0 | 0 |
-| 前端（FE-xx） | 13 | 0 | 2 | 6 | 5 | 4 | 0 | 9 | 0 | 0 | 0 |
+| 前端（FE-xx） | 13 | 0 | 2 | 6 | 5 | 0 | 0 | 13 | 0 | 0 | 0 |
 | 桌面/生态（DT-xx） | 14 | 4 | 0 | 7 | 3 | 0 | 0 | 14 | 0 | 0 | 0 |
-| **合计** | **76** | **11** | **10** | **36** | **19** | **4** | **0** | **72** | **0** | **0** | **0** |
+| **合计** | **76** | **11** | **10** | **36** | **19** | **0** | **0** | **76** | **0** | **0** | **0** |
 
 ## 二、状态定义
 
@@ -171,13 +171,13 @@
 | FE-04 | P2 | 已修复 | ai-chat SSE 的 JSON.parse 未容错 | ai-chat-stream.ts:69,81 |
 | FE-05 | P1 | 已修复 | AI 发送存在重复提交竞态，可重复扣减额度 | useAiChatSend.ts:212-248 |
 | FE-06 | P2 | 已修复 | ECharts 实例与 DOM 生命周期失配，option 恢复后白屏 | EchartsPanel.vue:21-30,68-70 |
-| FE-07 | P2 | 待修复 | 多个巨型组件违反单一职责（最大 2085 行） | SqlConsoleTab.vue:2085 · WelcomeTab.vue:1886 · IntegrationsSettingsPanel.vue:1789 等 |
+| FE-07 | P2 | 已修复 | 多个巨型组件违反单一职责（最大 2085 行） | SqlConsoleTab.vue:2085 · WelcomeTab.vue:1886 · IntegrationsSettingsPanel.vue:1789 等 |
 | FE-08 | P2 | 已修复 | 终端 WebSocket create() Promise 无超时，永久 pending | websocket-terminal.bridge.ts:81-143 |
-| FE-09 | P3 | 待修复 | defineAsyncComponent 普遍用 as any 绕过类型检查 | ShortcutPanelDrawer.vue:51,57 · WorkspaceTabs.vue:60 等 |
-| FE-10 | P3 | 待修复 | 模板 v-bind="xxx as any" 绕过绑定类型校验 | DataGridMainViews.vue:22,27 |
+| FE-09 | P3 | 已修复 | defineAsyncComponent 普遍用 as any 绕过类型检查 | ShortcutPanelDrawer.vue:51,57 · WorkspaceTabs.vue:60 等 |
+| FE-10 | P3 | 已修复 | 模板 v-bind="xxx as any" 绕过绑定类型校验 | DataGridMainViews.vue:22,27 |
 | FE-11 | P3 | 已修复 | 共享定时器永不清理，onUnmounted 空实现 | useConnectorUpdateBadge.ts:8-9,30-32 |
 | FE-12 | P3 | 已修复 | JSON.parse 导入配置无容错 | app-config.service.ts:1068 · elasticsearch-profile.ts:142 · plugin-store.ts:210 |
-| FE-13 | P3 | 待修复 | Store 直接暴露可变 ref 供外部修改，巨型 store | ai-chat.ts · app-config-store.ts:1322 |
+| FE-13 | P3 | 已修复 | Store 直接暴露可变 ref 供外部修改，巨型 store | ai-chat.ts · app-config-store.ts:1322 |
 
 **问题与修复建议**
 
@@ -187,13 +187,13 @@
 - **FE-04**：`JSON.parse(parsed.data)` 无容错，单条畸形帧可能打断增量渲染。**修复**：包 try/catch，跳过坏帧并记录。
 - **FE-05**：检查 `isSending` 到 `setSending(true)` 之间有 `buildPrompt`、`scrollToBottom` 等 await 让出点，快速双击可两次通过检查，重复发送/扣费。**修复**：校验后同步立即 setSending，失败再回滚；或用 sessionId 级同步锁。
 - **FE-06**：`v-if="option"` 销毁 DOM 但 chart 实例未 dispose，option 恢复时 `chart ??=` 跳过重新 init，对已脱离文档的实例 setOption 导致白屏。**修复**：option 为 null 时 dispose 并置 null；或改 v-show。
-- **FE-07**：SqlConsoleTab.vue 单文件 2085 行承担 10+ 职责，是竞态与回归温床。**修复**：按职责拆 composable，目标单文件 <500 行。
+- **FE-07**：SqlConsoleTab.vue 单文件 2085 行承担 10+ 职责，是竞态与回归温床。**修复**：已按职责拆 composable/子组件（SqlConsole≈645、Welcome≈514、Integrations≈230）；继续可再压壳层 props/emits。
 - **FE-08**：create() 仅在收到 created/error/close 时 settle，服务端半开时 Promise 永久 pending，socket 与 4 个监听器驻留。**修复**：增加超时定时器与 settle，超时后 close；与 ssh bridge 对齐。
 - **FE-09**：`(()=>import(...)) as any` 掩盖 loader 类型，props 契约不一致时无法编译校验。**修复**：统一 props 类型，用泛型去掉 as any。
 - **FE-10**：`v-bind="formBind as any"` 关闭动态组件 props 类型检查。**修复**：定义明确 props 接口，避免 any。
 - **FE-11**：模块级 `timer`/`started`，onUnmounted 刻意留空，HMR/复用场景下 started 永不重置。**修复**：抽为显式应用级 service（含引用计数），由根生命周期管理。
 - **FE-12**：对用户导入文件直接 `JSON.parse` 无 try/catch，损坏文件抛未捕获异常且无提示。**修复**：外部输入统一 try/catch，捕获后 toast 提示。
-- **FE-13**：setup store 将内部 ref 直接 return，外部可绕过 action 直接修改，持久化/会话上限逻辑可能被绕过。**修复**：对外只读暴露，写操作收敛到 action；拆分巨型 store。
+- **FE-13**：setup store 将内部 ref 直接 return，外部可绕过 action 直接修改，持久化/会话上限逻辑可能被绕过。**修复**：ai-chat / app-config 对外 `readonly` 暴露；写操作走 action。巨型 store 物理拆分可另开重构。
 
 ### 模块五：桌面端与生态（desktop / mcp / cli / plugin）· 14 项
 

@@ -20,6 +20,7 @@ import {
     toAiDatabaseTargetPayload,
     toAiLlmProfilePayload,
 } from '@/shared/api/internal/ai'
+import type {AiPreferences} from '@/shared/config/app-config.types'
 import {
     drainThinkTags,
     mergeThinking,
@@ -87,7 +88,7 @@ export function useAiChatSend(options: {
         sessionId: string,
         analysisContext?: AiAnalysisContextPayload,
     ) {
-        const profile = resolveWorkbenchAiLlmProfile(appConfig.aiPreferences)
+        const profile = resolveWorkbenchAiLlmProfile(appConfig.aiPreferences as AiPreferences)
         logAiChatRequest(text, targets.length)
         const started = performance.now()
 
