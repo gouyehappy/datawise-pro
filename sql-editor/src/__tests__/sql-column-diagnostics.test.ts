@@ -61,4 +61,33 @@ describe('sql-column-diagnostics', () => {
         )
         assert.deepEqual(diagnostics, [])
     })
+
+    it('ignores catalog.schema in CREATE SCHEMA (Trino)', () => {
+        const diagnostics = collectSqlColumnDiagnostics(
+            'create schema if not exists kudu.a008',
+            schema,
+        )
+        assert.deepEqual(diagnostics, [])
+    })
+
+    it('ignores qualified names in CREATE TABLE / SHOW / USE', () => {
+        assert.deepEqual(
+            collectSqlColumnDiagnostics('CREATE TABLE IF NOT EXISTS kudu.a008.t1 (id int)', schema),
+            [],
+        )
+        assert.deepEqual(
+            collectSqlColumnDiagnostics('SHOW TABLES FROM kudu.information_schema', schema),
+            [],
+        )
+        assert.deepEqual(collectSqlColumnDiagnostics('USE kudu.a008', schema), [])
+    })
+
+    it('still flags unknown aliases in SELECT', () => {
+        const diagnostics = collectSqlColumnDiagnostics(
+            'SELECT kudu.id FROM orders o',
+            schema,
+        )
+        assert.equal(diagnostics.length, 1)
+        assert.equal(diagnostics[0]?.code, 'unknown_table')
+    })
 })
