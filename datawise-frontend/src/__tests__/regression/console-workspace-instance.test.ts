@@ -18,20 +18,17 @@ describe('console-workspace-instance', () => {
         )
     })
 
-    it('prefers bound catalog.schema over sql', () => {
+    it('always saves trino consoles under connection scripts', () => {
         assert.equal(
             resolveConsoleWorkspaceInstance({
                 dbType: 'trino',
-                sql: 'SELECT 1',
+                sql: 'SELECT * FROM kudu.a003.hh_15',
                 tabDatabase: 'hive.a003',
                 tree: [],
                 connectionId: 'conn-1',
             }),
-            'hive.a003',
+            TRINO_CONNECTION_SCRIPTS_INSTANCE,
         )
-    })
-
-    it('infers catalog.schema from sql when tab only has catalog', () => {
         assert.equal(
             resolveConsoleWorkspaceInstance({
                 dbType: 'trino',
@@ -40,16 +37,13 @@ describe('console-workspace-instance', () => {
                 tree: [],
                 connectionId: 'conn-1',
             }),
-            'kudu.a003',
+            TRINO_CONNECTION_SCRIPTS_INSTANCE,
         )
-    })
-
-    it('uses connection scripts folder when no schema context', () => {
         assert.equal(
             resolveConsoleWorkspaceInstance({
-                dbType: 'trino',
+                dbType: 'presto',
                 sql: 'SELECT 1',
-                tabDatabase: 'kudu',
+                tabDatabase: undefined,
                 tree: [],
                 connectionId: 'conn-1',
             }),

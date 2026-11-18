@@ -72,7 +72,7 @@ export function resolveConnectionDbType(tree: TreeNode[], nodeId: string): DbTyp
 
 export const TABLES_FOLDER_LOADED_META = 'tables:loaded'
 
-const LAZY_LOAD_FOLDER_LABELS = new Set(['tables', 'workspaces', 'models', 'views', 'functions', 'procedures', 'triggers', 'ai', 'semantics'])
+const LAZY_LOAD_FOLDER_LABELS = new Set(['tables', 'workspaces', 'scripts', 'models', 'views', 'functions', 'procedures', 'triggers', 'ai', 'semantics'])
 
 const loadedExplorerFolderIds = new Set<string>()
 
@@ -193,7 +193,17 @@ export function needsLazyLoad(node: TreeNode, connectionDbType?: DbType): boolea
     }
     const catalogSchema = isCatalogSchemaDbType(connectionDbType ?? node.dbType)
     switch (node.type) {
-        case 'connection':
+        case 'connection': {
+            const children = node.children ?? []
+            if (!children.length) return true
+            // Frontend may inject connection-level scripts/ai before catalogs load —
+            // that must not count as "already loaded".
+            if (catalogSchema || isCatalogSchemaDbType(node.dbType)) {
+                const hasCatalog = children.some((child) => child.type === 'database')
+                return !hasCatalog
+            }
+            return false
+        }
         case 'table':
             return !node.children?.length
         case 'database':

@@ -29,6 +29,10 @@ import {
 } from '@/features/explorer/utils/data-sources'
 import {isCatalogSchemaDbType} from '@/features/explorer/services/explorer-lazy-load'
 import {resolveNextScriptFileForOpen} from '@/features/explorer/services/sql-script.service'
+import {
+    findConnectionScriptsFolder,
+    TRINO_CONNECTION_SCRIPTS_INSTANCE,
+} from '@/features/workspace/services/console-workspace-instance'
 import {resolveNextViewModelNameForOpen} from '@/features/explorer/services/view-model-open.service'
 import {platformCatalogTabTitle} from '@/features/platform/services/platform-catalog.service'
 import {
@@ -187,17 +191,26 @@ export function createWorkspaceOpenAppsDomain(deps: WorkspaceOpenAppsDeps) {
     function ensureConsoleTabScriptFile(tab: WorkspaceTab) {
         if (tab.type !== 'console' || !tab.connectionId || getBoundConsoleSqlFile(tab)) return
         const explorer = deps.getExplorer()
+        const connection = explorer.findNode(tab.connectionId)
+        // Federated engines always name/list under connection scripts, not JDBC catalog.schema.
+        const scriptInstanceName = isCatalogSchemaDbType(connection?.dbType)
+            ? TRINO_CONNECTION_SCRIPTS_INSTANCE
+            : tab.database
+        const scriptInstanceId = isCatalogSchemaDbType(connection?.dbType)
+            ? (findConnectionScriptsFolder(connection!)?.id ?? tab.instanceId)
+            : tab.instanceId
         void resolveNextScriptFileForOpen({
             tabs: deps.tabs.value,
             connectionId: tab.connectionId,
-            instanceId: tab.instanceId,
-            instanceName: tab.database,
+            instanceId: scriptInstanceId,
+            instanceName: scriptInstanceName,
             tree: explorer.tree as never,
             excludeTabId: tab.id,
         }).then((fileName) => {
             const latest = deps.tabs.value.find((item) => item.id === tab.id)
             if (!latest || !latest.connectionId || getBoundConsoleSqlFile(latest)) return
             latest.sqlFile = fileName
+            if (scriptInstanceId) latest.instanceId = scriptInstanceId
             const nextTitle = syncConsoleTabTitle(
                 latest,
                 deps.resolveConnectionLabel(latest.connectionId),

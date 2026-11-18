@@ -47,6 +47,18 @@ describe('BUG-008 explorer tables expand', () => {
         assert.equal(needsLazyLoad(aiFolder), true)
     })
 
+    it('connection-level scripts folder is expandable when empty', () => {
+        const scriptsFolder = node({
+            id: 'folder-scripts-conn-1-scripts',
+            label: 'scripts',
+            type: 'folder',
+            children: [],
+        })
+
+        assert.equal(canExpandTreeNode(scriptsFolder), true)
+        assert.equal(needsLazyLoad(scriptsFolder), true)
+    })
+
     it('platform_feature nodes are leaf entries', () => {
         const featureNode = node({
             id: 'pf-conn-1-admin_db-semantic_metrics',

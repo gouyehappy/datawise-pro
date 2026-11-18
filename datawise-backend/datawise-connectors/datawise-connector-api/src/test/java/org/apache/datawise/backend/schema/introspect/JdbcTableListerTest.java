@@ -104,16 +104,18 @@ class JdbcTableListerTest {
     }
 
     @Test
-    void ensureConnectionScriptsFolder_injectsMissingScriptsNode() {
+    void ensureConnectionScriptsFolder_injectsMissingScriptsAndAiNodes() {
         List<TreeNode> roots = List.of(treeNode("hive"));
 
         List<TreeNode> ensured = ExplorerSchemaFilter.ensureConnectionScriptsFolder(
                 "conn-1", "trino", roots);
 
-        assertEquals(2, ensured.size());
+        assertEquals(3, ensured.size());
         assertEquals("scripts", ensured.get(0).getLabel());
         assertEquals("folder", ensured.get(0).getType());
-        assertEquals("hive", ensured.get(1).getLabel());
+        assertEquals("ai", ensured.get(1).getLabel());
+        assertEquals("folder", ensured.get(1).getType());
+        assertEquals("hive", ensured.get(2).getLabel());
     }
 
     @Test

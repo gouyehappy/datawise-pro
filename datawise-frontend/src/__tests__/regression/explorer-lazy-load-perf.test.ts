@@ -75,4 +75,25 @@ describe('explorer-lazy-load-perf', () => {
         const tables = folder('tables', 'folder-tables-2', undefined, [])
         assert.equal(needsLazyLoad(tables, 'mysql'), true)
     })
+
+    it('needsLazyLoad still loads trino connection that only has injected ai/scripts', () => {
+        clearExplorerFolderLoadedIds()
+        const connection: TreeNode = {
+            id: 'conn-1',
+            label: 'Trino',
+            type: 'connection',
+            dbType: 'trino',
+            children: [
+                {id: 'folder-ai', label: 'ai', type: 'folder', children: []},
+            ],
+        }
+        assert.equal(needsLazyLoad(connection, 'trino'), true)
+
+        connection.children = [
+            {id: 'folder-scripts', label: 'scripts', type: 'folder', children: []},
+            {id: 'folder-ai', label: 'ai', type: 'folder', children: []},
+            {id: 'db-sdi', label: 'sdi', type: 'database', children: []},
+        ]
+        assert.equal(needsLazyLoad(connection, 'trino'), false)
+    })
 })

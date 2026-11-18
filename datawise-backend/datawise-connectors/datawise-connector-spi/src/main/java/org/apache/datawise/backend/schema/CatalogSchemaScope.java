@@ -6,6 +6,9 @@ public record CatalogSchemaScope(String catalog, String schema) {
     /** Trino 连接级脚本目录（无 catalog.schema 上下文时） */
     public static final String CONNECTION_SCRIPTS = "_scripts";
 
+    /** Trino 连接级 AI / 平台能力入口（非 JDBC catalog） */
+    public static final String CONNECTION_PLATFORM = "_connection";
+
     public static CatalogSchemaScope parse(String database) {
         if (database == null || database.isBlank()) {
             return new CatalogSchemaScope(null, null);
@@ -26,10 +29,17 @@ public record CatalogSchemaScope(String catalog, String schema) {
         return CONNECTION_SCRIPTS.equals(catalog) && !hasSchema();
     }
 
+    public boolean isConnectionPlatform() {
+        return CONNECTION_PLATFORM.equals(catalog) && !hasSchema();
+    }
+
     /** workspaces 磁盘目录与 API instanceName（Trino: catalog.schema；MySQL: database） */
     public String instanceKey() {
         if (isConnectionScripts()) {
             return CONNECTION_SCRIPTS;
+        }
+        if (isConnectionPlatform()) {
+            return CONNECTION_PLATFORM;
         }
         if (hasSchema()) {
             return catalog + "." + schema;

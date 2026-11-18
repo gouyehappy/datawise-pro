@@ -78,7 +78,7 @@ export interface ExplorerSqlFileScope {
     instanceLabel: string
 }
 
-/** 从 sql_file 节点向上解析 scope（Trino 优先 schema，MySQL 为 database；连接级 scripts → `_scripts`） */
+/** 从 sql_file / platform_feature 向上解析 scope（连接级 scripts → `_scripts`，连接级 ai → `_connection`） */
 export function resolveExplorerSqlFileScope(
     tree: TreeNode[],
     sqlFileNodeId: string,
@@ -93,18 +93,26 @@ export function resolveExplorerSqlFileScope(
         return {scopeNode, instanceLabel}
     }
 
-    // Connection-level scripts folder (Trino / Presto)
+    // Connection-level scripts / ai folders (Trino / Presto)
     const fileNode = findNodeById(tree, sqlFileNodeId)
-    const scriptsFolder = fileNode
-        ? findAncestorByType(tree, sqlFileNodeId, 'folder')
+    const folder = fileNode
+        ? (
+            fileNode.type === 'folder'
+                ? fileNode
+                : findAncestorByType(tree, sqlFileNodeId, 'folder')
+        )
         : null
     if (
-        scriptsFolder
-        && scriptsFolder.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
-        && findAncestorByType(tree, scriptsFolder.id, 'connection')
-        && !findAncestorByType(tree, scriptsFolder.id, 'database')
+        folder
+        && findAncestorByType(tree, folder.id, 'connection')
+        && !findAncestorByType(tree, folder.id, 'database')
     ) {
-        return {scopeNode: scriptsFolder, instanceLabel: '_scripts'}
+        if (folder.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0) {
+            return {scopeNode: folder, instanceLabel: '_scripts'}
+        }
+        if (folder.label.localeCompare('ai', undefined, {sensitivity: 'accent'}) === 0) {
+            return {scopeNode: folder, instanceLabel: '_connection'}
+        }
     }
 
     return null

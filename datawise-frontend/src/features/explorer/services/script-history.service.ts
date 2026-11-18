@@ -1,5 +1,6 @@
 import {instanceSqlApi} from '@/api'
 import type {ScriptHistoryTarget} from '@/features/explorer/stores/script-history-drawer-store'
+import {setCachedSqlScript} from '@/features/explorer/services/sql-script-content-cache'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 
@@ -13,6 +14,15 @@ export async function restoreScriptHistoryVersion(
         fileName: target.fileName,
         versionId,
     })
+
+    setCachedSqlScript(
+        {
+            connectionId: target.connectionId,
+            instanceName: target.instanceName,
+            fileName: target.fileName,
+        },
+        result.sql,
+    )
 
     const workspace = useWorkspaceStore()
     const explorer = useExplorerStore()

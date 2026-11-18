@@ -78,10 +78,9 @@ public final class SchemaTreeBuilder {
         folders.add(schemaEmptyFolder("functions", connectionId, catalog, schema, "folder-functions"));
         folders.add(schemaEmptyFolder("procedures", connectionId, catalog, schema, "folder-procedures"));
         folders.add(schemaEmptyFolder("triggers", connectionId, catalog, schema, "folder-triggers"));
-        // Extension folders (models / workspace scripts / AI) — same level as flat-database trees
+        // Models stay schema-scoped (home schema for view models).
+        // Scripts + AI live at connection root for catalog.schema engines (see ExplorerSchemaFilter).
         folders.add(schemaEmptyFolder("models", connectionId, catalog, schema, "folder-models"));
-        folders.add(schemaEmptyFolder("workspaces", connectionId, catalog, schema, "folder-ws"));
-        folders.add(schemaEmptyFolder("ai", connectionId, catalog, schema, "folder-ai"));
         return folders;
     }
 

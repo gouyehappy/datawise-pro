@@ -2,17 +2,19 @@ import type {DbType, TreeNode} from '@/core/types'
 import {findNodeById} from '@/core/utils/tree'
 import {
     findExplorerScopeNode,
-    resolveExplorerInstanceLabel,
 } from '@/features/explorer/services/explorer-database-scope'
 import {isCatalogSchemaDbType} from '@/features/explorer/services/explorer-lazy-load'
 
-/** Trino 连接级脚本目录（无 catalog.schema 上下文时） */
+/**
+ * 跨 catalog 引擎（Trino / Presto / Hive / SQL Server）的控制台脚本固定落盘实例。
+ * Explorer 连接根下的 scripts 文件夹对应此目录，不再按 SQL / 选中 schema 散落到 catalog.schema。
+ */
 export const TRINO_CONNECTION_SCRIPTS_INSTANCE = '_scripts'
 
 const TRINO_THREE_PART =
     /\b([a-zA-Z_][\w]*)\s*\.\s*([a-zA-Z_][\w]*)\s*\.\s*([a-zA-Z_][\w]*)\b/g
 
-/** 从 SQL 解析第一个 catalog.schema（如 kudu.a003.hh_15 → kudu.a003） */
+/** 从 SQL 解析第一个 catalog.schema（如 kudu.a003.hh_15 → kudu.a003）；定位用，不参与保存路径 */
 export function parseTrinoCatalogSchemaFromSql(sql: string): string | null {
     const text = sql.trim()
     if (!text) return null
@@ -27,6 +29,11 @@ export function parseTrinoCatalogSchemaFromSql(sql: string): string | null {
     return `${catalog}.${schema}`
 }
 
+/**
+ * 控制台 Save 的工作区实例名。
+ * - 普通库：绑定的 database 名
+ * - catalog.schema 族：固定 `_scripts`（连接级 scripts），避免跨库 SQL 把文件写到各 schema 下
+ */
 export function resolveConsoleWorkspaceInstance(options: {
     dbType?: DbType
     sql: string
@@ -36,40 +43,12 @@ export function resolveConsoleWorkspaceInstance(options: {
     selectedNodeId?: string | null
     findNode?: (nodeId: string) => TreeNode | null | undefined
 }): string | undefined {
-    const bound = options.tabDatabase?.trim()
-    if (!isCatalogSchemaDbType(options.dbType)) {
-        return bound || undefined
-    }
-
-    if (bound?.includes('.')) {
-        return bound
-    }
-
-    const findNode = options.findNode ?? ((id: string) => findNodeById(options.tree, id))
-    const selectedId = options.selectedNodeId
-    if (selectedId) {
-        const selected = findNode(selectedId)
-        if (selected?.type === 'schema') {
-            const scoped = resolveExplorerInstanceLabel(options.tree, selected.id, options.dbType)
-            if (scoped?.includes('.')) return scoped
-        }
-        if (selected?.type === 'database') {
-            const catalog = selected.label
-            const schemaFromSql = parseTrinoCatalogSchemaFromSql(options.sql)
-            if (schemaFromSql?.startsWith(`${catalog}.`)) {
-                return schemaFromSql
-            }
-        }
-    }
-
-    const fromSql = parseTrinoCatalogSchemaFromSql(options.sql)
-    if (fromSql) return fromSql
-
-    if (bound) {
+    if (isCatalogSchemaDbType(options.dbType)) {
         return TRINO_CONNECTION_SCRIPTS_INSTANCE
     }
 
-    return TRINO_CONNECTION_SCRIPTS_INSTANCE
+    const bound = options.tabDatabase?.trim()
+    return bound || undefined
 }
 
 /** 连接级 scripts 文件夹（磁盘 instance = `_scripts`） */

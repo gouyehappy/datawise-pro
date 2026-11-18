@@ -127,6 +127,14 @@ describe('resolveConsoleInstanceLabel', () => {
         assert.equal(label, 'cdp')
     })
 
+    it('ignores connection-level scripts folder as JDBC database', () => {
+        const label = resolveConsoleInstanceLabel({
+            tabDatabase: '_scripts',
+            findNodeLabel: () => undefined,
+        })
+        assert.equal(label, undefined)
+    })
+
     it('prefers scoped trino schema label over raw schema node label', () => {
         const label = resolveConsoleInstanceLabel({
             instanceId: 'schema-a003',

@@ -20,6 +20,7 @@ import {resolveRenameViewModelPlan} from '@/features/explorer/services/view-mode
 import {resolveConnectionCatalogErrorMessage} from '@/features/connection/services/connection-catalog.service'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
 import {deleteInstanceSqlScript} from '@/features/explorer/services/sql-script.service'
+import {invalidateCachedSqlScript} from '@/features/explorer/services/sql-script-content-cache'
 import {resolveExplorerSqlFileScope} from '@/features/explorer/services/explorer-database-scope'
 import {resolveViewModelScope, viewModelApi} from '@/api/modules/view-model'
 import {explorerApi, sqlApi} from '@/api'
@@ -195,6 +196,11 @@ export function useExplorerTreeDangerDialogs(deps: ExplorerTreeDangerDialogsDeps
     
     try {
         await deleteInstanceSqlScript({
+            connectionId,
+            instanceName: scope.instanceLabel,
+            fileName: node.label,
+        })
+        invalidateCachedSqlScript({
             connectionId,
             instanceName: scope.instanceLabel,
             fileName: node.label,

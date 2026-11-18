@@ -351,6 +351,19 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
         }
         node.expanded = true
         deps.touchTree()
+        // Warm SQL script content cache when opening scripts / workspaces.
+        const folderLabel = node.label.toLowerCase()
+        if (
+            node.type === 'folder'
+            && (folderLabel === 'scripts' || folderLabel === 'workspaces')
+            && (node.children?.some((child) => child.type === 'sql_file') ?? false)
+        ) {
+            void import('@/features/explorer/services/sql-script-content.service').then(
+                ({prefetchSqlScriptsForExplorerFolder}) => {
+                    prefetchSqlScriptsForExplorerFolder(deps.tree.value, node)
+                },
+            )
+        }
     }
 
     function isRootTreeNode(nodeId: string) {
@@ -472,6 +485,31 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
     function findDatabaseNode(connectionId: string, instanceLabel: string, instanceId?: string | null): TreeNode | null {
         const connection = deps.findNode(connectionId)
         const dbType = resolveConnectionDbType(deps.tree.value, connectionId) ?? connection?.dbType
+        const trimmedLabel = instanceLabel.trim()
+
+        // Connection-level scripts/ai must win over a stale schema instanceId from the console tab.
+        if (connection && isCatalogSchemaDbType(dbType)) {
+            if (
+                trimmedLabel === '_scripts'
+                || trimmedLabel.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+            ) {
+                return connection.children?.find(
+                    (node) =>
+                        node.type === 'folder'
+                        && node.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0,
+                ) ?? null
+            }
+            if (
+                trimmedLabel === '_connection'
+                || trimmedLabel.localeCompare('ai', undefined, {sensitivity: 'accent'}) === 0
+            ) {
+                return connection.children?.find(
+                    (node) =>
+                        node.type === 'folder'
+                        && node.label.localeCompare('ai', undefined, {sensitivity: 'accent'}) === 0,
+                ) ?? null
+            }
+        }
 
         if (instanceId) {
             const byId = deps.findNode(instanceId)
@@ -481,32 +519,19 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
                     return byId
                 }
             }
-            // Trino/Presto 连接级 scripts 文件夹
             if (
                 byId
                 && byId.type === 'folder'
-                && byId.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+                && (
+                    byId.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+                    || byId.label.localeCompare('ai', undefined, {sensitivity: 'accent'}) === 0
+                )
             ) {
                 const parentConnectionId = resolveConnectionId(deps.tree.value, byId.id)
                 if (parentConnectionId === connectionId) {
                     return byId
                 }
             }
-        }
-
-        if (
-            connection
-            && isCatalogSchemaDbType(dbType)
-            && (
-                instanceLabel === '_scripts'
-                || instanceLabel.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
-            )
-        ) {
-            return connection.children?.find(
-                (node) =>
-                    node.type === 'folder'
-                    && node.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0,
-            ) ?? null
         }
 
         if (connection && isCatalogSchemaDbType(dbType) && instanceLabel.includes('.')) {
@@ -588,13 +613,22 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
         instanceId?: string | null,
     ) {
         const connectionNode = deps.findNode(connectionId)
-        if (connectionNode && !connectionNode.children?.length) {
+        if (connectionNode && (!connectionNode.children?.length || connectionNode.children == null)) {
             await forceLoadChildren(connectionId, connectionNode)
             connectionNode.expanded = true
             deps.touchTree()
         }
 
         let scopeNode = findDatabaseNode(connectionId, instanceLabel, instanceId)
+        if (!scopeNode) {
+            // Scripts/ai folder may be missing until connection roots are (re)loaded.
+            if (connectionNode) {
+                await forceLoadChildren(connectionId, connectionNode)
+                connectionNode.expanded = true
+                deps.touchTree()
+            }
+            scopeNode = findDatabaseNode(connectionId, instanceLabel)
+        }
         if (!scopeNode && instanceId) {
             scopeNode = findDatabaseNode(connectionId, instanceLabel)
         }
@@ -611,6 +645,11 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
             scopeNode.expanded = true
             deps.touchTree()
             await expandPathToNode(scopeNode.id)
+            void import('@/features/explorer/services/sql-script-content.service').then(
+                ({prefetchSqlScriptsForExplorerFolder}) => {
+                    prefetchSqlScriptsForExplorerFolder(deps.tree.value, scopeNode)
+                },
+            )
             return
         }
 
@@ -625,6 +664,11 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
         folder.expanded = true
         deps.touchTree()
         await expandPathToNode(folder.id)
+        void import('@/features/explorer/services/sql-script-content.service').then(
+            ({prefetchSqlScriptsForExplorerFolder}) => {
+                prefetchSqlScriptsForExplorerFolder(deps.tree.value, folder)
+            },
+        )
     }
 
     async function reloadModelsFolder(

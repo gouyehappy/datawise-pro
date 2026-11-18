@@ -673,6 +673,19 @@ function onCatalogPointerDown(event: MouseEvent, node: TreeNode) {
   }
 }
 
+/** Hover: warm SQL script content cache before open. */
+function onRowPointerEnter(node: TreeNode) {
+  if (props.selectable) return
+  if (node.type !== 'sql_file' || node.id.startsWith('project-file:')) return
+  const tree = props.explorerTree
+  if (!tree?.length) return
+  void import('@/features/explorer/services/sql-script-content.service').then(
+    ({prefetchSqlScriptFromTreeNode}) => {
+      prefetchSqlScriptFromTreeNode(tree, node)
+    },
+  )
+}
+
 /** 单击：仅选中（+ Info）；不展开、不开 Tab。拖拽后的 click 会被吞掉。 */
 function onRowClick(node: TreeNode) {
   if (suppressNextClick.value) {
@@ -838,6 +851,7 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
             : t('explorer.reorderCatalogDragHint'))
           : undefined"
         @mousedown="onCatalogPointerDown($event, node)"
+        @pointerenter="onRowPointerEnter(node)"
         @click="onRowClick(node)"
         @dblclick="onRowDblClick(node)"
         @contextmenu="!selectable && emit('contextmenu', $event, node)"

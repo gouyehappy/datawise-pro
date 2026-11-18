@@ -10,6 +10,7 @@ export const EXPLORER_CATALOG_LABEL_KEYS = [
     'triggers',
     'models',
     'workspaces',
+    'scripts',
     'ai',
     'semantics',
     'columns',
@@ -28,11 +29,13 @@ export const EXPLORER_CORE_CATALOG_FOLDERS = [
     'triggers',
 ] as const
 
-/** 扩展目录（模型 / 工作区脚本 / AI） */
+/**
+ * Schema/database 下的扩展目录（蓝色描边图标）。
+ * 连接级 scripts / ai 不用此样式，与普通文件夹同为琥珀色。
+ */
 export const EXPLORER_EXTENSION_CATALOG_FOLDERS = [
     'models',
     'workspaces',
-    'ai',
     'semantics',
 ] as const
 
@@ -94,8 +97,14 @@ export function orderExplorerCatalogFolders(children: TreeNode[]): TreeNode[] {
     return [...catalogFolders, ...others]
 }
 
-/** 展示用 label；未知目录名原样返回 */
+/** 展示用 label；未知目录名原样返回。连接级 scripts 固定英文名。 */
 export function resolveExplorerCatalogLabel(node: TreeNode, t: ComposerTranslation): string {
+    if (
+        node.type === 'folder'
+        && node.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+    ) {
+        return 'scripts'
+    }
     const key = resolveExplorerCatalogLabelKey(node)
     return key ? t(`explorer.treeCatalog.${key}`) : node.label
 }

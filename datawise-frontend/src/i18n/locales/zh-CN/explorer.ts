@@ -229,6 +229,7 @@ export default {
         procedures: '存储过程',
         triggers: '触发器',
         workspaces: '工作区',
+        scripts: '脚本',
         columns: '列',
         keys: '键',
         indexes: '索引',

@@ -229,6 +229,7 @@ export default {
         procedures: 'Procedures',
         triggers: 'Triggers',
         workspaces: 'Workspaces',
+        scripts: 'Scripts',
         columns: 'Columns',
         keys: 'Keys',
         indexes: 'Indexes',

@@ -5,9 +5,19 @@ export function isSqlServerFamily(dbType?: DbType | string): boolean {
     return normalized === 'sqlserver' || normalized === 'mssql'
 }
 
-/** API/Explorer instance key uses {@code catalog.schema} (Trino / Presto / Hive / SQL Server). */
+/**
+ * API/Explorer instance key uses {@code catalog.schema}
+ * (Trino / Presto / Hive / Flink / SQL Server — align with backend DbTypeFamily).
+ */
 export function usesCatalogSchemaInstanceKey(dbType?: DbType | string): boolean {
-    return dbType === 'trino' || dbType === 'presto' || dbType === 'hive' || isSqlServerFamily(dbType)
+    const normalized = dbType?.toLowerCase()
+    return (
+        normalized === 'trino'
+        || normalized === 'presto'
+        || normalized === 'hive'
+        || normalized === 'flink'
+        || isSqlServerFamily(dbType)
+    )
 }
 
 /** @alias usesCatalogSchemaInstanceKey */

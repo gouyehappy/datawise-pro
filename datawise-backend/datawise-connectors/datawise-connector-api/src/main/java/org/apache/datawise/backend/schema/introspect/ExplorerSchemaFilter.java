@@ -78,7 +78,17 @@ public final class ExplorerSchemaFilter {
                 && "scripts".equalsIgnoreCase(node.getLabel());
     }
 
-    /** Ensure Trino/Presto-style connections expose a connection-level scripts folder. */
+    public static boolean isConnectionAiFolder(TreeNode node) {
+        return node != null
+                && "folder".equals(node.getType())
+                && node.getLabel() != null
+                && "ai".equalsIgnoreCase(node.getLabel());
+    }
+
+    /**
+     * Ensure Trino/Presto-style connections expose connection-level {@code scripts} + {@code ai}.
+     * Schema nodes no longer carry workspaces/ai for these engines.
+     */
     public static List<TreeNode> ensureConnectionScriptsFolder(
                                                               String connectionId,
                                                               String dbType,
@@ -87,19 +97,37 @@ public final class ExplorerSchemaFilter {
             return roots == null ? List.of() : roots;
         }
         List<TreeNode> next = roots == null ? new ArrayList<>() : new ArrayList<>(roots);
+        boolean hasScripts = false;
+        boolean hasAi = false;
         for (TreeNode node : next) {
             if (isConnectionScriptsFolder(node)) {
-                return next;
+                hasScripts = true;
+            }
+            if (isConnectionAiFolder(node)) {
+                hasAi = true;
             }
         }
-        TreeNode scripts = new TreeNode();
-        scripts.setId(SchemaNodeIds.nodeId(
-                "folder-scripts", connectionId, CatalogSchemaScope.CONNECTION_SCRIPTS));
-        scripts.setLabel("scripts");
-        scripts.setType("folder");
-        scripts.setExpanded(false);
-        scripts.setChildren(new ArrayList<>());
-        next.add(0, scripts);
+        int insertAt = 0;
+        if (!hasScripts) {
+            TreeNode scripts = new TreeNode();
+            scripts.setId(SchemaNodeIds.nodeId(
+                    "folder-scripts", connectionId, CatalogSchemaScope.CONNECTION_SCRIPTS));
+            scripts.setLabel("scripts");
+            scripts.setType("folder");
+            scripts.setExpanded(false);
+            scripts.setChildren(new ArrayList<>());
+            next.add(insertAt++, scripts);
+        }
+        if (!hasAi) {
+            TreeNode ai = new TreeNode();
+            ai.setId(SchemaNodeIds.nodeId(
+                    "folder-ai", connectionId, CatalogSchemaScope.CONNECTION_PLATFORM));
+            ai.setLabel("ai");
+            ai.setType("folder");
+            ai.setExpanded(false);
+            ai.setChildren(new ArrayList<>());
+            next.add(insertAt, ai);
+        }
         return next;
     }
 

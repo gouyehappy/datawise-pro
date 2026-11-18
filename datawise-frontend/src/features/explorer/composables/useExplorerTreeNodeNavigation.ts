@@ -235,6 +235,13 @@ export function useExplorerTreeNodeNavigation(deps: ExplorerTreeNodeNavigationDe
         return
     }
     explorer.selectNode(node.id)
+    if (node.type === 'sql_file' && !node.id.startsWith('project-file:')) {
+        void import('@/features/explorer/services/sql-script-content.service').then(
+            ({prefetchSqlScriptFromTreeNode}) => {
+                prefetchSqlScriptFromTreeNode(explorer.tree, node)
+            },
+        )
+    }
     if (selectIntent.sync === 'view-model') {
         scheduleViewModelExplorerInfoSync(node)
         return
