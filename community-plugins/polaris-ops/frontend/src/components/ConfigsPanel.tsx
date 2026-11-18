@@ -545,6 +545,12 @@ export function ConfigsPanel(props: Props) {
                 ) : (
                   <div className="editor-stage">
                     <CodeEditor
+                      key={activeTabId ?? (isNew ? 'new' : 'none')}
+                      path={
+                        activeTabId
+                          ? `inmemory://polaris-config/${encodeURIComponent(activeTabId)}`
+                          : undefined
+                      }
                       value={editorValue}
                       language={editorFormat}
                       fontSize={fontSize}

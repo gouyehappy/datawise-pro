@@ -93,11 +93,15 @@ export function App() {
   const detailLoading = Boolean(activeTab?.loading)
   const isDirty = activeTab ? isOpenTabDirty(activeTab) : false
 
-  const patchActiveTab = useCallback((patch: Partial<OpenConfigTab>) => {
-    setOpenTabs((tabs) =>
-      tabs.map((tab) => (tab.id === activeTabId ? { ...tab, ...patch } : tab)),
-    )
-  }, [activeTabId])
+  const patchTab = useCallback((id: string | null | undefined, patch: Partial<OpenConfigTab>) => {
+    if (!id) return
+    setOpenTabs((tabs) => tabs.map((tab) => (tab.id === id ? { ...tab, ...patch } : tab)))
+  }, [])
+
+  const patchActiveTab = useCallback(
+    (patch: Partial<OpenConfigTab>) => patchTab(activeTabId, patch),
+    [patchTab, activeTabId],
+  )
 
   openTabsRef.current = openTabs
 
@@ -986,8 +990,8 @@ export function App() {
               onCloseOtherTabs={(id) => void closeOtherTabs(id)}
               onCloseTabsRight={(id) => void closeTabsToRight(id)}
               onCloseAllTabs={() => void closeAllTabs()}
-              onDraft={(v) => patchActiveTab({ draft: v })}
-              onDraftType={(v) => patchActiveTab({ draftType: v })}
+              onDraft={(v) => patchTab(activeTabId, { draft: v })}
+              onDraftType={(v) => patchTab(activeTabId, { draftType: v })}
               onMetaChange={(meta) => {
                 if (!selected) return
                 patchActiveTab({
