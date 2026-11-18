@@ -87,6 +87,7 @@ const sql = defineModel<string>({required: true})
 
 const emit = defineEmits<{
   contextmenu: [payload: { x: number; y: number; selectedText: string }]
+  'selection-change': [payload: { selectedText: string; x: number; y: number } | null]
   'run-statement': [payload: SqlGutterStatementPayload]
   'open-table': [payload: SqlTablePeekPayload]
 }>()
@@ -583,6 +584,7 @@ defineExpose<SqlEditorExpose>({
           :resolve-table-peek="resolveTablePeek"
           @contextmenu="emit('contextmenu', $event)"
           @cursor-change="onCursorChange"
+          @selection-change="emit('selection-change', $event)"
           @focus="pushCompletionContext"
           @run-statement="emit('run-statement', $event)"
           @open-table="emit('open-table', $event)"

@@ -2,7 +2,7 @@
   SQL 控制台 Tab — 业务逻辑在 composables / services，本组件负责布局与事件绑定。
 -->
 <script setup lang="ts">
-import {computed, defineAsyncComponent, ref} from 'vue'
+import {computed, defineAsyncComponent, onBeforeUnmount, ref, watch} from 'vue'
 defineOptions({name: 'SqlConsoleTab'})
 import {useI18n} from 'vue-i18n'
 import SqlConsoleToolbar from '@/features/workspace/components/SqlConsoleToolbar.vue'
@@ -39,6 +39,10 @@ import {
   CONSOLE_EDITOR_HEIGHT_MAX,
   CONSOLE_EDITOR_HEIGHT_MIN,
 } from '@/features/workspace/constants/defaults'
+import {
+  hideSqlSelectionToolbar,
+  showSqlSelectionToolbar,
+} from '@/features/workspace/services/sql-selection-toolbar.singleton'
 
 const SqlConsoleTeamCollabLayer = defineAsyncComponent(
     () => import('@/features/workspace/components/tabs/SqlConsoleTeamCollabLayer.vue'),
@@ -371,6 +375,50 @@ const {
   consoleQuery,
 })
 
+/**
+ * 选中浮层：只向模块级单例注册状态与动作闭包，不写本组件的任何响应式字段。
+ * 这样选中态变化只触发 AppShell 里的浮层渲染，绝不在 Tab 的 patch 窗口中改父级状态。
+ */
+function onEditorSelectionChange(payload: {selectedText: string; x: number; y: number} | null) {
+  // visibility 常驻壳下所有 Tab 都挂载着编辑器；只有当前激活 Tab 才允许抢占浮层。
+  if (workspace.activeTabId !== props.tab.id) return
+  if (!payload || !payload.selectedText.trim()) {
+    hideSqlSelectionToolbar(props.tab.id)
+    return
+  }
+  const selectedText = payload.selectedText
+  showSqlSelectionToolbar(
+      props.tab.id,
+      {
+        selectedText,
+        x: payload.x,
+        y: payload.y,
+        // EXPLAIN 可用性与右键菜单保持同一判定
+        explainSupported: explainPlanEnabled.value && (connectionCaps.value.sqlExplain ?? true),
+      },
+      {
+        run: () => executeSql(selectedText, {perfSource: 'context-menu'}),
+        explain: () => requestExplainPlan(selectedText),
+        format: () => formatSelection(),
+      },
+  )
+}
+
+/** 右键打开菜单时收起选中浮层，两者不同时出现。 */
+function handleEditorContextMenu(payload: {x: number; y: number; selectedText: string}) {
+  hideSqlSelectionToolbar(props.tab.id)
+  onEditorContextMenu(payload)
+}
+
+// Tab 失活 / 关闭时清理浮层所有者，避免其它 Tab 误触发已销毁 Tab 的动作闭包。
+watch(
+    () => workspace.activeTabId,
+    (activeTabId) => {
+      if (activeTabId !== props.tab.id) hideSqlSelectionToolbar(props.tab.id)
+    },
+)
+onBeforeUnmount(() => hideSqlSelectionToolbar(props.tab.id))
+
 /** 有结果可回看时才显示底部收起条；从未查询过则编辑器占满 */
 const canReopenResultPanel = computed(
     () => consoleQuery.value.results.length > 0 || running.value,
@@ -535,7 +583,8 @@ useSqlEditorShortcuts(props.tab.id, () => ({
             :get-editor="getSqlEditor"
             :on-editor-drag-over="onEditorDragOver"
             :on-editor-drop="onEditorDrop"
-            @contextmenu="onEditorContextMenu"
+            @contextmenu="handleEditorContextMenu"
+            @selection-change="onEditorSelectionChange"
             @run-statement="onRunStatementFromGutter"
             @open-table="onOpenTableFromSql"
         />

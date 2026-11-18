@@ -49,6 +49,7 @@ import ShortcutCheatsheetOverlay from '@/features/layout/components/ShortcutChea
 import {useShortcutCheatsheet} from '@/features/layout/composables/useShortcutCheatsheet'
 import {useWorkbenchContextPublisher} from '@/features/ai/context/composables/useWorkbenchContextPublisher'
 import {useDockViewportSync} from '@/features/dock/composables/useDockViewportSync'
+import SqlSelectionToolbar from '@/features/workspace/components/console/SqlSelectionToolbar.vue'
 
 /** PERF-03: keep AI / onboarding out of the shell critical graph. */
 const AssistantDrawer = defineAsyncComponent(() =>
@@ -265,6 +266,8 @@ watch(
     <McpConfirmDrawer/>
     <AppConfirmHost/>
     <AppToast/>
+    <!-- SQL 选中文本浮层：挂在与工作台 Tab 无关的根节点，避免选中态更新触发 Tab patch 竞态。 -->
+    <SqlSelectionToolbar/>
   </div>
 </template>
 

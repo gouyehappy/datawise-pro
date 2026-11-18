@@ -136,6 +136,7 @@ export function resolveActiveTabLocateNodeId(
             tabDatabase: activeTab.database,
             findNodeLabel: options.findNodeLabel,
             resolveScopedLabel: options.resolveScopedLabel,
+            keepConnectionScope: true,
         })
         if (instanceLabel) {
             const databaseNode = options.findDatabaseNode(

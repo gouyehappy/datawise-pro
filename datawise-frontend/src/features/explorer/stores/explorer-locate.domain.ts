@@ -63,6 +63,7 @@ export function createExplorerLocateDomain(deps: ExplorerLocateDomainDeps) {
                     tabDatabase: activeTab.database,
                     findNodeLabel: (nodeId) => deps.findNode(nodeId)?.label,
                     resolveScopedLabel: buildExplorerScopedLabelResolver(deps.tree.value, deps.findNode),
+                    keepConnectionScope: true,
                 })
 
         if (!databaseLabel) return false
@@ -159,6 +160,7 @@ export function createExplorerLocateDomain(deps: ExplorerLocateDomainDeps) {
                 tabDatabase: activeTab.database,
                 findNodeLabel: (nodeId) => deps.findNode(nodeId)?.label,
                 resolveScopedLabel: buildExplorerScopedLabelResolver(deps.tree.value, deps.findNode),
+                keepConnectionScope: true,
             })
             if (!instanceLabel) {
                 await deps.ensureChildrenLoaded(activeTab.connectionId)
@@ -281,6 +283,7 @@ export function createExplorerLocateDomain(deps: ExplorerLocateDomainDeps) {
                 tabDatabase: activeTab.database,
                 findNodeLabel: (id) => deps.findNode(id)?.label,
                 resolveScopedLabel: buildExplorerScopedLabelResolver(deps.tree.value, deps.findNode),
+                keepConnectionScope: true,
             })
             if (instanceLabel) {
                 await deps.reloadWorkspacesFolder(activeTab.connectionId, instanceLabel, activeTab.instanceId)

@@ -411,16 +411,15 @@
 .exec-result-pane__sql-summary {
   display: flex;
   align-items: center;
-  gap: var(--dw-gap-sm);
   cursor: pointer;
   font-size: var(--dw-text-sm);
   color: var(--dw-text-secondary);
   user-select: none;
+  list-style: none;
 }
 
-.exec-result-pane__chevron {
-  flex-shrink: 0;
-  color: var(--dw-text-secondary);
+.exec-result-pane__sql-summary::-webkit-details-marker {
+  display: none;
 }
 
 .exec-result-pane__code {

@@ -2,7 +2,6 @@
 /**
  * Non-grid DML / exec success summary (C7 extract from QueryResultPane).
  */
-import {DwIcon} from '@/core/icons'
 import {useI18n} from 'vue-i18n'
 
 defineProps<{
@@ -27,7 +26,6 @@ const {t} = useI18n()
     </p>
     <details v-if="sql?.trim()" class="exec-result-pane__sql" open>
       <summary class="exec-result-pane__sql-summary">
-        <DwIcon class="exec-result-pane__chevron" name="chevron-down" size="sm" :stroke-width="2.25"/>
         <span>{{ t('queryResult.failedSql') }}</span>
       </summary>
       <pre class="exec-result-pane__code">{{ sql }}</pre>

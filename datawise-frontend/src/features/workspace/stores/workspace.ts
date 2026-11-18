@@ -375,7 +375,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         const tab = tabs.value.find((item) => item.id === tabId)
         if (!tab || tab.type !== 'console') return false
 
-        let fileName = getBoundConsoleSqlFile(tab)
+        // Prefer the file bound to the tab; for an unsaved console fall back to the
+        // file name implied by its visible title (e.g. `<host> Script 5` -> Script-5.sql),
+        // so Ctrl+S saves to the script the user is looking at instead of reassigning a new name.
+        let fileName = resolveConsoleSqlFileName(tab)
         if (fileName && isLocalAbsolutePath(fileName)) {
             try {
                 await writeLocalTextFile(fileName, tab.sql ?? '')

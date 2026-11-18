@@ -82,10 +82,42 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
   contextmenu: [payload: { x: number; y: number; selectedText: string }]
   'cursor-change': [payload: { lineNumber: number; column: number; offset: number }]
+  'selection-change': [payload: { selectedText: string; x: number; y: number } | null]
   focus: []
   'run-statement': [payload: SqlGutterStatementPayload]
   'open-table': [payload: SqlTablePeekPayload]
 }>()
+
+/** 选中文本浮层锚点：选区末端下方，转成视口坐标（浮层 Teleport 到 body 用 fixed 定位）。 */
+function emitSelectionChange() {
+  if (!editor) return
+  const selection = editor.getSelection()
+  const model = editor.getModel()
+  if (!selection || selection.isEmpty() || !model) {
+    emit('selection-change', null)
+    return
+  }
+  const selectedText = model.getValueInRange(selection)
+  if (!selectedText.trim()) {
+    emit('selection-change', null)
+    return
+  }
+  const visible = editor.getScrolledVisiblePosition(selection.getEndPosition())
+  const domRect = editor.getDomNode()?.getBoundingClientRect()
+  if (!visible || !domRect) {
+    emit('selection-change', null)
+    return
+  }
+  emit('selection-change', {
+    selectedText,
+    x: domRect.left + visible.left,
+    y: domRect.top + visible.top + visible.height,
+  })
+}
+
+// 选区浮层仅在用户 mouseup / keyup 时上报（见 bindSelectionSync）。
+// 绝不在编辑器挂载、modelValue 回填或 Monaco 内部 selection 变化时 emit——
+// 那会在 Vue patch 新 tab 期间同步修改父组件状态，引发 vnode/el 为 null 的竞态。
 
 const globalConfig = inject(SQL_EDITOR_CONFIG_KEY, null)
 const containerRef = ref<HTMLElement>()
@@ -644,6 +676,39 @@ function bindSelectionSync() {
   syncSelectionToRuntime()
 }
 
+/**
+ * 选区浮层锚点：只在用户显式结束选区操作（松开鼠标 / 抬起按键）时上报，
+ * 且延迟到事件当前宏任务结束后（setTimeout 0），彻底避开 Vue 的同步 patch 窗口。
+ * 挂载、setValue 回填、程序化选区变化都不走这里。
+ */
+let selectionEmitTimer: ReturnType<typeof setTimeout> | undefined
+function queueSelectionEmit() {
+  if (selectionEmitTimer) clearTimeout(selectionEmitTimer)
+  selectionEmitTimer = setTimeout(() => {
+    selectionEmitTimer = undefined
+    emitSelectionChange()
+  }, 0)
+}
+
+function bindSelectionToolbarTrigger() {
+  const host = containerRef.value
+  if (!host || props.preview) return
+  host.addEventListener('mouseup', queueSelectionEmit)
+  host.addEventListener('keyup', queueSelectionEmit)
+}
+
+function unbindSelectionToolbarTrigger() {
+  // 先无条件清 timer：即使容器 ref 已被清空，也不能让待发射的选区事件落到已卸载链路上。
+  if (selectionEmitTimer) {
+    clearTimeout(selectionEmitTimer)
+    selectionEmitTimer = undefined
+  }
+  const host = containerRef.value
+  if (!host) return
+  host.removeEventListener('mouseup', queueSelectionEmit)
+  host.removeEventListener('keyup', queueSelectionEmit)
+}
+
 function bindLineShortcuts() {
   lineShortcutDisposable?.dispose()
   if (!editor || props.preview) return
@@ -790,6 +855,7 @@ function mountEditor() {
     bindRunGutter()
     bindTablePeek()
     bindSelectionSync()
+    bindSelectionToolbarTrigger()
     suggestAcceptDisposable = bindSuggestAcceptSuppress(editor, () => {
       suppressAutocomplete(480)
       cancelScheduledAutoSuggest()
@@ -924,6 +990,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  unbindSelectionToolbarTrigger()
   if (initRafOuter) cancelAnimationFrame(initRafOuter)
   if (initRafInner) cancelAnimationFrame(initRafInner)
   if (diagnosticTimer) clearTimeout(diagnosticTimer)

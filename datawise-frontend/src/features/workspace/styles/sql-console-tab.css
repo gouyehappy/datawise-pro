@@ -85,40 +85,6 @@
   min-height: 0;
 }
 
-.editor-empty {
-  pointer-events: none;
-  position: absolute;
-  inset: var(--dw-control-h-sm, 1.75rem) 0 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: var(--dw-space-2);
-  padding: clamp(1.5rem, 4cqh, 2.75rem) clamp(1.25rem, 3cqi, 2.5rem);
-  max-width: 28rem;
-  color: var(--dw-text-muted);
-}
-
-.editor-empty__title {
-  margin: 0;
-  font-size: var(--dw-text-sm);
-  font-weight: 600;
-  color: var(--dw-text-secondary);
-  line-height: 1.4;
-}
-
-.editor-empty__hint {
-  margin: 0;
-  font-size: var(--dw-text-xs);
-  line-height: 1.45;
-}
-
-.editor-empty__action {
-  pointer-events: auto;
-  margin-top: var(--dw-space-1);
-}
-
 .editor-surface :deep(.sql-editor-hint-bar) {
   height: var(--dw-control-h-sm);
   min-height: var(--dw-control-h-sm);

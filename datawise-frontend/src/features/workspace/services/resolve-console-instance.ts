@@ -11,19 +11,27 @@ export function resolveConsoleInstanceLabel(options: {
     tabDatabase?: string
     findNodeLabel: (nodeId: string) => string | undefined
     resolveScopedLabel?: (nodeId: string) => string | undefined
+    /**
+     * 资源树定位场景：连接级 scripts / ai 是树里真实存在的目录（磁盘实例 `_scripts`），
+     * 必须保留才能定位到目录下的脚本文件节点。默认 false 维持"仅 JDBC catalog"语义
+     * （保存等其它链路不应把 scripts 当成数据库名）。
+     */
+    keepConnectionScope?: boolean
 }): string | undefined {
+    const normalize = (label: string): string | undefined =>
+        options.keepConnectionScope ? label.trim() || undefined : asJdbcDatabase(label)
     if (options.activeInstanceLabel?.trim()) {
-        return asJdbcDatabase(options.activeInstanceLabel.trim())
+        return normalize(options.activeInstanceLabel)
     }
     const nodeId = options.instanceId ?? options.tabInstanceId
     if (nodeId) {
         const scoped = options.resolveScopedLabel?.(nodeId)
-        if (scoped?.trim()) return asJdbcDatabase(scoped.trim())
+        if (scoped?.trim()) return normalize(scoped)
         const label = options.findNodeLabel(nodeId)
-        if (label?.trim()) return asJdbcDatabase(label.trim())
+        if (label?.trim()) return normalize(label)
     }
     if (options.tabDatabase?.trim()) {
-        return asJdbcDatabase(options.tabDatabase.trim())
+        return normalize(options.tabDatabase)
     }
     return undefined
 }
