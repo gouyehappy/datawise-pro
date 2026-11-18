@@ -1132,6 +1132,17 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
   transition: var(--dw-transition-bg);
 }
 
+/* 置顶节点：用主色轻点缀标签与左侧竖条，让置顶项在树中更容易被注意到。
+   放在选中态规则之前，选中时竖条会被选中色覆盖，避免两种强调冲突。 */
+.tree-node.is-pinned .tree-label__text {
+  color: var(--dw-primary);
+  font-weight: 500;
+}
+
+.tree-node.is-pinned .tree-node__body::before {
+  background: color-mix(in srgb, var(--dw-primary) 55%, transparent);
+}
+
 .tree-node:hover .tree-node__body {
   background: var(--dw-bg-hover);
 }
