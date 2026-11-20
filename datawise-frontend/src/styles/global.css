@@ -32,6 +32,7 @@
 @import './menus.css';
 @import './context-menu.css';
 @import './modals.css';
+@import '@datawise/overlays/styles/tooltip.css';
 
 @import './module-page.css';
 @import './settings-panel.css';

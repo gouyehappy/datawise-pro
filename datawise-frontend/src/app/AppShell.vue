@@ -10,6 +10,7 @@ import LoginDialog from '@/features/auth/components/LoginDialog.vue'
 import ChangePasswordDialog from '@/features/settings/components/ChangePasswordDialog.vue'
 import AppToast from '@/core/components/AppToast.vue'
 import AppConfirmHost from '@/core/components/AppConfirmHost.vue'
+import {AppHoverTooltip} from '@datawise/overlays'
 import {useAuthStore} from '@/features/auth/stores/auth-store'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
@@ -266,6 +267,7 @@ watch(
     <McpConfirmDrawer/>
     <AppConfirmHost/>
     <AppToast/>
+    <AppHoverTooltip/>
     <!-- SQL 选中文本浮层：挂在与工作台 Tab 无关的根节点，避免选中态更新触发 Tab patch 竞态。 -->
     <SqlSelectionToolbar/>
   </div>

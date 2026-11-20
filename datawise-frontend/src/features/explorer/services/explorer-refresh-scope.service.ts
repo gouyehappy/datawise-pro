@@ -1,5 +1,8 @@
 import type {TreeNode} from '@/core/types'
 import {findAncestorByType, findParentConnectionId, findParentNode} from '@/core/utils/tree'
+import {
+    formatExplorerDatabaseScope,
+} from '@/features/explorer/services/explorer-database-scope'
 import {isTablesFolderNode} from '@/features/explorer/services/explorer-menu-intents.service'
 import {resolveTableContext} from '@/features/explorer/services/table-context-actions.service'
 
@@ -32,7 +35,19 @@ export function resolveTablesRefreshScope(
 
     if (isTablesFolderNode(node)) {
         const parent = findParentNode(tree, node.id)
-        if (parent?.type === 'database' || parent?.type === 'schema') {
+        if (parent?.type === 'schema') {
+            const catalogNode = findAncestorByType(tree, parent.id, 'database')
+            const connection = findAncestorByType(tree, node.id, 'connection')
+            const scopeLabel = catalogNode
+                ? formatExplorerDatabaseScope(connection?.dbType, catalogNode.label, parent.label)
+                : parent.label
+            return {
+                connectionId,
+                scopeLabel,
+                scopeNodeId: parent.id,
+            }
+        }
+        if (parent?.type === 'database') {
             return {
                 connectionId,
                 scopeLabel: parent.label,

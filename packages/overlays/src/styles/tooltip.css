@@ -1,0 +1,80 @@
+/**
+ * Motty / Viva HoverTooltip look:
+ * inverted fill (theme text → tip bg), 12×6 pad, ~8px radius, 10×4 arrow, gap 10.
+ */
+.dw-hover-tooltip {
+  position: fixed;
+  z-index: var(--dw-z-tooltip, 1300);
+  transform: translate(-50%, 0);
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--dw-text);
+  color: var(--dw-bg);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: center;
+  pointer-events: none;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--dw-bg) 12%, transparent),
+    0 8px 20px color-mix(in srgb, var(--dw-text) 22%, transparent);
+  animation: dw-hover-tooltip-in 150ms ease-out;
+}
+
+.dw-hover-tooltip.is-above {
+  transform: translate(-50%, -100%);
+  animation-name: dw-hover-tooltip-in-above;
+}
+
+.dw-hover-tooltip::after {
+  content: '';
+  position: absolute;
+  left: calc(50% + var(--dw-tooltip-arrow-offset, 0px));
+  top: -4px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 4px solid var(--dw-text);
+  transform: translateX(-50%);
+}
+
+.dw-hover-tooltip.is-above::after {
+  top: auto;
+  bottom: -4px;
+  border-bottom: none;
+  border-top: 4px solid var(--dw-text);
+}
+
+@keyframes dw-hover-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes dw-hover-tooltip-in-above {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 4px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dw-hover-tooltip,
+  .dw-hover-tooltip.is-above {
+    animation: none;
+  }
+}

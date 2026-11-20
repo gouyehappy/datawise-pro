@@ -34,6 +34,7 @@ mod sftp_tree;
 mod socks5;
 mod ssh;
 mod ssh_algorithms;
+mod ssh_config_sync;
 mod sudo_allowlist;
 mod sudo_fs;
 mod sudo_profiles;
@@ -1932,6 +1933,11 @@ impl Plugin {
                 "plugin": "io.datawise.community.ssh",
                 "maxTransferSize": MAX_TRANSFER_SIZE
             })),
+            "sshConfig/read" => ssh_config_sync::read(&plugin_data_dir(), &params),
+            "sshConfig/settings" => ssh_config_sync::settings(&plugin_data_dir(), &params),
+            "sshConfig/import" => ssh_config_sync::import_preview(&plugin_data_dir(), &params),
+            "sshConfig/ackImport" => ssh_config_sync::ack_import(&plugin_data_dir(), &params),
+            "sshConfig/export" => ssh_config_sync::export(&plugin_data_dir(), &params),
             _ => Err(format!("Method not found: {method}")),
         }
     }

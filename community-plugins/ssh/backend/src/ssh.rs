@@ -1668,7 +1668,9 @@ impl SshRuntime {
             .map(|command| spawn_exec_payload(&command));
         let connection_id = request.connection_id.as_str();
         let workbench_id = request.workbench_id.as_str();
-        let reuse_authenticated_transport = request.reuse_authenticated_transport;
+        let additional_shell = request.additional_shell;
+        let reuse_authenticated_transport =
+            request.reuse_authenticated_transport || additional_shell;
         let cols = request.cols;
         let rows = request.rows;
         let connection = self
@@ -1680,7 +1682,10 @@ impl SshRuntime {
             .ok_or("Connection is not active; reopen it from DataWise")?;
         // Remount / reconnect with the same workbench id must not leave the
         // previous PTY in the inventory (batch-send would list ghost targets).
-        let _ = self.close_workbench(workbench_id).await;
+        // In-pane split keeps the primary shell and opens another channel.
+        if !additional_shell {
+            let _ = self.close_workbench(workbench_id).await;
+        }
         // A copied workbench gets its own PTY channel, replay buffer and
         // terminal task, but deliberately shares the already authenticated
         // SSH transport. This avoids replaying an MFA challenge without ever

@@ -7,6 +7,7 @@ export {default as UnsavedChangesDialog} from './components/UnsavedChangesDialog
 export {default as AppToast} from './components/AppToast.vue'
 export {default as AppDrawer} from './components/AppDrawer.vue'
 export {default as AppPalette} from './components/AppPalette.vue'
+export {default as AppHoverTooltip} from './tooltip/AppHoverTooltip.vue'
 
 export {
   ContextMenu,

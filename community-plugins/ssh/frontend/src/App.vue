@@ -19,14 +19,11 @@ import {
   Link2,
   CircleStop,
   ArrowDown,
-  ArrowLeft,
   ArrowLeftRight,
   ArrowUp,
   ArrowUpDown,
-  Bot,
-  Braces,
   ClipboardPaste,
-  Columns3,
+  Columns2,
   Container,
   Copy,
   Download,
@@ -46,23 +43,24 @@ import {
   History,
   Home,
   Info,
-  KeyRound,
   ListChecks,
   Loader2,
   Lock,
   Monitor,
+  MoreHorizontal,
   Cable,
   AppWindow,
   Timer,
   Network,
   PackageOpen,
-  Palette,
+  PanelRight,
   PanelRightClose,
   Pencil,
   Pin,
   PlugZap,
   RefreshCw,
   RotateCw,
+  Rows2,
   Save,
   Scissors,
   ScrollText,
@@ -120,7 +118,15 @@ import {
 } from "./lib/terminalInteraction";
 import { extractHttpUrl } from "./lib/terminalContextMenu";
 import { createTerminalWriteThrottle, type TerminalWriteThrottle } from "./lib/terminalWriteThrottle";
-import { uiStorage } from "./lib/uiStorage";
+import { initUiStorage, uiStorage } from "./lib/uiStorage";
+import {
+  canOpenTerminalSplit,
+  sanitizeSplitOrientation,
+  sanitizeSyncInputEnabled,
+  TERMINAL_SPLIT_ORIENTATION_KEY,
+  TERMINAL_SYNC_INPUT_KEY,
+  type TerminalSplitOrientation,
+} from "./lib/terminalSplit";
 import { findForwardConflict, forwardStartParams, parseForwards, type PortForward } from "./lib/portForward";
 import {
   forwardsStorageKey,
@@ -186,6 +192,11 @@ import {
   resolveQuickPaletteKey,
   type QuickPaletteItem,
 } from "./lib/quickCommandPalette";
+import {
+  isCommandPaletteShortcut,
+  type PaletteCommand,
+} from "./lib/commandPalette";
+import CommandPalette from "./components/CommandPalette.vue";
 import { resolveBatchTargetKey } from "./lib/batchTargetKeys";
 import { sampleTransferSpeed, type TransferSpeedSample } from "./lib/transferSpeed";
 import { sanitizeContainerRef, type DockerContainer } from "./lib/dockerContainers";
@@ -194,7 +205,8 @@ import { readClipboardText, writeClipboardText, type ClipboardDeps } from "./lib
 import { filesFromClipboard } from "./lib/clipboardFiles";
 import { friendlySftpError } from "./lib/sftpErrors";
 import { filterDiskMounts, filterNetworkInterfaces } from "./lib/metricsView";
-import ResourceStrip from "./components/ResourceStrip.vue";
+import MonitorDock from "./components/MonitorDock.vue";
+import RightToolRail from "./components/RightToolRail.vue";
 import CopilotDock from "./components/CopilotDock.vue";
 import {
   buildModelOptions,
@@ -214,6 +226,7 @@ import {
   shouldEnsureAgentPresets,
 } from "./lib/copilot/chatMode";
 import { runToolCard } from "./lib/copilot/toolRunner";
+import { redactSensitiveText } from "./lib/copilot/redact";
 import {
   appendAssistantStreamDelta,
   clampCopilotDockWidth,
@@ -273,19 +286,13 @@ import { sanitizeInteractionPrefs, type InteractionPrefs } from "./lib/interacti
 import {
   canAddQuickCommandInScope,
   countQuickCommandsInScope,
-  filterQuickCommands,
-  groupQuickCommands,
-  groupQuickCommandsByConnection,
   normalizeQuickCommands,
-  otherScopedQuickCommands,
   QUICK_COMMAND_GROUP_MAX_LENGTH,
   QUICK_COMMANDS_LIMIT,
-  quickCommandGroupCount,
   quickCommandText,
   shortenConnectionId,
   visibleQuickCommands,
   type QuickCommand,
-  type QuickCommandGroupView,
 } from "./lib/quickCommands";
 import { batchTargetLabel, batchTargetsNeedDisambiguation, deriveBatchCommandName, liveBatchTargets, normalizeBatchTargets, orphanBatchSessionIds, quickPickCommandById, restoreBatchSelection, selectBatchTargets, summarizeBatchResults, toggleBatchTarget, type BatchSendSummary, type BatchSendTarget } from "./lib/batchSend";
 import {
@@ -315,11 +322,8 @@ import {
   highlightFillStyle,
   matchesInLine,
   normalizeHighlightRules,
-  sanitizeHighlightRuleInput,
   shouldRebuildHighlightRow,
   toAbsoluteRowRange,
-  HIGHLIGHT_COLOR_DEFAULT,
-  HIGHLIGHT_RULES_LIMIT,
   type HighlightRuleView,
 } from "./lib/keywordHighlight";
 import { pushSample, sparklinePath, METRICS_SAMPLE_CAPACITY } from "./lib/metricsSparkline";
@@ -330,7 +334,16 @@ import { encodeGif } from "./lib/gifEncoder";
 import { canKillProcess, sortProcessRows, type ProcessSortKey } from "./lib/processActions";
 import { distroBadge, type DistroBadge } from "./lib/distroBadge";
 import { auditKindLabel, auditKindOptions, auditOutcomeLabel, sanitizeAuditEntries, type AuditEntry } from "./lib/auditLog";
-import { resolveSftpPaneOpen, sanitizeSftpPaneDefaultOpen, type SshWorkbenchPaneOrder } from "./lib/workbenchLayout";
+import {
+  clampSftpWidthPx,
+  isSftpDrawerLayout,
+  resolvePaneOrder,
+  resolveSftpPaneOpen,
+  resolveSftpWidthPx,
+  sanitizeSftpPaneDefaultOpen,
+  SFTP_WIDTH_DEFAULT_PX,
+  type SshWorkbenchPaneOrder,
+} from "./lib/workbenchLayout";
 import { pickLiveSessionForReattach, type SessionSummary } from "./lib/sessionRestore";
 import { toolbarTintStyle } from "./lib/toolbarTint";
 import { createGhostClickGuard } from "./lib/ghostClickGuard";
@@ -363,7 +376,6 @@ import ConnectingCard from "./components/ConnectingCard.vue";
 import FolderPickerDialog from "./components/FolderPickerDialog.vue";
 import SideNavPanel, { type SftpSideQuickPath } from "./components/SideNavPanel.vue";
 import { Switch } from "./components/ui/switch";
-import { ToggleGroup, ToggleGroupItem } from "./components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "./components/ui/context-menu";
 import { Popover, PopoverAnchor, PopoverContent } from "./components/ui/popover";
@@ -395,6 +407,7 @@ import { ensureBuiltinSchemeCatalog } from "./lib/terminalScheme";
 // Defer settings / multi-format preview modules off the first-paint import graph
 // (single-file pack still inlines them, but factories run only when opened).
 const SettingsDialog = defineAsyncComponent(() => import("./components/SettingsDialog.vue"));
+import QuickCommandsPanel from "./components/QuickCommandsPanel.vue";
 const PreviewPane = defineAsyncComponent(() => import("./components/PreviewPane.vue"));
 import ImportWizard from "./components/ImportWizard.vue";
 import OtpPanel from "./components/OtpPanel.vue";
@@ -558,7 +571,9 @@ interface WorkbenchState {
   sftpPath?: string;
   followDirectory?: boolean;
   sudoMode?: boolean;
+  /** @deprecated Migrated to sftpWidthPx; kept for one-shot restore. */
   splitRatio?: number;
+  sftpWidthPx?: number;
   paneOrder?: SshWorkbenchPaneOrder;
   sftpPaneOpen?: boolean;
   visibleColumns?: SftpColumn[];
@@ -650,6 +665,12 @@ const QUICK_COMMANDS_KEY = "ssh-quick-commands";
 const SFTP_PANE_OPEN_KEY = "ssh-sftp-pane-open";
 // 会话顶栏常驻资源条（OpenOcta 式一眼态势）：默认开，"false" 关闭。
 const RESOURCE_STRIP_KEY = "ssh-resource-strip";
+/** Motty-style right icon rail; default open ("false" hides). */
+const RIGHT_RAIL_KEY = "ssh-right-rail";
+/** Global default for “follow terminal cwd” (new workbenches). */
+const FOLLOW_DIRECTORY_KEY = "ssh-follow-directory";
+/** Global default for SFTP visible columns (new workbenches). */
+const VISIBLE_COLUMNS_KEY = "ssh-visible-columns";
 // 侧栏形态偏好：tree/quick tab（默认 tree）与收起状态，localStorage 全局持久化。
 const SFTP_SIDE_TAB_KEY = "ssh-sftp-side-tab";
 const SFTP_SIDE_COLLAPSED_KEY = "ssh-sftp-side-collapsed";
@@ -687,13 +708,43 @@ const HIGHLIGHT_FLOOD_PENDING_BYTES = 48 * 1024;
 const HIGHLIGHT_BUSY_RETRY_MS = 80;
 const HIGHLIGHT_FLOOD_RETRY_MS = 120;
 // 8 色板（新增规则默认色板；自定义 hex 输入并行提供）。
-const HIGHLIGHT_PALETTE = ["#ef4444", "#f59e0b", "#facc15", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#6b7280"];
-
 type TerminalSearchMatchState = "idle" | "match" | "no-match";
 
 const terminalHost = ref<HTMLElement>();
 const sftpPane = ref<HTMLElement>();
 const paneContainer = ref<HTMLElement>();
+const splitOrientation = ref<TerminalSplitOrientation>(
+  sanitizeSplitOrientation(uiStorage.getItem(TERMINAL_SPLIT_ORIENTATION_KEY)),
+);
+const syncInputEnabled = ref(sanitizeSyncInputEnabled(uiStorage.getItem(TERMINAL_SYNC_INPUT_KEY)));
+const splitBusy = ref(false);
+const splitLayoutOpen = ref(false);
+const splitRatio = ref(0.5);
+/** Reactive peer session id — plain Map mutations do not trigger Vue. */
+const splitPeerSessionId = ref<string | null>(null);
+/** Focus chrome: primary pane vs split peer. */
+const focusedPane = ref<"primary" | "split">("primary");
+/** Single in-pane split peer — not a host/plugin tab. */
+const SPLIT_PEER_KEY = "split-peer";
+
+type ExtraShellRuntime = {
+  key: string;
+  sessionId: string;
+  terminal?: Terminal;
+  fitAddon?: FitAddon;
+  disposeInput?: { dispose(): void };
+  webglAddon?: WebglAddon;
+  lastSequence: number;
+  pendingFrames: Map<number, { stream: number; data: Uint8Array }>;
+  throttle: TerminalWriteThrottle;
+  hostEl: HTMLElement | null;
+};
+
+const extraShells = new Map<string, ExtraShellRuntime>();
+
+const splitSessionId = computed(() => splitPeerSessionId.value);
+/** Layout is driven by the open flag so panes appear immediately; PTY id is tracked separately. */
+const splitActive = computed(() => splitLayoutOpen.value);
 const uploadInput = ref<HTMLInputElement>();
 const lzpackUploadInput = ref<HTMLInputElement>();
 const zmodemInput = ref<HTMLInputElement>();
@@ -741,13 +792,18 @@ const agentPromptExpired = ref(false);
 // （后端 D2 兜底：破坏性命令自动忽略记住标记）。
 const agentPromptRemember = ref(false);
 const agentRunning = ref<AgentNoticePayload>();
-const splitRatio = ref(58);
-const paneOrder = ref<SshWorkbenchPaneOrder>("terminal-left");
+const sftpWidthPx = ref(SFTP_WIDTH_DEFAULT_PX);
+const paneOrder = ref<SshWorkbenchPaneOrder>("sftp-left");
 // SFTP 面板可见性：每个工作台即时开关（写入 workbenchState）；
-// 新工作台的初始值取全局"默认打开"偏好（localStorage）。
+// 新工作台的初始值取全局"默认打开"偏好（localStorage；Motty 对齐默认开）。
 const sftpPaneOpen = ref(loadSftpPaneDefaultOpen());
 const sftpPaneDefaultOpen = ref(loadSftpPaneDefaultOpen());
+/** Side monitor dock (replaces the full-width ResourceStrip). Preference key reused. */
 const resourceStripEnabled = ref(loadResourceStripEnabled());
+const rightRailOpen = ref(loadRightRailOpen());
+const toolbarMoreOpen = ref(false);
+const workbenchWidthPx = ref(1200);
+const sftpDrawerMode = computed(() => isSftpDrawerLayout(workbenchWidthPx.value));
 // 侧栏导航形态偏好：tree（目录树，默认）/ quick（快捷路径）+ 收起状态。
 const sftpSideTab = ref<"tree" | "quick">(loadSftpSideTab());
 const sftpSideCollapsed = ref(loadSftpSideCollapsed());
@@ -758,9 +814,11 @@ const sftpHomePath = ref("");
 // 选中复制 + 右键粘贴（终端交互偏好，全局生效，切换即持久化）。
 const termSelectCopy = ref(loadSelectCopyEnabled());
 const termClickCursor = ref(loadClickCursorEnabled());
-const followDirectory = ref(false);
+const followDirectoryDefault = ref(loadFollowDirectoryDefault());
+const followDirectory = ref(followDirectoryDefault.value);
 const directoryTrackingSupported = ref<boolean | undefined>();
-const visibleColumns = ref<SftpColumn[]>([...DEFAULT_VISIBLE_COLUMNS]);
+const visibleColumnsDefault = ref<SftpColumn[]>(loadVisibleColumnsDefault());
+const visibleColumns = ref<SftpColumn[]>([...visibleColumnsDefault.value]);
 /** 每列当前宽度（px）。 */
 const sftpColumnWidths = reactive<Record<SftpColumn, number>>({ ...DEFAULT_COLUMN_WIDTHS });
 /** 名称列宽度（px）；null = 未拖过，弹性填充剩余空间。 */
@@ -783,7 +841,6 @@ const resumableTasks = ref<ResumableUploadTask[]>([]);
 const resumableLoading = ref(false);
 const resumeInput = ref<HTMLInputElement | null>(null);
 const resumeTargetTaskId = ref("");
-const columnsOpen = ref(false);
 const transferSpeeds = reactive<Record<string, number>>({});
 const sudoMode = ref(false);
 const archiveBusy = ref(false);
@@ -853,88 +910,15 @@ const historyNow = ref(Date.now());
 // 快速命令：用户自定义片段，sidecar 持久化；可全局或绑定 connectionId。
 // 单作用域 ≤20 条；工作台展示「全局 + 当前连接」，工具栏下拉一键发送到 PTY。
 const quickCommands = ref<QuickCommand[]>(loadQuickCommands());
-const quickMenuOpen = ref(false);
 const quickSaving = ref(false);
-const quickDraft = reactive<{ id?: string; name: string; command: string; group: string; scope: "global" | "connection" }>({
-  name: "",
-  command: "",
-  group: "",
-  scope: "connection",
-});
-// Termius Snippets 式面板状态：搜索过滤 / 卡片展开 / 编辑器子视图。
-const quickSearch = ref("");
-const quickExpandedId = ref<string | null>(null);
-const quickEditorOpen = ref(false);
-const quickCollapsedGroups = ref<string[]>([]);
+const quickPanelSettings = ref<{ resetView: () => void; onSaved: () => void } | null>(null);
 const visibleQuickCommandList = computed(() => visibleQuickCommands(quickCommands.value, connectionId.value));
-const filteredQuickCommands = computed(() => filterQuickCommands(visibleQuickCommandList.value, quickSearch.value));
-const groupedQuickCommands = computed<QuickCommandGroupView[]>(() => groupQuickCommands(filteredQuickCommands.value));
-const quickHasRealGroups = computed(() => quickCommandGroupCount(visibleQuickCommandList.value) > 0);
-const otherQuickCommandGroups = computed(() =>
-  groupQuickCommandsByConnection(otherScopedQuickCommands(quickCommands.value, connectionId.value)),
-);
-const otherQuickCommandCount = computed(() =>
-  otherQuickCommandGroups.value.reduce((sum, group) => sum + group.commands.length, 0),
-);
-const quickOtherOpen = ref(false);
-const quickDraftScopeId = computed(() => (quickDraft.scope === "connection" ? connectionId.value : ""));
-const quickDraftScopeCount = computed(() => countQuickCommandsInScope(quickCommands.value, quickDraftScopeId.value || null));
-const quickDraftCanAdd = computed(() => {
-  if (quickDraft.id) {
-    const existing = quickCommands.value.find((item) => item.id === quickDraft.id);
-    const sameScope =
-      (existing?.connectionId?.trim() ?? "") === (quickDraftScopeId.value || "");
-    if (sameScope) return true;
-  }
-  return canAddQuickCommandInScope(quickCommands.value, quickDraftScopeId.value || null);
-});
 const batchSaveScope = ref<"global" | "connection">("connection");
 const batchSaveScopeId = computed(() => (batchSaveScope.value === "connection" ? connectionId.value : ""));
 const batchScopeCanAdd = computed(() => canAddQuickCommandInScope(quickCommands.value, batchSaveScopeId.value || null));
 
-function openQuickEditor(item?: QuickCommand) {
-  quickDraft.id = item?.id;
-  quickDraft.name = item?.name ?? "";
-  quickDraft.command = item?.command ?? "";
-  quickDraft.group = item?.group ?? "";
-  // 新建默认「当前连接」；编辑沿用原条目 scope。
-  if (item) {
-    quickDraft.scope = item.connectionId?.trim() ? "connection" : "global";
-  } else {
-    quickDraft.scope = connectionId.value ? "connection" : "global";
-  }
-  quickEditorOpen.value = true;
-}
-
-function closeQuickEditor() {
-  quickEditorOpen.value = false;
-  quickDraft.id = undefined;
-  quickDraft.name = "";
-  quickDraft.command = "";
-  quickDraft.group = "";
-  quickDraft.scope = connectionId.value ? "connection" : "global";
-}
-
-function toggleQuickGroupCollapse(groupId: string) {
-  const index = quickCollapsedGroups.value.indexOf(groupId);
-  if (index >= 0) quickCollapsedGroups.value.splice(index, 1);
-  else quickCollapsedGroups.value.push(groupId);
-}
-
-function quickGroupName(group: QuickCommandGroupView): string {
-  return group.id ? group.name : t("quickCommands.ungrouped");
-}
-
-function setQuickDraftBoundToConnection(bound: boolean | undefined) {
-  quickDraft.scope = bound === true && connectionId.value ? "connection" : "global";
-}
-
 function setBatchSaveBoundToConnection(bound: boolean | undefined) {
   batchSaveScope.value = bound === true && connectionId.value ? "connection" : "global";
-}
-
-function toggleQuickExpand(id: string) {
-  quickExpandedId.value = quickExpandedId.value === id ? null : id;
 }
 // 批量发送命令条（Electerm quick-command bar 风格）：常驻贴在终端底部，回车
 // 即发送。目标来自 ssh/sessions/list（跨连接全部活跃会话），命令写入各会话
@@ -1147,6 +1131,9 @@ const quickPaletteOpen = ref(false);
 const quickPaletteQuery = ref("");
 const quickPaletteIndex = ref(0);
 const quickPaletteQueryInput = ref<HTMLInputElement | null>(null);
+// Universal command palette (Ctrl/Cmd+Shift+P): all actions in one keyboard entry.
+const commandPaletteOpen = ref(false);
+const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null);
 const commandCatalog = ref<string[]>([...COMMON_COMMANDS]);
 const commandSuggestOpen = ref(false);
 const commandSuggestItems = ref<SuggestItem[]>([]);
@@ -1363,14 +1350,13 @@ const metricsLoading = ref(false);
 const metricsError = ref("");
 const settingsOpen = ref(false);
 const settingsFocusCategory = ref<"sudo" | "agent" | "transfer" | "terminal" | "security" | "mcp" | null>(null);
+const settingsFocusAnchor = ref<string | null>(null);
 const settingsFocusAddModel = ref(false);
 const importOpen = ref(false);
 // reka Select 不接受空串 option value（空串 = 未选中占位）；空值选项用哨兵值双向映射。
 const SELECT_EMPTY_SENTINEL = "__empty__";
 const auditOpen = ref(false);
-// 终端 MCP 模式快速开关（工具栏弹出层）：连接级 agentTerminalMode 的就地入口，
-// 与设置弹窗共用 ssh/settings/set，值语义见 lib/agentTerminal.ts。
-const agentModeOpen = ref(false);
+// 连接级 agentTerminalMode（与设置页共用 ssh/settings/*，值语义见 lib/agentTerminal.ts）。
 const agentMode = ref<AgentTerminalMode>("off");
 const agentModeBusy = ref(false);
 const profilesOpen = ref(false);
@@ -1406,6 +1392,7 @@ const settingsDialog = ref<{
   flushSettings?: () => Promise<void>;
   setDownloadDirDraft?: (path: string) => void;
   setDownloadUseDefaultDraft?: (value: boolean) => void;
+  onQuickCommandSaved?: () => void;
 } | null>(null);
 const downloadPrefsAdapter = {
   loadDir: loadDownloadDir,
@@ -1515,6 +1502,8 @@ let pasteConfirmResolver: ((accepted: boolean) => void) | undefined;
 let dropUploadResolver: ((choice: "cancel" | "cwd" | { dir: string }) => void) | undefined;
 let zoomNoticeTimer = 0;
 let resizeObserver: ResizeObserver | undefined;
+let workbenchResizeObserver: ResizeObserver | undefined;
+const workbenchRoot = ref<HTMLElement>();
 let disposeInput: { dispose(): void } | undefined;
 let disposeWriteParsed: { dispose(): void } | undefined;
 let disposeSelectionCopy: { dispose(): void } | undefined;
@@ -1604,11 +1593,11 @@ const terminalWriteThrottle: TerminalWriteThrottle = createTerminalWriteThrottle
     terminal.write(data, done);
   },
 });
-
 function flushTerminalOutputNow() {
   if (disposed) return;
   flushDeferredTerminalOutput();
   terminalWriteThrottle.flush();
+  for (const runtime of extraShells.values()) runtime.throttle.flush();
 }
 
 function flushDeferredTerminalOutput() {
@@ -1774,10 +1763,15 @@ const connectionAuthMethodLabel = computed(() => formatAuthMethodLabel(connectio
 }));
 // 连接色染色按主题分级（light 压低 alpha 保 muted 文字 AA 对比度，P2-4）。
 const toolbarStyle = computed(() => toolbarTintStyle(connection.value.color, appearance.value.colorScheme));
-const terminalBasis = computed(() => ({ flexBasis: sftpPaneOpen.value ? `${splitRatio.value}%` : "100%" }));
+const terminalBasis = computed(() => ({ flex: "1 1 auto", minWidth: "0" }));
+const sftpPaneStyle = computed(() => {
+  const width = `${sftpWidthPx.value}px`;
+  return { width, flex: `0 0 ${width}`, maxWidth: width };
+});
 const orderedPaneClass = computed(() => [
   paneOrder.value === "sftp-left" ? "panes panes--reversed" : "panes",
   sftpPaneOpen.value ? "" : "panes--solo",
+  sftpPaneOpen.value && sftpDrawerMode.value ? "panes--drawer" : "",
 ].filter(Boolean).join(" "));
 const sortedEntries = computed(() => {
   const direction = sort.value.direction === "asc" ? 1 : -1;
@@ -1844,17 +1838,33 @@ function initialState(): WorkbenchState {
   return value && typeof value === "object" ? (value as WorkbenchState) : {};
 }
 
+/** True once workbenchState explicitly stored sftpPaneOpen (vs falling back to global default). */
+let workbenchSftpPaneExplicit = false;
+/** True once workbenchState explicitly stored followDirectory. */
+let workbenchFollowExplicit = false;
+/** True once workbenchState stored columnsV2-visibleColumns (vs global default). */
+let workbenchColumnsExplicit = false;
+
 function restoreUiState() {
   const state = initialState();
   currentPath.value = typeof state.sftpPath === "string" ? normalizeRemotePath(state.sftpPath) : "/";
-  splitRatio.value = typeof state.splitRatio === "number" && state.splitRatio >= 35 && state.splitRatio <= 80 ? state.splitRatio : 58;
-  paneOrder.value = state.paneOrder === "sftp-left" ? "sftp-left" : "terminal-left";
+  paneOrder.value = resolvePaneOrder(state.paneOrder);
+  sftpWidthPx.value = resolveSftpWidthPx(state, paneContainer.value?.clientWidth || workbenchWidthPx.value);
+  workbenchSftpPaneExplicit = typeof state.sftpPaneOpen === "boolean";
   sftpPaneOpen.value = resolveSftpPaneOpen(state, sftpPaneDefaultOpen.value);
-  followDirectory.value = state.followDirectory === true;
+  workbenchFollowExplicit = typeof state.followDirectory === "boolean";
+  followDirectory.value = workbenchFollowExplicit
+    ? state.followDirectory === true
+    : followDirectoryDefault.value;
   sudoMode.value = state.sudoMode === true && canWrite.value;
   // 一次性迁移：六列默认上线前的旧偏好重置为全开（之后用户自定义照常持久化）。
   const legacyColumns = state.visibleColumns != null && state.columnsV2 !== true;
-  visibleColumns.value = legacyColumns ? [...DEFAULT_VISIBLE_COLUMNS] : sanitizeVisibleColumns(state.visibleColumns);
+  workbenchColumnsExplicit = !legacyColumns && state.visibleColumns != null;
+  visibleColumns.value = legacyColumns
+    ? [...DEFAULT_VISIBLE_COLUMNS]
+    : workbenchColumnsExplicit
+      ? sanitizeVisibleColumns(state.visibleColumns)
+      : sanitizeVisibleColumns(visibleColumnsDefault.value);
   // 恢复列宽，未知列或越界用默认值兜底
   const saved = state.sftpColumnWidths || {};
   const allCols: SftpColumn[] = ["size", "modified", "owner", "group", "permissions"];
@@ -1874,7 +1884,7 @@ function writeWorkbenchState() {
     sftpPath: currentPath.value,
     followDirectory: followDirectory.value,
     sudoMode: sudoMode.value,
-    splitRatio: splitRatio.value,
+    sftpWidthPx: sftpWidthPx.value,
     paneOrder: paneOrder.value,
     sftpPaneOpen: sftpPaneOpen.value,
     visibleColumns: visibleColumns.value,
@@ -1891,14 +1901,16 @@ function persistState() {
   }, 150);
 }
 
-// —— 自定义 tooltip（对齐宿主的气泡提示）——
+// —— 自定义 tooltip（Motty HoverTooltip：反色气泡、即时出现、下方优先）——
 // 全局接管 title 属性：悬停或键盘聚焦时把值挪到 data-tooltip（抑制原生慢速
-// 灰框），350ms 后显示主题化气泡；下方空间不足翻到上方。模板无需改动，所有
+// 灰框），0ms 后显示主题化气泡；下方空间不足翻到上方。模板无需改动，所有
 // 现有和未来的 title 自动生效。
 const tooltip = ref<{ text: string; x: number; y: number; above: boolean; arrowOffset: number } | null>(null);
 const tooltipBubble = ref<HTMLElement>();
 let tooltipEl: HTMLElement | null = null;
 let tooltipTimer = 0;
+const TOOLTIP_DELAY_MS = 0;
+const TOOLTIP_SIDE_GAP = 10;
 
 function hideTooltip() {
   window.clearTimeout(tooltipTimer);
@@ -1921,9 +1933,9 @@ function scheduleTooltip(target: HTMLElement) {
     tooltipTimer = 0;
     if (!target.isConnected) return;
     const rect = target.getBoundingClientRect();
-    const above = rect.bottom + 34 > window.innerHeight && rect.top > 34;
+    const above = rect.bottom + 40 > window.innerHeight && rect.top > 40;
     const center = rect.left + rect.width / 2;
-    tooltip.value = { text, x: center, y: above ? rect.top - 6 : rect.bottom + 6, above, arrowOffset: 0 };
+    tooltip.value = { text, x: center, y: above ? rect.top - TOOLTIP_SIDE_GAP : rect.bottom + TOOLTIP_SIDE_GAP, above, arrowOffset: 0 };
     // 量出气泡实际宽度后重新钳位，保证整框（而非仅中心点）落在视口内；
     // 小三角按钳位偏差反向偏移，继续对准触发元素。
     void nextTick(() => {
@@ -1936,7 +1948,7 @@ function scheduleTooltip(target: HTMLElement) {
         tooltip.value = { ...current, x: clamped, arrowOffset: center - clamped };
       }
     });
-  }, 350);
+  }, TOOLTIP_DELAY_MS);
 }
 
 function onTooltipOver(event: MouseEvent) {
@@ -2315,6 +2327,11 @@ function handleTerminalKey(event: KeyboardEvent) {
     event.stopPropagation();
     return false;
   };
+  // Universal command palette: Ctrl/Cmd+Shift+P (works even when disconnected).
+  if (isCommandPaletteShortcut(event)) {
+    toggleCommandPalette();
+    return consume();
+  }
   // Find: Ctrl/Cmd+Shift+F always. Ctrl/Cmd+F opens Find when no ghost;
   // Ctrl+F with ghost accepts the fish-style remainder (Cmd+F stays Find on Apple).
   if (mod && (event.key === "f" || event.key === "F")) {
@@ -2351,6 +2368,10 @@ function handleTerminalKey(event: KeyboardEvent) {
   // Esc closes the topmost terminal overlay only — never forward Esc to the PTY
   // while a panel is open (would clear the readline line / confuse TUI apps).
   if (event.key === "Escape") {
+    if (commandPaletteOpen.value) {
+      closeCommandPalette();
+      return consume();
+    }
     if (searchOpen.value) {
       closeTerminalSearch();
       return consume();
@@ -2626,42 +2647,338 @@ function trackPendingInput(data: string) {
   recordSubmittedCommands(result.submitted);
 }
 
-function sendTerminalBytes(data: Uint8Array) {
+function allExtraSessionIds(): string[] {
+  return [...extraShells.values()].map((runtime) => runtime.sessionId).filter(Boolean);
+}
+
+function sendTerminalBytes(data: Uint8Array, sourceSessionId?: string) {
   const proto = protocolSession.value;
   if (proto && (proto.kind === "local" || proto.kind === "telnet" || proto.kind === "serial")) {
     terminalInputQueue.enqueue(proto.sessionId, normalizeTerminalInputBytes(data));
     return;
   }
-  const sessionId = session.value?.sessionId;
-  if (!sessionId) return;
-  terminalInputQueue.enqueue(sessionId, normalizeTerminalInputBytes(data));
+  const primaryId = session.value?.sessionId;
+  const extras = allExtraSessionIds();
+  const payload = normalizeTerminalInputBytes(data);
+  if (syncInputEnabled.value && extras.length) {
+    const targets = new Set<string>();
+    if (primaryId) targets.add(primaryId);
+    for (const id of extras) targets.add(id);
+    for (const id of targets) terminalInputQueue.enqueue(id, payload);
+    return;
+  }
+  const source = sourceSessionId || primaryId;
+  if (source) terminalInputQueue.enqueue(source, payload);
 }
 
 function scheduleFit() {
   window.clearTimeout(resizeTimer);
   resizeTimer = window.setTimeout(() => {
-    if (!terminal || !fitAddon || !terminalHost.value?.clientWidth || !terminalHost.value.clientHeight) return;
     try {
-      fitAddon.fit();
-      // trzsz 进度条按终端列宽渲染（filter 内部文本进度条虽未启用，列宽保持同步）。
-      trzszFilter?.setTerminalColumns(terminal.cols);
-      const proto = protocolSession.value;
-      if (proto?.kind === "local") {
+      if (terminal && fitAddon && terminalHost.value?.clientWidth && terminalHost.value.clientHeight) {
+        fitAddon.fit();
+        // trzsz 进度条按终端列宽渲染（filter 内部文本进度条虽未启用，列宽保持同步）。
+        trzszFilter?.setTerminalColumns(terminal.cols);
+        const proto = protocolSession.value;
+        if (proto?.kind === "local") {
+          void window.datawisePlugin
+            .notify("local/terminal/resize", { sessionId: proto.sessionId, cols: terminal.cols, rows: terminal.rows })
+            .catch(() => undefined);
+        } else if (proto?.kind === "telnet") {
+          void window.datawisePlugin
+            .notify("telnet/resize", { sessionId: proto.sessionId, cols: terminal.cols, rows: terminal.rows })
+            .catch(() => undefined);
+        } else if (session.value) {
+          void window.datawisePlugin.notify("ssh/terminal/resize", { sessionId: session.value.sessionId, cols: terminal.cols, rows: terminal.rows }).catch(() => undefined);
+        }
+      }
+      for (const runtime of extraShells.values()) {
+        if (!runtime.terminal || !runtime.fitAddon || !runtime.hostEl?.clientWidth || !runtime.hostEl.clientHeight) continue;
+        runtime.fitAddon.fit();
         void window.datawisePlugin
-          .notify("local/terminal/resize", { sessionId: proto.sessionId, cols: terminal.cols, rows: terminal.rows })
+          .notify("ssh/terminal/resize", {
+            sessionId: runtime.sessionId,
+            cols: runtime.terminal.cols,
+            rows: runtime.terminal.rows,
+          })
           .catch(() => undefined);
-      } else if (proto?.kind === "telnet") {
-        void window.datawisePlugin
-          .notify("telnet/resize", { sessionId: proto.sessionId, cols: terminal.cols, rows: terminal.rows })
-          .catch(() => undefined);
-      } else if (session.value) {
-        void window.datawisePlugin.notify("ssh/terminal/resize", { sessionId: session.value.sessionId, cols: terminal.cols, rows: terminal.rows }).catch(() => undefined);
       }
     } catch {
       // The iframe can briefly be detached while the host switches tabs.
     }
   }, 20);
 }
+
+function drainExtraShellFrames(runtime: ExtraShellRuntime) {
+  let frame = runtime.pendingFrames.get(runtime.lastSequence + 1);
+  while (frame) {
+    runtime.pendingFrames.delete(runtime.lastSequence + 1);
+    runtime.lastSequence += 1;
+    if (frame.stream !== 2) runtime.throttle.write(frame.data);
+    frame = runtime.pendingFrames.get(runtime.lastSequence + 1);
+  }
+}
+
+function disposeExtraShellRuntime(key: string) {
+  const runtime = extraShells.get(key);
+  if (!runtime) return;
+  runtime.disposeInput?.dispose();
+  try {
+    runtime.webglAddon?.dispose();
+  } catch {
+    /* ignore */
+  }
+  try {
+    runtime.terminal?.dispose();
+  } catch {
+    /* ignore */
+  }
+  runtime.throttle.dispose();
+  extraShells.delete(key);
+}
+
+async function closeAllExtraShells() {
+  const keys = [...extraShells.keys()];
+  for (const key of keys) {
+    const runtime = extraShells.get(key);
+    const sessionId = runtime?.sessionId;
+    disposeExtraShellRuntime(key);
+    if (sessionId) {
+      await window.datawisePlugin.invoke("ssh/session/close", { sessionId }).catch(() => undefined);
+    }
+  }
+  splitPeerSessionId.value = null;
+  splitLayoutOpen.value = false;
+  focusedPane.value = "primary";
+}
+
+function createExtraShellTerminal(runtime: ExtraShellRuntime, host: HTMLElement) {
+  if (runtime.terminal) return;
+  const font = resolveTerminalFont(terminalFontOverride.value, {
+    fontFamily: hostTerminalFontFamily(appearance.value),
+    fontSize: appearance.value.terminal.fontSize,
+  });
+  const term = new Terminal({
+    convertEol: false,
+    cursorBlink: true,
+    cursorStyle: "bar",
+    fontFamily: font.fontFamily,
+    fontSize: font.fontSize,
+    lineHeight: 1.15,
+    scrollback: 15_000,
+    allowProposedApi: true,
+    theme: terminalTheme(),
+  });
+  const fit = new FitAddon();
+  term.loadAddon(fit);
+  term.loadAddon(new WebLinksAddon());
+  term.open(host);
+  term.loadAddon(new Unicode11Addon());
+  term.unicode.activeVersion = "11";
+  runtime.webglAddon = loadWebglEnabled()
+    ? attachWebglRenderer(term, () => new WebglAddon()) ?? undefined
+    : undefined;
+  runtime.disposeInput = term.onData((data) => {
+    if (!runtime.sessionId) return;
+    sendTerminalBytes(new TextEncoder().encode(data), runtime.sessionId);
+  });
+  runtime.terminal = term;
+  runtime.fitAddon = fit;
+  runtime.hostEl = host;
+}
+
+function bindSplitPeerHost(el: Element | null) {
+  const runtime = extraShells.get(SPLIT_PEER_KEY);
+  if (!runtime) return;
+  if (!el) {
+    runtime.hostEl = null;
+    return;
+  }
+  const host = el as HTMLElement;
+  runtime.hostEl = host;
+  if (!runtime.terminal) {
+    createExtraShellTerminal(runtime, host);
+    scheduleFit();
+  }
+}
+
+function ensureSplitPeerRuntime(): ExtraShellRuntime {
+  const existing = extraShells.get(SPLIT_PEER_KEY);
+  if (existing) return existing;
+  const runtime: ExtraShellRuntime = {
+    key: SPLIT_PEER_KEY,
+    sessionId: "",
+    lastSequence: 0,
+    pendingFrames: new Map(),
+    throttle: createTerminalWriteThrottle({
+      sink: (data, done) => {
+        const current = extraShells.get(SPLIT_PEER_KEY);
+        if (!current?.terminal) {
+          done();
+          return;
+        }
+        current.terminal.write(data, done);
+      },
+    }),
+    hostEl: null,
+  };
+  extraShells.set(SPLIT_PEER_KEY, runtime);
+  return runtime;
+}
+
+async function openSplitPeerSession(): Promise<boolean> {
+  if (!connectionId.value || !workbenchId.value || !session.value?.sessionId) return false;
+  const runtime = ensureSplitPeerRuntime();
+  if (runtime.sessionId) {
+    splitPeerSessionId.value = runtime.sessionId;
+    return true;
+  }
+  try {
+    await nextTick();
+    const cols = runtime.terminal?.cols || terminal?.cols || 120;
+    const rows = runtime.terminal?.rows || terminal?.rows || 32;
+    const info = await window.datawisePlugin.invoke<SessionInfo>("ssh/session/open", {
+      connectionId: connectionId.value,
+      workbenchId: workbenchId.value,
+      cols,
+      rows,
+      reuseAuthenticatedTransport: true,
+      reuseAuthenticatedSessionId: session.value.sessionId,
+      additionalShell: true,
+    });
+    runtime.sessionId = info.sessionId;
+    splitPeerSessionId.value = info.sessionId;
+    await window.datawisePlugin
+      .invoke<ReplayResult>("ssh/terminal/replay", { sessionId: info.sessionId, afterSequence: 0 })
+      .catch(() => undefined);
+    scheduleFit();
+    return true;
+  } catch (cause) {
+    disposeExtraShellRuntime(SPLIT_PEER_KEY);
+    splitPeerSessionId.value = null;
+    showError(cause, "terminal");
+    return false;
+  }
+}
+
+function focusSplitPane(pane: "primary" | "split") {
+  focusedPane.value = pane;
+  void nextTick(() => {
+    if (pane === "primary") terminal?.focus();
+    else extraShells.get(SPLIT_PEER_KEY)?.terminal?.focus();
+  });
+}
+
+async function toggleTerminalSplit() {
+  if (splitLayoutOpen.value) {
+    await closeTerminalSplit();
+    return;
+  }
+  if (
+    !canOpenTerminalSplit({
+      connected: connected.value,
+      primarySessionId: session.value?.sessionId,
+      splitSessionId: splitPeerSessionId.value ?? undefined,
+      protocolKind: "ssh",
+    }) &&
+    !splitPeerSessionId.value
+  ) {
+    return;
+  }
+  if (splitBusy.value) return;
+  ensureSplitPeerRuntime();
+  splitLayoutOpen.value = true;
+  focusedPane.value = "primary";
+  await nextTick();
+  if (splitPeerSessionId.value) {
+    scheduleFit();
+    return;
+  }
+  splitBusy.value = true;
+  try {
+    const ok = await openSplitPeerSession();
+    if (!ok) {
+      splitLayoutOpen.value = false;
+      splitPeerSessionId.value = null;
+      disposeExtraShellRuntime(SPLIT_PEER_KEY);
+      return;
+    }
+  } finally {
+    splitBusy.value = false;
+  }
+  void nextTick(scheduleFit);
+}
+
+async function closeTerminalSplit() {
+  const runtime = extraShells.get(SPLIT_PEER_KEY);
+  const sessionId = runtime?.sessionId || splitPeerSessionId.value;
+  disposeExtraShellRuntime(SPLIT_PEER_KEY);
+  splitPeerSessionId.value = null;
+  splitLayoutOpen.value = false;
+  focusedPane.value = "primary";
+  if (sessionId) {
+    await window.datawisePlugin.invoke("ssh/session/close", { sessionId }).catch(() => undefined);
+  }
+  void nextTick(scheduleFit);
+}
+
+function setSplitOrientation(next: TerminalSplitOrientation) {
+  splitOrientation.value = next;
+  try {
+    uiStorage.setItem(TERMINAL_SPLIT_ORIENTATION_KEY, next);
+  } catch {
+    /* ignore */
+  }
+  void nextTick(scheduleFit);
+}
+
+function setSyncInputEnabled(next: boolean) {
+  syncInputEnabled.value = next;
+  try {
+    uiStorage.setItem(TERMINAL_SYNC_INPUT_KEY, next ? "true" : "false");
+  } catch {
+    /* ignore */
+  }
+}
+
+function toggleSyncInput() {
+  setSyncInputEnabled(!syncInputEnabled.value);
+}
+
+function onSplitDividerPointerDown(event: PointerEvent) {
+  const target = event.currentTarget as HTMLElement | null;
+  const pane = target?.closest(".terminal-pane") as HTMLElement | null;
+  if (!pane) return;
+  event.preventDefault();
+  const vertical = splitOrientation.value === "vertical";
+  const start = vertical ? event.clientX : event.clientY;
+  const startRatio = splitRatio.value;
+  const rect = pane.getBoundingClientRect();
+  const size = vertical ? rect.width : rect.height;
+  const onMove = (ev: PointerEvent) => {
+    const delta = (vertical ? ev.clientX : ev.clientY) - start;
+    const next = Math.min(0.75, Math.max(0.25, startRatio + delta / Math.max(1, size)));
+    splitRatio.value = next;
+    scheduleFit();
+  };
+  const onUp = () => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+}
+
+const splitPrimaryStyle = computed(() => {
+  if (!splitActive.value) return undefined;
+  const pct = `${Math.round(splitRatio.value * 1000) / 10}%`;
+  return splitOrientation.value === "vertical" ? { flexBasis: pct, width: pct } : { flexBasis: pct, height: pct };
+});
+const splitSecondaryStyle = computed(() => {
+  if (!splitActive.value) return undefined;
+  const pct = `${Math.round((1 - splitRatio.value) * 1000) / 10}%`;
+  return splitOrientation.value === "vertical" ? { flexBasis: pct, width: pct } : { flexBasis: pct, height: pct };
+});
 
 function stopCommandMarkerTick() {
   if (commandMarkerTimer) {
@@ -3254,6 +3571,16 @@ async function saveTrzszDownloadedFiles(
 function handleBinary(event: DatawisePluginBinaryEvent) {
   const sessionId = activeTerminalSessionId || session.value?.sessionId;
   const proto = protocolSession.value;
+  for (const runtime of extraShells.values()) {
+    if (!runtime.sessionId || event.channel !== `ssh/terminal/out/${runtime.sessionId}`) continue;
+    const payload = bridgeBinaryBytes(event, window.datawisePlugin.decodeBase64);
+    if (payload.length < 9) return;
+    const sequence = readU64(payload, 1);
+    if (sequence <= runtime.lastSequence) return;
+    runtime.pendingFrames.set(sequence, { stream: payload[0], data: payload.slice(9) });
+    drainExtraShellFrames(runtime);
+    return;
+  }
   const terminalOutChannel =
     sessionId &&
     (event.channel === `ssh/terminal/out/${sessionId}`
@@ -3864,6 +4191,7 @@ async function closeSession(updateStatus = true) {
   const sessionId = session.value?.sessionId;
   session.value = undefined;
   activeTerminalSessionId = "";
+  await closeAllExtraShells();
   clearAgentPrompts();
   agentRunning.value = undefined;
   // Closing mid-ZMODEM aborts the transfer silently instead of leaving the
@@ -3999,12 +4327,12 @@ async function openSessionTab(reuseAuthenticatedTransport: boolean) {
   }
 }
 
-/** 新建会话：独立 transport，可能再次要求堡垒机 MFA。 */
+/** 新建宿主会话标签（与 Motty 开新窗口/标签一致，不再做插件内 shell tab）。 */
 async function openNewSessionTab() {
   await openSessionTab(false);
 }
 
-/** 复制会话：复用当前已认证 transport，免再次 MFA。 */
+/** 复制到宿主新标签（复用已认证 transport，免 MFA）。 */
 async function openCopiedSessionTab() {
   await openSessionTab(true);
 }
@@ -4351,6 +4679,8 @@ const copilotChatMode = ref<CopilotChatMode>("agent");
 const isCopilotAskMode = computed(() => copilotChatMode.value === "ask");
 /** auto = follow workbench locale; zh-CN / en = force reply language. */
 const copilotReplyLanguage = ref<CopilotReplyLanguage>("auto");
+/** Mask secrets in terminal output / tool results before they enter the LLM prompt. */
+const copilotRedactOutput = ref(true);
 /** auto | plugin BYOK | host default — user pick from merged list. */
 const copilotModelPreference = ref<ModelPreference>("auto");
 const copilotModelOptions = ref<ModelOption[]>([]);
@@ -4592,7 +4922,9 @@ function onSettingsOpenChange(open: boolean) {
   settingsOpen.value = open;
   if (!open) {
     settingsFocusCategory.value = null;
+    settingsFocusAnchor.value = null;
     settingsFocusAddModel.value = false;
+    void refreshAgentMode();
   }
 }
 
@@ -4607,6 +4939,15 @@ async function setCopilotReplyLanguage(value: CopilotReplyLanguage) {
   copilotReplyLanguage.value = next;
   try {
     await window.datawisePlugin.invoke("local/preferences/set", { copilotReplyLanguage: next });
+  } catch {
+    // Memory-only for this session.
+  }
+}
+
+async function setCopilotRedactOutput(value: boolean) {
+  copilotRedactOutput.value = value === true;
+  try {
+    await window.datawisePlugin.invoke("local/preferences/set", { copilotRedactOutput: copilotRedactOutput.value });
   } catch {
     // Memory-only for this session.
   }
@@ -4676,11 +5017,16 @@ async function askCopilotLlm(userText: string, fallbackCards: ActionCard[] = [])
       hostAiApi,
       {
         system: copilotSystemPrompt(),
-        prompt: composeUserPrompt({
-          userText,
-          context: copilotContext.value,
-          mode: askMode ? "ask" : "agent",
-        }),
+        // Mask secrets in the whole assembled prompt (terminal selection,
+        // attachments, context JSON and tool-output follow-ups all funnel here).
+        prompt: redactSensitiveText(
+          composeUserPrompt({
+            userText,
+            context: copilotContext.value,
+            mode: askMode ? "ask" : "agent",
+          }),
+          copilotRedactOutput.value,
+        ),
         requestId,
         stream: true,
         prefer: copilotModelPreference.value,
@@ -4925,18 +5271,6 @@ watch(
 // rAF 节流（≤30fps）视口行扫描，per-row Map 维护 decoration，全局上限 400。
 // ---------------------------------------------------------------------------
 const highlightRules = ref<HighlightRuleView[]>([]);
-const highlightMenuOpen = ref(false);
-const highlightSaving = ref(false);
-const highlightDraftError = ref("");
-const highlightDraft = reactive({ id: undefined as string | undefined, pattern: "", color: HIGHLIGHT_COLOR_DEFAULT, isRegex: false, caseSensitive: false });
-// ToggleGroup（multiple）以字符串数组建模；这里桥接到 draft 的两个布尔标志位。
-const highlightFlagValues = computed<string[]>({
-  get: () => [highlightDraft.isRegex ? "regex" : "", highlightDraft.caseSensitive ? "case" : ""].filter(Boolean),
-  set: (values) => {
-    highlightDraft.isRegex = values.includes("regex");
-    highlightDraft.caseSensitive = values.includes("case");
-  },
-});
 const compiledHighlightRules = computed(() => compileRules(highlightRules.value));
 
 function loadHighlightEnabled(): boolean {
@@ -4950,8 +5284,9 @@ function loadHighlightEnabled(): boolean {
 // 总开关：关闭时摘掉 onRender 挂子并全量清理 decoration（零挂钩子语义）。
 const highlightEnabled = ref(loadHighlightEnabled());
 
-function toggleHighlightEnabled() {
-  highlightEnabled.value = !highlightEnabled.value;
+function setHighlightEnabled(value: boolean) {
+  if (highlightEnabled.value === value) return;
+  highlightEnabled.value = value;
   try {
     uiStorage.setItem(HIGHLIGHT_ENABLED_KEY, highlightEnabled.value ? "true" : "false");
   } catch {
@@ -4965,6 +5300,11 @@ function toggleHighlightEnabled() {
   }
 }
 
+function onHighlightRulesChanged(rules: HighlightRuleView[]) {
+  highlightRules.value = rules;
+  if (highlightEnabled.value) rescanHighlightViewport();
+}
+
 async function hydrateHighlightRules() {
   try {
     const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/list", {});
@@ -4973,85 +5313,6 @@ async function hydrateHighlightRules() {
     // 后端不可用（如旧版 sidecar）：静默降级空表，高亮功能整体退场。
     highlightRules.value = [];
   }
-}
-
-function resetHighlightDraft() {
-  highlightDraft.id = undefined;
-  highlightDraft.pattern = "";
-  highlightDraft.color = HIGHLIGHT_COLOR_DEFAULT;
-  highlightDraft.isRegex = false;
-  highlightDraft.caseSensitive = false;
-  highlightDraftError.value = "";
-}
-
-async function saveHighlightRule() {
-  if (highlightSaving.value) return;
-  const sanitized = sanitizeHighlightRuleInput({ pattern: highlightDraft.pattern, color: highlightDraft.color, isRegex: highlightDraft.isRegex, caseSensitive: highlightDraft.caseSensitive });
-  if (sanitized.error || !sanitized.value) {
-    highlightDraftError.value = t(sanitized.error ?? "highlightRules.invalidPattern");
-    return;
-  }
-  if (!highlightDraft.id && highlightRules.value.length >= HIGHLIGHT_RULES_LIMIT) return;
-  highlightSaving.value = true;
-  highlightDraftError.value = "";
-  try {
-    const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/save", {
-      id: highlightDraft.id ?? "",
-      pattern: sanitized.value.pattern,
-      isRegex: sanitized.value.isRegex,
-      color: sanitized.value.color,
-      caseSensitive: sanitized.value.caseSensitive,
-    });
-    highlightRules.value = normalizeHighlightRules(response.rules);
-    resetHighlightDraft();
-  } catch (cause) {
-    highlightDraftError.value = settingsErrorOf(cause);
-  } finally {
-    highlightSaving.value = false;
-  }
-}
-
-function editHighlightRule(item: HighlightRuleView) {
-  highlightDraft.id = item.id;
-  highlightDraft.pattern = item.pattern;
-  highlightDraft.color = item.color;
-  highlightDraft.isRegex = item.isRegex;
-  highlightDraft.caseSensitive = item.caseSensitive;
-  highlightDraftError.value = "";
-}
-
-async function toggleHighlightRule(item: HighlightRuleView) {
-  try {
-    const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/save", {
-      id: item.id,
-      pattern: item.pattern,
-      isRegex: item.isRegex,
-      color: item.color,
-      caseSensitive: item.caseSensitive,
-      enabled: !item.enabled,
-    });
-    highlightRules.value = normalizeHighlightRules(response.rules);
-  } catch (cause) {
-    showError(cause, "terminal");
-  }
-}
-
-async function deleteHighlightRule(id: string) {
-  try {
-    const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/delete", { id });
-    highlightRules.value = normalizeHighlightRules(response.rules);
-    if (highlightDraft.id === id) resetHighlightDraft();
-  } catch (cause) {
-    showError(cause, "terminal");
-  }
-}
-
-// 规则弹层开关（互斥族统一走 closeToolbarPopovers 收口）。
-function toggleHighlightMenu() {
-  const next = !highlightMenuOpen.value;
-  closeToolbarPopovers();
-  highlightMenuOpen.value = next;
-  if (next) resetHighlightDraft();
 }
 
 // ---- decoration 引擎 ----
@@ -5561,9 +5822,12 @@ async function setDirectoryTracking(enabled: boolean) {
       showNotice(t("directoryTrackingProtocolPassive"));
     }
     followDirectory.value = enabled;
+    workbenchFollowExplicit = true;
     directoryTrackingSupported.value = mode !== "unsupported";
     directoryParser.reset();
     persistState();
+    // Settings / toolbar toggle also updates the global default for new workbenches.
+    setFollowDirectoryDefault(enabled);
   } catch (cause) {
     showError(cause, "terminal");
   }
@@ -5575,46 +5839,117 @@ function togglePaneOrder() {
   void nextTick(scheduleFit);
 }
 
-function toggleSftpPane() {
-  sftpPaneOpen.value = !sftpPaneOpen.value;
-  persistState();
-  void nextTick(scheduleFit);
-}
-
-// 全局偏好只影响新工作台的初始面板状态；当前工作台不被连带切换。
-function toggleSftpPaneDefaultOpen() {
-  sftpPaneDefaultOpen.value = !sftpPaneDefaultOpen.value;
+/** Cache layout habits in plugin UI storage (fast); sidecar preferences.json is SoT. */
+function cacheLayoutPrefs() {
   try {
     uiStorage.setItem(SFTP_PANE_OPEN_KEY, sftpPaneDefaultOpen.value ? "true" : "false");
+    uiStorage.setItem(RIGHT_RAIL_KEY, rightRailOpen.value ? "true" : "false");
+    uiStorage.setItem(RESOURCE_STRIP_KEY, resourceStripEnabled.value ? "true" : "false");
+    uiStorage.setItem(FOLLOW_DIRECTORY_KEY, followDirectoryDefault.value ? "true" : "false");
+    uiStorage.setItem(VISIBLE_COLUMNS_KEY, JSON.stringify(visibleColumnsDefault.value));
   } catch {
-    // localStorage 不可用时偏好仅对当前会话生效。
+    /* opaque origin / quota — memory + sidecar still hold the habit */
   }
+}
+
+function loadFollowDirectoryDefault(): boolean {
+  try {
+    return uiStorage.getItem(FOLLOW_DIRECTORY_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function setFollowDirectoryDefault(enabled: boolean) {
+  followDirectoryDefault.value = enabled;
+  cacheLayoutPrefs();
+  void syncPrefs();
+}
+
+function loadVisibleColumnsDefault(): SftpColumn[] {
+  try {
+    return sanitizeVisibleColumns(JSON.parse(uiStorage.getItem(VISIBLE_COLUMNS_KEY) || "null"));
+  } catch {
+    return [...DEFAULT_VISIBLE_COLUMNS];
+  }
+}
+
+function setVisibleColumnsDefault(columns: SftpColumn[]) {
+  visibleColumnsDefault.value = sanitizeVisibleColumns(columns);
+  cacheLayoutPrefs();
+  void syncPrefs();
+}
+
+function setSftpPaneDefaultOpen(open: boolean) {
+  sftpPaneDefaultOpen.value = open;
+  cacheLayoutPrefs();
+  void syncPrefs();
+}
+
+function toggleSftpPane() {
+  sftpPaneOpen.value = !sftpPaneOpen.value;
+  workbenchSftpPaneExplicit = true;
+  // Remember as the habit for the next new workbench (close once → stay closed).
+  setSftpPaneDefaultOpen(sftpPaneOpen.value);
+  persistState();
+  void nextTick(scheduleFit);
 }
 
 function loadSftpPaneDefaultOpen(): boolean {
   try {
     return sanitizeSftpPaneDefaultOpen(uiStorage.getItem(SFTP_PANE_OPEN_KEY));
   } catch {
-    return false;
+    return true;
   }
 }
 
 function loadResourceStripEnabled(): boolean {
+  // Motty-like: monitor dock is opt-in (Gauge). Explicit "true" keeps it open.
   try {
-    return uiStorage.getItem(RESOURCE_STRIP_KEY) !== "false";
+    return uiStorage.getItem(RESOURCE_STRIP_KEY) === "true";
   } catch {
-    return true;
+    return false;
   }
 }
 
 function setResourceStripEnabled(enabled: boolean) {
   resourceStripEnabled.value = enabled;
+  cacheLayoutPrefs();
+  void syncPrefs();
+  syncMetricsPolling();
+}
+
+function loadRightRailOpen(): boolean {
   try {
-    uiStorage.setItem(RESOURCE_STRIP_KEY, enabled ? "true" : "false");
+    return uiStorage.getItem(RIGHT_RAIL_KEY) !== "false";
   } catch {
-    /* ignore quota / private mode */
+    return true;
+  }
+}
+
+function setRightRailOpen(open: boolean) {
+  rightRailOpen.value = open;
+  cacheLayoutPrefs();
+  void syncPrefs();
+}
+
+function toggleRightRail() {
+  setRightRailOpen(!rightRailOpen.value);
+}
+
+/** Apply plugin-local layout habits to the live workbench (after prefs hydrate). */
+function applyLayoutHabits() {
+  if (!workbenchSftpPaneExplicit) {
+    sftpPaneOpen.value = sftpPaneDefaultOpen.value;
+  }
+  if (!workbenchFollowExplicit) {
+    followDirectory.value = followDirectoryDefault.value;
+  }
+  if (!workbenchColumnsExplicit) {
+    visibleColumns.value = sanitizeVisibleColumns(visibleColumnsDefault.value);
   }
   syncMetricsPolling();
+  void nextTick(scheduleFit);
 }
 
 // 下载偏好（保存目录 + 每次询问 + 终端字体来源）：权威存储在 sidecar
@@ -5681,6 +6016,7 @@ function cachePrefs() {
 
 async function syncPrefs() {
   cachePrefs();
+  cacheLayoutPrefs();
   try {
     await window.datawisePlugin.invoke("local/preferences/set", {
       downloadDir: downloadDirState.value,
@@ -5693,7 +6029,14 @@ async function syncPrefs() {
       copilotDockWidth: copilotDockWidth.value,
       copilotChatMode: copilotChatMode.value,
       copilotReplyLanguage: copilotReplyLanguage.value,
+      copilotRedactOutput: copilotRedactOutput.value,
       copilotModelPreference: copilotModelPreference.value,
+      // Plugin-local layout habits (SSH preferences.json — not host settings).
+      sftpPaneDefaultOpen: sftpPaneDefaultOpen.value,
+      rightRailOpen: rightRailOpen.value,
+      resourceStripEnabled: resourceStripEnabled.value,
+      followDirectoryDefault: followDirectoryDefault.value,
+      visibleColumns: visibleColumnsDefault.value,
     });
   } catch {
     // 旧 sidecar 无此方法：本次会话内存态兜底。
@@ -5722,7 +6065,13 @@ async function hydratePrefs() {
       copilotDockWidth?: unknown;
       copilotChatMode?: unknown;
       copilotReplyLanguage?: unknown;
+      copilotRedactOutput?: unknown;
       copilotModelPreference?: unknown;
+      sftpPaneDefaultOpen?: unknown;
+      rightRailOpen?: unknown;
+      resourceStripEnabled?: unknown;
+      followDirectoryDefault?: unknown;
+      visibleColumns?: unknown;
     }>("local/preferences/get", {});
     if (typeof prefs.downloadDir === "string") downloadDirState.value = prefs.downloadDir.trim();
     if (typeof prefs.downloadUseDefaultDir === "boolean") downloadUseDefaultState.value = prefs.downloadUseDefaultDir;
@@ -5739,12 +6088,42 @@ async function hydratePrefs() {
     if (savedMode) copilotChatMode.value = savedMode;
     const savedReplyLang = normalizeCopilotReplyLanguage(prefs.copilotReplyLanguage);
     if (savedReplyLang) copilotReplyLanguage.value = savedReplyLang;
+    if (typeof prefs.copilotRedactOutput === "boolean") copilotRedactOutput.value = prefs.copilotRedactOutput;
     const savedPrefer = normalizeModelPreference(prefs.copilotModelPreference);
     if (savedPrefer) copilotModelPreference.value = savedPrefer;
+    // Layout habits: sidecar wins; fall back to uiStorage seed if key never saved.
+    if (typeof prefs.sftpPaneDefaultOpen === "boolean") {
+      sftpPaneDefaultOpen.value = prefs.sftpPaneDefaultOpen;
+    } else {
+      sftpPaneDefaultOpen.value = loadSftpPaneDefaultOpen();
+    }
+    if (typeof prefs.rightRailOpen === "boolean") {
+      rightRailOpen.value = prefs.rightRailOpen;
+    } else {
+      rightRailOpen.value = loadRightRailOpen();
+    }
+    if (typeof prefs.resourceStripEnabled === "boolean") {
+      resourceStripEnabled.value = prefs.resourceStripEnabled;
+    } else {
+      resourceStripEnabled.value = loadResourceStripEnabled();
+    }
+    if (typeof prefs.followDirectoryDefault === "boolean") {
+      followDirectoryDefault.value = prefs.followDirectoryDefault;
+    } else {
+      followDirectoryDefault.value = loadFollowDirectoryDefault();
+    }
+    if (prefs.visibleColumns !== undefined) {
+      visibleColumnsDefault.value = sanitizeVisibleColumns(prefs.visibleColumns);
+    } else {
+      visibleColumnsDefault.value = loadVisibleColumnsDefault();
+    }
     cachePrefs();
+    cacheLayoutPrefs();
+    applyLayoutHabits();
     if (copilotEnabled.value) void refreshCopilotModelSource();
   } catch {
-    // 旧 sidecar：保留 localStorage 种子或默认。
+    // 旧 sidecar：保留 uiStorage 种子或默认。
+    applyLayoutHabits();
   }
 }
 
@@ -5912,13 +6291,15 @@ function toggleClickCursor() {
 
 function startDividerDrag(event: PointerEvent) {
   const container = paneContainer.value;
-  if (!container) return;
+  if (!container || sftpDrawerMode.value) return;
   const pointerId = event.pointerId;
   const move = (next: PointerEvent) => {
     const bounds = container.getBoundingClientRect();
-    const fromLeft = ((next.clientX - bounds.left) / bounds.width) * 100;
-    const terminalPercent = paneOrder.value === "terminal-left" ? fromLeft : 100 - fromLeft;
-    splitRatio.value = Math.max(35, Math.min(80, terminalPercent));
+    const raw =
+      paneOrder.value === "sftp-left"
+        ? next.clientX - bounds.left
+        : bounds.right - next.clientX;
+    sftpWidthPx.value = clampSftpWidthPx(raw);
     scheduleFit();
   };
   const stop = () => {
@@ -5937,7 +6318,10 @@ function startDividerDrag(event: PointerEvent) {
 function toggleColumn(column: SftpColumn) {
   const hadOwnerData = visibleColumns.value.includes("owner") || visibleColumns.value.includes("group");
   visibleColumns.value = visibleColumns.value.includes(column) ? visibleColumns.value.filter((value) => value !== column) : [...visibleColumns.value, column];
+  workbenchColumnsExplicit = true;
   persistState();
+  // Settings / header toggle also updates the global default for new workbenches.
+  setVisibleColumnsDefault(visibleColumns.value);
   // 属主/属组列从关到开：当前列表可能没有 owner/group 数据（此前请求没带
   // includeOwner），重拉一次目录；关列不需要重拉。
   if ((column === "owner" || column === "group") && !hadOwnerData && session.value && !sudoMode.value) {
@@ -7687,33 +8071,52 @@ async function hydrateQuickCommands() {
   }
 }
 
-async function addQuickCommand() {
-  const command = quickDraft.command.trim();
-  if (!command || quickSaving.value) return;
-  if (!quickDraftCanAdd.value) return;
+type QuickCommandSavePayload = {
+  id?: string;
+  name: string;
+  command: string;
+  group: string;
+  scope: "global" | "connection";
+};
+
+/** Shared persistence for both quick-command forms (settings card add + manage list). */
+async function persistQuickCommand(payload: QuickCommandSavePayload): Promise<boolean> {
+  const command = payload.command.trim();
+  if (!command || quickSaving.value) return false;
   const boundConnectionId =
-    quickDraft.scope === "connection" && connectionId.value ? connectionId.value : "";
+    payload.scope === "connection" && connectionId.value ? connectionId.value : "";
+  const scopeKey = boundConnectionId || null;
+  if (!payload.id && !canAddQuickCommandInScope(quickCommands.value, scopeKey)) return false;
+  if (payload.id) {
+    const existing = quickCommands.value.find((item) => item.id === payload.id);
+    const sameScope = (existing?.connectionId?.trim() ?? "") === (boundConnectionId || "");
+    if (!sameScope && !canAddQuickCommandInScope(quickCommands.value, scopeKey)) return false;
+  }
   quickSaving.value = true;
   try {
     const response = await window.datawisePlugin.invoke<{ commands: unknown }>("ssh/quickCommands/save", {
-      id: quickDraft.id ?? "",
-      name: quickDraft.name.trim(),
+      id: payload.id ?? "",
+      name: payload.name.trim(),
       command,
       connectionId: boundConnectionId,
-      group: quickDraft.group.trim().slice(0, QUICK_COMMAND_GROUP_MAX_LENGTH),
+      group: payload.group.trim().slice(0, QUICK_COMMAND_GROUP_MAX_LENGTH),
     });
     quickCommands.value = normalizeQuickCommands(response.commands);
-    closeQuickEditor();
+    return true;
   } catch (cause) {
     showError(cause, "terminal");
+    return false;
   } finally {
     quickSaving.value = false;
   }
 }
 
-// 点击卡片的编辑按钮：编辑器子视图载入草稿（携带 id 即更新语义）。
-function editQuickCommand(item: QuickCommand) {
-  openQuickEditor(item);
+async function saveQuickCommandFromPanel(payload: QuickCommandSavePayload) {
+  if (await persistQuickCommand(payload)) quickPanelSettings.value?.onSaved();
+}
+
+async function saveQuickCommandFromSettings(payload: QuickCommandSavePayload) {
+  if (await persistQuickCommand(payload)) settingsDialog.value?.onQuickCommandSaved?.();
 }
 
 // 快速命令删除确认走应用内弹窗：工作台 iframe 无 allow-modals，window.confirm 恒 false。
@@ -8247,7 +8650,7 @@ function dismissBatchResult() {
   batchError.value = "";
 }
 
-// ---- 命令条内联保存为快速命令（与工具栏 Zap 弹层同一后端；可选全局/当前连接）----
+// ---- 命令条内联保存为快速命令（与设置页同一后端；可选全局/当前连接）----
 
 function openBatchBarSave() {
   const command = batchDraft.value.trim();
@@ -8308,7 +8711,6 @@ watch(connected, (value) => {
   if (value) {
     void refreshAgentMode();
   } else {
-    agentModeOpen.value = false;
     metrics.value = undefined;
     metricsError.value = "";
   }
@@ -8318,18 +8720,6 @@ watch(connected, (value) => {
 // ---------------------------------------------------------------------------
 // 连接信息面板（只读）
 // ---------------------------------------------------------------------------
-
-function toggleQuickMenu() {
-  const next = !quickMenuOpen.value;
-  closeToolbarPopovers();
-  quickMenuOpen.value = next;
-  if (next) {
-    // 每次打开回到列表态：清空搜索/展开/编辑器子视图。
-    quickSearch.value = "";
-    quickExpandedId.value = null;
-    quickEditorOpen.value = false;
-  }
-}
 
 function toggleConnectionInfo() {
   const next = !connectionInfoOpen.value;
@@ -8344,20 +8734,7 @@ function toggleConnectionInfo() {
   }
 }
 
-function toggleAgentModeMenu() {
-  const next = !agentModeOpen.value;
-  closeToolbarPopovers();
-  agentModeOpen.value = next;
-  if (next) void refreshAgentMode();
-}
-
 // ---- 模板内联互斥清单收敛为具名 toggle（round2），与五个函数 toggle 同族 ----
-
-function toggleColumnsMenu() {
-  const next = !columnsOpen.value;
-  closeToolbarPopovers();
-  columnsOpen.value = next;
-}
 
 function toggleTransferPanel() {
   const next = !transferPanelOpen.value;
@@ -8393,7 +8770,6 @@ async function applyAgentMode(mode: AgentTerminalMode) {
   try {
     await window.datawisePlugin.invoke("ssh/settings/set", { sessionId, agentTerminalMode: mode });
     agentMode.value = mode;
-    agentModeOpen.value = false;
   } catch (cause) {
     showError(cause, "terminal");
   } finally {
@@ -8460,7 +8836,7 @@ async function refreshMetrics() {
   }
 }
 
-/** 资源条或指标浮层任一需要时共用 5s 轮询；两者都关则停表。 */
+/** 侧坞或指标浮层任一需要时共用 5s 轮询；两者都关则停表。 */
 function syncMetricsPolling() {
   window.clearInterval(metricsTimer);
   metricsTimer = 0;
@@ -8472,6 +8848,20 @@ function syncMetricsPolling() {
       void refreshMetrics();
     }
   }, 5000);
+}
+
+function toggleMonitorDock() {
+  setResourceStripEnabled(!resourceStripEnabled.value);
+}
+
+function closeMonitorDock() {
+  setResourceStripEnabled(false);
+}
+
+function closeSftpDrawerIfOverlay() {
+  if (sftpDrawerMode.value && sftpPaneOpen.value) {
+    toggleSftpPane();
+  }
 }
 
 // 悬浮指标卡：打开即刷新并启动 5s 轮询；不阻塞终端/SFTP 操作，随时开关。
@@ -8701,6 +9091,77 @@ function onQuickPaletteKey(event: KeyboardEvent) {
     quickPaletteIndex.value,
     resolved.delta,
   );
+}
+
+// ---- Universal command palette (Ctrl/Cmd+Shift+P) ----
+const commandPaletteCommands = computed<PaletteCommand[]>(() => {
+  const pt = (key: string) => t(key);
+  const gSession = pt("commandPalette.group.session");
+  const gTerminal = pt("commandPalette.group.terminal");
+  const gPanels = pt("commandPalette.group.panels");
+  const gSettings = pt("commandPalette.group.settings");
+  const rows: PaletteCommand[] = [];
+  const add = (
+    id: string, labelKey: string, group: string, aliases: string, shortcut: string, run: () => void,
+  ) => rows.push({ id, label: pt(labelKey), group, aliases, shortcut, run });
+
+  // Session
+  add("session.reconnect", "commandPalette.cmd.reconnect", gSession, "reconnect reload 重连 重新连接", "Ctrl+R", () => { void reconnectNow(); });
+  add("session.newTab", "commandPalette.cmd.newTab", gSession, "new tab session 新建 标签 会话", "", () => { void openNewSessionTab(); });
+  add("session.disconnect", "commandPalette.cmd.disconnect", gSession, "disconnect close 断开 关闭会话", "", () => { void closeSession(); });
+  // Terminal
+  add("terminal.find", "commandPalette.cmd.find", gTerminal, "find search grep 查找 搜索", "Ctrl+F", () => openTerminalSearch());
+  add("terminal.clear", "commandPalette.cmd.clear", gTerminal, "clear cls 清屏", "", () => clearTerminal());
+  add("terminal.copy", "commandPalette.cmd.copy", gTerminal, "copy selection 复制 选中", "", () => { void copyTerminalSelection(); });
+  add("terminal.paste", "commandPalette.cmd.paste", gTerminal, "paste 粘贴", "", () => { void pasteTerminal(); });
+  add("terminal.split", "commandPalette.cmd.split", gTerminal, "split pane 分屏 双栏", "", () => { void toggleTerminalSplit(); });
+  add("terminal.history", "commandPalette.cmd.history", gTerminal, "history command 历史 命令", "Ctrl+R", () => toggleHistoryPanel());
+  add("terminal.quick", "commandPalette.cmd.quick", gTerminal, "quick command snippet 快捷命令", "Ctrl+;", () => toggleQuickPalette());
+  add("terminal.zoomReset", "commandPalette.cmd.zoomReset", gTerminal, "reset font size zoom 重置字号", "Ctrl+0", () => resetTerminalZoom());
+  // Panels
+  add("panel.sftp", "commandPalette.cmd.sftp", gPanels, "sftp files panel 文件 面板", "", () => toggleSftpPane());
+  add("panel.rail", "commandPalette.cmd.rail", gPanels, "right rail toolbar 右侧 工具栏", "", () => toggleRightRail());
+  add("panel.local", "commandPalette.cmd.local", gPanels, "local files pane 本地 文件", "", () => { localPaneOpen.value = !localPaneOpen.value; });
+  add("panel.assistant", "commandPalette.cmd.assistant", gPanels, "copilot ai assistant 助手", "", () => { void openCopilotDock(); });
+  // Settings jumps
+  add("settings.general", "commandPalette.cmd.settings", gSettings, "settings preferences 设置 偏好", "", () => openSettings());
+  add("settings.terminal", "settingsNav.terminal", gSettings, "terminal settings 终端 设置", "", () => openSettingsAt("terminal"));
+  add("settings.connection", "settingsNav.connection", gSettings, "connection settings 连接 设置", "", () => openSettingsAt("sudo"));
+  add("settings.files", "settingsNav.files", gSettings, "sftp settings 文件 设置", "", () => openSettingsAt("transfer"));
+  add("settings.assistant", "settingsNav.assistant", gSettings, "copilot ai settings 助手 设置", "", () => openSettingsAt("agent"));
+  add("settings.security", "settingsNav.security", gSettings, "security settings 安全 设置", "", () => openSettingsAt("security"));
+  add("settings.mcp", "settingsNav.mcp", gSettings, "mcp settings 设置", "", () => openSettingsAt("mcp"));
+  add("settings.scheme", "commandPalette.cmd.scheme", gSettings, "color scheme theme 配色 主题", "", () => openSettingsAt("terminal", "scheme"));
+  add("settings.font", "terminalFont.title", gSettings, "font size family 字体 字号", "", () => openSettingsAt("terminal", "font"));
+  add("settings.quickCommands", "quickCommands", gSettings, "quick commands snippets 快捷命令", "", () => openSettingsAt("terminal", "resource-quick"));
+  add("settings.startup", "startupCommands.title", gSettings, "startup commands 启动命令", "", () => openSettingsAt("terminal", "resource-startup"));
+  add("settings.models", "copilot.settingsModels", gSettings, "llm models provider 助手 模型", "", () => openSettingsAt("agent", "resource-models"));
+  add("settings.highlight", "highlightRules.title", gSettings, "keyword highlight rules 关键字 高亮", "", () => openSettingsAt("terminal", "resource-highlight"));
+  add("settings.sshSync", "sshSync.title", gSettings, "ssh config sync 同步 配置", "", () => openSettingsAt("sudo", "ssh-config-sync"));
+  return rows;
+});
+
+function toggleCommandPalette() {
+  if (commandPaletteOpen.value) {
+    closeCommandPalette();
+    return;
+  }
+  closeQuickPalette();
+  closeHistoryPanel(false);
+  closeCompletionMenu();
+  hideCommandSuggest();
+  closeToolbarPopovers();
+  commandPaletteOpen.value = true;
+  void nextTick(() => commandPaletteRef.value?.focusInput());
+}
+
+function closeCommandPalette() {
+  commandPaletteOpen.value = false;
+}
+
+function runPaletteCommand(cmd: PaletteCommand) {
+  closeCommandPalette();
+  cmd.run();
 }
 
 function onHistoryPanelKey(event: KeyboardEvent) {
@@ -9050,6 +9511,7 @@ function beginProtocolTerminal(kind: "local" | "telnet" | "serial", sessionId: s
 
 async function openLocalShell() {
   protocolMenuOpen.value = false;
+  toolbarMoreOpen.value = false;
   try {
     const cols = Math.max(40, terminal?.cols ?? 80);
     const rows = Math.max(10, terminal?.rows ?? 24);
@@ -9835,13 +10297,18 @@ function openSettings() {
   void probeLocalCapabilities();
 }
 
+/** Command-palette entry: open settings at a specific category/anchor. */
+function openSettingsAt(category: "terminal" | "sudo" | "transfer" | "agent" | "security" | "mcp", anchor?: string) {
+  settingsFocusCategory.value = category;
+  settingsFocusAnchor.value = anchor ?? null;
+  settingsFocusAddModel.value = false;
+  settingsOpen.value = true;
+  void probeLocalCapabilities();
+}
+
 function openImportWizard() {
   closeToolbarPopovers();
   importOpen.value = true;
-}
-
-function openProfilesManager() {
-  profilesOpen.value = true;
 }
 
 async function confirmChmod() {
@@ -9956,15 +10423,13 @@ function closeToolbarPopovers() {
   terminalMenuOpen.value = false;
   transferHistoryMenu.value = undefined;
   transferPanelOpen.value = false;
-  columnsOpen.value = false;
   pathHistoryOpen.value = false;
-  quickMenuOpen.value = false;
   connectionInfoOpen.value = false;
-  agentModeOpen.value = false;
-  highlightMenuOpen.value = false;
   bookmarkSaveOpen.value = false;
   batchTargetsOpen.value = false;
   batchQuickPickOpen.value = false;
+  toolbarMoreOpen.value = false;
+  protocolMenuOpen.value = false;
 }
 
 function closeMenus() {
@@ -10057,6 +10522,7 @@ const modalOpenStates = computed(() => [
   hostKeyPrompt.value,
   agentPromptHead.value,
   dockerConfirm.value !== null,
+  importOpen.value,
 ]);
 const modalOpenCount = computed(() => modalOpenStates.value.filter(Boolean).length);
 
@@ -10110,6 +10576,18 @@ function onDocumentKeydown(event: KeyboardEvent) {
   // 生效）；此处不再拦截 Tab。注意 FocusScope 的 keydown 挂在内容元素上，冒泡先于
   // 本 document 处理器，若恢复自制陷阱会与 reka 双步进，勿回退。
   if (event.key === "Tab") return;
+  // Ctrl/Cmd+Shift+P opens the command palette from anywhere (terminal handler
+  // consumes it first when focused, so this is the non-terminal fallback).
+  if (isCommandPaletteShortcut(event)) {
+    event.preventDefault();
+    toggleCommandPalette();
+    return;
+  }
+  if (commandPaletteOpen.value && event.key === "Escape") {
+    event.preventDefault();
+    closeCommandPalette();
+    return;
+  }
   if (event.key !== "Escape") return;
   // reka Select/ContextMenu/Popover 弹层打开时 Esc 由 reka 消费（关弹层），不落入下方
   // 弹窗关闭链。本处理器注册早于 DismissableLayer，先跑时弹层 DOM 仍在。
@@ -10513,7 +10991,7 @@ async function findReattachSession(): Promise<string> {
   }
 }
 
-watch([splitRatio, paneOrder, sftpPaneOpen, followDirectory, sudoMode, visibleColumns], persistState, { deep: true });
+watch([sftpWidthPx, paneOrder, sftpPaneOpen, followDirectory, sudoMode, visibleColumns], persistState, { deep: true });
 
 onMounted(() => {
   document.addEventListener("click", onDocumentClickCloseMenus);
@@ -10533,9 +11011,21 @@ onMounted(() => {
   window.addEventListener("focus", flushTerminalOutputNow);
   window.addEventListener("pageshow", flushTerminalOutputNow);
   hostFontObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+  if (workbenchRoot.value) {
+    workbenchResizeObserver = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (typeof width === "number" && width > 0) {
+        workbenchWidthPx.value = width;
+        scheduleFit();
+      }
+    });
+    workbenchResizeObserver.observe(workbenchRoot.value);
+    workbenchWidthPx.value = workbenchRoot.value.clientWidth || workbenchWidthPx.value;
+  }
   void hydrateQuickCommands();
   void hydrateHighlightRules();
-  void hydratePrefs();
+  // Warm UI-storage cache, then load plugin preferences.json (layout habits SoT).
+  void initUiStorage().then(() => hydratePrefs());
   // After first paint: expand Tabby scheme catalog so saved scheme ids resolve.
   void ensureBuiltinSchemeCatalog().then(() => applyTerminalAppearance());
   void initialize().catch((cause) => {
@@ -10606,6 +11096,7 @@ onBeforeUnmount(() => {
   deferredTerminalChunks.length = 0;
   deferredTerminalBytes = 0;
   resizeObserver?.disconnect();
+  workbenchResizeObserver?.disconnect();
   for (const disposable of oscColorQueryDisposables) disposable.dispose();
   oscColorQueryDisposables = [];
   osc52Disposable?.dispose();
@@ -10613,6 +11104,7 @@ onBeforeUnmount(() => {
   disposeInput?.dispose();
   disposeWriteParsed?.dispose();
   disposeSelectionCopy?.dispose();
+  void closeAllExtraShells();
   terminalWriteThrottle.dispose();
   detachHighlightRender();
   terminal?.dispose();
@@ -10630,9 +11122,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="workbench">
-    <header class="toolbar" :style="toolbarStyle">
-      <!-- 连接信息入口：Info 图标按钮紧跟标识区（状态徽章右侧），弹层左对齐锚定 -->
+  <main ref="workbenchRoot" class="workbench">
+    <!-- Motty: connection color only on the identity mark — toolbar itself stays neutral. -->
+    <header class="toolbar">
       <div class="identity-side">
         <div class="identity">
           <span v-if="connection.color" class="connection-color" :style="{ backgroundColor: connection.color }" />
@@ -10663,275 +11155,94 @@ onBeforeUnmount(() => {
         </Popover>
       </div>
       <div class="toolbar-actions">
-        <button class="icon-button icon-neutral" :title="paneOrder === 'terminal-left' ? t('moveSftpLeft') : t('moveTerminalLeft')" @click="togglePaneOrder"><ArrowLeftRight /></button>
-        <button class="icon-button icon-cyan" :class="{ 'is-active': sftpPaneOpen }" :title="sftpPaneOpen ? t('sftpPane.close') : t('sftpPane.open')" :aria-pressed="sftpPaneOpen" @click="toggleSftpPane"><FolderOpen v-if="!sftpPaneOpen" /><PanelRightClose v-else /></button>
-        <button class="icon-button" :title="t('terminalFontDecrease')" @click="adjustTerminalZoom(-1)"><span class="font-step-label" aria-hidden="true">A−</span></button>
-        <button class="icon-button" :title="t('terminalFontIncrease')" @click="adjustTerminalZoom(1)"><span class="font-step-label" aria-hidden="true">A+</span></button>
-        <button class="icon-button icon-emerald" :title="t('newSessionTab')" :disabled="!connectionId" @click="openNewSessionTab"><SquarePlus /></button>
-        <button class="icon-button icon-emerald" :title="t('copySessionTab')" :disabled="!connectionId || !connected" @click="openCopiedSessionTab"><Copy /></button>
-        <button class="icon-button icon-emerald" :title="t('reconnect')" :disabled="terminalState === 'connecting' && !reconnectPending" @click="reconnectNow"><PlugZap /></button>
-        <!-- 一键 sudo -v：向当前 PTY 写入命令刷新 sudo 凭据缓存；quick sudo 自动应答
-             是否启用由连接设置决定（设置弹窗），工作台不再提供开关。 -->
-        <button class="icon-button icon-emerald" :title="t('sudoRefresh.title')" :disabled="!connected" @click="sendSudoRefresh"><ShieldCheck /></button>
-        <button class="icon-button icon-emerald" :title="t('profilesTitle')" @click="openProfilesManager"><KeyRound /></button>
-        <button class="icon-button icon-cyan" :title="t('alertTriage.title')" @click="openAlertTriage"><Siren /></button>
-        <button class="icon-button icon-cyan" :title="t('forwards.title')" :disabled="!session" @click="forwardsOpen = true"><Network /></button>
-        <button v-if="isJumpServerMode" class="icon-button icon-cyan" :class="{ 'is-active': assetsOpen }" :title="t('jumpserver.title')" :aria-label="t('jumpserver.title')" :aria-pressed="assetsOpen" :disabled="!connected" @click="toggleAssets"><Server /></button>
-        <button class="icon-button icon-cyan" :class="{ 'is-active': dockerOpen }" :title="t('docker.title')" :aria-label="t('docker.title')" :aria-pressed="dockerOpen" :disabled="!connected" @click="toggleDocker"><Container /></button>
-        <button class="icon-button icon-cyan" :class="{ 'is-active': historyPanelOpen }" :title="t('historyPanel.titleShortcut')" :aria-pressed="historyPanelOpen" :disabled="!connected" @click="toggleHistoryPanel"><History /></button>
-        <button class="icon-button icon-cyan" :class="{ 'is-active': otpOpen }" :title="t('otp.title')" :aria-pressed="otpOpen" @click="toggleOtpPanel"><Lock /></button>
+        <!-- Motty-like quiet chrome: muted icons; active state carries emphasis -->
+        <button class="icon-button icon-neutral" :class="{ 'is-active': sftpPaneOpen }" :title="sftpPaneOpen ? t('sftpPane.close') : t('sftpPane.open')" :aria-pressed="sftpPaneOpen" @click="toggleSftpPane"><FolderOpen v-if="!sftpPaneOpen" /><PanelRightClose v-else /></button>
+        <button class="icon-button icon-neutral" :title="t('terminalFontDecrease')" @click="adjustTerminalZoom(-1)"><span class="font-step-label" aria-hidden="true">A−</span></button>
+        <button class="icon-button icon-neutral" :title="t('terminalFontIncrease')" @click="adjustTerminalZoom(1)"><span class="font-step-label" aria-hidden="true">A+</span></button>
+        <button class="icon-button icon-neutral" :title="t('newSessionTab')" :disabled="!connectionId" @click="openNewSessionTab"><SquarePlus /></button>
         <button
-          v-if="serialSessionActive"
-          class="icon-button icon-cyan"
-          :title="t('serial.upload.title')"
-          :disabled="serialUploadBusy"
-          @click="openSerialUploadDialog"
-        ><FileUp /></button>
-        <Popover :open="protocolMenuOpen" @update:open="(open) => { protocolMenuOpen = open; }">
+          class="icon-button icon-neutral"
+          :class="{ 'is-active': splitActive }"
+          :title="splitActive ? t('terminalSplit.close') : t('terminalSplit.open')"
+          :aria-pressed="splitActive"
+          :disabled="(!connected || !session || splitBusy) && !splitActive"
+          @click="toggleTerminalSplit"
+        ><Columns2 /></button>
+        <button
+          v-if="splitActive"
+          class="icon-button icon-neutral"
+          :title="splitOrientation === 'vertical' ? t('terminalSplit.stack') : t('terminalSplit.sideBySide')"
+          @click="setSplitOrientation(splitOrientation === 'vertical' ? 'horizontal' : 'vertical')"
+        ><Rows2 v-if="splitOrientation === 'vertical'" /><Columns2 v-else /></button>
+        <button
+          v-if="splitActive"
+          class="icon-button icon-neutral"
+          :class="{ 'is-active': syncInputEnabled }"
+          :title="syncInputEnabled ? t('terminalSplit.syncOn') : t('terminalSplit.syncOff')"
+          :aria-pressed="syncInputEnabled"
+          @click="toggleSyncInput"
+        ><Link2 /></button>
+        <button class="icon-button icon-neutral" :title="t('reconnect')" :disabled="terminalState === 'connecting' && !reconnectPending" @click="reconnectNow"><PlugZap /></button>
+        <button class="icon-button icon-neutral" :class="{ 'is-active': rightRailOpen }" :title="t('rightRail.toggle')" :aria-pressed="rightRailOpen" @click="toggleRightRail"><PanelRight /></button>
+        <button class="icon-button icon-neutral" :class="{ 'is-active': settingsOpen }" :title="t('settings')" :aria-pressed="settingsOpen" @click="openSettings"><Settings /></button>
+        <Popover :open="toolbarMoreOpen" @update:open="(open) => { toolbarMoreOpen = open; }">
           <PopoverAnchor as-child>
-            <button class="icon-button icon-cyan" :title="t('protocol.menu')" :aria-pressed="protocolMenuOpen" @click.stop="protocolMenuOpen = !protocolMenuOpen"><Monitor /></button>
+            <button class="icon-button icon-neutral" :class="{ 'is-active': toolbarMoreOpen }" :title="t('toolbar.more')" :aria-pressed="toolbarMoreOpen" @click.stop="toolbarMoreOpen = !toolbarMoreOpen"><MoreHorizontal /></button>
           </PopoverAnchor>
-          <PopoverContent class="popover" align="end" :side-offset="5">
-            <h3>{{ t("protocol.menu") }}</h3>
-            <button class="link-button" @click="openLocalShell"><SquareTerminal /> {{ t("protocol.localShell") }}</button>
-            <button class="link-button" @click="protocolMenuOpen = false; telnetDialogOpen = true"><Cable /> Telnet</button>
-            <button class="link-button" @click="protocolMenuOpen = false; serialDialogOpen = true"><Cable /> Serial</button>
-            <button
-              class="link-button"
-              :disabled="!serialSessionActive || serialUploadBusy"
-              @click="protocolMenuOpen = false; openSerialUploadDialog()"
-            ><FileUp /> {{ t("serial.upload.title") }}</button>
-            <button class="link-button" @click="protocolMenuOpen = false; vncDialogOpen = true"><AppWindow /> VNC</button>
-            <button class="link-button" @click="protocolMenuOpen = false; rdpDialogOpen = true"><Monitor /> RDP</button>
-            <button class="link-button" @click="protocolMenuOpen = false; taskDialogOpen = true"><Timer /> {{ t("task.title") }}</button>
+          <PopoverContent class="popover toolbar-more-popover" align="end" :side-offset="5">
+            <h3>{{ t("toolbar.more") }}</h3>
+            <div class="toolbar-more-grid">
+              <button class="link-button" :disabled="!connectionId || !connected" @click="openCopiedSessionTab(); toolbarMoreOpen = false"><Copy /> {{ t("copySessionTab") }}</button>
+              <button class="link-button" :title="paneOrder === 'terminal-left' ? t('moveSftpLeft') : t('moveTerminalLeft')" @click="togglePaneOrder(); toolbarMoreOpen = false"><ArrowLeftRight /> {{ paneOrder === 'terminal-left' ? t('moveSftpLeft') : t('moveTerminalLeft') }}</button>
+              <button class="link-button" :disabled="!connected" @click="sendSudoRefresh(); toolbarMoreOpen = false"><ShieldCheck /> {{ t("sudoRefresh.title") }}</button>
+              <button class="link-button" @click="openAlertTriage(); toolbarMoreOpen = false"><Siren /> {{ t("alertTriage.title") }}</button>
+              <button class="link-button" :disabled="!session" @click="forwardsOpen = true; toolbarMoreOpen = false"><Network /> {{ t("forwards.title") }}</button>
+              <button v-if="isJumpServerMode" class="link-button" :disabled="!connected" @click="toggleAssets(); toolbarMoreOpen = false"><Server /> {{ t("jumpserver.title") }}</button>
+              <button class="link-button" :disabled="!connected" @click="toggleDocker(); toolbarMoreOpen = false"><Container /> {{ t("docker.title") }}</button>
+              <button class="link-button" :disabled="!connected" @click="toggleHistoryPanel(); toolbarMoreOpen = false"><History /> {{ t("historyPanel.titleShortcut") }}</button>
+              <button class="link-button" @click="toggleOtpPanel(); toolbarMoreOpen = false"><Lock /> {{ t("otp.title") }}</button>
+              <button v-if="serialSessionActive" class="link-button" :disabled="serialUploadBusy" @click="openSerialUploadDialog(); toolbarMoreOpen = false"><FileUp /> {{ t("serial.upload.title") }}</button>
+              <button class="link-button" :disabled="!connected" @click="openCommandDialog(); toolbarMoreOpen = false"><SquareTerminal /> {{ t("commandTitle") }}</button>
+              <button class="link-button" :disabled="!connected" @click="toggleBatchBar(); toolbarMoreOpen = false"><ListChecks /> {{ t("batchSendTitle") }}</button>
+              <button class="link-button" :class="{ 'is-active': recordingActive }" :disabled="!canRecord" @click="toggleRecording(); toolbarMoreOpen = false"><Disc /> {{ recordingActive ? t("recordingStop") : t("recordingTitle") }}</button>
+              <button class="link-button" @click="toggleRecordings(); toolbarMoreOpen = false"><Film /> {{ t("recordingsTitle") }}</button>
+              <button class="link-button" @click="openImportWizard(); toolbarMoreOpen = false"><FolderInput /> {{ t("importWizard.title") }}</button>
+              <button class="link-button" @click="openAuditLog(); toolbarMoreOpen = false"><FileText /> {{ t("auditLog.title") }}</button>
+              <button class="link-button" @click="metricsOpen = true; void backfillMetricsHistory(); syncMetricsPolling(); toolbarMoreOpen = false" :disabled="!connected"><Gauge /> {{ t("metrics") }}</button>
+            </div>
+            <hr class="columns-popover-separator" />
+            <!-- Inline submenu (not nested Reka Popover) so the first click stays open. -->
+            <button type="button" class="link-button" :aria-expanded="protocolMenuOpen" @click.stop="protocolMenuOpen = !protocolMenuOpen"><Monitor /> {{ t("protocol.menu") }}</button>
+            <div v-if="protocolMenuOpen" class="toolbar-more-submenu">
+              <button type="button" class="link-button" @click="openLocalShell"><SquareTerminal /> {{ t("protocol.localShell") }}</button>
+              <button type="button" class="link-button" @click="protocolMenuOpen = false; toolbarMoreOpen = false; telnetDialogOpen = true"><Cable /> Telnet</button>
+              <button type="button" class="link-button" @click="protocolMenuOpen = false; toolbarMoreOpen = false; serialDialogOpen = true"><Cable /> Serial</button>
+              <button
+                type="button"
+                class="link-button"
+                :disabled="!serialSessionActive || serialUploadBusy"
+                @click="protocolMenuOpen = false; toolbarMoreOpen = false; openSerialUploadDialog()"
+              ><FileUp /> {{ t("serial.upload.title") }}</button>
+              <button type="button" class="link-button" @click="protocolMenuOpen = false; toolbarMoreOpen = false; vncDialogOpen = true"><AppWindow /> VNC</button>
+              <button type="button" class="link-button" @click="protocolMenuOpen = false; toolbarMoreOpen = false; rdpDialogOpen = true"><Monitor /> RDP</button>
+              <button type="button" class="link-button" @click="protocolMenuOpen = false; toolbarMoreOpen = false; taskDialogOpen = true"><Timer /> {{ t("task.title") }}</button>
+            </div>
           </PopoverContent>
         </Popover>
-        <label class="follow-directory-control" :title="t('followTerminal')">
-          <Switch
-            size="sm"
-            :model-value="followDirectory"
-            :disabled="!(connected || (protocolSession && (protocolSession.kind === 'local' || protocolSession.kind === 'telnet' || protocolSession.kind === 'serial') && terminalState === 'connected'))"
-            @update:model-value="setDirectoryTracking"
-          />
-          <span>{{ t("followTerminal") }}</span>
-        </label>
         <span class="toolbar-separator" aria-hidden="true" />
-        <button class="icon-button icon-neutral" :title="t('commandTitle')" :disabled="!connected" @click="openCommandDialog"><SquareTerminal /></button>
-        <button class="icon-button icon-neutral" :class="{ 'is-active': batchBarOpen }" :title="t('batchSendTitle')" :aria-pressed="batchBarOpen" :disabled="!connected" @click="toggleBatchBar"><ListChecks /></button>
-        <div>
-          <Popover :open="quickMenuOpen" @update:open="(open) => { if (!open) quickMenuOpen = false; }">
-            <PopoverAnchor as-child>
-              <button class="icon-button icon-amber" :title="t('quickCommands')" :disabled="!connected" @click.stop="toggleQuickMenu"><Zap /></button>
-            </PopoverAnchor>
-            <PopoverContent class="popover quick-commands-popover" align="end" :side-offset="5">
-            <!-- Termius Snippets 式结构：列表态（搜索 + 卡片 + 整宽新建按钮）与
-                 编辑器子视图（返回 + 名称 + 多行命令 + 保存）两个视图切换。 -->
-            <template v-if="!quickEditorOpen">
-              <h3>{{ t("quickCommands") }}</h3>
-              <div v-if="visibleQuickCommandList.length" class="quick-search">
-                <Search />
-                <input v-model="quickSearch" :placeholder="t('quickCommandsSearch')" spellcheck="false" />
-              </div>
-              <div v-if="!visibleQuickCommandList.length" class="empty compact">{{ t("quickCommandsEmpty") }}</div>
-              <div v-else-if="!filteredQuickCommands.length" class="empty compact">{{ t("quickCommandsNoMatch") }}</div>
-              <template v-else>
-                <p v-if="quickHasRealGroups" class="quick-command-group-summary">{{ t("quickCommands.groupSummary", { groups: quickCommandGroupCount(visibleQuickCommandList), count: visibleQuickCommandList.length }) }}</p>
-                <section v-for="group in groupedQuickCommands" :key="group.id || '__ungrouped__'" class="quick-group">
-                  <button v-if="quickHasRealGroups" type="button" class="quick-group-head" :aria-expanded="!quickCollapsedGroups.includes(group.id)" @click="toggleQuickGroupCollapse(group.id)">
-                    <ChevronDown v-if="!quickCollapsedGroups.includes(group.id)" class="quick-group-chevron" />
-                    <ChevronRight v-else class="quick-group-chevron" />
-                    <span class="quick-group-name">{{ quickGroupName(group) }}</span>
-                    <span class="quick-group-count">{{ group.commands.length }}</span>
-                  </button>
-                  <template v-if="!quickHasRealGroups || !quickCollapsedGroups.includes(group.id)">
-                    <div v-for="item in group.commands" :key="item.id" class="quick-command-row quick-card" :class="{ expanded: quickExpandedId === item.id }">
-                      <button class="quick-card-main" :title="item.command" @click="toggleQuickExpand(item.id)">
-                        <Braces class="quick-card-icon" />
-                        <span class="quick-card-text">
-                          <span class="quick-card-title">
-                            <strong>{{ item.name }}</strong>
-                            <span
-                              class="quick-command-scope-badge"
-                              :data-scope="item.connectionId ? 'connection' : 'global'"
-                            >{{ item.connectionId ? t("quickCommands.badge.connection") : t("quickCommands.badge.global") }}</span>
-                          </span>
-                          <span class="mono">{{ item.command }}</span>
-                        </span>
-                      </button>
-                      <div class="quick-card-actions">
-                        <button class="quick-action" :disabled="!connected" @click="sendQuickCommand(item)">{{ t("quickCommandRun") }}</button>
-                        <button class="quick-action" :disabled="!connected" @click="pasteQuickCommand(item)">{{ t("quickCommandPaste") }}</button>
-                        <button class="icon-button compact" :title="t('quickCommandsEdit')" @click="editQuickCommand(item)"><Pencil /></button>
-                        <button class="icon-button compact" :title="t('delete')" @click="deleteQuickCommand(item.id)"><Trash2 /></button>
-                      </div>
-                      <div v-if="quickExpandedId === item.id" class="quick-card-full mono">{{ item.command }}</div>
-                    </div>
-                  </template>
-                </section>
-              </template>
-              <div v-if="otherQuickCommandCount" class="quick-other-section">
-                <button type="button" class="quick-other-toggle" @click="quickOtherOpen = !quickOtherOpen">
-                  <span>{{ t("quickCommands.otherConnections", { count: otherQuickCommandCount }) }}</span>
-                </button>
-                <div v-if="quickOtherOpen" class="quick-other-list">
-                  <div v-for="group in otherQuickCommandGroups" :key="group.connectionId" class="quick-other-group">
-                    <div class="quick-other-group-head">
-                      <span class="mono" :title="group.connectionId">{{ shortenConnectionId(group.connectionId) }}</span>
-                      <span class="quick-command-limit">{{ group.commands.length }}</span>
-                      <button type="button" class="link-button" @click="deleteQuickCommandsForConnection(group.connectionId)">{{ t("quickCommands.deleteConnection") }}</button>
-                    </div>
-                    <div v-for="item in group.commands" :key="item.id" class="quick-other-row">
-                      <span class="quick-other-name" :title="item.command">{{ item.name }}</span>
-                      <button type="button" class="link-button" @click="makeQuickCommandGlobal(item)">{{ t("quickCommands.makeGlobal") }}</button>
-                      <button type="button" class="icon-button compact" :title="t('delete')" @click="deleteQuickCommand(item.id)"><Trash2 /></button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <footer class="quick-command-footer">
-                <button
-                  class="quick-new-btn"
-                  :disabled="!canAddQuickCommandInScope(quickCommands, connectionId || null) && !canAddQuickCommandInScope(quickCommands, null)"
-                  @click="openQuickEditor()"
-                ><Plus />{{ t("quickCommandsNew") }}</button>
-                <span class="quick-command-limit">{{ t("quickCommands.limitScope", { count: countQuickCommandsInScope(quickCommands, connectionId || null), limit: QUICK_COMMANDS_LIMIT }) }}</span>
-              </footer>
-            </template>
-            <template v-else>
-              <header class="quick-editor-head">
-                <button class="icon-button compact" :title="t('cancel')" @click="closeQuickEditor"><ArrowLeft /></button>
-                <h3>{{ quickDraft.id ? t("quickCommandsEdit") : t("quickCommandsNew") }}</h3>
-              </header>
-              <footer class="quick-command-editor">
-                <input v-model="quickDraft.name" :placeholder="t('quickCommandsName')" :maxlength="60" autofocus />
-                <input v-model="quickDraft.group" :placeholder="t('quickCommands.groupPlaceholder')" :maxlength="QUICK_COMMAND_GROUP_MAX_LENGTH" />
-                <label
-                  class="quick-scope-bind"
-                  :class="{ disabled: !connectionId }"
-                  :title="connectionId ? t('quickCommands.scope.connection') : t('quickCommands.scope.global')"
-                >
-                  <Switch
-                    size="sm"
-                    :model-value="quickDraft.scope === 'connection'"
-                    :disabled="!connectionId"
-                    @update:model-value="setQuickDraftBoundToConnection"
-                  />
-                  <span>{{ t("quickCommands.bindCurrent") }}</span>
-                </label>
-                <textarea v-model="quickDraft.command" class="mono" rows="4" :placeholder="t('quickCommandsCommand')" :maxlength="500" @keydown.ctrl.enter="addQuickCommand" />
-                <div class="quick-command-editor-actions">
-                  <button class="primary-button" :disabled="quickSaving || !quickDraft.command.trim() || !quickDraftCanAdd" @click="addQuickCommand">{{ quickDraft.id ? t("save") : t("quickCommandsAdd") }}</button>
-                  <button @click="closeQuickEditor">{{ t("cancel") }}</button>
-                  <span class="quick-command-limit">{{ t("quickCommands.limitScope", { count: quickDraftScopeCount, limit: QUICK_COMMANDS_LIMIT }) }}</span>
-                </div>
-              </footer>
-            </template>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div>
-          <Popover :open="agentModeOpen" @update:open="(open) => { if (!open) agentModeOpen = false; }">
-            <PopoverAnchor as-child>
-              <button class="icon-button" :class="agentMode === 'off' ? 'icon-neutral' : 'icon-emerald is-active'" :title="t('agentTerminalQuickHint')" :aria-pressed="agentMode !== 'off'" :disabled="!connected" @click.stop="toggleAgentModeMenu"><Bot /></button>
-            </PopoverAnchor>
-            <PopoverContent class="popover agent-mode-popover" align="end" :side-offset="5">
-            <h3>{{ t("agentTerminalSection") }}</h3>
-            <label v-for="mode in AGENT_MODES" :key="mode" class="agent-mode-option">
-              <input type="radio" name="agent-mode" :checked="agentMode === mode" :disabled="agentModeBusy" @change="applyAgentMode(mode)" />
-              <span>{{ t(`agentTerminal${mode === "off" ? "Off" : mode === "auto" ? "Auto" : "Strict"}`) }}</span>
-            </label>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div>
-          <Popover :open="highlightMenuOpen" @update:open="(open) => { if (!open) highlightMenuOpen = false; }">
-            <PopoverAnchor as-child>
-              <button class="icon-button icon-violet" :class="{ 'is-active': highlightMenuOpen }" :title="t('highlightRules.title')" :aria-pressed="highlightMenuOpen" @click.stop="toggleHighlightMenu"><Palette /></button>
-            </PopoverAnchor>
-            <PopoverContent class="popover highlight-rules-popover" align="end" :side-offset="5">
-            <h3>{{ t("highlightRules.title") }}</h3>
-            <div v-if="!highlightRules.length" class="empty compact">{{ t("highlightRules.empty") }}</div>
-            <div v-else class="highlight-rule-list">
-              <div v-for="item in highlightRules" :key="item.id" class="highlight-rule-row">
-              <span class="highlight-color-dot" :style="{ backgroundColor: item.color }" />
-              <div class="highlight-rule-main">
-                <span class="highlight-rule-pattern mono" :class="{ disabled: !item.enabled }" :title="item.pattern">{{ item.pattern }}</span>
-                <span class="highlight-rule-badges">
-                  <span v-if="item.isRegex">regex</span>
-                  <span v-if="item.caseSensitive">Aa</span>
-                </span>
-              </div>
-              <span class="highlight-rule-actions">
-                <label class="highlight-switch-control" :title="t('highlightRules.enabled')">
-                  <input type="checkbox" :checked="item.enabled" @change="toggleHighlightRule(item)" />
-                </label>
-                <button class="icon-button" :title="t('quickCommandsEdit')" @click="editHighlightRule(item)"><Pencil /></button>
-                <button class="icon-button" :title="t('delete')" @click="deleteHighlightRule(item.id)"><Trash2 /></button>
-              </span>
-            </div>
-            </div>
-            <footer class="highlight-editor">
-              <div class="highlight-editor-inputs">
-                <input v-model="highlightDraft.pattern" :placeholder="t('highlightRules.patternPlaceholder')" :maxlength="200" spellcheck="false" @keydown.enter="saveHighlightRule" />
-                <ToggleGroup v-model="highlightFlagValues" type="multiple" class="highlight-editor-flags">
-                  <ToggleGroupItem value="regex" class="highlight-editor-flag-item" :title="t('highlightRules.regex')">.*</ToggleGroupItem>
-                  <ToggleGroupItem value="case" class="highlight-editor-flag-item" :title="t('highlightRules.caseSensitive')">Aa</ToggleGroupItem>
-                </ToggleGroup>
-              </div>
-              <div class="highlight-palette">
-                <button v-for="swatch in HIGHLIGHT_PALETTE" :key="swatch" type="button" class="highlight-palette-swatch" :class="{ selected: highlightDraft.color.toLowerCase() === swatch }" :style="{ backgroundColor: swatch }" :aria-label="swatch" @click="highlightDraft.color = swatch" />
-                <input v-model="highlightDraft.color" class="highlight-hex-input mono" :title="t('highlightRules.color')" :maxlength="7" spellcheck="false" />
-              </div>
-              <div class="highlight-editor-actions">
-                <span class="highlight-rule-limit">{{ t("highlightRules.limit", { count: highlightRules.length, limit: HIGHLIGHT_RULES_LIMIT }) }}</span>
-                <button v-if="highlightDraft.id" @click="resetHighlightDraft">{{ t("cancel") }}</button>
-                <button class="primary-button" :disabled="highlightSaving || !highlightDraft.pattern.trim() || (!highlightDraft.id && highlightRules.length >= HIGHLIGHT_RULES_LIMIT)" @click="saveHighlightRule">{{ highlightDraft.id ? t("save") : t("highlightRules.add") }}</button>
-              </div>
-              <p v-if="highlightDraftError" class="task-error">{{ highlightDraftError }}</p>
-            </footer>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <button class="icon-button icon-cyan" :class="{ 'is-active': copilotDockOpen }" :title="t('copilot.openDock')" :aria-pressed="copilotDockOpen" :disabled="!connected" @click="setCopilotDockOpen(!copilotDockOpen)"><Sparkles /></button>
-        <button class="icon-button icon-emerald" :class="{ 'is-active': metricsOpen }" :title="t('metrics')" :aria-pressed="metricsOpen" :disabled="!connected" @click="toggleMetrics"><Gauge /></button>
-        <button class="icon-button" :class="{ 'is-recording': recordingActive }" :title="recordingActive ? t('recordingStop') : t('recordingTitle')" :disabled="!canRecord" @click="toggleRecording"><Disc /></button>
-        <button class="icon-button" :class="{ 'is-active': recordingsOpen }" :title="t('recordingsTitle')" :aria-pressed="recordingsOpen" @click="toggleRecordings"><Film /></button>
-        <button class="icon-button icon-violet" :title="t('settings')" :disabled="!connected" @click="openSettings"><Settings /></button>
-        <button class="icon-button" :title="t('importWizard.title')" :aria-pressed="importOpen" @click="openImportWizard"><FolderInput /></button>
-        <button class="icon-button icon-amber" :title="t('auditLog.title')" @click="openAuditLog"><FileText /></button>
-        <div>
-          <Popover :open="columnsOpen" @update:open="(open) => { if (!open) columnsOpen = false; }">
-            <PopoverAnchor as-child>
-              <button class="icon-button icon-violet" :title="t('customizeColumns')" @click.stop="toggleColumnsMenu"><Columns3 /></button>
-            </PopoverAnchor>
-            <PopoverContent class="popover columns-popover" align="end" :side-offset="5">
-            <label v-for="column in (['size', 'modified', 'owner', 'group', 'permissions'] as SftpColumn[])" :key="column"><input type="checkbox" :checked="visibleColumns.includes(column)" @change="toggleColumn(column)" />{{ t(column) }}</label>
-            <hr class="columns-popover-separator" />
-            <label><input type="checkbox" :checked="sftpPaneDefaultOpen" @change="toggleSftpPaneDefaultOpen" />{{ t("sftpPane.defaultOpen") }}</label>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div>
-          <!-- 历史卡右键菜单（ContextMenu）打开时忽略弹层的外点关闭请求：
-               菜单项 pointerdown 相对弹层是"外部"，不加守卫会在 select 前把宿主弹层
-               连同菜单一起卸载，动作丢失。 -->
-          <Popover :open="transferPanelOpen" @update:open="(open) => { if (!open && !transferHistoryMenu) transferPanelOpen = false; }">
-            <PopoverAnchor as-child>
-              <button class="icon-button icon-blue" :title="t('transfers')" @click.stop="toggleTransferPanel"><ArrowUpDown /><span v-if="activeTransfers" class="activity-dot" /></button>
-            </PopoverAnchor>
-            <PopoverContent class="popover transfer-popover" align="end" :side-offset="5">
+        <Popover :open="transferPanelOpen" @update:open="(open) => { if (!open && !transferHistoryMenu) transferPanelOpen = false; }">
+          <PopoverAnchor as-child>
+            <button class="icon-button icon-neutral" :title="t('transfers')" @click.stop="toggleTransferPanel"><ArrowUpDown /><span v-if="activeTransfers" class="activity-dot" /></button>
+          </PopoverAnchor>
+          <PopoverContent class="popover transfer-popover" align="end" :side-offset="5">
             <h3>{{ t("transfers") }}</h3>
             <div v-if="!transferList.length" class="empty compact">{{ t("noTransfers") }}</div>
             <article v-for="task in transferList" :key="task.taskId" class="transfer-card">
               <div class="transfer-title"><FileUp v-if="task.direction === 'upload'" /><Download v-else /><span>{{ task.fileName || task.taskId }}</span><span v-if="task.compression === 'gzip'" class="transfer-gz">gz</span><span v-else-if="task.compression === 'lzpack'" class="transfer-gz">dbxz</span><strong v-if="task.phase !== 'staging'">{{ transferPercent(task) }}%</strong></div>
               <progress :value="transferBarValue(task)" max="100" />
               <div class="transfer-meta"><span>{{ t(`transferStatus.${task.status}`) }}</span><span :title="transferBytesTitle(task)">{{ formatBytes(transferShownBytes(task)) }} / {{ formatBytes(task.size) }}</span><span v-if="transferSpeeds[task.taskId]">{{ formatBytes(transferSpeeds[task.taskId]) }}/s</span></div>
-              <!-- 目录下载：在传文件相对路径，让长传输有可感知的推进。 -->
               <p v-if="task.currentFile" class="transfer-path mono" :title="task.currentFile">{{ task.currentFile }}</p>
               <p v-if="task.localPath" class="transfer-path mono" :title="task.localPath">{{ task.localPath }}</p>
-              <!-- 目录下载部分失败的汇总由完成 toast 承担：failedCount 与终态
-                   同拍赋值，终态卡随即转入历史区，活跃卡上的失败行永远渲染
-                   不到（UI 回归确认），故不再放置死分支。 -->
               <div v-if="transferPausable(task.status) || task.status === 'queued' || task.status === 'running' || task.localPath" class="transfer-actions">
                 <button v-if="transferPausable(task.status)" class="icon-button" :title="t(pausedTaskIds.has(task.taskId) ? 'transferResume' : 'transferPause')" :aria-label="t(pausedTaskIds.has(task.taskId) ? 'transferResume' : 'transferPause')" @click="toggleTransferPause(task)"><Play v-if="pausedTaskIds.has(task.taskId)" /><Pause v-else /></button>
                 <button v-if="task.status === 'queued' || task.status === 'running'" class="icon-button" :title="t('cancel')" :aria-label="t('cancel')" @click="cancelTransfer(task)"><X /></button>
@@ -10940,7 +11251,6 @@ onBeforeUnmount(() => {
               </div>
               <p v-if="task.error" class="task-error">{{ task.error }}</p>
             </article>
-            <!-- 保留上传断点续传入口；文件选择器本身始终隐藏，仅由 Resume 按钮唤起。 -->
             <template v-if="resumableTasks.length">
               <h3 class="transfer-history-title">{{ t("resumableTitle") }}</h3>
               <article v-for="task in resumableTasks" :key="task.taskId" class="transfer-card">
@@ -10950,7 +11260,6 @@ onBeforeUnmount(() => {
               </article>
             </template>
             <input ref="resumeInput" type="file" class="hidden" @change="onResumeFilePicked" />
-            <!-- 传输历史与活跃任务并列展示：历史是落盘快照，不应被当前传输状态遮住。 -->
             <div class="transfer-history-head">
               <h3 class="transfer-history-title">{{ t("transfersHistory.title") }}</h3>
               <span class="transfer-history-actions">
@@ -10978,21 +11287,10 @@ onBeforeUnmount(() => {
                 <ContextMenuItem @select="entry.localPath && openTransferTarget(entry.localPath)"><FileText />{{ t("openDownloadedFile") }}</ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
-            </PopoverContent>
-          </Popover>
-        </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </header>
-
-    <ResourceStrip
-      v-if="connected && resourceStripEnabled"
-      :metrics="metrics"
-      :loading="metricsLoading"
-      :error="metricsError"
-      :t="t"
-      @open-metrics="openMetricsFromStrip"
-      @open-copilot="openCopilotFromStrip"
-    />
 
     <div v-if="tooltip" ref="tooltipBubble" class="app-tooltip" :class="{ 'app-tooltip-above': tooltip.above }" :style="{ left: `${tooltip.x}px`, top: `${tooltip.y}px`, '--arrow-offset': `${tooltip.arrowOffset}px` }" role="tooltip">{{ tooltip.text }}</div>
     <ToastProvider :label="t('notification')">
@@ -11012,11 +11310,157 @@ onBeforeUnmount(() => {
     </ToastProvider>
 
     <div class="workbench-body">
-    <section ref="paneContainer" :class="orderedPaneClass">
+    <SettingsDialog
+      v-if="settingsOpen || profilesOpen"
+      ref="settingsDialog"
+      class="settings-workspace-host"
+      :open="settingsOpen"
+      @update:open="onSettingsOpenChange"
+      v-model:profilesOpen="profilesOpen"
+      :focus-category="settingsFocusCategory"
+      :focus-anchor="settingsFocusAnchor"
+      :focus-add-model="settingsFocusAddModel"
+      :quick-command-count="visibleQuickCommandList.length"
+      :quick-commands="quickCommands"
+      :quick-saving="quickSaving"
+      :session-id="session?.sessionId"
+      :connection-id="connectionId"
+      :connection="connection"
+      :terminal-font-size="terminalFontSize"
+      :host-font-size="appearance.terminal.fontSize"
+      :host-color-scheme="appearance.colorScheme"
+      :local-download-dir="localDownloadDir"
+      :local-can-save="localCanSave"
+      :webgl-enabled="webglEnabled"
+      :term-select-copy="termSelectCopy"
+      :term-click-cursor="termClickCursor"
+      :resource-strip-enabled="resourceStripEnabled"
+      :sftp-pane-default-open="sftpPaneDefaultOpen"
+      :right-rail-open="rightRailOpen"
+      :split-orientation="splitOrientation"
+      :sync-input-enabled="syncInputEnabled"
+      :follow-directory="followDirectory"
+      :follow-directory-disabled="!(connected || (protocolSession && (protocolSession.kind === 'local' || protocolSession.kind === 'telnet' || protocolSession.kind === 'serial') && terminalState === 'connected'))"
+      :visible-columns="visibleColumns"
+      :highlight-enabled="highlightEnabled"
+      :highlight-rules="highlightRules"
+      :copilot-dock-default-open="copilotDockOpen"
+      :copilot-chat-mode="copilotChatMode"
+      :copilot-reply-language="copilotReplyLanguage"
+      :copilot-redact-output="copilotRedactOutput"
+      :interaction-prefs="interactionPrefs"
+      :download-prefs="downloadPrefsAdapter"
+      :editor-prefs="editorPrefsAdapter"
+      :terminal-appearance="terminalAppearance"
+      :t="t"
+      @notice="showNotice"
+      @error="showError"
+      @browse-download-dir="folderPickerTarget = 'settings'"
+      @update:webgl="setWebglEnabled"
+      @toggle-select-copy="toggleSelectCopy"
+      @toggle-click-cursor="toggleClickCursor"
+      @update:resource-strip="setResourceStripEnabled"
+      @update:sftp-pane-default-open="setSftpPaneDefaultOpen"
+      @update:right-rail-open="setRightRailOpen"
+      @update:split-orientation="setSplitOrientation"
+      @update:sync-input-enabled="setSyncInputEnabled"
+      @update:follow-directory="setDirectoryTracking"
+      @toggle-column="toggleColumn"
+      @update:highlight-enabled="setHighlightEnabled"
+      @highlight-rules-changed="onHighlightRulesChanged"
+      @update:copilot-dock-default-open="setCopilotDockOpen"
+      @update:copilot-chat-mode="setCopilotChatMode"
+      @update:copilot-reply-language="setCopilotReplyLanguage"
+      @update:copilot-redact-output="setCopilotRedactOutput"
+      @copilot-llm-saved="refreshCopilotModelSource"
+      @update:interaction-prefs="updateInteractionPrefs"
+      @quick-command-save="saveQuickCommandFromSettings"
+      @apply-font="(payload) => applyTerminalFontSettings(payload.family, payload.size)"
+      @update:terminal-appearance="updateTerminalAppearanceState"
+    >
+      <template #quick-commands>
+        <QuickCommandsPanel
+          ref="quickPanelSettings"
+          :commands="quickCommands"
+          :connection-id="connectionId"
+          :connected="connected"
+          :saving="quickSaving"
+          :allow-run="true"
+          :show-add-button="false"
+          :t="t"
+          @save="saveQuickCommandFromPanel"
+          @delete="deleteQuickCommand"
+          @delete-connection="deleteQuickCommandsForConnection"
+          @make-global="makeQuickCommandGlobal"
+          @send="sendQuickCommand"
+          @paste="pasteQuickCommand"
+        />
+      </template>
+    </SettingsDialog>
+    <section v-show="!settingsOpen" ref="paneContainer" :class="orderedPaneClass">
+      <button
+        v-if="sftpPaneOpen && sftpDrawerMode"
+        type="button"
+        class="sftp-drawer-backdrop"
+        :aria-label="t('sftpPane.close')"
+        @click="closeSftpDrawerIfOverlay"
+      />
       <ContextMenu :open="terminalMenuOpen" @update:open="(open) => { if (!open) terminalMenuOpen = false; }">
         <ContextMenuTrigger as-child>
-      <section class="terminal-pane" :class="{ 'drag-active': terminalDragActive, 'batch-bar-open': connected && batchBarOpen }" :style="terminalBasis" @contextmenu="showTerminalMenu" @dragenter.prevent="onTerminalDragEnter" @dragover.prevent @dragleave.self="terminalDragActive = false" @drop.prevent="onTerminalDrop($event)">
-        <div ref="terminalHost" class="terminal-host" />
+      <section
+        class="terminal-pane"
+        :class="{
+          'drag-active': terminalDragActive,
+          'batch-bar-open': connected && batchBarOpen,
+          'terminal-pane--split': splitActive,
+          'terminal-pane--split-vertical': splitActive && splitOrientation === 'vertical',
+          'terminal-pane--split-horizontal': splitActive && splitOrientation === 'horizontal',
+        }"
+        :style="terminalBasis"
+        @contextmenu="showTerminalMenu"
+        @dragenter.prevent="onTerminalDragEnter"
+        @dragover.prevent
+        @dragleave.self="terminalDragActive = false"
+        @drop.prevent="onTerminalDrop($event)"
+      >
+        <div
+          class="terminal-shells"
+          :class="{
+            'terminal-shells--split': splitActive,
+            'terminal-shells--vertical': splitActive && splitOrientation === 'vertical',
+            'terminal-shells--horizontal': splitActive && splitOrientation === 'horizontal',
+          }"
+        >
+          <div
+            class="terminal-split-primary"
+            :class="{ 'is-focused': splitActive && focusedPane === 'primary' }"
+            :style="splitPrimaryStyle"
+            @pointerdown="focusSplitPane('primary')"
+          >
+            <div ref="terminalHost" class="terminal-host" />
+          </div>
+          <div
+            v-if="splitLayoutOpen"
+            class="terminal-split-divider"
+            :class="splitOrientation === 'vertical' ? 'is-vertical' : 'is-horizontal'"
+            @pointerdown="onSplitDividerPointerDown"
+          />
+          <div
+            v-if="splitLayoutOpen"
+            class="terminal-split-secondary terminal-split-peer"
+            :class="{ 'is-sync': syncInputEnabled, 'is-focused': focusedPane === 'split' }"
+            :style="splitSecondaryStyle"
+            @pointerdown="focusSplitPane('split')"
+          >
+            <div class="terminal-host" :ref="(el) => bindSplitPeerHost(el as Element | null)" />
+            <button
+              type="button"
+              class="terminal-split-close icon-button compact icon-neutral"
+              :title="t('terminalSplit.close')"
+              @click.stop="closeTerminalSplit"
+            ><X /></button>
+          </div>
+        </div>
         <div v-if="terminalDragActive || (dragActive && !sftpPaneOpen)" class="drop-overlay"><FileUp /><strong>{{ t("terminalDrop.hint") }}</strong></div>
         <TerminalSearchPanel
           v-if="searchOpen"
@@ -11121,6 +11565,14 @@ onBeforeUnmount(() => {
           </div>
           <p class="history-overlay-hint">{{ t("quickPalette.hint") }}</p>
         </section>
+        <CommandPalette
+          v-if="commandPaletteOpen"
+          ref="commandPaletteRef"
+          :commands="commandPaletteCommands"
+          :t="t"
+          @close="closeCommandPalette"
+          @run="runPaletteCommand"
+        />
         <div
           v-if="historyPanelOpen && historyGhostText"
           class="command-suggest-ghost history-ghost mono"
@@ -11784,16 +12236,30 @@ onBeforeUnmount(() => {
         </ContextMenuContent>
       </ContextMenu>
 
-      <div v-if="sftpPaneOpen" class="divider" @pointerdown="startDividerDrag" />
+      <div v-if="sftpPaneOpen && !sftpDrawerMode" class="divider" @pointerdown="startDividerDrag" />
 
-      <section v-if="sftpPaneOpen" ref="sftpPane" class="sftp-pane" tabindex="-1" :class="{ 'drag-active': dragActive }" @pointerdown="focusSftpPaneOnPointerDown" @paste.capture="onSftpClipboardPaste" @dragenter.prevent="dragActive = true" @dragover.prevent @dragleave.self="dragActive = false" @drop.prevent="onDrop">
-        <div class="path-toolbar">
-          <button class="icon-button" :title="t('parentFolder')" :disabled="currentPath === '/'" @click="goParent"><ArrowUp /></button>
-          <button class="icon-button icon-amber" :title="t('home')" :disabled="!connected" @click="loadHome"><Home /></button>
-          <button class="icon-button icon-cyan" :title="t('refresh')" :disabled="!connected || loadingFiles" @click="loadDirectory()"><RefreshCw :class="{ spinning: loadingFiles }" /></button>
-          <!-- #54 路径栏双态：非编辑态把当前路径渲染成可点击分段（末段为当前位置），
-               点击分段直接回跳、点击分段外区域进入编辑；编辑态是原先的完整输入框，
-               提交后回到分段展示。分段切分走 remotePathInput（有单测）。 -->
+      <section v-if="sftpPaneOpen" ref="sftpPane" class="sftp-pane" tabindex="-1" :class="{ 'drag-active': dragActive }" :style="sftpPaneStyle" @pointerdown="focusSftpPaneOnPointerDown" @paste.capture="onSftpClipboardPaste" @dragenter.prevent="dragActive = true" @dragover.prevent @dragleave.self="dragActive = false" @drop.prevent="onDrop">
+        <!-- Motty hierarchy: title → tools → path → list -->
+        <header class="sftp-title-bar">
+          <strong class="sftp-title-bar-label">{{ t("sftpPane.title") }}</strong>
+          <span class="sftp-title-bar-path mono" :title="currentPath">{{ currentPath }}</span>
+          <button class="icon-button compact icon-neutral" :title="t('sftpPane.close')" @click="toggleSftpPane"><X /></button>
+        </header>
+        <div class="sftp-tools">
+          <button class="icon-button icon-neutral" :title="t('refresh')" :disabled="!connected || loadingFiles" @click="loadDirectory()"><RefreshCw :class="{ spinning: loadingFiles }" /></button>
+          <button class="icon-button icon-neutral" :title="t('sftpPaste.action')" :disabled="!connected || !canWrite || !sftpClipboard || pasteBusy" @click="pasteClipboard"><ClipboardPaste /></button>
+          <button class="icon-button icon-neutral" :title="`${t('upload')} · Ctrl/Cmd+V`" :disabled="!connected || !canWrite" @click.stop="chooseUpload"><FileUp /></button>
+          <button class="icon-button icon-neutral" :class="{ 'is-active': localPaneOpen }" :title="t('localPane.toggle')" :aria-pressed="localPaneOpen" @click="localPaneOpen = !localPaneOpen"><HardDrive /></button>
+          <button class="icon-button icon-neutral" :title="t('newFolder')" :disabled="!connected || !canWrite" @click="operationDraft = ''; operationDialog = 'mkdir'"><FolderPlus /></button>
+          <button class="icon-button icon-neutral" :title="t('sftpNewFile.action')" :disabled="!connected || !canWrite" @click="openNewFileDialog"><FilePlus /></button>
+          <label class="follow-directory-control sudo-label" :title="!canWrite ? t('readOnly') : undefined">
+            <Switch size="sm" :model-value="sudoMode" :disabled="!connected || !canWrite" @update:model-value="toggleSudoMode" />
+            <span>{{ t("sudo.mode") }}</span>
+          </label>
+        </div>
+        <div class="sftp-path-bar">
+          <button class="icon-button icon-neutral" :title="t('parentFolder')" :disabled="currentPath === '/'" @click="goParent"><ArrowUp /></button>
+          <button class="icon-button icon-neutral" :title="t('home')" :disabled="!connected" @click="loadHome"><Home /></button>
           <div class="path-bar">
             <input
               v-show="pathBarEditing"
@@ -11815,9 +12281,8 @@ onBeforeUnmount(() => {
           <div>
             <Popover :open="bookmarkSaveOpen" @update:open="(open) => { if (!open) bookmarkSaveOpen = false; }">
               <PopoverAnchor as-child>
-                <button class="icon-button icon-amber" :title="t('sftpBookmark.add')" :disabled="!connected" @click.stop="toggleBookmarkSave"><Star /></button>
+                <button class="icon-button icon-neutral" :title="t('sftpBookmark.add')" :disabled="!connected" @click.stop="toggleBookmarkSave"><Star /></button>
               </PopoverAnchor>
-              <!-- 星标收藏弹层：label 默认取路径末段，可编辑后保存（前端先行校验 + 后端错误回显） -->
               <PopoverContent class="popover bookmark-save-popover" align="end" :side-offset="5">
               <strong class="path-history-title">{{ t("sftpBookmark.add") }}</strong>
               <span class="bookmark-save-path mono" :title="currentPath">{{ currentPath }}</span>
@@ -11832,13 +12297,12 @@ onBeforeUnmount(() => {
           <div>
             <Popover :open="pathHistoryOpen" @update:open="(open) => { if (!open) pathHistoryOpen = false; }">
               <PopoverAnchor as-child>
-                <button class="icon-button" :title="t('sftpPathHistory.title')" :disabled="!connected" @click.stop="togglePathHistoryMenu"><History /></button>
+                <button class="icon-button icon-neutral" :title="t('sftpPathHistory.title')" :disabled="!connected" @click.stop="togglePathHistoryMenu"><History /></button>
               </PopoverAnchor>
               <PopoverContent class="popover path-history-popover" align="end" :side-offset="5">
               <strong class="path-history-title">{{ t("sftpPathHistory.title") }}</strong>
               <button v-for="item in currentPathHistory" :key="item" class="path-item mono" :title="item" @click="goToPath(item)">{{ item }}</button>
               <div v-if="!currentPathHistory.length" class="empty compact">{{ t("sftpPathHistory.empty") }}</div>
-              <!-- 书签区：点击跳转，行尾悬浮删除；全局清单（跨连接共享） -->
               <strong class="path-history-title">{{ t("sftpBookmark.title") }}</strong>
               <template v-if="sftpBookmarks.length">
                 <div v-for="bookmark in sftpBookmarks" :key="bookmark.id" class="bookmark-row">
@@ -11852,15 +12316,6 @@ onBeforeUnmount(() => {
               </PopoverContent>
             </Popover>
           </div>
-          <button class="icon-button" :title="t('sftpPaste.action')" :disabled="!connected || !canWrite || !sftpClipboard || pasteBusy" @click="pasteClipboard"><ClipboardPaste /></button>
-          <button class="icon-button icon-teal" :title="`${t('upload')} · Ctrl/Cmd+V`" :disabled="!connected || !canWrite" @click.stop="chooseUpload"><FileUp /></button>
-          <button class="icon-button icon-neutral" :class="{ 'is-active': localPaneOpen }" :title="t('localPane.toggle')" :aria-pressed="localPaneOpen" @click="localPaneOpen = !localPaneOpen"><HardDrive /></button>
-          <button class="icon-button icon-amber" :title="t('newFolder')" :disabled="!connected || !canWrite" @click="operationDraft = ''; operationDialog = 'mkdir'"><FolderPlus /></button>
-          <button class="icon-button icon-amber" :title="t('sftpNewFile.action')" :disabled="!connected || !canWrite" @click="openNewFileDialog"><FilePlus /></button>
-          <label class="follow-directory-control sudo-label" :title="!canWrite ? t('readOnly') : undefined">
-            <Switch size="sm" :model-value="sudoMode" :disabled="!connected || !canWrite" @update:model-value="toggleSudoMode" />
-            <span>{{ t("sudo.mode") }}</span>
-          </label>
         </div>
         <!-- SFTP 面板主体：本机半栏 + 远端 tree/quick 侧栏 + 文件区 -->
         <div class="sftp-body">
@@ -12052,8 +12507,44 @@ onBeforeUnmount(() => {
       </section>
     </section>
 
+    <MonitorDock
+      v-if="!settingsOpen && connected && resourceStripEnabled"
+      :metrics="metrics"
+      :loading="metricsLoading"
+      :error="metricsError"
+      :t="t"
+      @open-metrics="openMetricsFromStrip"
+      @close="closeMonitorDock"
+    />
+    <RightToolRail
+      v-if="!settingsOpen && rightRailOpen"
+      :connected="connected"
+      :session-ready="!!session"
+      :is-jump-server-mode="isJumpServerMode"
+      :can-record="canRecord"
+      :recording-active="recordingActive"
+      :monitor-open="resourceStripEnabled"
+      :copilot-open="copilotDockOpen"
+      :docker-open="dockerOpen"
+      :history-open="historyPanelOpen"
+      :otp-open="otpOpen"
+      :assets-open="assetsOpen"
+      :batch-bar-open="batchBarOpen"
+      :t="t"
+      @monitor="toggleMonitorDock"
+      @copilot="setCopilotDockOpen(!copilotDockOpen)"
+      @forwards="forwardsOpen = true"
+      @docker="toggleDocker"
+      @history="toggleHistoryPanel"
+      @otp="toggleOtpPanel"
+      @assets="toggleAssets"
+      @command="openCommandDialog"
+      @batch="toggleBatchBar"
+      @record="toggleRecording"
+      @recordings="toggleRecordings"
+    />
     <CopilotDock
-      :open="copilotDockOpen"
+      :open="!settingsOpen && copilotDockOpen"
       :enabled="copilotEnabled"
       :chat-mode="copilotChatMode"
       :model-preference="copilotModelPreference"
@@ -12436,49 +12927,6 @@ onBeforeUnmount(() => {
         <footer><button @click="importOpen = false">{{ t("close") }}</button></footer>
       </DialogContent>
     </Dialog>
-
-    <SettingsDialog
-      v-if="settingsOpen || profilesOpen"
-      ref="settingsDialog"
-      :open="settingsOpen"
-      @update:open="onSettingsOpenChange"
-      v-model:profilesOpen="profilesOpen"
-      :focus-category="settingsFocusCategory"
-      :focus-add-model="settingsFocusAddModel"
-      :session-id="session?.sessionId"
-      :connection-id="connectionId"
-      :terminal-font-size="terminalFontSize"
-      :host-font-size="appearance.terminal.fontSize"
-      :host-color-scheme="appearance.colorScheme"
-      :local-download-dir="localDownloadDir"
-      :local-can-save="localCanSave"
-      :webgl-enabled="webglEnabled"
-      :term-select-copy="termSelectCopy"
-      :term-click-cursor="termClickCursor"
-      :resource-strip-enabled="resourceStripEnabled"
-      :copilot-dock-default-open="copilotDockOpen"
-      :copilot-chat-mode="copilotChatMode"
-      :copilot-reply-language="copilotReplyLanguage"
-      :interaction-prefs="interactionPrefs"
-      :download-prefs="downloadPrefsAdapter"
-      :editor-prefs="editorPrefsAdapter"
-      :terminal-appearance="terminalAppearance"
-      :t="t"
-      @notice="showNotice"
-      @error="showError"
-      @browse-download-dir="folderPickerTarget = 'settings'"
-      @update:webgl="setWebglEnabled"
-      @toggle-select-copy="toggleSelectCopy"
-      @toggle-click-cursor="toggleClickCursor"
-      @update:resource-strip="setResourceStripEnabled"
-      @update:copilot-dock-default-open="setCopilotDockOpen"
-      @update:copilot-chat-mode="setCopilotChatMode"
-      @update:copilot-reply-language="setCopilotReplyLanguage"
-      @copilot-llm-saved="refreshCopilotModelSource"
-      @update:interaction-prefs="updateInteractionPrefs"
-      @apply-font="(payload) => applyTerminalFontSettings(payload.family, payload.size)"
-      @update:terminal-appearance="updateTerminalAppearanceState"
-    />
 
     <Dialog :open="auditOpen" @update:open="(open) => { if (!open) auditOpen = false; }">
       <DialogContent class="modal audit-modal" @escape-key-down.prevent>

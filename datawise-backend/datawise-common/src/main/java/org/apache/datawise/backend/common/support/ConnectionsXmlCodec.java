@@ -250,6 +250,15 @@ public final class ConnectionsXmlCodec {
         if (!projectId.isBlank()) {
             group.setProjectId(projectId.trim());
         }
+        // Nested groups are written as child <group> elements; parentId is structural, not an attribute.
+        // Restore it on read so subgroups do not flatten to root after persist/reload.
+        if (element.getParentNode() instanceof Element parentElement
+                && "group".equals(parentElement.getTagName())) {
+            String parentId = parentElement.getAttribute("id");
+            if (parentId != null && !parentId.isBlank()) {
+                group.setParentId(parentId);
+            }
+        }
         return group;
     }
 

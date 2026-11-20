@@ -9,7 +9,18 @@ import { clampFontSize } from "./terminalZoom";
 import { pushPathHistory, sanitizePathHistories } from "./sftpPathHistory";
 import { formatBytes, formatRate } from "./format";
 import { expandSelection, filterSftpEntries } from "./sftpFileFilters";
-import { getSshWorkbenchSplitLayout, resolveSftpPaneOpen, sanitizeSftpPaneDefaultOpen } from "./workbenchLayout";
+import {
+  clampSftpWidthPx,
+  getSshWorkbenchSplitLayout,
+  isSftpDrawerLayout,
+  resolvePaneOrder,
+  resolveSftpPaneOpen,
+  resolveSftpWidthPx,
+  sanitizeSftpPaneDefaultOpen,
+  SFTP_WIDTH_DEFAULT_PX,
+  SFTP_WIDTH_MAX_PX,
+  SFTP_WIDTH_MIN_PX,
+} from "./workbenchLayout";
 import { commandMarkerTooltip, formatCommandDuration, getOsc633ParserState, parseOsc633StreamChunk, runningCommandElapsedMs } from "./terminalCommandMarkers";
 import { describeWorkbenchSessionStatus, isUsableSshSession, normalizeSshSessionStatus } from "./sessionStatus";
 import { sanitizeCommandOutput, stripCommandEcho, stripHiddenCommandEchoes, stripTerminalControlSequences } from "./terminalOutputText";
@@ -120,12 +131,31 @@ describe("SSH workbench protocol helpers", () => {
   });
 
   it("parses the persisted SFTP default-open preference defensively", () => {
-    // Global default is OFF: only the explicit opt-in opens new workbenches
-    // with the SFTP pane visible.
-    expect(sanitizeSftpPaneDefaultOpen(null)).toBe(false);
+    // Motty-like default is ON: only explicit "false" keeps new workbenches terminal-only.
+    expect(sanitizeSftpPaneDefaultOpen(null)).toBe(true);
     expect(sanitizeSftpPaneDefaultOpen("true")).toBe(true);
-    expect(sanitizeSftpPaneDefaultOpen("garbage")).toBe(false);
+    expect(sanitizeSftpPaneDefaultOpen("garbage")).toBe(true);
     expect(sanitizeSftpPaneDefaultOpen("false")).toBe(false);
+  });
+
+  it("defaults pane order to SFTP on the left", () => {
+    expect(resolvePaneOrder(undefined)).toBe("sftp-left");
+    expect(resolvePaneOrder("sftp-left")).toBe("sftp-left");
+    expect(resolvePaneOrder("terminal-left")).toBe("terminal-left");
+    expect(resolvePaneOrder("nope")).toBe("sftp-left");
+  });
+
+  it("clamps and migrates SFTP dock width from legacy splitRatio", () => {
+    expect(clampSftpWidthPx(340)).toBe(340);
+    expect(clampSftpWidthPx(100)).toBe(SFTP_WIDTH_MIN_PX);
+    expect(clampSftpWidthPx(999)).toBe(SFTP_WIDTH_MAX_PX);
+    expect(clampSftpWidthPx("x")).toBe(SFTP_WIDTH_DEFAULT_PX);
+    expect(resolveSftpWidthPx({ sftpWidthPx: 360 })).toBe(360);
+    // Legacy terminal 58% → SFTP ~42% of 1000px ≈ 420.
+    expect(resolveSftpWidthPx({ splitRatio: 58 }, 1000)).toBe(420);
+    expect(resolveSftpWidthPx({})).toBe(SFTP_WIDTH_DEFAULT_PX);
+    expect(isSftpDrawerLayout(899)).toBe(true);
+    expect(isSftpDrawerLayout(900)).toBe(false);
   });
 });
 
@@ -156,6 +186,7 @@ describe("workbench localization", () => {
       "sftpCopy.copy",
       "sftpPaste.action",
       "connectionInactive",
+      "sftpPane.title",
       "sftpPane.open",
       "sftpPane.close",
       "sftpPane.defaultOpen",

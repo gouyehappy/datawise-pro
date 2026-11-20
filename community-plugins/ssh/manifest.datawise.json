@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "io.datawise.community.ssh",
   "name": "SSH Terminal",
-  "version": "0.7.11-beta.17",
+  "version": "0.7.11-beta.28",
   "publisher": "datawise-community",
   "description": "SSH terminal, SFTP, and remote operations.",
   "license": "MIT",

@@ -6,7 +6,7 @@
 // 模板与响应式状态，而它自身是自洽的（入参是 id + 目录，出参是「选了谁」），
 // 与设置弹窗其余表单无耦合。
 import { computed, ref } from "vue";
-import { Search } from "@lucide/vue";
+import { FileUp, Pencil, Plus, Search, Trash2 } from "@lucide/vue";
 import { filterTerminalSchemes, schemeTone, type TerminalColorScheme } from "../lib/terminalScheme";
 
 const props = defineProps<{
@@ -21,6 +21,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "pick", payload: { slot: "dark" | "light"; id: string | null }): void;
+  (e: "create"): void;
+  (e: "import"): void;
+  (e: "edit", scheme: TerminalColorScheme): void;
+  (e: "delete", scheme: TerminalColorScheme): void;
 }>();
 
 const slot = ref<"dark" | "light">(props.hostColorScheme === "light" ? "light" : "dark");
@@ -79,6 +83,10 @@ function swatchColors(scheme: TerminalColorScheme): string[] {
         >{{ t(item === 'all' ? 'terminalAppearance.toneAll' : item === 'dark' ? 'terminalAppearance.toneDark' : 'terminalAppearance.toneLight') }}</button>
       </span>
     </div>
+    <div class="picker-actions">
+      <button type="button" class="picker-action" @click="emit('create')"><Plus />{{ t("terminalAppearance.addScheme") }}</button>
+      <button type="button" class="picker-action" @click="emit('import')"><FileUp />{{ t("terminalAppearance.importScheme") }}</button>
+    </div>
     <ul class="picker-list" role="listbox">
       <li>
         <button
@@ -93,21 +101,38 @@ function swatchColors(scheme: TerminalColorScheme): string[] {
         </button>
       </li>
       <li v-for="scheme in visible" :key="scheme.id">
-        <button
-          type="button"
-          class="picker-row"
-          :class="{ selected: currentId === scheme.id }"
-          role="option"
-          :aria-selected="currentId === scheme.id"
-          @click="emit('pick', { slot, id: scheme.id })"
-        >
-          <span class="picker-name" :title="scheme.name">{{ scheme.name }}</span>
-          <span v-if="scheme.source === 'custom'" class="picker-badge">{{ t('terminalAppearance.importSection') }}</span>
-          <span class="picker-swatch" aria-hidden="true">
-            <i v-for="(color, index) in swatchColors(scheme)" :key="index" :style="{ background: color }" />
-          </span>
-          <span class="picker-tone-tag" :data-tone="schemeTone(scheme)">{{ t(schemeTone(scheme) === 'dark' ? 'terminalAppearance.toneDark' : 'terminalAppearance.toneLight') }}</span>
-        </button>
+        <div class="picker-entry" :class="{ selected: currentId === scheme.id }">
+          <button
+            type="button"
+            class="picker-row"
+            role="option"
+            :aria-selected="currentId === scheme.id"
+            @click="emit('pick', { slot, id: scheme.id })"
+          >
+            <span class="picker-name" :title="scheme.name">{{ scheme.name }}</span>
+            <span v-if="scheme.source === 'custom'" class="picker-badge">{{ t('terminalAppearance.importSection') }}</span>
+            <span class="picker-swatch" aria-hidden="true">
+              <i v-for="(color, index) in swatchColors(scheme)" :key="index" :style="{ background: color }" />
+            </span>
+            <span class="picker-tone-tag" :data-tone="schemeTone(scheme)">{{ t(schemeTone(scheme) === 'dark' ? 'terminalAppearance.toneDark' : 'terminalAppearance.toneLight') }}</span>
+          </button>
+          <template v-if="scheme.source === 'custom'">
+            <button
+              type="button"
+              class="picker-icon"
+              :title="t('terminalAppearance.editScheme')"
+              :aria-label="t('terminalAppearance.editScheme')"
+              @click="emit('edit', scheme)"
+            ><Pencil /></button>
+            <button
+              type="button"
+              class="picker-icon picker-icon--danger"
+              :title="t('delete')"
+              :aria-label="t('delete')"
+              @click="emit('delete', scheme)"
+            ><Trash2 /></button>
+          </template>
+        </div>
       </li>
       <li v-if="!visible.length" class="picker-empty">{{ t("terminalAppearance.emptyFilter") }}</li>
     </ul>
@@ -134,17 +159,38 @@ function swatchColors(scheme: TerminalColorScheme): string[] {
   border-radius: var(--radius); background: var(--background); color: var(--muted-foreground); cursor: pointer;
 }
 .picker-tone.active { border-color: var(--primary); color: var(--foreground); }
+.picker-actions { display: flex; gap: 6px; }
+.picker-action {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; font-size: var(--dw-text-xs); border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--muted); color: var(--foreground); cursor: pointer;
+}
+.picker-action:hover { border-color: var(--primary); }
+.picker-action svg { width: 12px; height: 12px; }
 .picker-list {
   list-style: none; margin: 0; padding: 2px; display: flex; flex-direction: column; gap: 1px;
   max-height: 210px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius);
 }
+.picker-entry {
+  display: flex; align-items: center; gap: 2px;
+  border: 1px solid transparent; border-radius: 4px;
+}
+.picker-entry:hover { background: var(--accent); }
+.picker-entry.selected { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); }
 .picker-row {
-  display: flex; align-items: center; gap: 8px; width: 100%;
+  display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0;
   padding: 4px 6px; border: 1px solid transparent; border-radius: 4px;
   background: transparent; color: var(--foreground); cursor: pointer; text-align: left;
 }
-.picker-row:hover { background: var(--accent); }
-.picker-row.selected { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.picker-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 22px; height: 22px; padding: 0;
+  border: none; border-radius: 4px; background: transparent;
+  color: var(--muted-foreground); cursor: pointer;
+}
+.picker-icon:hover { background: color-mix(in srgb, var(--foreground) 10%, transparent); color: var(--foreground); }
+.picker-icon--danger:hover { color: var(--destructive); }
+.picker-icon svg { width: 12px; height: 12px; }
 .picker-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--dw-font-size); }
 .picker-badge { flex: 0 0 auto; font-size: var(--dw-text-2xs); color: var(--muted-foreground); border: 1px solid var(--border); border-radius: 3px; padding: 0 3px; }
 .picker-swatch { flex: 0 0 auto; display: inline-flex; gap: 1px; }

@@ -516,7 +516,13 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
             if (byId && (byId.type === 'database' || byId.type === 'schema')) {
                 const parentConnectionId = resolveConnectionId(deps.tree.value, byId.id)
                 if (parentConnectionId === connectionId) {
-                    return byId
+                    // catalog.schema label + catalog id would wrongly stop on the catalog;
+                    // fall through so schema scope can resolve.
+                    const catalogSchemaLabel =
+                        isCatalogSchemaDbType(dbType) && trimmedLabel.includes('.')
+                    if (!(catalogSchemaLabel && byId.type === 'database')) {
+                        return byId
+                    }
                 }
             }
             if (
@@ -587,7 +593,9 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
         if (!databaseNode && databaseNodeId) {
             databaseNode = findDatabaseNode(connectionId, databaseLabel)
         }
-        if (!databaseNode) return
+        if (!databaseNode) {
+            throw new Error(i18n.global.t('explorer.refreshFailed'))
+        }
 
         await expandPathToNode(databaseNode.id)
         await loadNodeChildren(connectionId, databaseNode.id, {refresh: true})
@@ -596,7 +604,9 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
             ?? findDatabaseNode(connectionId, databaseLabel)
             ?? databaseNode
         const folder = findExplorerTablesFolder(databaseNode)
-        if (!folder) return
+        if (!folder) {
+            throw new Error(i18n.global.t('explorer.refreshFailed'))
+        }
 
         childEtags.delete(`${connectionId}:${folder.id}`)
         const ok = await loadNodeChildren(connectionId, folder.id, {refresh: true})

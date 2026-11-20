@@ -1,6 +1,6 @@
 [package]
 name = "datawise-plugin-ssh"
-version = "0.7.11-beta.17"
+version = "0.7.11-beta.28"
 edition = "2021"
 license = "MIT"
 authors = ["datawise-community"]

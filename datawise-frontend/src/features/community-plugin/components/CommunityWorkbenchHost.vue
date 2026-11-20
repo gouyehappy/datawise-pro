@@ -534,7 +534,7 @@ watch(
       :style="{ colorScheme: hostAppearance }"
       :sandbox="workbenchSandbox"
       :referrerpolicy="embedEnabled ? 'no-referrer-when-downgrade' : 'no-referrer'"
-      title="Community plugin workbench"
+      aria-label="Community plugin workbench"
       @load="onLoad"
     />
     <div
