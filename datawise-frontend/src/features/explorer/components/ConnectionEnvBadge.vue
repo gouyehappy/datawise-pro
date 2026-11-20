@@ -21,7 +21,6 @@ const label = computed(() => resolveConnectionEnvTreeLabel(props.env, props.envC
   <span
       class="conn-env-badge"
       :class="`conn-env-badge--${tone}`"
-      :title="label"
   >
     {{ label }}
   </span>

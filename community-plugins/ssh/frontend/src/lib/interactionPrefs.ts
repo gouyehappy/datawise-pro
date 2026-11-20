@@ -21,7 +21,14 @@ export type InteractionPrefs = {
    * Full accept (→ / Ctrl+F) still works while the list is hidden.
    */
   suggestCompactMode: boolean;
+  /** Disable soft wrap: widen PTY so long lines scroll horizontally (#306). */
+  noWrap: boolean;
+  /** Target column count while no-wrap is on (clamped). */
+  noWrapColumns: number;
 };
+
+export const NOWRAP_COLUMNS_MIN = 80;
+export const NOWRAP_COLUMNS_MAX = 10_000;
 
 export const DEFAULT_INTERACTION_PREFS: InteractionPrefs = {
   historyEnabled: true,
@@ -31,7 +38,15 @@ export const DEFAULT_INTERACTION_PREFS: InteractionPrefs = {
   figCompletionEnabled: true,
   lineSuggestEnabled: true,
   suggestCompactMode: false,
+  noWrap: false,
+  noWrapColumns: 1000,
 };
+
+export function clampNoWrapColumns(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_INTERACTION_PREFS.noWrapColumns;
+  return Math.min(NOWRAP_COLUMNS_MAX, Math.max(NOWRAP_COLUMNS_MIN, Math.round(n)));
+}
 
 export function clampHistoryLimit(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
@@ -51,5 +66,7 @@ export function sanitizeInteractionPrefs(raw: unknown): InteractionPrefs {
     figCompletionEnabled: o.figCompletionEnabled !== false,
     lineSuggestEnabled: o.lineSuggestEnabled !== false,
     suggestCompactMode: o.suggestCompactMode === true,
+    noWrap: o.noWrap === true,
+    noWrapColumns: clampNoWrapColumns(o.noWrapColumns),
   };
 }

@@ -4,6 +4,7 @@ import {useI18n} from 'vue-i18n'
 import {API_PATHS} from '@/shared/api/http/paths'
 import {postJson} from '@/shared/api/http/request'
 import {
+  cloneForPostMessage,
   collectPluginHostTheme,
   createPluginHostBridge,
 } from '@/features/community-plugin/lib/pluginHostBridge'
@@ -108,8 +109,10 @@ const resolvedContext = computed(() => {
     workbenchInstanceId: props.workbenchInstanceId,
     locale: locale.value,
   })
+  // Pinia tab.pluginHostContext is a Proxy; nested objects (e.g. plugin:{mode})
+  // must be plain before postMessage or PanelErrorBoundary catches DataCloneError.
   const fromHost = props.hostContext && Object.keys(props.hostContext).length > 0
-    ? props.hostContext
+    ? cloneForPostMessage(props.hostContext)
     : {}
   const mergedConnection = {
     ...((built.connection && typeof built.connection === 'object')
@@ -130,12 +133,18 @@ const resolvedContext = computed(() => {
   )
   const workbenchId =
     String(fromHost.workbenchId || props.workbenchInstanceId || built.workbenchId || '')
+  const contributionId = String(
+    fromHost.contributionId
+    || props.contributionId
+    || '',
+  ).trim()
   return {
     ...built,
     ...fromHost,
     connectionId,
     connectionName,
     workbenchId,
+    ...(contributionId ? {contributionId} : {}),
     connection: {
       ...mergedConnection,
       id: String(mergedConnection.id || connectionId),
@@ -173,8 +182,17 @@ const uiUrl = computed(() => {
     || (typeof props.hostContext?.workbenchId === 'string' ? props.hostContext.workbenchId : '')
     || '',
   ).trim()
+  const contributionId = String(
+    props.contributionId
+    || (typeof props.hostContext?.contributionId === 'string' ? props.hostContext.contributionId : '')
+    || '',
+  ).trim()
   if (connectionId) params.set('dwConnectionId', connectionId)
   if (workbenchId) params.set('dwWorkbenchId', workbenchId)
+  // Sync route key for multi-workbench plugins (e.g. SSH monitor vs terminal) —
+  // available before postMessage context, so the iframe can choose the root
+  // component without racing host.ready.
+  if (contributionId) params.set('dwContributionId', contributionId)
   const qs = params.toString()
   return `${base}${base.includes('?') ? '&' : '?'}${qs}`
 })
@@ -227,6 +245,20 @@ function resolveWorkbenchConnectionId(): string {
 async function ensureSidecarConnection(): Promise<void> {
   const connectionId = resolveWorkbenchConnectionId()
   if (!connectionId) return
+  // Multi-workbench plugins (e.g. SSH monitor) open without a catalog connection;
+  // never fetchConnection on sentinels / contribution-only tabs (avoids EXPLORER_CONNECTION_NOT_FOUND toast).
+  const contributionId = String(props.contributionId || props.hostContext?.contributionId || '').trim()
+  if (
+    connectionId.startsWith('__')
+    || connectionId.endsWith('__')
+    || contributionId.endsWith('.monitor')
+    || (typeof props.hostContext?.plugin === 'object'
+      && props.hostContext.plugin
+      && !Array.isArray(props.hostContext.plugin)
+      && (props.hostContext.plugin as {mode?: unknown}).mode === 'monitor')
+  ) {
+    return
+  }
   try {
     await ensureCommunityPluginSidecarConnection(connectionId, props.pluginId)
   } catch (e) {
@@ -299,17 +331,36 @@ const bridge = createPluginHostBridge({
   openWorkbench: async (contributionId, context, openOptions) => {
     const {useWorkspaceStore} = await import('@/features/workspace/stores/workspace')
     const workspace = useWorkspaceStore()
-    const connectionId =
-      (typeof context?.connectionId === 'string' && context.connectionId)
-      || props.connectionId
-      || ''
-    const workbenchInstanceId =
-      (typeof context?.workbenchId === 'string' && context.workbenchId)
-      || undefined
-    const connection =
-      context?.connection && typeof context.connection === 'object' && !Array.isArray(context.connection)
-        ? (context.connection as CommunityPluginWorkbenchConnection)
-        : props.connection
+    // Only inherit this tab's connection when opening the same contribution
+    // (e.g. "new session tab"). A different contribution such as the SSH
+    // multi-server monitor must not reuse connectionId — that would boot the
+    // terminal connect card and flap SSH sessions.
+    const sameContribution =
+      !props.contributionId
+      || !contributionId
+      || props.contributionId === contributionId
+    const contextConnectionId =
+      typeof context?.connectionId === 'string' && context.connectionId.trim()
+        ? context.connectionId.trim()
+        : ''
+    const connectionId = contextConnectionId || (sameContribution ? (props.connectionId || '') : '')
+    const mintedWorkbenchId =
+      (typeof context?.workbenchId === 'string' && context.workbenchId.trim())
+      || crypto.randomUUID?.()
+      || `wb-${Date.now()}`
+    const pluginHostContext = cloneForPostMessage({
+      ...(context && typeof context === 'object' && !Array.isArray(context) ? context : {}),
+      ...(connectionId ? {connectionId} : {}),
+      workbenchId: mintedWorkbenchId,
+    }) as Record<string, unknown>
+    const contextConnection =
+      pluginHostContext.connection && typeof pluginHostContext.connection === 'object' && !Array.isArray(pluginHostContext.connection)
+        ? (pluginHostContext.connection as CommunityPluginWorkbenchConnection)
+        : undefined
+    const connection = contextConnection
+      || (sameContribution && props.connection
+        ? cloneForPostMessage(props.connection as Record<string, unknown>) as CommunityPluginWorkbenchConnection
+        : undefined)
     const connectionName =
       connection && typeof connection.name === 'string' && connection.name.trim()
         ? connection.name.trim()
@@ -318,8 +369,8 @@ const bridge = createPluginHostBridge({
     workspace.openCommunityWorkbench(props.pluginId, contributionId, tabTitle, {
       connectionId: connectionId || undefined,
       connection,
-      workbenchInstanceId,
-      pluginHostContext: context,
+      workbenchInstanceId: mintedWorkbenchId,
+      pluginHostContext,
       forceNew: openOptions?.forceNew === true,
     })
   },

@@ -748,6 +748,20 @@ function displayNodeLabel(node: TreeNode) {
   return resolveExplorerCatalogLabel(node, t)
 }
 
+/** Native title only when text is ellipsized — repeating fully visible text is noise. */
+function syncOverflowTitle(event: PointerEvent, selector?: string) {
+  const root = event.currentTarget as HTMLElement | null
+  if (!root) return
+  const text = (selector ? root.querySelector(selector) : root) as HTMLElement | null
+  if (!text) {
+    root.removeAttribute('title')
+    return
+  }
+  const overflow = text.scrollWidth > text.clientWidth + 1
+  if (overflow) root.title = text.textContent?.trim() || ''
+  else root.removeAttribute('title')
+}
+
 function shouldShowComment(node: TreeNode) {
   if (!node.comment?.trim()) return false
   if (node.type === 'column') return props.showColumnComment
@@ -845,11 +859,6 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
           : undefined"
         :data-tree-node-id="node.id"
         :style="rowStyle(depth)"
-        :title="isPointerDraggable(node)
-          ? (isProjectSandboxMovableNode(node)
-            ? t('explorer.projectFiles.moveDragHint')
-            : t('explorer.reorderCatalogDragHint'))
-          : undefined"
         @mousedown="onCatalogPointerDown($event, node)"
         @pointerenter="onRowPointerEnter(node)"
         @click="onRowClick(node)"
@@ -921,7 +930,11 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
             @keydown="onDraftKeydown"
             @blur="onDraftBlur"
         >
-        <span v-else class="tree-label" :title="displayNodeLabel(node)">
+        <span
+            v-else
+            class="tree-label"
+            @pointerenter="syncOverflowTitle($event, '.tree-label__text')"
+        >
           <span class="tree-label__text">{{ displayNodeLabel(node) }}</span>
           <span
               v-if="folderItemCountLabel(node) != null"
@@ -936,7 +949,6 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
             inline
             class="tree-env-pill tree-default-db-pill"
             variant="neutral"
-            :title="t('explorer.defaultDatabaseBadge')"
         >
           {{ t('explorer.defaultDatabaseBadge') }}
         </StatusPill>
@@ -953,7 +965,7 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
         <span
             v-if="shouldShowComment(node)"
             class="tree-comment"
-            :title="node.comment"
+            @pointerenter="syncOverflowTitle($event)"
         >
           {{ node.comment }}
         </span>
@@ -961,7 +973,7 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
         <span
             v-if="node.meta && node.type !== 'load_more' && node.type !== 'project-files-draft' && node.type !== 'group-draft' && !isInlineEditing(node) && !isConnectionFeatureNode(node) && !isViewModelStatusMeta(node.meta) && !isInternalTreeMeta(node.meta)"
             class="tree-meta"
-            :title="node.meta"
+            @pointerenter="syncOverflowTitle($event)"
         >
           {{ node.meta }}
         </span>

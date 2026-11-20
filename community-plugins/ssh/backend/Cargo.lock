@@ -884,7 +884,7 @@ dependencies = [
 
 [[package]]
 name = "datawise-plugin-ssh"
-version = "0.7.11-beta.28"
+version = "0.7.11-beta.32"
 dependencies = [
  "aes",
  "aes-gcm",

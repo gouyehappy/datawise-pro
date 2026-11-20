@@ -9,7 +9,7 @@ DataWise 社区插件：SSH 终端 + SFTP（`io.datawise.community.ssh`）。
 | Transport | `stdio-framed` |
 | Sidecar | Rust `datawise-plugin-ssh` |
 | 文件系统 | `sessionBound` + `intent.reveal-files` |
-| 当前版本 | `0.7.11-beta.28`（见 `manifest.datawise.json`） |
+| 当前版本 | `0.7.11-beta.37`（见 `manifest.datawise.json`） |
 
 协议（宿主只定义契约）：[`_private/docs/design/COMMUNITY_PLUGIN.md#platform`](../../_private/docs/design/COMMUNITY_PLUGIN.md#platform)  
 按协议开发：[`_private/docs/design/COMMUNITY_PLUGIN.md#implementation`](../../_private/docs/design/COMMUNITY_PLUGIN.md#implementation)

@@ -374,13 +374,21 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
   z-index: 3;
   top: 6px;
   right: 6px;
-  opacity: 0.55;
+  /* 默认隐藏：常驻半透明在深色终端上易被当成黑边；悬停副屏或聚焦时再显形。 */
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.terminal-split-secondary:hover .terminal-split-close,
+.terminal-split-secondary:focus-within .terminal-split-close,
+.terminal-split-close:focus-visible {
+  opacity: 0.85;
 }
 .terminal-split-close:hover {
   opacity: 1;
 }
-.terminal-pane.batch-bar-open .terminal-shells {
-  margin-bottom: 42px;
+/* #306 无折行：宽列画布由容器横向滚动承载；普通模式画布与容器同宽。 */
+.terminal-host.terminal-h-scroll {
+  overflow-x: auto;
 }
 .terminal-pane.batch-bar-open .terminal-host {
   inset: 0;
@@ -399,6 +407,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
      黑边。这里跟随插件终端背景色压掉库默认值（本文件在 xterm.css 之后
      导入，同特异性后者生效；若未来 xterm 恢复 viewport 内联着色，内联
      同为主题色，此规则自然让位）。 */
+  background: var(--ssh-terminal-background);
+}
+/* 分屏副屏同款：fit 按行高取整后 canvas 底边与窗格富余会露出 viewport 黑底。 */
+.terminal-split-secondary .terminal-host .xterm .xterm-viewport {
+  scrollbar-width: none !important;
   background: var(--ssh-terminal-background);
 }
 .terminal-host .xterm .xterm-viewport::-webkit-scrollbar {
@@ -1056,26 +1069,254 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
 .command-output { display: flex; min-height: 96px; max-height: 40vh; overflow: auto; flex-direction: column; align-items: flex-start; gap: 8px; margin: 0; border: 1px solid var(--border); border-radius: 6px; padding: 12px; background: color-mix(in srgb, var(--muted) 45%, transparent); font-size: var(--dw-font-size); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .command-exit { color: var(--muted-foreground); font-size: var(--dw-text-2xs); }
 
-/* 批量发送命令条（Electerm quick-command bar 风格）：常驻贴终端底部，回车即发送。
-   命令条约 35px 高，宿主让位 42px 留出 7px 间隙；浮层偏移同步上移。 */
-.terminal-pane.batch-bar-open .terminal-host { inset: 0 0 42px 0; }
+/* 批量发送命令条：整行统一高度的工具条（模式 / 目标 / 一体输入同高）。 */
+.terminal-pane.batch-bar-open .terminal-shells { margin-bottom: 48px; }
+.terminal-pane.batch-bar-open .terminal-host { inset: 0 0 48px 0; }
 .terminal-pane.batch-bar-open .terminal-command-marker,
-.terminal-pane.batch-bar-open .zmodem-status { bottom: 50px; }
-.batch-bar { position: absolute; z-index: 5; right: 0; bottom: 0; left: 0; display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--border); padding: 4px 8px; background: var(--background); }
-.batch-bar-targets { display: inline-flex; flex: 0 1 auto; min-width: 0; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; background: var(--background); color: var(--foreground); font-size: var(--dw-text-xs); cursor: pointer; white-space: nowrap; }
-.batch-bar-targets:hover { background: color-mix(in srgb, var(--muted) 55%, transparent); }
+.terminal-pane.batch-bar-open .zmodem-status { bottom: 56px; }
+.batch-bar {
+  --batch-ctrl-h: 30px;
+  --batch-ctrl-radius: 6px;
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  height: calc(var(--batch-ctrl-h) + 16px);
+  border-top: 1px solid var(--border);
+  padding: 0 10px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--foreground) 4%, var(--background)) 0%,
+      var(--background) 100%
+    );
+}
+.batch-bar > * { flex: 0 0 auto; }
+.batch-bar-slot { display: flex; flex: 0 1 auto; min-width: 0; height: var(--batch-ctrl-h); align-items: stretch; }
+.batch-mode-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: var(--batch-ctrl-h);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--batch-ctrl-radius);
+  background: color-mix(in srgb, var(--muted) 40%, var(--background));
+}
+.batch-mode-switch button {
+  display: inline-flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: var(--batch-ctrl-h);
+  border: 0;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.batch-mode-switch button svg { width: 14px; height: 14px; flex: 0 0 14px; }
+.batch-mode-switch button:hover:not(.active) {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+.batch-mode-switch button.active {
+  background: color-mix(in srgb, var(--primary) 22%, var(--background));
+  color: var(--foreground);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--primary) 55%, transparent);
+}
+.batch-mode-switch button + button { border-left: 1px solid var(--border); }
+.batch-upload-files-popover { display: flex; width: min(360px, calc(100vw - 32px)); max-height: min(320px, 60vh); flex-direction: column; gap: 6px; overflow: auto; padding: 8px; }
+.batch-upload-file-list { display: flex; flex-direction: column; gap: 2px; overflow: auto; }
+.batch-upload-file-row { display: flex; align-items: center; gap: 6px; border-radius: 6px; padding: 3px 6px; font-size: 12px; }
+.batch-upload-file-row:hover { background: color-mix(in srgb, var(--muted) 45%, transparent); }
+.batch-upload-file-row svg { width: 13px; height: 13px; flex: 0 0 auto; color: var(--muted-foreground); }
+.batch-upload-file-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.batch-upload-file-size { flex: 0 0 auto; font-size: 11px; font-variant-numeric: tabular-nums; }
+.batch-bar-targets {
+  display: inline-flex;
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  min-width: 0;
+  height: var(--batch-ctrl-h);
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--batch-ctrl-radius);
+  padding: 0 11px;
+  background: color-mix(in srgb, var(--muted) 40%, var(--background));
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.batch-bar-targets svg { width: 14px; height: 14px; flex: 0 0 14px; }
+.batch-bar-targets:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 8%, var(--background)); }
+.batch-bar-targets:disabled { opacity: 0.5; cursor: default; }
 .batch-bar-targets span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* 一体输入：左快捷命令触发 + 右可编辑框，共享同一边框。 */
-.batch-bar-compose { display: flex; flex: 1 1 auto; min-width: 60px; align-items: stretch; height: 26px; overflow: hidden; border: 1px solid var(--border); border-radius: 4px; background: var(--background); }
-.batch-bar-compose:focus-within { border-color: color-mix(in srgb, var(--primary) 70%, var(--border)); }
-.batch-bar-compose-trigger { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 26px; border: 0; border-right: 1px solid var(--border); padding: 0; background: transparent; color: var(--muted-foreground); cursor: pointer; }
-.batch-bar-compose-trigger:hover:not(:disabled) { background: color-mix(in srgb, var(--muted) 55%, transparent); color: var(--foreground); }
+/* 一体输入：命令态 / 上传态共用外壳，内部控件同高。 */
+.batch-bar-compose {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 80px;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: var(--batch-ctrl-h);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--batch-ctrl-radius);
+  background: color-mix(in srgb, var(--muted) 28%, var(--background));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+.batch-bar-compose:focus-within {
+  border-color: color-mix(in srgb, var(--primary) 65%, var(--border));
+  background: var(--background);
+}
+.batch-bar-compose-trigger {
+  display: inline-flex;
+  flex: 0 0 var(--batch-ctrl-h);
+  align-items: center;
+  justify-content: center;
+  width: var(--batch-ctrl-h);
+  border: 0;
+  border-right: 1px solid var(--border);
+  padding: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.batch-bar-compose-trigger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  color: var(--foreground);
+}
 .batch-bar-compose-trigger:disabled { opacity: 0.5; cursor: default; }
-.batch-bar-compose-trigger svg { width: 12px; height: 12px; }
-.batch-bar-compose-input { flex: 1 1 auto; min-width: 0; height: 100%; border: 0; border-radius: 0; padding: 0 8px; background: transparent; color: var(--foreground); font-size: var(--dw-font-size); outline: none; }
-.batch-bar-input { flex: 1 1 auto; min-width: 60px; height: 26px; border: 1px solid var(--border); border-radius: 4px; padding: 0 8px; background: var(--background); color: var(--foreground); font-size: var(--dw-font-size); }
-.batch-bar-input:focus { border-color: color-mix(in srgb, var(--primary) 70%, var(--border)); }
-.batch-bar .icon-button { flex: 0 0 auto; }
+.batch-bar-compose-trigger svg { width: 14px; height: 14px; }
+.batch-bar-compose-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 12.5px;
+  outline: none;
+}
+.batch-bar-compose-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 100%;
+  border: 0;
+  border-left: 1px solid var(--border);
+  padding: 0 10px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.batch-bar-compose-chip svg { width: 13px; height: 13px; flex: 0 0 13px; }
+.batch-bar-compose-chip:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+.batch-bar-compose-chip:disabled { opacity: 0.45; cursor: default; }
+/* 覆盖策略：用主题 Select，避免原生 <select> 在深色主题下画系统白框。 */
+.batch-bar-compose-select {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-width: 6.5rem;
+  gap: 4px !important;
+  border: 0 !important;
+  border-left: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  padding: 0 8px !important;
+  background: transparent !important;
+  color: var(--foreground) !important;
+  font-size: 12px !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+.batch-bar-compose-select:hover,
+.batch-bar-compose-select:focus,
+.batch-bar-compose-select:focus-visible,
+.batch-bar-compose-select[data-state="open"] {
+  background: color-mix(in srgb, var(--foreground) 7%, transparent) !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+  outline: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+.batch-bar-compose-select[data-disabled] { opacity: 0.55; cursor: default; }
+.batch-bar-compose-select svg { width: 12px !important; height: 12px !important; }
+.batch-bar-compose-action {
+  display: inline-flex;
+  flex: 0 0 var(--batch-ctrl-h);
+  align-items: center;
+  justify-content: center;
+  width: var(--batch-ctrl-h);
+  border: 0;
+  border-left: 1px solid var(--border);
+  padding: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.batch-bar-compose-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  color: var(--foreground);
+}
+.batch-bar-compose-action:disabled { opacity: 0.42; cursor: default; }
+.batch-bar-compose-action svg { width: 14px; height: 14px; }
+.batch-bar-compose-action--send {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+.batch-bar-compose-action--send:hover:not(:disabled) {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+}
+.batch-bar-input {
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  min-width: 60px;
+  height: var(--batch-ctrl-h);
+  border: 1px solid var(--border);
+  border-radius: var(--batch-ctrl-radius);
+  padding: 0 10px;
+  background: color-mix(in srgb, var(--muted) 28%, var(--background));
+  color: var(--foreground);
+  font-size: 12.5px;
+}
+.batch-bar-input:focus { border-color: color-mix(in srgb, var(--primary) 65%, var(--border)); outline: none; background: var(--background); }
+.batch-bar .icon-button {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: var(--batch-ctrl-h);
+  height: var(--batch-ctrl-h);
+  border: 1px solid var(--border);
+  border-radius: var(--batch-ctrl-radius);
+  background: color-mix(in srgb, var(--muted) 40%, var(--background));
+}
+.batch-bar .icon-button:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 8%, var(--background)); }
 .batch-bar-send { color: var(--success); }
 .batch-quick-popover { display: flex; width: min(420px, calc(100vw - 32px)); max-height: min(300px, 50vh); flex-direction: column; gap: 2px; overflow: auto; padding: 6px; }
 .batch-quick-item { display: flex; width: 100%; min-width: 0; flex-direction: column; gap: 2px; border: 0; border-radius: 4px; padding: 6px 8px; background: transparent; color: var(--foreground); text-align: left; cursor: pointer; }
@@ -1095,7 +1336,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
   position: absolute;
   z-index: 6;
   right: 10px;
-  bottom: 46px;
+  bottom: 54px;
   left: auto;
   display: flex;
   max-width: min(280px, calc(100% - 20px));

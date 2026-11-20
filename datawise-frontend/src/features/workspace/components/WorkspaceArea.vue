@@ -197,6 +197,13 @@ const reconnectConnectionName = computed(() => {
   return explorer.findNode(id)?.label || id
 })
 
+const reconnectConnectionDbType = computed(() => {
+  const id = reconnectConnectionId.value
+  if (!id) return undefined
+  const tab = mainTab.value ?? workspace.activeTab
+  return tab?.dbType ?? explorer.findNode(id)?.dbType
+})
+
 function reconcileBrokenActiveTab() {
   const tab = mainTab.value
   if (!tab) return
@@ -282,6 +289,7 @@ function onWorkspaceDrop(event: DragEvent) {
           v-if="reconnectConnectionId"
           :connection-id="reconnectConnectionId"
           :connection-name="reconnectConnectionName"
+          :db-type="reconnectConnectionDbType"
       />
     </div>
   </main>

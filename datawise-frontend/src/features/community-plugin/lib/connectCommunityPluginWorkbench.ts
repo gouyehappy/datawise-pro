@@ -224,7 +224,9 @@ export async function ensureCommunityPluginSidecarConnection(
 
   const explorerApi = createHttpExplorerApi()
   const pluginsApi = createHttpCommunityPluginsApi()
-  const config = await explorerApi.fetchConnection(trimmedId)
+  // silent: workbench ensure is best-effort; a missing id must not toast the shell
+  // (e.g. SSH monitor contribution opened without a catalog connection).
+  const config = await explorerApi.fetchConnection(trimmedId, {silent: true})
   const pluginId = config.pluginId?.trim() || pluginIdHint?.trim() || ''
   if (!pluginId) throw new Error('pluginId missing on connection')
 

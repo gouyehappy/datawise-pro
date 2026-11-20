@@ -106,6 +106,34 @@ function readCssVar(styles: CSSStyleDeclaration, name: string): string {
   return styles.getPropertyValue(name).trim()
 }
 
+/**
+ * `window.postMessage` uses the structured clone algorithm. Vue/Pinia Proxies
+ * (common when tab.pluginHostContext nests objects like `{plugin:{mode}}`)
+ * throw DataCloneError and take down PanelErrorBoundary. JSON round-trip
+ * yields plain data that postMessage can clone.
+ */
+export function cloneForPostMessage<T>(value: T): T {
+  try {
+    return JSON.parse(JSON.stringify(value)) as T
+  } catch {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+    const out: Record<string, unknown> = {}
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof nested === 'function' || typeof nested === 'symbol') continue
+      if (nested && typeof nested === 'object') {
+        try {
+          out[key] = JSON.parse(JSON.stringify(nested))
+        } catch {
+          // drop non-serializable nested value
+        }
+      } else if (nested !== undefined) {
+        out[key] = nested
+      }
+    }
+    return out as T
+  }
+}
+
 /** Host light/dark + surfaces/primary/fonts so plugin chrome matches the shell. */
 export function collectPluginHostTheme(): PluginHostTheme {
   if (typeof document === 'undefined') {
@@ -583,19 +611,24 @@ export function createPluginHostBridge(options: {
   }
 
   function postEnv(win: Window) {
-    const info = buildHostInfo()
-    win.postMessage(
-      {
-        type: 'datawise-plugin-env',
-        protocolVersion: info.protocolVersion,
-        pluginId: info.pluginId,
-        locale: info.locale,
-        context: info.context,
-        theme: info.theme,
-        appearance: info.appearance,
-      },
-      pluginMessageTargetOrigin(),
-    )
+    try {
+      const info = buildHostInfo()
+      // Always clone: context may still hold Vue Proxies from Pinia tab state.
+      win.postMessage(
+        cloneForPostMessage({
+          type: 'datawise-plugin-env',
+          protocolVersion: info.protocolVersion,
+          pluginId: info.pluginId,
+          locale: info.locale,
+          context: info.context,
+          theme: info.theme,
+          appearance: info.appearance,
+        }),
+        pluginMessageTargetOrigin(),
+      )
+    } catch (err) {
+      console.warn('[datawise] postEnv failed', err)
+    }
   }
 
   /** Tell the iframe whether this KeepAlive host is the focused workbench. */
@@ -686,12 +719,12 @@ export function createPluginHostBridge(options: {
     if (data.type !== 'datawise-plugin-request' || !('id' in data) || !data.id) return
     const frame = event.source as Window | null
     if (data.method === 'host.getContext') {
-      reply(frame, data.id, currentContext)
+      reply(frame, data.id, cloneForPostMessage(currentContext))
       return
     }
     if (data.method === 'host.getHostInfo') {
       currentTheme = collectPluginHostTheme()
-      const info = buildHostInfo()
+      const info = cloneForPostMessage(buildHostInfo())
       if (frame) postEnv(frame)
       reply(frame, data.id, info)
       return
@@ -743,6 +776,42 @@ export function createPluginHostBridge(options: {
             ? result.workbenchIds.filter((id): id is string => typeof id === 'string' && !!id.trim())
             : []
           reply(frame, data.id, {workbenchIds: ids})
+        })
+        .catch((err: unknown) =>
+          reply(frame, data.id, undefined, err instanceof Error ? err.message : String(err)),
+        )
+      return
+    }
+    if (data.method === 'host.listConnections') {
+      // Provider-scoped connection inventory for plugin UIs (SSH multi-server monitor).
+      void Promise.all([
+        import('@/features/community-plugin/lib/connectCommunityPluginWorkbench').then(({listSavedPluginConnections}) =>
+          listSavedPluginConnections(options.pluginId),
+        ),
+        import('@/shared/api/http/explorer')
+          .then(({createHttpExplorerApi}) => createHttpExplorerApi().listPooledConnections())
+          .catch(() => [] as string[]),
+      ])
+        .then(([configs, pooled]) => {
+          const pooledSet = new Set((pooled || []).map((id) => String(id)))
+          const connections = (configs || []).map((config) => {
+            const id = String(config.id || '').trim()
+            const connected = pooledSet.has(id)
+            return {
+              id,
+              name: String(config.name || id),
+              dbType: config.dbType || 'plugin',
+              providerId: config.pluginConnectionProvider || config.pluginId || options.pluginId,
+              connectionType: 'ssh',
+              connected,
+              isConnected: connected,
+              host: config.host,
+              port: config.port,
+              user: config.user,
+              readOnly: false,
+            }
+          }).filter((row) => row.id)
+          reply(frame, data.id, {connections})
         })
         .catch((err: unknown) =>
           reply(frame, data.id, undefined, err instanceof Error ? err.message : String(err)),
@@ -1216,7 +1285,8 @@ export function createPluginHostBridge(options: {
       if (!win) return
       iframeWindow = win
       if (context) {
-        currentContext = {pluginId: options.pluginId, ...context}
+        // Persist a plain clone so later resume()/hello postEnv cannot hit Proxies.
+        currentContext = cloneForPostMessage({pluginId: options.pluginId, ...context})
         const ctxLocale = context.locale
         if (typeof ctxLocale === 'string' && ctxLocale.trim()) {
           currentLocale = ctxLocale.trim()
@@ -1252,13 +1322,14 @@ export function createPluginHostBridge(options: {
             }).datawisePlugin
             if (api) {
               const info = buildHostInfo()
-              api.context = currentContext
-              api.ready = Promise.resolve(currentContext)
+              const plainContext = cloneForPostMessage(currentContext)
+              api.context = plainContext
+              api.ready = Promise.resolve(plainContext)
               api.theme = info.theme
               api.appearance = info.appearance
               api.locale = info.locale
               win.postMessage(
-                  {type: 'datawise-plugin-context', context: currentContext},
+                  cloneForPostMessage({type: 'datawise-plugin-context', context: plainContext}),
                   pluginMessageTargetOrigin(),
               )
             }

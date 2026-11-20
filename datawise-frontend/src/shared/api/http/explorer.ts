@@ -572,8 +572,12 @@ export function createHttpExplorerApi(): ExplorerApi {
         restartK8sDeployment: async (connectionId, namespace, deploymentName) =>
             postJson(API_PATHS.explorer.k8sRestartDeployment(connectionId, namespace, deploymentName), {}),
 
-        fetchConnection: async (connectionId) =>
-            getJson<ConnectionConfig>(API_PATHS.explorer.connection(connectionId)),
+        fetchConnection: async (connectionId, options) =>
+            getJson<ConnectionConfig>(
+                API_PATHS.explorer.connection(connectionId),
+                undefined,
+                {silent: options?.silent === true},
+            ),
 
         connectConnection: async (connectionId) =>
             mapTestResult(

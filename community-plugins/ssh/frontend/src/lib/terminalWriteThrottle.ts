@@ -16,6 +16,12 @@
  *
  * The sink must invoke `done` when the chunk is accepted (xterm write
  * completion) so the next flush waits for parser/paint backpressure.
+ *
+ * `setHold` is DECSET 2026 synchronized output (WT-1, WezTerm parity): while
+ * held, rAF scheduling pauses and writes keep accumulating; `setHold(false)`
+ * commits the whole batch in one merged write. A hold older than
+ * `holdFlushDelayMs` (default 100ms) force-flushes so a sync window split
+ * across PTY read boundaries cannot stall rendering until the byte cap.
  */
 
 export interface TerminalWriteThrottleOptions {
@@ -32,6 +38,12 @@ export interface TerminalWriteThrottleOptions {
   maxBufferBytes?: number;
   /** Fallback timer when rAF is starved (default 16 ms ≈ one frame). */
   flushDelayMs?: number;
+  /** DECSET 2026 hold deadline in ms (default 100). */
+  holdFlushDelayMs?: number;
+  /** Schedules the hold-deadline flush. Defaults to setTimeout. */
+  scheduleHold?: (callback: () => void) => unknown;
+  /** Cancels a handle returned by `scheduleHold`. */
+  cancelHold?: (handle: unknown) => void;
 }
 
 export interface TerminalWriteThrottle {
@@ -39,8 +51,18 @@ export interface TerminalWriteThrottle {
   write(data: Uint8Array): void;
   /** Cancel the pending frame and deliver queued bytes now (when idle). */
   flush(): void;
+  /**
+   * DECSET 2026 frame sync: `true` pauses scheduled flushes (queued writes
+   * keep accumulating), `false` commits everything buffered so far in one
+   * merged call. A hold older than `holdFlushDelayMs` flushes on its own so
+   * a release stranded behind the hold cannot stall rendering until the byte
+   * cap. Idempotent; repeated values are no-ops.
+   */
+  setHold(hold: boolean): void;
   /** Deliver any idle queued bytes, then stop scheduling. */
   dispose(): void;
+  /** Whether frame sync is currently holding writes back. */
+  readonly held: boolean;
   readonly pendingBytes: number;
   readonly pending: boolean;
 }
@@ -101,7 +123,7 @@ export function createDualFrameSchedule(flushDelayMs = DEFAULT_FLUSH_DELAY_MS): 
 }
 
 function mergeChunks(chunks: Uint8Array[], total: number): Uint8Array {
-  if (chunks.length === 1) return chunks[0];
+  if (chunks.length === 1) return chunks[0]!;
   const merged = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
@@ -118,14 +140,33 @@ export function createTerminalWriteThrottle(options: TerminalWriteThrottleOption
     : createDualFrameSchedule(options.flushDelayMs ?? DEFAULT_FLUSH_DELAY_MS);
   const schedule = options.schedule ?? dual!.schedule;
   const cancel = options.cancel ?? dual!.cancel;
+  const holdFlushDelayMs = options.holdFlushDelayMs ?? 100;
+  const scheduleHold = options.scheduleHold ?? ((callback: () => void) => setTimeout(callback, holdFlushDelayMs));
+  const cancelHold = options.cancelHold ?? ((handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>));
   let queue: Uint8Array[] = [];
   let queuedBytes = 0;
   let handle: unknown = null;
+  let holdHandle: unknown = null;
   let emitting = false;
+  let held = false;
   let disposed = false;
 
+  function armHoldDeadline() {
+    if (holdHandle !== null) return;
+    holdHandle = scheduleHold(() => {
+      holdHandle = null;
+      if (!emitting) emit();
+    });
+  }
+
+  function disarmHoldDeadline() {
+    if (holdHandle === null) return;
+    cancelHold(holdHandle);
+    holdHandle = null;
+  }
+
   function scheduleEmit() {
-    if (disposed || emitting || handle !== null || !queue.length) return;
+    if (disposed || emitting || held || handle !== null || !queue.length) return;
     handle = schedule(emit);
   }
 
@@ -146,6 +187,10 @@ export function createTerminalWriteThrottle(options: TerminalWriteThrottleOption
         emit();
         return;
       }
+      if (held) {
+        if (queue.length) armHoldDeadline();
+        return;
+      }
       scheduleEmit();
     };
     try {
@@ -158,11 +203,13 @@ export function createTerminalWriteThrottle(options: TerminalWriteThrottleOption
   return {
     write(data: Uint8Array) {
       if (disposed || !data.byteLength) return;
-      // Burst past the cap: flush the current merge first (when idle) so memory
-      // stays bounded and chunk order is preserved.
-      if (!emitting && handle !== null && queuedBytes + data.byteLength > maxBufferBytes) {
-        cancel(handle);
-        handle = null;
+      // Cap / hold: flush the current merge first (when idle) so memory stays
+      // bounded and chunk order is preserved. Cap also bites while held.
+      if (!emitting && (handle !== null || held) && queuedBytes + data.byteLength > maxBufferBytes) {
+        if (handle !== null) {
+          cancel(handle);
+          handle = null;
+        }
         emit();
       }
       queue.push(data);
@@ -173,6 +220,10 @@ export function createTerminalWriteThrottle(options: TerminalWriteThrottleOption
           handle = null;
         }
         emit();
+        return;
+      }
+      if (held) {
+        armHoldDeadline();
         return;
       }
       // Large pending bursts should not wait a full animation frame on JCEF.
@@ -194,13 +245,27 @@ export function createTerminalWriteThrottle(options: TerminalWriteThrottleOption
       }
       if (!emitting) emit();
     },
+    setHold(next: boolean) {
+      if (held === next) return;
+      held = next;
+      if (next) {
+        if (handle !== null) {
+          cancel(handle);
+          handle = null;
+        }
+        armHoldDeadline();
+      } else {
+        disarmHoldDeadline();
+        this.flush();
+      }
+    },
     dispose() {
+      disarmHoldDeadline();
       if (handle !== null) {
         cancel(handle);
         handle = null;
       }
       if (!emitting && queue.length) {
-        // Last chance delivery before teardown (terminal still alive in App.vue).
         emit();
       }
       disposed = true;
@@ -208,6 +273,9 @@ export function createTerminalWriteThrottle(options: TerminalWriteThrottleOption
         queue = [];
         queuedBytes = 0;
       }
+    },
+    get held() {
+      return held;
     },
     get pendingBytes() {
       return queuedBytes;

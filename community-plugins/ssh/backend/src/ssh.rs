@@ -1598,6 +1598,20 @@ impl SshRuntime {
         })
     }
 
+    /// Live authenticated handle for a connection (monitor collectors share it).
+    pub async fn live_handle_for_connection(
+        &self,
+        connection_id: &str,
+    ) -> Option<Arc<Handle<SshClient>>> {
+        let sessions = self.sessions.read().await;
+        sessions
+            .values()
+            .find(|entry| {
+                entry.connection_id == connection_id && entry.connected.load(Ordering::Acquire)
+            })
+            .map(|entry| Arc::clone(&entry.handle))
+    }
+
     pub async fn local_target(
         &self,
         _connection_id: &str,

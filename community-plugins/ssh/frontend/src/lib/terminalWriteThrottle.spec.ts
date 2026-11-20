@@ -187,6 +187,119 @@ describe("createTerminalWriteThrottle", () => {
     scheduler.run();
     expect(delivered).toEqual(["one", "two"]);
   });
+
+  // --- DECSET 2026 frame sync (WT-1): hold buffers, release commits merged ---
+  function manualHoldScheduler() {
+    let callback: (() => void) | undefined;
+    return {
+      schedule(cb: () => void) {
+        callback = cb;
+        return 1;
+      },
+      run() {
+        const cb = callback;
+        callback = undefined;
+        cb?.();
+      },
+      cancel() {
+        callback = undefined;
+      },
+      armed: () => callback !== undefined,
+    };
+  }
+
+  it("setHold(true) pauses the pending frame; release commits the whole batch merged", () => {
+    const scheduler = manualScheduler();
+    const delivered: string[] = [];
+    const throttle = createTerminalWriteThrottle({
+      sink: syncSink(delivered),
+      schedule: scheduler.schedule,
+      cancel: scheduler.cancel,
+    });
+    throttle.write(bytes("part-1 "));
+    throttle.setHold(true);
+    expect(throttle.held).toBe(true);
+    expect(scheduler.cancels()).toBe(1);
+    throttle.write(bytes("part-2 "));
+    scheduler.run();
+    throttle.write(bytes("part-3"));
+    expect(delivered).toEqual([]);
+    expect(throttle.pending).toBe(true);
+    throttle.setHold(false);
+    expect(delivered).toEqual(["part-1 part-2 part-3"]);
+    expect(throttle.pending).toBe(false);
+    expect(throttle.held).toBe(false);
+  });
+
+  it("a hold exceeding the byte cap is force-flushed in order and keeps buffering", () => {
+    const scheduler = manualScheduler();
+    const delivered: string[] = [];
+    const throttle = createTerminalWriteThrottle({
+      sink: syncSink(delivered),
+      schedule: scheduler.schedule,
+      cancel: () => undefined,
+      maxBufferBytes: 10,
+    });
+    throttle.write(bytes("aaaaaa"));
+    throttle.setHold(true);
+    throttle.write(bytes("bbbbbb"));
+    expect(delivered).toEqual(["aaaaaa"]);
+    throttle.write(bytes("cc"));
+    expect(delivered).toEqual(["aaaaaa"]);
+    throttle.setHold(false);
+    expect(delivered).toEqual(["aaaaaa", "bbbbbbcc"]);
+    expect(throttle.pending).toBe(false);
+  });
+
+  it("a hold stranded across a chunk boundary flushes at the deadline", () => {
+    const scheduler = manualScheduler();
+    const holdTimer = manualHoldScheduler();
+    const delivered: string[] = [];
+    const throttle = createTerminalWriteThrottle({
+      sink: syncSink(delivered),
+      schedule: scheduler.schedule,
+      cancel: () => undefined,
+      scheduleHold: holdTimer.schedule,
+      cancelHold: holdTimer.cancel,
+    });
+    throttle.write(bytes("\x1b[?2026h\x1b[1;1Hhello"));
+    scheduler.run();
+    throttle.setHold(true);
+    throttle.write(bytes(" world\x1b[?2026l"));
+    expect(delivered).toEqual(["\x1b[?2026h\x1b[1;1Hhello"]);
+    expect(throttle.pending).toBe(true);
+    expect(holdTimer.armed()).toBe(true);
+    holdTimer.run();
+    expect(delivered).toEqual([
+      "\x1b[?2026h\x1b[1;1Hhello",
+      " world\x1b[?2026l",
+    ]);
+    expect(throttle.pending).toBe(false);
+    throttle.setHold(false);
+    expect(delivered).toHaveLength(2);
+    expect(throttle.held).toBe(false);
+  });
+
+  it("dispose clears the hold deadline without leaking the timer", () => {
+    const scheduler = manualScheduler();
+    const holdTimer = manualHoldScheduler();
+    const delivered: string[] = [];
+    const throttle = createTerminalWriteThrottle({
+      sink: syncSink(delivered),
+      schedule: scheduler.schedule,
+      cancel: () => undefined,
+      scheduleHold: holdTimer.schedule,
+      cancelHold: holdTimer.cancel,
+    });
+    throttle.setHold(true);
+    throttle.write(bytes("tail"));
+    expect(holdTimer.armed()).toBe(true);
+    throttle.dispose();
+    expect(delivered).toEqual(["tail"]);
+    expect(holdTimer.armed()).toBe(false);
+    holdTimer.run();
+    expect(delivered).toEqual(["tail"]);
+  });
 });
 
 describe("createDualFrameSchedule", () => {

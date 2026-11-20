@@ -22,7 +22,7 @@ import { clampFontSize, TERMINAL_FONT_MAX, TERMINAL_FONT_MIN } from "../lib/term
 import { loadTerminalFontOverride } from "../lib/terminalFont";
 import { MIB, mibField, settingsErrorOf, type DiscoveredKey, type KnownHostEntry, type McpSizeSettings, type SshSettings, type SudoProfileView } from "../lib/settingsModel";
 import { DOWNLOAD_CONFLICT_POLICIES, COMPRESSION_STRATEGIES, type CompressionStrategy, type DownloadConflictPolicy } from "../lib/downloadPrefs";
-import type { InteractionPrefs } from "../lib/interactionPrefs";
+import { NOWRAP_COLUMNS_MAX, NOWRAP_COLUMNS_MIN, type InteractionPrefs } from "../lib/interactionPrefs";
 import {
   HIGHLIGHT_COLOR_DEFAULT,
   HIGHLIGHT_RULES_LIMIT,
@@ -266,6 +266,7 @@ const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
   { category: "terminal", labelKey: "terminalPreview.section", hintKey: "terminalPreview.hint", anchor: "preview", aliases: "live sample 实时预览 示例" },
   { category: "terminal", labelKey: "interactionPrefs.historyLimit", anchor: "interaction", aliases: "history 历史 条数" },
   { category: "terminal", labelKey: "interactionPrefs.suggestCompact", anchor: "interaction", aliases: "inline completion 行内 建议" },
+  { category: "terminal", labelKey: "interactionPrefs.noWrap", anchor: "interaction", aliases: "wrap nowrap scroll 换行 日志 JSON" },
   { category: "terminal", labelKey: "terminalSplit.syncDefault", anchor: "layout", aliases: "broadcast typing 同步输入" },
   { category: "terminal", labelKey: "resourceStrip.label", anchor: "layout", aliases: "cpu mem disk net 资源 状态条" },
   { category: "terminal", labelKey: "rightRail.label", anchor: "layout", aliases: "tool rail 右侧 工具栏" },
@@ -3143,6 +3144,35 @@ defineExpose({ consumeInlineEsc, flushSettings, setDownloadDirDraft, setDownload
                   :model-value="interactionPrefs.suggestCompactMode"
                   :disabled="!interactionPrefs.lineSuggestEnabled"
                   @update:model-value="(value) => emit('update:interactionPrefs', { suggestCompactMode: value === true })"
+                />
+              </div>
+            </div>
+            <div class="settings-pref">
+              <div class="settings-pref-copy">
+                <span class="settings-pref-label">{{ t("interactionPrefs.noWrap") }}</span>
+                <span class="settings-pref-hint">{{ t("interactionPrefs.noWrapHint") }}</span>
+              </div>
+              <div class="settings-pref-control">
+                <Switch
+                  size="sm"
+                  :model-value="interactionPrefs.noWrap"
+                  @update:model-value="(value) => emit('update:interactionPrefs', { noWrap: value === true })"
+                />
+              </div>
+            </div>
+            <div v-if="interactionPrefs.noWrap" class="settings-pref">
+              <div class="settings-pref-copy">
+                <span class="settings-pref-label">{{ t("interactionPrefs.noWrapColumns") }}</span>
+              </div>
+              <div class="settings-pref-control">
+                <input
+                  type="number"
+                  class="settings-input-narrow mono"
+                  :min="NOWRAP_COLUMNS_MIN"
+                  :max="NOWRAP_COLUMNS_MAX"
+                  step="50"
+                  :value="interactionPrefs.noWrapColumns"
+                  @change="emit('update:interactionPrefs', { noWrapColumns: Number(($event.target as HTMLInputElement).value) })"
                 />
               </div>
             </div>

@@ -18,6 +18,7 @@ mod mcp;
 mod mcp_safety;
 mod metrics;
 mod metrics_history;
+mod monitor;
 mod model;
 mod multi_exec;
 mod preferences;
@@ -94,6 +95,8 @@ struct Plugin {
     connection_import: connection_import::ImportStream,
     non_ssh_creds: non_ssh_credentials::NonSshCredentials,
     tasks: Arc<task_provider::TaskProvider>,
+    /// Multi-server monitor panel (monitor/*): per-connection fast/slow collectors.
+    monitors: monitor::MonitorRegistry,
 }
 
 impl Plugin {
@@ -118,6 +121,7 @@ impl Plugin {
             connection_import: connection_import::ImportStream::default(),
             non_ssh_creds: non_ssh_credentials::NonSshCredentials::new(),
             tasks: Arc::new(task_provider::TaskProvider::new()),
+            monitors: monitor::MonitorRegistry::new(),
         })
     }
 
@@ -618,6 +622,22 @@ impl Plugin {
                     as usize;
                 self.runtime
                     .block_on(self.ssh.metrics_history(session_id, limit))
+            }
+            // Multi-server monitor (monitor/*): per-connection fast/slow collectors.
+            "monitor/start" => {
+                let connection_id = required_string(&params, "connectionId")?;
+                self.runtime
+                    .block_on(self.monitors.start(&self.ssh, connection_id, &self.runtime))
+            }
+            "monitor/stop" => {
+                let connection_id = required_string(&params, "connectionId")?;
+                self.runtime.block_on(self.monitors.stop(connection_id))
+            }
+            "monitor/status" => Ok(self.runtime.block_on(self.monitors.status())),
+            "monitor/snapshot" => Ok(self.runtime.block_on(self.monitors.snapshot(&params))),
+            "monitor/details" => {
+                let connection_id = required_string(&params, "connectionId")?;
+                self.runtime.block_on(self.monitors.details(connection_id))
             }
             "ssh/processes/list" => {
                 let session_id = required_string(&params, "sessionId")?;

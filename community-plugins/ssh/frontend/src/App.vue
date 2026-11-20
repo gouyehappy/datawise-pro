@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, createApp, defineAsyncComponent, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { ImageAddon } from "@xterm/addon-image";
@@ -8,6 +8,7 @@ import { SearchAddon, type ISearchOptions } from "@xterm/addon-search";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import {
+  Activity,
   Archive,
   Disc,
   Eye,
@@ -133,7 +134,14 @@ import {
   sanitizePersistedForwards,
   type PersistedForward,
 } from "./lib/portForwardPersist";
-import { createTerminalInputQueue } from "./lib/terminalInputQueue";
+import { createTerminalInputQueue, TerminalInputTimeoutError } from "./lib/terminalInputQueue";
+import { mergeTerminalFrames } from "./lib/terminalFrameBatch";
+import { inputTimeoutIndicatesStall } from "./lib/terminalInputGuard";
+import { interactivePromptNearCursor, isInteractivePromptPending } from "./lib/interactivePromptGuard";
+import { applyNoWrapWidth, registerAltScreenWatch } from "./lib/terminalNoWrap";
+import { createOutputGate } from "./lib/terminalBackpressure";
+import { registerTerminalModeQueryHandlers, type TerminalSyncOutput } from "./lib/terminalModeQueries";
+import { useBatchUpload } from "./composables/useBatchUpload";
 import { describeReconnectCountdown, describeReconnectRestoredNotice, isConnectionInactiveError, isSessionGoneError, shouldReattachTerminal, terminalReconnectDelay, TERMINAL_RECONNECT_DELAYS, type ReconnectCountdown } from "./lib/terminalReconnect";
 import { classifyConnectError, connectErrorKey } from "./lib/connectError";
 import { decideConnectRetry, isDuplicatedTransportUnavailableError } from "./lib/connectRetry";
@@ -206,6 +214,8 @@ import { filesFromClipboard } from "./lib/clipboardFiles";
 import { friendlySftpError } from "./lib/sftpErrors";
 import { filterDiskMounts, filterNetworkInterfaces } from "./lib/metricsView";
 import MonitorDock from "./components/MonitorDock.vue";
+import MonitorPanel from "./components/MonitorPanel.vue";
+import { isMonitorContext, isMonitorContribution, MONITOR_CONTRIBUTION_ID } from "./lib/pluginContext";
 import RightToolRail from "./components/RightToolRail.vue";
 import CopilotDock from "./components/CopilotDock.vue";
 import {
@@ -993,6 +1003,8 @@ const batchHistoryBackup = ref("");
 // 过滤回声；sidecar 缺该方法（旧版二进制）时静默降级，只影响同步。
 const batchBarSourceId = randomUUID();
 let batchBroadcastTimer: number | undefined;
+const batchUploadInput = ref<HTMLInputElement>();
+const batchHomeDir = computed(() => sftpHomePath.value || "/");
 // 连接信息面板（只读摘要 + echo 往返延迟）。
 const connectionInfoOpen = ref(false);
 const connectionLatency = ref<number | null>(null);
@@ -1215,6 +1227,7 @@ const completionController = new CompletionController({
   // Phase ownership (not mutual open flags): first token → line suggest; args → fig.
   enabled: () => {
     if (!connected.value || historyPanelOpen.value || quickPaletteOpen.value || zmodemBusy.value || trzszBusy.value) return false;
+    if (interactivePromptGatePending()) return false;
     return resolveCompletionOwner({
       typedLine: pendingTerminalInput,
       figEnabled: interactionPrefs.value.figCompletionEnabled,
@@ -1538,6 +1551,12 @@ let disposed = false;
   /** Connect-card log ordinal: increments across auto-retries and manual reconnects until success / fresh Connect. */
   let connectAttemptSerial = 0;
 let lastSequence = 0;
+/** #302：最近一次终端数据到达时刻；输入超时时用于区分拥塞 vs 失联。 */
+let lastTerminalDataAt = 0;
+/** #302：rAF/timeout 排水句柄；同帧只排一次。 */
+let terminalDrainHandle: number | null = null;
+/** #302：合帧字节上限——超过则切段，避免单段过大阻塞主线程。 */
+const TERMINAL_MERGED_FLUSH_BYTES = 256 * 1024;
 let replayInFlight = false;
 // Consecutive replays that returned complete without filling the detected
 // sequence hole. A sidecar that keeps reporting complete on a gap that never
@@ -1569,7 +1588,10 @@ const pendingTerminalFrames = new Map<number, { stream: number; data: Uint8Array
 const uploadAckWaiters = new Map<string, { nextOffset: number; resolve: () => void; reject: (error: Error) => void; timer: number }>();
 // 上传收尾等待器（issue #60）：finish RPC 只负责把远端推送交给 sidecar
 // 后台任务，真正的完成/失败经终态 progress 事件回传，这里据此结算。
-const transferCompletionWaiters = new Map<string, { resolve: () => void; reject: (error: Error) => void }>();
+// issue #305：watchdog 1s 起步逐级退避，终态事件丢失时尽快轮询结算。
+const COMPLETION_WATCHDOG_STEPS_MS = [1_000, 2_000, 4_000, 8_000];
+const COMPLETION_WATCHDOG_MAX_MS = 15_000;
+const transferCompletionWaiters = new Map<string, { resolve: () => void; reject: (error: Error) => void; watchdog: number }>();
 const downloadChunkWaiters = new Map<string, { offset: number; resolve: (bytes: Uint8Array) => void; reject: (error: Error) => void; timer: number }>();
 const transferSamples = new Map<string, TransferSpeedSample>();
 // Download task ids the user cancelled from the transfer panel; lets the download
@@ -1584,15 +1606,58 @@ const commandMarkerParser = new Osc633CommandParser();
 // rAF+timeout scheduling keeps JCEF flushing when animation frames stall
 // (otherwise `tail -f` waits for a keypress). Sink uses write-completion
 // backpressure so paints cannot stack unboundedly.
+//
+// 大输出保护（P2-7，对齐 dbx-plugin-ssh）：积压 = 已交给 xterm 但 write 回调
+// 尚未触发的字节数。≥128KiB 进入 strained：合并批次按 32KiB 分帧写、挂起
+// 高亮扫描；回落到 64KiB 以下自动恢复并补扫一次。
+const outputGate = createOutputGate();
+let outputInFlightBytes = 0;
+function settleOutputChunk(chunk: Uint8Array, done: () => void) {
+  outputInFlightBytes = Math.max(0, outputInFlightBytes - chunk.byteLength);
+  if (outputGate.feed(outputInFlightBytes) && outputGate.mode === "normal") onOutputGateRelease();
+  done();
+}
+function onOutputGateRelease() {
+  showNotice(t("backpressure.released"));
+  rescanHighlightViewport();
+}
 const terminalWriteThrottle: TerminalWriteThrottle = createTerminalWriteThrottle({
   sink: (data, done) => {
     if (!terminal) {
       done();
       return;
     }
-    terminal.write(data, done);
+    outputInFlightBytes += data.byteLength;
+    if (outputGate.feed(outputInFlightBytes) && outputGate.mode === "strained") {
+      showNotice(t("backpressure.engaged"));
+    }
+    if (outputGate.mode === "strained") {
+      const frames = outputGate.write(data);
+      let remaining = frames.length;
+      if (!remaining) {
+        done();
+        return;
+      }
+      for (const frame of frames) {
+        terminal.write(frame, () => {
+          settleOutputChunk(frame, () => {
+            remaining -= 1;
+            if (remaining === 0) done();
+          });
+        });
+      }
+      return;
+    }
+    terminal.write(data, () => settleOutputChunk(data, done));
   },
 });
+// DECSET 2026 synchronized output (WT-1)：`CSI ? 2026 h` 期间挂起合帧定时提交，
+// `CSI ? 2026 l` 整批合并一次上屏，减轻 vim/neovim 重绘撕裂。
+const terminalSyncOutput: TerminalSyncOutput = {
+  begin: () => terminalWriteThrottle.setHold(true),
+  end: () => terminalWriteThrottle.setHold(false),
+};
+let disposeModeQueryHandlers: (() => void) | undefined;
 function flushTerminalOutputNow() {
   if (disposed) return;
   flushDeferredTerminalOutput();
@@ -1621,6 +1686,8 @@ function setWorkbenchActive(active: boolean) {
   }
 }
 const terminalInputQueue = createTerminalInputQueue({
+  // Bound a stalled bridge send so one hung promise cannot chain every later keystroke.
+  sendTimeoutMs: 8_000,
   send: (sessionId, payload) => {
     const proto = protocolSession.value;
     if (proto && proto.sessionId === sessionId) {
@@ -1642,6 +1709,12 @@ const terminalInputQueue = createTerminalInputQueue({
     return window.datawisePlugin.sendBinary(`ssh/terminal/in/${sessionId}`, payload);
   },
   onError: (cause) => {
+    terminalInputQueue.reset();
+    // #302：终端输出仍在到达说明 SSH 通道活着，输入超时只是请求路径拥塞——
+    // 只复位队列，不触发重连梯子。
+    if (cause instanceof TerminalInputTimeoutError && inputTimeoutIndicatesStall(lastTerminalDataAt, Date.now())) {
+      return;
+    }
     showError(cause, "terminal");
     // 会话被外部杀掉（宿主重推连接的 disconnect、sidecar 重启）时本 tab 无
     // 事件感知，终端看似活着实则打不进字。输入撞上死会话时按传输断开的
@@ -1650,7 +1723,13 @@ const terminalInputQueue = createTerminalInputQueue({
     if (proto && (proto.kind === "local" || proto.kind === "telnet" || proto.kind === "serial")) {
       return;
     }
-    if (terminalState.value === "connected" && !reconnectPending.value && isSessionGoneError(cause)) scheduleSessionReconnect();
+    if (
+      terminalState.value === "connected"
+      && !reconnectPending.value
+      && (cause instanceof TerminalInputTimeoutError || isSessionGoneError(cause))
+    ) {
+      scheduleSessionReconnect();
+    }
   },
 });
 
@@ -2240,6 +2319,13 @@ function createTerminal() {
     iipSupport: true,
   }));
   registerOscColorQueryHandlers();
+  // #306：备用屏进出时重新解析无折行宽度（vim/htop 自动回退可视列宽）。
+  registerAltScreenWatch(terminal, () => scheduleFit());
+  disposeModeQueryHandlers?.();
+  disposeModeQueryHandlers = registerTerminalModeQueryHandlers(terminal, {
+    syncOutput: terminalSyncOutput,
+    decRqmState: (mode) => (mode === 2026 ? (terminalWriteThrottle.held ? 1 : 2) : 2),
+  });
   osc52Disposable = terminal.parser.registerOscHandler(52, (data) =>
     handleOsc52ClipboardWrite(data, (text) => writeClipboardText(text, clipboardDeps())),
   );
@@ -2347,6 +2433,8 @@ function handleTerminalKey(event: KeyboardEvent) {
     return consume();
   }
   if (isHistoryOverlayShortcut(event) && connected.value) {
+    // MFA/password/select prompts: leave ↑↓/Ctrl+R to the remote (issue #150).
+    if (interactivePromptGatePending()) return true;
     toggleHistoryPanel();
     return consume();
   }
@@ -2671,12 +2759,24 @@ function sendTerminalBytes(data: Uint8Array, sourceSessionId?: string) {
   if (source) terminalInputQueue.enqueue(source, payload);
 }
 
+function applyNoWrapWidthForMain(): boolean {
+  if (!terminal || !fitAddon) return false;
+  // proposeDimensions = 可视列宽；无折行抬宽后 term.cols 已不是 viewport，
+  // 备用屏回退必须读 propose，不能用当前 cols（否则 vim/htop 仍拿到 1000 列）。
+  return applyNoWrapWidth(terminal, {
+    enabled: interactionPrefs.value.noWrap,
+    configuredCols: interactionPrefs.value.noWrapColumns,
+    viewportCols: fitAddon.proposeDimensions()?.cols,
+  });
+}
+
 function scheduleFit() {
   window.clearTimeout(resizeTimer);
   resizeTimer = window.setTimeout(() => {
     try {
       if (terminal && fitAddon && terminalHost.value?.clientWidth && terminalHost.value.clientHeight) {
         fitAddon.fit();
+        applyNoWrapWidthForMain();
         // trzsz 进度条按终端列宽渲染（filter 内部文本进度条虽未启用，列宽保持同步）。
         trzszFilter?.setTerminalColumns(terminal.cols);
         const proto = protocolSession.value;
@@ -2695,6 +2795,11 @@ function scheduleFit() {
       for (const runtime of extraShells.values()) {
         if (!runtime.terminal || !runtime.fitAddon || !runtime.hostEl?.clientWidth || !runtime.hostEl.clientHeight) continue;
         runtime.fitAddon.fit();
+        applyNoWrapWidth(runtime.terminal, {
+          enabled: interactionPrefs.value.noWrap,
+          configuredCols: interactionPrefs.value.noWrapColumns,
+          viewportCols: runtime.fitAddon.proposeDimensions()?.cols,
+        });
         void window.datawisePlugin
           .notify("ssh/terminal/resize", {
             sessionId: runtime.sessionId,
@@ -3593,7 +3698,7 @@ function handleBinary(event: DatawisePluginBinaryEvent) {
     const sequence = readU64(payload, 1);
     if (sequence <= lastSequence) return;
     pendingTerminalFrames.set(sequence, { stream: payload[0], data: payload.slice(9) });
-    drainTerminalFrames();
+    scheduleTerminalDrain();
     return;
   }
   if (vncSessionId.value && event.channel === `vnc/frame/${vncSessionId.value}`) {
@@ -3616,13 +3721,36 @@ function handleBinary(event: DatawisePluginBinaryEvent) {
   waiter.resolve(payload.slice(8));
 }
 
+/** #302：终端帧合帧调度。洪峰时每帧同步跑中间件链会吃满主线程；入队后统一到 rAF 排水。 */
+function scheduleTerminalDrain() {
+  if (terminalDrainHandle !== null) return;
+  if (typeof document !== "undefined" && !document.hidden && typeof requestAnimationFrame === "function") {
+    terminalDrainHandle = requestAnimationFrame(() => {
+      terminalDrainHandle = null;
+      drainTerminalFrames();
+    });
+  } else {
+    terminalDrainHandle = window.setTimeout(() => {
+      terminalDrainHandle = null;
+      drainTerminalFrames();
+    }, 0);
+  }
+}
+
 function drainTerminalFrames() {
+  // 两段式消费（先收齐再处理）：本次 drain 期间处理产生的同步副作用不会与下一批帧交错。
+  const batch: { stream: number; data: Uint8Array }[] = [];
   let frame = pendingTerminalFrames.get(lastSequence + 1);
   while (frame) {
     pendingTerminalFrames.delete(lastSequence + 1);
     lastSequence += 1;
-    if (frame.stream === 2) {
-      const state = new TextDecoder().decode(frame.data);
+    batch.push(frame);
+    frame = pendingTerminalFrames.get(lastSequence + 1);
+  }
+  if (batch.length) lastTerminalDataAt = Date.now();
+  for (const segment of mergeTerminalFrames(batch, TERMINAL_MERGED_FLUSH_BYTES)) {
+    if (segment.stream === 2) {
+      const state = new TextDecoder().decode(segment.data);
       if (state === "directory-tracking-unavailable") {
         followDirectory.value = false;
         directoryTrackingSupported.value = false;
@@ -3634,16 +3762,15 @@ function drainTerminalFrames() {
     } else {
       try {
         if (!zmodemSentry) resetZmodemSentry();
-        zmodemSentry?.consume(frame.data.slice().buffer);
+        zmodemSentry?.consume(segment.data.slice().buffer);
       } catch (cause) {
         if (zmodemBusy.value) finishZmodemUpload(cause);
         else {
           resetZmodemSentry();
-          dispatchTerminalOutput(frame.data);
+          dispatchTerminalOutput(segment.data);
         }
       }
     }
-    frame = pendingTerminalFrames.get(lastSequence + 1);
   }
   persistState();
   // A stalled gap must not grow the pending map without bound: once the
@@ -3664,8 +3791,14 @@ function drainTerminalFrames() {
     void window.datawisePlugin.invoke<ReplayResult>("ssh/terminal/replay", { sessionId: session.value.sessionId, afterSequence: lastSequence })
       .then((result) => {
         if (!result.complete) {
-          terminalState.value = "error";
-          terminalError.value = t("sessionUnrecoverable");
+          // Ring buffer (2 MiB) dropped the gap prefix: do not kill a live
+          // session (ZMODEM/sz floods always overrun the replay window).
+          // Resync to the buffer tail and keep the session — same strategy as
+          // dbx-plugin-ssh #302/#254.
+          pendingTerminalFrames.clear();
+          lastSequence = result.tailSequence;
+          replayNoProgress = 0;
+          showNotice(t("replayGapResynced"));
           return;
         }
         // The replay returned healthy but the hole below firstPending is still
@@ -3901,8 +4034,38 @@ function settleTransferCompletion(taskId: string, status: TransferTask["status"]
   const waiter = transferCompletionWaiters.get(taskId);
   if (!waiter || (status !== "completed" && status !== "cancelled" && status !== "failed")) return;
   transferCompletionWaiters.delete(taskId);
+  window.clearTimeout(waiter.watchdog);
   if (status === "completed") waiter.resolve();
   else waiter.reject(Object.assign(new Error(transferTasks[taskId]?.error || t(`transferStatus.${status}`)), { code: "transfer-terminal" }));
+}
+
+async function pollTransferStatus(taskId: string): Promise<boolean> {
+  try {
+    const status = await window.datawisePlugin.invoke<{ transferred?: number; status: string; phase?: string }>("sftp/transfer/status", { taskId });
+    const task = transferTasks[taskId];
+    if (!task) return true;
+    const normalized = normalizeTransferStatus(status.status, task.status);
+    if (normalized === "queued" || normalized === "running") return false;
+    task.status = normalized;
+    if (status.transferred != null) {
+      if (status.phase === "staging") task.staged = status.transferred;
+      else task.transferred = status.transferred;
+    }
+    settleTransferCompletion(taskId, normalized);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function armCompletionWatchdog(taskId: string, step = 0): number {
+  const delay = step < COMPLETION_WATCHDOG_STEPS_MS.length ? COMPLETION_WATCHDOG_STEPS_MS[step]! : COMPLETION_WATCHDOG_MAX_MS;
+  return window.setTimeout(async () => {
+    if (!transferCompletionWaiters.has(taskId)) return;
+    if (await pollTransferStatus(taskId)) return;
+    const waiter = transferCompletionWaiters.get(taskId);
+    if (waiter) waiter.watchdog = armCompletionWatchdog(taskId, step + 1);
+  }, delay);
 }
 
 /** 挂起直到该任务收到终态 progress 事件（完成/取消/失败）；注册前已终态则立即结算。 */
@@ -3913,7 +4076,7 @@ function waitForTransferCompletion(taskId: string) {
     return status === "completed" ? Promise.resolve() : Promise.reject(Object.assign(new Error(existing?.error || t(`transferStatus.${status}`)), { code: "transfer-terminal" }));
   }
   return new Promise<void>((resolve, reject) => {
-    transferCompletionWaiters.set(taskId, { resolve, reject });
+    transferCompletionWaiters.set(taskId, { resolve, reject, watchdog: armCompletionWatchdog(taskId) });
   });
 }
 
@@ -4335,6 +4498,49 @@ async function openNewSessionTab() {
 /** 复制到宿主新标签（复用已认证 transport，免 MFA）。 */
 async function openCopiedSessionTab() {
   await openSessionTab(true);
+}
+
+/** Open multi-server monitor workbench in a new tab (plugin.mode + contributionId self-route). */
+const canOpenMonitorPanel = computed(() => Boolean(window.datawisePlugin?.openWorkbench));
+function openMonitorPanel() {
+  const api = window.datawisePlugin;
+  if (!api.openWorkbench) return;
+  // Pass the real connectionId so Host ensureSidecarConnection does not toast
+  // EXPLORER_CONNECTION_NOT_FOUND. Routing uses plugin.mode / contributionId;
+  // App.initialize remounts MonitorPanel if the terminal root was mounted by mistake.
+  void api.openWorkbench(
+    MONITOR_CONTRIBUTION_ID,
+    {
+      plugin: {
+        mode: "monitor",
+        ...(connectionId.value ? { focusConnectionId: connectionId.value } : {}),
+      },
+      contributionId: MONITOR_CONTRIBUTION_ID,
+      ...(connectionId.value
+        ? {
+            connectionId: connectionId.value,
+            connection: {
+              id: connectionId.value,
+              name: connection.value.name,
+              readOnly: connection.value.readOnly === true,
+            },
+          }
+        : {}),
+    },
+    { forceNew: true },
+  );
+}
+
+function remountAsMonitorPanel(context: Record<string, unknown>): boolean {
+  try {
+    const current = getCurrentInstance()?.appContext.app;
+    current?.unmount();
+    createApp(MonitorPanel, { context }).mount("#app");
+    return true;
+  } catch (cause) {
+    console.error("[ssh-ui] failed to remount MonitorPanel", cause);
+    return false;
+  }
 }
 
 async function restoreTransfers() {
@@ -5357,6 +5563,8 @@ function rescanHighlightViewport() {
 function scheduleHighlightScan(start: number, end: number) {
   if (!workbenchActive) return;
   if (!terminal || !highlightEnabled.value || !compiledHighlightRules.value.length) return;
+  // 大输出保护生效期挂起扫描，恢复时由 onOutputGateRelease 补扫视口。
+  if (outputGate.mode === "strained") return;
   highlightPendingRange = highlightPendingRange
     ? { start: Math.min(highlightPendingRange.start, start), end: Math.max(highlightPendingRange.end, end) }
     : { start, end };
@@ -7064,19 +7272,30 @@ async function applyDropPlan(plan: Awaited<ReturnType<typeof planFolderDrop>>, t
   await uploadFolderDrop(plan.files, plan.emptyDirs, targetDir);
 }
 
-async function uploadSource(name: string, size: number, readChunk: (offset: number, length: number) => Promise<Uint8Array>, resume?: { taskId: string; remotePath: string }, targetDir?: string, options?: { lzpack?: boolean }) {
-  if (!session.value) return;
+async function uploadSource(
+  name: string,
+  size: number,
+  readChunk: (offset: number, length: number) => Promise<Uint8Array>,
+  resume?: { taskId: string; remotePath: string },
+  targetDir?: string,
+  options?: { lzpack?: boolean; sessionId?: string; duplicatePreCheckedAbsent?: boolean },
+): Promise<boolean> {
+  // 批量上传可显式传入其他会话的 sessionId；缺省仍走当前工作台会话。
+  const sessionId = (options?.sessionId?.trim() || session.value?.sessionId || "").trim();
+  if (!sessionId) return false;
+  // 跨会话批量上传固定走普通 SFTP（不继承当前面板的 sudo 开关）。
+  const useSudo = !options?.sessionId && sudoMode.value;
   // resume 携带原 taskId/remotePath：后端校验 spool meta 后从已传前缀续接。
   // targetDir 仅新上传生效（终端拖入的自定义目标目录）；缺省仍是 SFTP 当前目录。
-  const lzpack = !!options?.lzpack && !sudoMode.value;
-  const uploadStart = sudoMode.value ? "sudo/upload/start" : "sftp/upload/start";
-  const uploadFinish = sudoMode.value ? "sudo/upload/finish" : "sftp/upload/finish";
+  const lzpack = !!options?.lzpack && !useSudo;
+  const uploadStart = useSudo ? "sudo/upload/start" : "sftp/upload/start";
+  const uploadFinish = useSudo ? "sudo/upload/finish" : "sftp/upload/finish";
   const info = await window.datawisePlugin.invoke<{ taskId: string; chunkSize: number; resumeOffset?: number }>(uploadStart, resume
-    ? { sessionId: session.value.sessionId, remotePath: resume.remotePath, size, resumeTaskId: resume.taskId }
-    : { sessionId: session.value.sessionId, remotePath: joinRemote(targetDir ?? currentPath.value, name), size, mode: lzpack ? "lzpack" : undefined });
+    ? { sessionId, remotePath: resume.remotePath, size, resumeTaskId: resume.taskId }
+    : { sessionId, remotePath: joinRemote(targetDir ?? currentPath.value, name), size, mode: lzpack ? "lzpack" : undefined });
   const startOffset = info.resumeOffset ?? 0;
   const uploadName = lzpack ? `${name}.dbxz` : name;
-  transferTasks[info.taskId] = { taskId: info.taskId, sessionId: session.value.sessionId, direction: "upload", fileName: uploadName, size, transferred: startOffset, status: startOffset > 0 ? "running" : "queued", joinedAt: Date.now(), compression: lzpack ? "lzpack" : undefined };
+  transferTasks[info.taskId] = { taskId: info.taskId, sessionId, direction: "upload", fileName: uploadName, size, transferred: startOffset, status: startOffset > 0 ? "running" : "queued", joinedAt: Date.now(), compression: lzpack ? "lzpack" : undefined };
   try {
     let offset = startOffset;
     while (offset < size) {
@@ -7106,25 +7325,75 @@ async function uploadSource(name: string, size: number, readChunk: (offset: numb
       throw Object.assign(cause instanceof Error ? cause : new Error(String(cause)), { code: "upload-start-failed" });
     }
     await waitForTransferCompletion(info.taskId);
+    return true;
   } catch (cause) {
     await window.datawisePlugin.invoke("sftp/transfer/cancel", { taskId: info.taskId, reason: transferCancelReason(cause) }).catch(() => undefined);
     throw cause;
   }
 }
 
+const {
+  batchMode,
+  uploadDir,
+  uploadPolicy,
+  uploadFiles,
+  uploading,
+  uploadProgress,
+  uploadSummary,
+  uploadError,
+  uploadFilesOpen,
+  uploadTotalBytes,
+  uploadReady,
+  setBatchMode,
+  pickUploadFiles,
+  onUploadFilesInput,
+  removeUploadFile,
+  clearUploadFiles,
+  runBatchUpload,
+  dismissUploadResult,
+} = useBatchUpload({
+  t,
+  showError,
+  uploadSource,
+  batchTargets,
+  batchSelected,
+  homeDir: batchHomeDir,
+  fileInput: batchUploadInput,
+});
+const batchUploadBytesLabel = computed(() => formatBytes(uploadTotalBytes.value));
+
+// issue #305：分片 ACK 事件丢失时不再死等 30s——按阶梯轮询 sftp/transfer/status。
+const UPLOAD_ACK_POLL_STEPS_MS = [3_000, 8_000, 15_000, 30_000];
+
 function waitForUploadAck(taskId: string, nextOffset: number) {
   return new Promise<void>((resolve, reject) => {
-    const timer = window.setTimeout(async () => {
+    const settle = (outcome: () => void) => {
+      const waiter = uploadAckWaiters.get(taskId);
+      if (waiter) window.clearTimeout(waiter.timer);
       uploadAckWaiters.delete(taskId);
-      try {
-        const status = await window.datawisePlugin.invoke<{ transferred: number; status: string }>("sftp/transfer/status", { taskId });
-        if (status.transferred >= nextOffset && status.status === "running") resolve();
-        else reject(Object.assign(new Error(t("errors.uploadAckTimeout")), { code: "upload-ack-timeout" }));
-      } catch (cause) {
-        reject(cause instanceof Error ? cause : new Error(String(cause)));
-      }
-    }, 30_000);
-    uploadAckWaiters.set(taskId, { nextOffset, resolve, reject, timer });
+      outcome();
+    };
+    const poll = (step: number) => {
+      const delay = UPLOAD_ACK_POLL_STEPS_MS[Math.min(step, UPLOAD_ACK_POLL_STEPS_MS.length - 1)]!;
+      const timer = window.setTimeout(async () => {
+        try {
+          const status = await window.datawisePlugin.invoke<{ transferred: number; status: string }>("sftp/transfer/status", { taskId });
+          if (status.transferred >= nextOffset && status.status !== "cancelled" && status.status !== "failed") {
+            settle(resolve);
+            return;
+          }
+          if (status.status === "cancelled" || status.status === "failed") {
+            settle(() => reject(Object.assign(new Error(transferTasks[taskId]?.error || t(`transferStatus.${status.status}`)), { code: status.status === "cancelled" ? "transfer-cancelled" : "transfer-terminal" })));
+            return;
+          }
+          poll(step + 1);
+        } catch {
+          poll(step + 1);
+        }
+      }, delay);
+      uploadAckWaiters.set(taskId, { nextOffset, resolve, reject, timer });
+    };
+    poll(0);
   });
 }
 
@@ -7146,7 +7415,7 @@ function probeLocalCapabilities() {
   return localCapabilities;
 }
 
-async function downloadEntry(entry: SftpEntry, expandLzpack = false) {
+async function downloadEntry(entry: SftpEntry, expandLzpack = false, askTarget = false) {
   fileMenu.value = undefined;
   // 目录条目走递归文件夹下载（tree/start + 同一分块管线）；文件沿用单文件管线。
   if (entry.kind === "directory") {
@@ -7170,11 +7439,11 @@ async function downloadEntry(entry: SftpEntry, expandLzpack = false) {
     showError(new Error(t("sftpLzpack.filesOnly")));
     return;
   }
-  // 「使用默认地址」关闭时先选保存目录；取消则整次下载不发生。
+  // 「使用默认地址」关闭时，或右键「下载到…」强制选目录；取消则整次下载不发生。
   // 仅本地落盘可指定目录——web/docker 浏览器下载由浏览器决定位置。
   let dirOverride = "";
   let setDefaultAfter = false;
-  if (saveToLocal && !loadDownloadUseDefaultDir()) {
+  if (saveToLocal && (askTarget || !loadDownloadUseDefaultDir())) {
     const chosen = await askDownloadTarget(entry.name);
     if (chosen === undefined) return;
     dirOverride = chosen.dir.trim();
@@ -7933,11 +8202,19 @@ function persistInteractionPrefs() {
 }
 
 function updateInteractionPrefs(patch: Partial<InteractionPrefs>) {
+  const prev = interactionPrefs.value;
   interactionPrefs.value = sanitizeInteractionPrefs({ ...interactionPrefs.value, ...patch });
   persistInteractionPrefs();
   if (commandHistory.value.length > interactionPrefs.value.historyLimit) {
     commandHistory.value = commandHistory.value.slice(0, interactionPrefs.value.historyLimit);
     persistCommandHistory();
+  }
+  // #306：无折行开关/列数变化即时重排主终端与分屏副屏。
+  if (
+    patch.noWrap !== undefined && patch.noWrap !== prev.noWrap
+    || patch.noWrapColumns !== undefined && patch.noWrapColumns !== prev.noWrapColumns
+  ) {
+    scheduleFit();
   }
 }
 
@@ -8308,7 +8585,13 @@ async function refreshBatchTargets() {
     } catch {
       // 旧宿主无此 API：退化为只滤掉 disconnected，不主动 prune。
     }
-    const orphans = orphanBatchSessionIds(targets, openWorkbenchIds);
+    // Never prune the session owned by this workbench — missing workbenchId in
+    // host.listOpenWorkbenches (Monitor-opened tabs historically omitted it)
+    // would otherwise close us in a reconnect loop right after connect.
+    const selfSessionId = session.value?.sessionId?.trim() || "";
+    const orphans = orphanBatchSessionIds(targets, openWorkbenchIds).filter(
+      (sessionId) => !selfSessionId || sessionId !== selfSessionId,
+    );
     for (const sessionId of orphans) {
       void window.datawisePlugin.invoke("ssh/session/close", { sessionId }).catch(() => undefined);
     }
@@ -9007,11 +9290,31 @@ function pinHistoryPanelSelection() {
   syncHistoryDraftFromIndex();
 }
 
+function interactivePromptOnScreen(): boolean {
+  try {
+    const buffer = terminal?.buffer.active;
+    if (!buffer || buffer.type !== "normal") return false;
+    const row = buffer.baseY + Math.min(buffer.cursorY, buffer.length - 1);
+    return interactivePromptNearCursor(row, (line) => buffer.getLine(line)?.translateToString(true) ?? "");
+  } catch {
+    return false;
+  }
+}
+
+/** Yield overlays while remote asks for input (OTP/password/select) or a host-key dialog is open. */
+function interactivePromptGatePending(): boolean {
+  return isInteractivePromptPending({
+    promptLineOnScreen: interactivePromptOnScreen(),
+    challengeDialogPending: !!hostKeyPrompt.value,
+  });
+}
+
 function toggleHistoryPanel() {
   if (historyPanelOpen.value) {
     closeHistoryPanel(true);
     return;
   }
+  if (interactivePromptGatePending()) return;
   if (!interactionPrefs.value.historyEnabled) {
     showNotice(t("historyPanel.disabledNotice"));
     return;
@@ -9240,6 +9543,11 @@ function scheduleCommandSuggest() {
 
 function refreshCommandSuggest() {
   if (historyPanelOpen.value || quickPaletteOpen.value || !terminal || !terminalHost.value || !connected.value) {
+    hideCommandSuggest();
+    return;
+  }
+  // Password / MFA / select prompts: do not overlay suggestions on answers.
+  if (interactivePromptGatePending()) {
     hideCommandSuggest();
     return;
   }
@@ -10888,9 +11196,51 @@ async function waitForHostContext(
   return last;
 }
 
+function monitorRouteContext(context: Record<string, unknown>): Record<string, unknown> | null {
+  const contributionId =
+    (typeof context.contributionId === "string" && context.contributionId)
+    || "";
+  if (!isMonitorContext(context) && !isMonitorContribution(contributionId)) return null;
+  return {
+    ...context,
+    contributionId: contributionId || MONITOR_CONTRIBUTION_ID,
+    plugin: {
+      mode: "monitor",
+      ...(typeof context.plugin === "object" && context.plugin && !Array.isArray(context.plugin)
+        ? (context.plugin as Record<string, unknown>)
+        : {}),
+    },
+  };
+}
+
 async function initialize() {
   const api = await waitForHostApi();
+  // Prefer host.ready before any SSH openSession — monitor tabs carry plugin.mode here.
+  try {
+    const ready = await Promise.race([
+      api.ready,
+      new Promise<Record<string, unknown>>((resolve) => window.setTimeout(() => resolve({}), 3000)),
+    ]);
+    const early = {
+      ...(api.context && typeof api.context === "object" ? api.context : {}),
+      ...(ready && typeof ready === "object" ? ready : {}),
+    } as Record<string, unknown>;
+    const routed = monitorRouteContext(early);
+    if (routed) {
+      remountAsMonitorPanel(routed);
+      return;
+    }
+  } catch {
+    // fall through to normal terminal boot
+  }
   await waitForHostContext(api);
+  {
+    const routed = monitorRouteContext(hostContext.value);
+    if (routed) {
+      remountAsMonitorPanel(routed);
+      return;
+    }
+  }
   transportReuseState = createSessionTransportReuseState(hostContext.value);
   locale.value = api.locale || "zh-CN";
   restoreUiState();
@@ -11209,6 +11559,7 @@ onBeforeUnmount(() => {
               <button class="link-button" @click="openImportWizard(); toolbarMoreOpen = false"><FolderInput /> {{ t("importWizard.title") }}</button>
               <button class="link-button" @click="openAuditLog(); toolbarMoreOpen = false"><FileText /> {{ t("auditLog.title") }}</button>
               <button class="link-button" @click="metricsOpen = true; void backfillMetricsHistory(); syncMetricsPolling(); toolbarMoreOpen = false" :disabled="!connected"><Gauge /> {{ t("metrics") }}</button>
+              <button v-if="canOpenMonitorPanel" class="link-button" :disabled="!connectionId" @click="openMonitorPanel(); toolbarMoreOpen = false"><Activity /> {{ t("monitor.openMulti") }}</button>
             </div>
             <hr class="columns-popover-separator" />
             <!-- Inline submenu (not nested Reka Popover) so the first click stays open. -->
@@ -11437,7 +11788,11 @@ onBeforeUnmount(() => {
             :style="splitPrimaryStyle"
             @pointerdown="focusSplitPane('primary')"
           >
-            <div ref="terminalHost" class="terminal-host" />
+            <div
+              ref="terminalHost"
+              class="terminal-host"
+              :class="{ 'terminal-h-scroll': interactionPrefs.noWrap }"
+            />
           </div>
           <div
             v-if="splitLayoutOpen"
@@ -11452,7 +11807,11 @@ onBeforeUnmount(() => {
             :style="splitSecondaryStyle"
             @pointerdown="focusSplitPane('split')"
           >
-            <div class="terminal-host" :ref="(el) => bindSplitPeerHost(el as Element | null)" />
+            <div
+              class="terminal-host"
+              :class="{ 'terminal-h-scroll': interactionPrefs.noWrap }"
+              :ref="(el) => bindSplitPeerHost(el as Element | null)"
+            />
             <button
               type="button"
               class="terminal-split-close icon-button compact icon-neutral"
@@ -12024,9 +12383,9 @@ onBeforeUnmount(() => {
             </div>
           </section>
         </div>
-        <!-- 批量发送结果：右下角紧凑 toast，成功自动消失，失败稍长，可手动关。 -->
+        <!-- 批量发送 / 批量上传结果：右下角紧凑 toast。 -->
         <div
-          v-if="connected && batchBarOpen && (batchSummary || batchError)"
+          v-if="connected && batchBarOpen && batchMode === 'command' && (batchSummary || batchError)"
           class="batch-bar-status"
           :class="{ 'is-error': batchError || (batchSummary && batchSummary.failed) }"
           role="status"
@@ -12044,10 +12403,51 @@ onBeforeUnmount(() => {
           <p v-else class="task-error">{{ batchError }}</p>
           <button class="icon-button compact" :title="t('close')" @click="dismissBatchResult"><X /></button>
         </div>
+        <div
+          v-if="connected && batchBarOpen && batchMode === 'upload' && (uploadSummary || uploadError || uploadProgress)"
+          class="batch-bar-status"
+          :class="{ 'is-error': !!uploadError || !!(uploadSummary && (uploadSummary.failed || uploadSummary.skipped)) }"
+          role="status"
+        >
+          <template v-if="uploadProgress">
+            <p>
+              {{ t("batchUploadRunning", {
+                target: uploadProgress.targetIndex,
+                targets: uploadProgress.targetCount,
+                file: uploadProgress.fileIndex,
+                files: uploadProgress.fileCount,
+              }) }}
+              · {{ uploadProgress.label }} · {{ uploadProgress.fileName }}
+            </p>
+          </template>
+          <template v-else-if="uploadSummary">
+            <p :class="uploadSummary.failed || uploadSummary.skipped ? 'task-error' : undefined">
+              {{ uploadSummary.failed || uploadSummary.skipped
+                ? t("batchUploadPartial", { uploaded: uploadSummary.uploaded, failed: uploadSummary.failed, skipped: uploadSummary.skipped })
+                : t("batchUploadDone", { count: uploadSummary.uploaded }) }}
+            </p>
+            <div v-if="uploadSummary.failed || uploadSummary.skipped" class="batch-result-list">
+              <span
+                v-for="row in uploadSummary.rows.filter((item) => item.status !== 'uploaded').slice(0, 5)"
+                :key="`${row.sessionId}:${row.fileName}:${row.status}`"
+                class="batch-result-row mono"
+              >
+                {{ batchSessionLabel(row.sessionId) }} · {{ row.fileName }} · {{ row.status === "skipped" ? t("batchUploadSkipped") : row.error || t("batchUploadFailed") }}
+              </span>
+            </div>
+          </template>
+          <p v-else class="task-error">{{ uploadError }}</p>
+          <button class="icon-button compact" :title="t('close')" @click="dismissUploadResult"><X /></button>
+        </div>
         <!-- 批量发送命令条（Electerm quick-command bar）：贴终端底部，回车即发送；
              目标选择/快速命令切换/保存为快速命令均在条上完成。 -->
         <section v-if="connected && batchBarOpen" class="batch-bar" @contextmenu.stop @mousedown.stop @click.stop>
-          <div>
+          <div class="batch-mode-switch" role="tablist" :aria-label="t('batchUploadSummary')">
+            <button type="button" role="tab" :aria-selected="batchMode === 'command'" :class="{ active: batchMode === 'command' }" :title="t('batchModeCommand')" @click="setBatchMode('command')"><SquareTerminal /><span>{{ t("batchModeCommand") }}</span></button>
+            <button type="button" role="tab" :aria-selected="batchMode === 'upload'" :class="{ active: batchMode === 'upload' }" :title="t('batchModeUpload')" @click="setBatchMode('upload')"><FileUp /><span>{{ t("batchModeUpload") }}</span></button>
+          </div>
+          <input ref="batchUploadInput" class="hidden" type="file" multiple @change="onUploadFilesInput" />
+          <div class="batch-bar-slot">
             <!-- 底部条上的 popover 向上展开（reka side="top"，旧绝对定位会被裁切）。 -->
             <Popover :open="batchTargetsOpen" @update:open="(open) => { if (!open) batchTargetsOpen = false; }">
               <PopoverAnchor as-child>
@@ -12090,7 +12490,7 @@ onBeforeUnmount(() => {
               </PopoverContent>
             </Popover>
           </div>
-          <template v-if="batchSaveMode">
+          <template v-if="batchMode === 'command' && batchSaveMode">
             <label
               class="quick-scope-bind batch-scope-bind"
               :class="{ disabled: batchSaving || !connectionId }"
@@ -12116,7 +12516,7 @@ onBeforeUnmount(() => {
             <button class="icon-button icon-emerald" :title="t('save')" :disabled="batchSaving || !batchScopeCanAdd" @click="confirmBatchBarSave"><Save /></button>
             <button class="icon-button" :title="t('cancel')" :disabled="batchSaving" @click="cancelBatchBarSave"><X /></button>
           </template>
-          <template v-else>
+          <template v-else-if="batchMode === 'command'">
             <!-- 一体输入：快捷命令+历史联想；Ctrl+Space / ↓ / 左侧按钮打开；Enter 执行选中项。 -->
             <Popover
               v-if="batchSuggestAvailable"
@@ -12144,6 +12544,23 @@ onBeforeUnmount(() => {
                     @input="onBatchDraftInput"
                     @keydown="onBatchDraftKeydown"
                   />
+                  <button
+                    type="button"
+                    class="batch-bar-compose-action"
+                    :title="t('batchBarSave')"
+                    :disabled="!batchDraft.trim() || (!canAddQuickCommandInScope(quickCommands, connectionId || null) && !canAddQuickCommandInScope(quickCommands, null))"
+                    @click="openBatchBarSave"
+                  ><Save /></button>
+                  <button
+                    type="button"
+                    class="batch-bar-compose-action batch-bar-compose-action--send"
+                    :title="t('batchSendSend')"
+                    :disabled="batchSending || !batchDraft.trim() || !batchSelected.length"
+                    @click="sendBatchCommand"
+                  >
+                    <Loader2 v-if="batchSending" class="spinning" />
+                    <Send v-else />
+                  </button>
                 </div>
               </PopoverAnchor>
               <!-- 禁止 open/close 自动抢焦点：输入联想打开时必须焦点留在 input。 -->
@@ -12199,18 +12616,105 @@ onBeforeUnmount(() => {
                 @keydown.down.prevent="browseBatchHistoryDown"
                 @keydown.enter="sendBatchCommand"
               />
+              <button
+                type="button"
+                class="batch-bar-compose-action"
+                :title="t('batchBarSave')"
+                :disabled="!batchDraft.trim() || (!canAddQuickCommandInScope(quickCommands, connectionId || null) && !canAddQuickCommandInScope(quickCommands, null))"
+                @click="openBatchBarSave"
+              ><Save /></button>
+              <button
+                type="button"
+                class="batch-bar-compose-action batch-bar-compose-action--send"
+                :title="t('batchSendSend')"
+                :disabled="batchSending || !batchDraft.trim() || !batchSelected.length"
+                @click="sendBatchCommand"
+              >
+                <Loader2 v-if="batchSending" class="spinning" />
+                <Send v-else />
+              </button>
             </div>
-            <button
-              class="icon-button"
-              :title="t('batchBarSave')"
-              :disabled="!batchDraft.trim() || (!canAddQuickCommandInScope(quickCommands, connectionId || null) && !canAddQuickCommandInScope(quickCommands, null))"
-              @click="openBatchBarSave"
-            ><Save /></button>
           </template>
-          <button class="icon-button icon-emerald batch-bar-send" :title="t('batchSendSend')" :disabled="batchSending || !batchDraft.trim() || !batchSelected.length" @click="sendBatchCommand">
-            <Loader2 v-if="batchSending" class="spinning" />
-            <Send v-else />
-          </button>
+          <template v-else-if="batchMode === 'upload'">
+            <div class="batch-bar-compose batch-bar-compose--upload">
+              <input
+                v-model="uploadDir"
+                class="batch-bar-compose-input mono"
+                spellcheck="false"
+                :disabled="uploading"
+                :title="t('batchUploadPath')"
+                :placeholder="t('batchUploadPathPlaceholder')"
+                @keydown.enter="runBatchUpload"
+              />
+              <button
+                type="button"
+                class="batch-bar-compose-chip"
+                :title="t('batchUploadPick')"
+                :aria-label="t('batchUploadPick')"
+                :disabled="uploading"
+                @click="pickUploadFiles"
+              ><FileUp /><span>{{ t("batchUploadPick") }}</span></button>
+              <Popover :open="uploadFilesOpen" @update:open="(open) => { uploadFilesOpen = open === true; }">
+                <PopoverAnchor as-child>
+                  <button
+                    type="button"
+                    class="batch-bar-compose-chip"
+                    :title="t('batchUploadFiles', { count: uploadFiles.length })"
+                    :aria-label="t('batchUploadFiles', { count: uploadFiles.length })"
+                    :disabled="!uploadFiles.length"
+                    @click.stop="uploadFilesOpen = !uploadFilesOpen"
+                  >
+                    <FileText /><span>{{ t("batchUploadFiles", { count: uploadFiles.length }) }}</span>
+                  </button>
+                </PopoverAnchor>
+                <PopoverContent class="popover batch-upload-files-popover" side="top" align="start" :side-offset="6" @open-auto-focus.prevent @close-auto-focus.prevent>
+                  <div class="command-history-header">
+                    <span>{{ t("batchUploadFiles", { count: uploadFiles.length }) }} · {{ batchUploadBytesLabel }}</span>
+                    <button v-if="uploadFiles.length" class="link-button" @click="clearUploadFiles">{{ t("batchUploadClear") }}</button>
+                  </div>
+                  <p v-if="!uploadFiles.length" class="muted batch-send-hint">{{ t("batchUploadFilesEmpty") }}</p>
+                  <div v-else class="batch-upload-file-list">
+                    <div v-for="entry in uploadFiles" :key="entry.id" class="batch-upload-file-row">
+                      <FileText />
+                      <span class="batch-upload-file-name" :title="entry.name">{{ entry.name }}</span>
+                      <span class="batch-upload-file-size muted">{{ formatBytes(entry.size) }}</span>
+                      <button class="icon-button" :title="t('batchUploadRemove')" :aria-label="t('batchUploadRemove')" @click="removeUploadFile(entry.id)"><X /></button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <Select
+                :model-value="uploadPolicy"
+                :disabled="uploading"
+                @update:model-value="(v) => { if (v === 'overwrite' || v === 'rename' || v === 'skip') uploadPolicy = v; }"
+              >
+                <SelectTrigger
+                  size="xs"
+                  class="batch-bar-compose-select"
+                  :title="t('batchUploadPolicy')"
+                  :aria-label="t('batchUploadPolicy')"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent side="top" :side-offset="6">
+                  <SelectItem value="overwrite">{{ t("batchUploadPolicyOverwrite") }}</SelectItem>
+                  <SelectItem value="rename">{{ t("batchUploadPolicyRename") }}</SelectItem>
+                  <SelectItem value="skip">{{ t("batchUploadPolicySkip") }}</SelectItem>
+                </SelectContent>
+              </Select>
+              <button
+                type="button"
+                class="batch-bar-compose-action batch-bar-compose-action--send"
+                :title="t('batchUploadStart')"
+                :aria-label="t('batchUploadStart')"
+                :disabled="!uploadReady"
+                @click="runBatchUpload"
+              >
+                <Loader2 v-if="uploading" class="spinning" />
+                <FileUp v-else />
+              </button>
+            </div>
+          </template>
         </section>
       </section>
         </ContextMenuTrigger>
@@ -12458,6 +12962,7 @@ onBeforeUnmount(() => {
                   <ContextMenuItem v-if="fileMenu.entry.kind === 'directory' || fileMenu.entry.kind === 'file'" @select="openEntry(fileMenu.entry)"><Folder v-if="fileMenu.entry.kind === 'directory'" /><FileText v-else />{{ fileMenu.entry.kind === "directory" ? t("openFolder") : t("preview") }}</ContextMenuItem>
                   <ContextMenuItem @select="askCopilotAboutSelection"><Sparkles />{{ t("copilot.explainSelection") }}</ContextMenuItem>
                   <ContextMenuItem v-if="fileMenu.entry.kind === 'file' || fileMenu.entry.kind === 'directory'" @select="downloadEntry(fileMenu.entry)"><Download />{{ t("download") }}</ContextMenuItem>
+                  <ContextMenuItem v-if="fileMenu.entry.kind === 'file' && localCanSave" @select="downloadEntry(fileMenu.entry, false, true)"><FolderOpen />{{ t("downloadTo") }}</ContextMenuItem>
                   <ContextMenuItem v-if="fileMenu.entry.kind === 'file' && fileMenu.entry.name.endsWith('.dbxz')" @select="downloadEntry(fileMenu.entry, true)"><PackageOpen />{{ t("sftpLzpack.expandAction") }}</ContextMenuItem>
                   <ContextMenuSub v-if="fileMenu.entry.kind === 'file'" @update:open="(open) => { if (open) void ensureExternalEditors(); }">
                     <ContextMenuSubTrigger :disabled="!canWrite || !localCanSave" class="gap-2"><ExternalLink />{{ t("sftpEdit.openWith") }}<ChevronRight class="ml-auto opacity-60" /></ContextMenuSubTrigger>

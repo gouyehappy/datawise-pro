@@ -251,7 +251,7 @@ export default {
     connectionDisconnected: 'Disconnected from "{name}"',
     connectionIdleDisconnected: 'Connection "{name}" was closed due to inactivity',
     connectionNeedsReconnectTitle: 'Connection closed',
-    connectionNeedsReconnectHint: '"{name}" was released after disconnect or inactivity. Reconnect to continue on this tab.',
+    connectionNeedsReconnectHint: 'Released after disconnect or idle timeout — reconnect to continue.',
     connectionNeedsReconnectAction: 'Reconnect',
     connectionNeedsReconnectLoading: 'Connecting…',
     connectionDisconnectFailed: 'Failed to disconnect',
