@@ -53,7 +53,7 @@ function readVersion() {
     }
 }
 
-function resolveTarget() {
+function resolveNextBump() {
     if (/^\d+\.\d+\.\d+$/.test(bump) || /^v\d+\.\d+\.\d+$/.test(bump)) {
         return String(bump).replace(/^v/, '')
     }
@@ -63,6 +63,17 @@ function resolveTarget() {
     if (bump === 'minor') return `${m[1]}.${Number(m[2]) + 1}.0`
     if (bump === 'major') return `${Number(m[1]) + 1}.0.0`
     return `${m[1]}.${m[2]}.${Number(m[3]) + 1}`
+}
+
+/** Steps 3/4 tag the version already in the tree; 2/A compute next. */
+function resolveTarget(forStep) {
+    if (forStep === 'commit' || forStep === 'tag') {
+        if (/^\d+\.\d+\.\d+$/.test(bump) || /^v\d+\.\d+\.\d+$/.test(bump)) {
+            return String(bump).replace(/^v/, '')
+        }
+        return readVersion()
+    }
+    return resolveNextBump()
 }
 
 function pause(msg = '按回车返回菜单…') {
@@ -95,7 +106,7 @@ function line(ch = '─', n = 56) {
 
 function printMenu() {
     const ver = readVersion()
-    const target = resolveTarget()
+    const next = resolveNextBump()
     const branch = git(['branch', '--show-current']) || '?'
     const dirty = git(['status', '--porcelain'])
     const clean = !dirty
@@ -105,7 +116,8 @@ function printMenu() {
     console.log()
     console.log(`${c.bg}${c.white}${c.bold}  DataWise 发版助手  ${c.reset}`)
     console.log(`${c.dim}${line()}${c.reset}`)
-    console.log(`  当前版本   ${c.cyan}${ver}${c.reset}   →  目标 ${c.green}${c.bold}${target}${c.reset}  ${c.dim}(bump=${bump})${c.reset}`)
+    console.log(`  当前版本   ${c.cyan}${c.bold}${ver}${c.reset}   ${c.dim}(按 3/4 打 tag 用这个)${c.reset}`)
+    console.log(`  若再 bump  ${c.green}${next}${c.reset}   ${c.dim}(bump=${bump}，仅步骤 2 / A)${c.reset}`)
     console.log(`  最近 tag   ${c.dim}${tag}${c.reset}`)
     console.log(`  分支       ${branch}`)
     console.log(
@@ -113,19 +125,19 @@ function printMenu() {
     )
     if (!clean) {
         const n = dirty.split('\n').filter(Boolean).length
-        console.log(`  ${c.dim}          ${n} 个文件待处理 — 请先 commit 功能改动${c.reset}`)
+        console.log(`  ${c.dim}          ${n} 个文件待处理${c.reset}`)
     }
     console.log(`${c.dim}${line()}${c.reset}`)
     console.log()
     console.log(`  ${c.bold}按顺序执行${c.reset}`)
     console.log(`  ${c.cyan}1${c.reset}  检查工作区`)
-    console.log(`  ${c.cyan}2${c.reset}  提升版本号          ${c.dim}(不提交)${c.reset}`)
-    console.log(`  ${c.cyan}3${c.reset}  提交版本号          ${c.dim}chore(release)${c.reset}`)
-    console.log(`  ${c.cyan}4${c.reset}  push + 打 tag       ${c.dim}触发 CI 打包${c.reset}`)
+    console.log(`  ${c.cyan}2${c.reset}  提升版本号          ${c.dim}→ ${next}${c.reset}`)
+    console.log(`  ${c.cyan}3${c.reset}  提交版本号          ${c.dim}chore(release) ${ver}${c.reset}`)
+    console.log(`  ${c.cyan}4${c.reset}  push + 打 tag       ${c.dim}v${ver} → CI${c.reset}`)
     console.log(`  ${c.cyan}5${c.reset}  镜像到 CNB          ${c.dim}等 Release 产物齐${c.reset}`)
     console.log()
     console.log(`  ${c.bold}快捷${c.reset}`)
-    console.log(`  ${c.cyan}A${c.reset}  一键 2+3+4          ${c.dim}工作区须干净${c.reset}`)
+    console.log(`  ${c.cyan}A${c.reset}  一键 2+3+4          ${c.dim}工作区须干净 → ${next}${c.reset}`)
     console.log(`  ${c.cyan}B${c.reset}  改 bump             ${c.dim}patch / minor / major / 5.0.1${c.reset}`)
     console.log(`  ${c.cyan}0${c.reset}  刷新状态`)
     console.log(`  ${c.cyan}Q${c.reset}  退出`)
@@ -177,7 +189,8 @@ async function step1() {
 
 async function step2() {
     clear()
-    console.log(`\n${c.bold}[2] 提升版本号${c.reset}  bump=${bump} → ${resolveTarget()}\n`)
+    const target = resolveTarget('bump')
+    console.log(`\n${c.bold}[2] 提升版本号${c.reset}  bump=${bump} → ${target}\n`)
     const code = runNode([SHIP, '--bump', bump, '--step', 'bump'])
     console.log(code === 0 ? `\n${c.green}完成。下一步按 3。${c.reset}` : `\n${c.red}失败。${c.reset}`)
     await pause()
@@ -185,7 +198,8 @@ async function step2() {
 
 async function step3() {
     clear()
-    console.log(`\n${c.bold}[3] 提交版本号${c.reset}\n`)
+    const ver = resolveTarget('commit')
+    console.log(`\n${c.bold}[3] 提交版本号${c.reset}  ${ver}\n`)
     const code = runNode([SHIP, '--bump', bump, '--step', 'commit'])
     console.log(code === 0 ? `\n${c.green}完成。下一步按 4。${c.reset}` : `\n${c.red}失败（是否已执行第 2 步？）。${c.reset}`)
     await pause()
@@ -193,7 +207,7 @@ async function step3() {
 
 async function step4() {
     clear()
-    const target = resolveTarget()
+    const target = resolveTarget('tag')
     console.log(`\n${c.bold}[4] push + tag v${target}${c.reset}\n`)
     console.log('将 push 当前分支并推送 annotated tag，触发 GitHub Actions 打包。\n')
     const yn = await ask(`输入 ${c.green}Y${c.reset} 确认，其它取消: `)
@@ -219,8 +233,8 @@ async function step5() {
         console.log('请先设置后再试，例如：')
         console.log('  set CNB_TOKEN=你的令牌\n')
     }
-    let tag = await ask(`输入 tag（直接回车 = v${resolveTarget()}）: `)
-    if (!tag) tag = `v${resolveTarget()}`
+    let tag = await ask(`输入 tag（直接回车 = v${resolveTarget('tag')}）: `)
+    if (!tag) tag = `v${resolveTarget('tag')}`
     console.log(`\n将执行: npm run mirror:cnb -- --tag ${tag}\n`)
     const yn = await ask(`输入 ${c.green}Y${c.reset} 确认: `)
     if (yn.toLowerCase() !== 'y') {
@@ -241,8 +255,9 @@ async function step5() {
 
 async function stepAll() {
     clear()
+    const target = resolveTarget('bump')
     console.log(`\n${c.bold}[A] 一键 bump + commit + tag${c.reset}\n`)
-    console.log(`bump=${bump} → ${resolveTarget()}`)
+    console.log(`bump=${bump} → ${target}`)
     console.log('要求：工作区干净（功能改动已提交）。\n')
     const yn = await ask(`输入 ${c.green}Y${c.reset} 确认: `)
     if (yn.toLowerCase() !== 'y') {
@@ -266,7 +281,7 @@ async function changeBump() {
     console.log('可输入: patch / minor / major / 或具体版本如 5.0.1\n')
     const nb = await ask('新的 bump: ')
     if (nb) bump = nb
-    console.log(`已设为: ${bump} → 目标 ${resolveTarget()}`)
+    console.log(`已设为: ${bump} → 若 bump 则 ${resolveNextBump()}；打 tag 用当前 ${readVersion()}`)
     await pause('按回车…')
 }
 

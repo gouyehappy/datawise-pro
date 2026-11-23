@@ -120,15 +120,29 @@ function parseSemver(v) {
     return {major: +m[1], minor: +m[2], patch: +m[3], text: `${m[1]}.${m[2]}.${m[3]}`}
 }
 
+function isExplicitVersion(bump) {
+    return /^\d+\.\d+\.\d+$/.test(String(bump)) || /^v\d+\.\d+\.\d+$/.test(String(bump))
+}
+
 function nextVersion(current, bump) {
     const cur = parseSemver(current)
-    if (/^\d+\.\d+\.\d+$/.test(bump) || /^v\d+\.\d+\.\d+$/.test(bump)) {
+    if (isExplicitVersion(bump)) {
         return parseSemver(bump).text
     }
     if (bump === 'patch') return `${cur.major}.${cur.minor}.${cur.patch + 1}`
     if (bump === 'minor') return `${cur.major}.${cur.minor + 1}.0`
     if (bump === 'major') return `${cur.major + 1}.0.0`
     throw new Error(`--bump must be patch|minor|major|X.Y.Z (got ${bump || '(empty)'})`)
+}
+
+/**
+ * bump/all → compute next from --bump
+ * commit/tag → use workspace version (already bumped); do not patch again
+ */
+function resolveTargetVersion(current, bump, step) {
+    if (isExplicitVersion(bump)) return parseSemver(bump).text
+    if (step === 'commit' || step === 'tag') return current
+    return nextVersion(current, bump || 'patch')
 }
 
 function replaceOnce(file, pattern, replacement, label) {
@@ -247,8 +261,8 @@ function stepBump(version, dryRun) {
 function stepCommit(version, message, dryRun) {
     console.log(`\n[commit] chore(release): bump version to ${version}`)
     if (dryRun) return
-    // Stage typical release files; ignore unrelated dirt by requiring user clean-ish
-    git(['add',
+    // Only add paths that exist — one missing path makes the whole `git add` fail on Windows.
+    const candidates = [
         'package.json',
         'datawise-frontend/package.json',
         'datawise-frontend/package-lock.json',
@@ -258,7 +272,12 @@ function stepCommit(version, message, dryRun) {
         'datawise-desktop/src/main/java/org/apache/datawise/desktop/cef/CefRuntimeConfig.java',
         'datawise-frontend/src/features/layout/services/release-highlights.service.ts',
         'datawise-backend',
-    ], {allowFail: true})
+    ]
+    const toAdd = candidates.filter((p) => existsSync(join(ROOT, p)))
+    if (!toAdd.length) {
+        throw new Error('没有可提交的版本路径（仓库结构异常）')
+    }
+    git(['add', '--', ...toAdd])
     const staged = gitOut(['diff', '--cached', '--name-only'])
     if (!staged) {
         throw new Error('没有可提交的版本改动（是否已 bump？）')
@@ -326,11 +345,15 @@ async function main() {
 
     const current = readCurrentVersion()
     if (!args.bump) args.bump = 'patch'
-    const version = nextVersion(current, args.bump)
+    const version = resolveTargetVersion(current, args.bump, args.step)
     const tag = `v${version}`
 
     console.log('')
-    console.log(`当前 ${current} → 目标 ${version} (tag ${tag})`)
+    if (args.step === 'commit' || args.step === 'tag') {
+        console.log(`工作区版本 ${current} → 将使用 ${version} (tag ${tag})`)
+    } else {
+        console.log(`当前 ${current} → 目标 ${version} (tag ${tag})`)
+    }
     console.log(`步骤 ${args.step}`)
     console.log('')
 
@@ -343,7 +366,6 @@ async function main() {
         return
     }
     if (args.step === 'tag') {
-        // Ensure working tree version matches
         if (readCurrentVersion() !== version) {
             throw new Error(`工作区版本是 ${readCurrentVersion()}，与目标 ${version} 不一致。先 --step bump && commit`)
         }
