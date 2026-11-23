@@ -55,6 +55,7 @@
     "mirror:cnb": "node scripts/desktop/mirror-to-cnb.mjs",
     "ship:status": "node scripts/desktop/ship-release.mjs --step status",
     "ship:release": "node scripts/desktop/ship-release.mjs",
-    "ship:menu": "node scripts/desktop/ship-release-menu.mjs"
+    "ship:menu": "node scripts/desktop/ship-release-menu.mjs",
+    "menu": "node scripts/desktop/ship-release-menu.mjs"
   }
 }

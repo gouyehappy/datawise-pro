@@ -62,6 +62,7 @@ function parseArgs(argv) {
         remote: 'origin',
         message: '',
         dryRun: false,
+        noVerify: false,
     }
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i]
@@ -73,6 +74,7 @@ function parseArgs(argv) {
         else if (a === '--remote') out.remote = argv[++i]
         else if (a === '--message') out.message = argv[++i]
         else if (a === '--dry-run') out.dryRun = true
+        else if (a === '--no-verify') out.noVerify = true
         else if (a === '--help' || a === '-h') {
             printHelp()
             process.exit(0)
@@ -287,7 +289,7 @@ function stepCommit(version, message, dryRun) {
     git(['commit', '-m', msg], {stdio: 'inherit'})
 }
 
-function stepTag(version, remote, skipCiCheck, yes, dryRun) {
+function stepTag(version, remote, skipCiCheck, yes, dryRun, noVerify = false) {
     const tag = `v${version}`
     const branch = gitOut(['branch', '--show-current'])
     console.log(`\n[tag] ${tag} on branch ${branch}`)
@@ -308,16 +310,34 @@ function stepTag(version, remote, skipCiCheck, yes, dryRun) {
     }
 
     if (dryRun) {
-        console.log(`[dry-run] would: git push ${remote} ${branch}; git tag -a ${tag}; git push ${remote} ${tag}`)
+        console.log(
+            `[dry-run] would: git push${noVerify ? ' --no-verify' : ''} ${remote} ${branch}; git tag -a ${tag}; git push${noVerify ? ' --no-verify' : ''} ${remote} ${tag}`,
+        )
         return
     }
 
+    const pushExtra = noVerify ? ['--no-verify'] : []
+    if (noVerify) {
+        console.log('[tag] 使用 --no-verify（跳过 weekday pre-push hook）')
+    }
+
     console.log(`[tag] push ${remote} ${branch}…`)
-    git(['push', remote, `HEAD:refs/heads/${branch}`], {stdio: 'inherit'})
+    const pushBranch = git(
+        ['push', ...pushExtra, remote, `HEAD:refs/heads/${branch}`],
+        {stdio: 'inherit', allowFail: true},
+    )
+    if (pushBranch.status !== 0) {
+        throw new Error(
+            `git push 分支失败。若是工作日 hook：菜单选「紧急 push」或加 --no-verify`,
+        )
+    }
 
     git(['tag', '-a', tag, '-m', `Release ${version}`], {stdio: 'inherit'})
     console.log(`[tag] push ${remote} ${tag}…`)
-    git(['push', remote, tag], {stdio: 'inherit'})
+    const pushTag = git(['push', ...pushExtra, remote, tag], {stdio: 'inherit', allowFail: true})
+    if (pushTag.status !== 0) {
+        throw new Error(`git push tag 失败。本地 tag ${tag} 可能已创建；修好后: git push${noVerify ? ' --no-verify' : ''} ${remote} ${tag}`)
+    }
 
     console.log('')
     console.log('已推送 tag，GitHub Actions「Desktop release」应已开始。')
@@ -369,7 +389,7 @@ async function main() {
         if (readCurrentVersion() !== version) {
             throw new Error(`工作区版本是 ${readCurrentVersion()}，与目标 ${version} 不一致。先 --step bump && commit`)
         }
-        stepTag(version, args.remote, args.skipCiCheck, args.yes, args.dryRun)
+        stepTag(version, args.remote, args.skipCiCheck, args.yes, args.dryRun, args.noVerify)
         return
     }
     if (args.step === 'all') {
@@ -387,7 +407,7 @@ async function main() {
         }
         stepBump(version, args.dryRun)
         stepCommit(version, args.message, args.dryRun)
-        stepTag(version, args.remote, args.skipCiCheck, args.yes, args.dryRun)
+        stepTag(version, args.remote, args.skipCiCheck, args.yes, args.dryRun, args.noVerify)
         return
     }
     throw new Error(`unknown --step ${args.step}`)
