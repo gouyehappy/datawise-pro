@@ -194,11 +194,22 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
                 chrome.endDrag();
                 yield true;
             }
-            case "updater:checkForUpdates" -> updater.checkForUpdates();
+            case "updater:checkForUpdates" -> {
+                boolean force = false;
+                if (args.size() > 0 && args.get(0).isJsonObject()) {
+                    JsonObject opts = args.get(0).getAsJsonObject();
+                    force = opts.has("force") && opts.get("force").getAsBoolean();
+                }
+                yield updater.checkForUpdates(force);
+            }
             case "updater:downloadUpdate" -> updater.downloadUpdate();
             case "updater:quitAndInstall" -> {
-                boolean ok = updater.quitAndInstall();
-                if (ok) {
+                JsonObject installResult = updater.quitAndInstall();
+                boolean ok = installResult.has("ok") && installResult.get("ok").getAsBoolean();
+                boolean restartRequired = !installResult.has("restartRequired")
+                        || installResult.get("restartRequired").getAsBoolean();
+                // Frontend-only incremental apply reloads CEF in-process — do not exit.
+                if (ok && restartRequired) {
                     SwingUtilities.invokeLater(() -> {
                         quitting = true;
                         try {
@@ -208,7 +219,7 @@ public final class DesktopBridgeRouter extends CefMessageRouterHandlerAdapter {
                         System.exit(0);
                     });
                 }
-                yield ok;
+                yield installResult;
             }
             case "updater:setPreferences" -> {
                 if (args.size() > 0 && args.get(0).isJsonObject()) {

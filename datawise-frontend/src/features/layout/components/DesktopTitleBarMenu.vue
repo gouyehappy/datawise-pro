@@ -148,14 +148,24 @@ function openNewConsole() {
  */
 async function checkUpdate() {
     try {
-        const result = await updateSettings.runUpdateCheck()
+        const result = await updateSettings.runUpdateCheck({force: true})
         if (result?.hasUpdate) {
             layout.openSettingsModule('about')
+            const size = result.downloadBytes
+                ? `${Math.max(1, Math.round(result.downloadBytes / (1024 * 1024)))} MB`
+                : ''
+            const saved = result.savedBytes
+                ? `${Math.max(1, Math.round(result.savedBytes / (1024 * 1024)))} MB`
+                : ''
             layout.notifyQuiet({
                 category: 'system',
                 titleKey: 'updateAvailable',
-                bodyKey: 'updateAvailable',
-                params: {version: result.latestVersion || ''},
+                bodyKey: size ? 'updateAvailableIncremental' : 'updateAvailable',
+                params: {
+                    version: result.latestVersion || '',
+                    size,
+                    saved,
+                },
             })
             return
         }

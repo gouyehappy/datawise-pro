@@ -51,12 +51,72 @@ public final class DesktopServerJarUpdater {
             // Server jar fingerprint changed — drop AppCDS archive so the next launch
             // does not load a stale shared archive (JVM would fail-open, but avoid ClassVerify noise).
             invalidateAppCdsBeside(target);
+            // Also mirror into backend/ when the live jar lives under app/ (jpackage).
+            mirrorServerJar(target);
+            if (!writeLocalVersionFromStaging(archive)) {
+                // Zip had no manifest — still stamp components.serverJar so the next check
+                // does not keep offering the same server pack.
+                try {
+                    String sha = DesktopUpdaterService.sha256Hex(target);
+                    DesktopLocalVersion.patchComponentSha("serverJar", sha, Files.size(target));
+                } catch (Exception ignored) {
+                }
+            }
             return target;
         } catch (Exception e) {
             if (Files.isRegularFile(backup) && !Files.isRegularFile(target)) {
                 Files.move(backup, target, StandardCopyOption.REPLACE_EXISTING);
             }
             throw e;
+        }
+    }
+
+    private static void mirrorServerJar(Path written) {
+        try {
+            Path install = DesktopPaths.installRoot();
+            Path backend = install.resolve("backend").resolve("datawise-server.jar");
+            if (!written.toAbsolutePath().normalize().equals(backend.toAbsolutePath().normalize())
+                    && Files.isDirectory(backend.getParent())) {
+                Files.copy(written, backend, StandardCopyOption.REPLACE_EXISTING);
+            }
+            Path app = install.resolve("app").resolve("datawise-server.jar");
+            if (!written.toAbsolutePath().normalize().equals(app.toAbsolutePath().normalize())
+                    && Files.isDirectory(app.getParent())) {
+                Files.copy(written, app, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Prefer the full manifest shipped inside the server-jar zip when present. */
+    private static boolean writeLocalVersionFromStaging(Path archive) {
+        try {
+            String lower = archive.getFileName().toString().toLowerCase(Locale.ROOT);
+            if (!lower.endsWith(".zip")) {
+                return false;
+            }
+            Path work = DesktopPaths.userDataDir().resolve("updates").resolve("server-jar-apply");
+            Path manifest = work.resolve("local_version.json");
+            if (!Files.isRegularFile(manifest)) {
+                return false;
+            }
+            byte[] bytes = Files.readAllBytes(manifest);
+            for (Path candidate : DesktopUpdaterService.localVersionCandidates()) {
+                Path parent = candidate.getParent();
+                if (parent == null || !Files.isDirectory(parent)) {
+                    continue;
+                }
+                Files.write(candidate, bytes);
+            }
+            Path install = DesktopPaths.installRoot().resolve("local_version.json");
+            try {
+                Files.createDirectories(install.getParent());
+                Files.write(install, bytes);
+            } catch (Exception ignored) {
+            }
+            return true;
+        } catch (Exception ignored) {
+            return false;
         }
     }
 

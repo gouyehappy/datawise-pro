@@ -95,7 +95,9 @@ public final class DesktopBridgeScript {
                     },
                     _ackSessionFlush: function () { return invoke('app:sessionFlushed'); },
                     updater: {
-                      checkForUpdates: function () { return invoke('updater:checkForUpdates'); },
+                      checkForUpdates: function (opts) {
+                        return invoke('updater:checkForUpdates', opts ? [opts] : []);
+                      },
                       downloadUpdate: function () { return invoke('updater:downloadUpdate'); },
                       quitAndInstall: function () { return invoke('updater:quitAndInstall'); },
                       setPreferences: function (prefs) { return invoke('updater:setPreferences', [prefs]); },

@@ -51,6 +51,10 @@
     "check:connection-capabilities": "node scripts/generate-connection-capabilities.mjs --check",
     "clean:dwp-staging": "node scripts/clean-dwp-staging.mjs",
     "ensure:sql-editor": "npm run ensure:sql-editor --prefix datawise-frontend",
-    "dev:frontend": "npm run dev --prefix datawise-frontend"
+    "dev:frontend": "npm run dev --prefix datawise-frontend",
+    "mirror:cnb": "node scripts/desktop/mirror-to-cnb.mjs",
+    "ship:status": "node scripts/desktop/ship-release.mjs --step status",
+    "ship:release": "node scripts/desktop/ship-release.mjs",
+    "ship:menu": "node scripts/desktop/ship-release-menu.mjs"
   }
 }
