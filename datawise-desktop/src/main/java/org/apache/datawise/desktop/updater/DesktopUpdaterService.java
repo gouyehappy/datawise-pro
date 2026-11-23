@@ -38,7 +38,7 @@ import java.util.regex.Pattern;
  */
 public final class DesktopUpdaterService {
     /** Build-time fallback when {@code local_version.json} is absent (dev / unpackaged). */
-    public static final String CURRENT_VERSION = "5.0.0";
+    public static final String CURRENT_VERSION = "5.0.1";
 
     private static final String DEFAULT_GITHUB_SLUG = "gouyehappy/datawise-cli";
     private static final Pattern GITHUB_SLUG_PATTERN = Pattern.compile("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$");

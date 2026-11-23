@@ -1,6 +1,6 @@
 {
   "name": "datawise-monorepo",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "private": true,
   "description": "DataWise monorepo — 常用命令入口（详见 npm run help）",
   "workspaces": [

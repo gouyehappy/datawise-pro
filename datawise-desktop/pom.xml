@@ -6,7 +6,7 @@
 
     <groupId>org.apache.datawise</groupId>
     <artifactId>datawise-desktop</artifactId>
-    <version>5.0.0</version>
+    <version>5.0.1</version>
     <packaging>jar</packaging>
     <name>datawise-desktop</name>
     <description>DataWise desktop UI (JetBrains JCEF) — same JVM as Spring Boot when packaged</description>
