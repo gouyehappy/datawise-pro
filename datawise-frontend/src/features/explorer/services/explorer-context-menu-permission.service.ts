@@ -40,6 +40,8 @@ const EXPLORER_CONTEXT_MENU_PERMISSION_BY_ID: Record<string, FeaturePermissionKe
     'move-project-file': FeaturePermission.WorkbenchExplorerContextEdit,
     'delete-project-file': FeaturePermission.WorkbenchExplorerContextEdit,
     'refresh-project-files': FeaturePermission.WorkbenchExplorerContextOpen,
+    'share-project-folder': FeaturePermission.WorkbenchExplorerContextEdit,
+    'unshare-project-folder': FeaturePermission.WorkbenchExplorerContextEdit,
 
     console: FeaturePermission.WorkbenchExplorerContextConsole,
     'ask-ai': FeaturePermission.NavAi,
@@ -81,6 +83,7 @@ const EXPLORER_CONTEXT_MENU_PERMISSION_BY_ID: Record<string, FeaturePermissionKe
     'backup-wizard': FeaturePermission.WorkbenchExplorerContextExport,
     'export-structure': FeaturePermission.WorkbenchExplorerContextExport,
     'export-all': FeaturePermission.WorkbenchExplorerContextExport,
+    'generate-data': FeaturePermission.WorkbenchExplorerContextExport,
     import: FeaturePermission.WorkbenchExplorerContextExport,
     'migrate-data': FeaturePermission.WorkbenchExplorerContextExport,
     'export-data': FeaturePermission.WorkbenchExplorerContextExport,

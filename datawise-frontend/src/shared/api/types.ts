@@ -1570,7 +1570,7 @@ export interface ExplorerApi {
         deploymentName: string,
     ): Promise<import('@/shared/api/k8s.types').K8sMutationResult>
 
-    fetchConnection(connectionId: string): Promise<ConnectionConfig>
+    fetchConnection(connectionId: string, options?: { silent?: boolean }): Promise<ConnectionConfig>
 
     connectConnection(connectionId: string): Promise<ConnectionTestResult>
 

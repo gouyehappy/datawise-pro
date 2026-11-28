@@ -167,13 +167,19 @@ export const useLayoutStore = defineStore('layout', () => {
         }
     }
 
+    function resolveSettingsSection(section: SettingsSection): SettingsSection {
+        // 配置云同步已并入配置迁移
+        return section === 'configCloudSync' ? 'configPortability' : section
+    }
+
     function openSettingsModule(section: SettingsSection = 'basic', anchor?: string) {
-        if (!canOpenSettingsSection(section)) return
-        if (section === 'backupCenter' && !useEntitlementStore().guardPack('pack.backup', 'settings.backup')) {
+        const resolved = resolveSettingsSection(section)
+        if (!canOpenSettingsSection(resolved)) return
+        if (resolved === 'backupCenter' && !useEntitlementStore().guardPack('pack.backup', 'settings.backup')) {
             return
         }
         showProfileMenu.value = false
-        settingsSection.value = section
+        settingsSection.value = resolved
         settingsScrollAnchor.value = anchor ?? null
         activeModule.value = 'settings'
     }
@@ -183,7 +189,7 @@ export const useLayoutStore = defineStore('layout', () => {
     }
 
     function setSettingsSection(section: SettingsSection) {
-        settingsSection.value = section
+        settingsSection.value = resolveSettingsSection(section)
     }
 
     function toggleProfileMenu() {

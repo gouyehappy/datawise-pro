@@ -39,7 +39,15 @@ public class JdbcTransactionExecutor {
     public SqlSessionStatus rollback(ManagedSession session) throws SQLException {
         session.lock.lock();
         try {
-            session.connection.rollback();
+            try {
+                if (session.connection != null) {
+                    session.connection.rollback();
+                }
+            } catch (SQLException ignored) {
+                // Trino aborted/expired txns reject further commands ("Unknown transaction ID").
+                // Drop the dead JDBC connection; next execute will open a fresh one.
+                connectionSupport.closeSessionConnection(session);
+            }
             session.pending = false;
             return session.toStatus();
         } finally {

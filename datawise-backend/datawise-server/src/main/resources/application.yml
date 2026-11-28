@@ -53,8 +53,9 @@ datawise:
     auto-claim-tenant-pro-trial: false
     # §1.3 云端新租户 Pro 试用天数（application-cloud.yml 同步 14）
     tenant-pro-trial-days: 14
-    # 生产环境务必覆盖；空白密钥不再静默回退到此默认值
-    signing-secret: datawise-dev-pack-signing-secret-change-me
+    # Local/CI default only (open mode). Override via DATAWISE_ENTITLEMENT_SIGNING_SECRET.
+    # Cloud/enforced refuses this public default (EntitlementSigningSecretValidator fail-fast).
+    signing-secret: ${DATAWISE_ENTITLEMENT_SIGNING_SECRET:datawise-dev-pack-signing-secret-change-me}
     watermark-enabled: true
     watermark-text: ""
     # 留空关闭公证心跳；生产可指向 license 网关
@@ -172,12 +173,13 @@ datawise:
     # 服务端默认最大返回行数；0 表示不设默认上限（仍受 absolute-max-result-rows 约束）
     max-result-rows: 10000
     # 交互 SQL 物化绝对上限（即使 max-result-rows=0 也会生效）；0 仅建议本地调试
-    absolute-max-result-rows: 100000
+    # Aligned with JdbcResultSetMapper.SAFETY_MAX_ROWS (DB-12)
+    absolute-max-result-rows: 20000
     # 游标 / 表分页 OFFSET 上限，避免深 OFFSET 全表扫描；0 = 不限制
     max-cursor-offset: 100000
     # 结果游标存储：in-memory（进程内）| jdbc（共享 dw_sql_cursors，需 storage.backend=jdbc；cloud 默认 jdbc）
     cursor-store-type: in-memory
-    # JDBC Statement.setQueryTimeout（秒）；0 表示不限制。默认 5 分钟防挂死查询（cloud 同为 300）。
+    # JDBC Statement.setQueryTimeout（秒）；0 表示不限制（仅显式关闭）。默认 5 分钟；代码缺省 60s（DB-06）。
     timeout-seconds: 300
     # 交互 SQL 进程内并发上限；0 = 不限制。控制台执行与游标续页共用。
     max-concurrent-global: 64

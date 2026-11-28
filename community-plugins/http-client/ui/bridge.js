@@ -9,6 +9,7 @@
   const MAX_INVOKE_TIMEOUT = 120000;
   const PROGRESS_LISTENERS = new Set();
   const STREAM_LISTENERS = new Set();
+  const WORKFLOW_LISTENERS = new Set();
 
   let backendReady = false;
   let backendError = "";
@@ -61,6 +62,11 @@
         }
         if (method === "stream/open" || method === "stream/message" || method === "stream/close" || method === "stream/error") {
           STREAM_LISTENERS.forEach((listener) => {
+            try { listener(method, params); } catch (error) { /* ignore */ }
+          });
+        }
+        if (method === "workflow/progress" || method === "workflow/variables") {
+          WORKFLOW_LISTENERS.forEach((listener) => {
             try { listener(method, params); } catch (error) { /* ignore */ }
           });
         }
@@ -160,6 +166,11 @@
     return () => STREAM_LISTENERS.delete(listener);
   }
 
+  function onWorkflow(listener) {
+    WORKFLOW_LISTENERS.add(listener);
+    return () => WORKFLOW_LISTENERS.delete(listener);
+  }
+
   function requireBackend() {
     if (!plugin) throw new Error(HC.i18n.t("err.backendHint"));
     return plugin;
@@ -195,6 +206,29 @@
     } catch (error) {
       return { ok: false };
     }
+  }
+
+  async function workflowStart(params) {
+    return invoke("workflow/start", params || {}, 30000);
+  }
+
+  async function workflowStop(runId) {
+    return invoke("workflow/stop", { runId: runId || "" }, 10000);
+  }
+
+  async function workflowStatus() {
+    return invoke("workflow/status", {}, 10000);
+  }
+
+  async function workflowPause(runId, paused) {
+    return invoke("workflow/pause", { runId: runId || "", paused: !!paused }, 10000);
+  }
+
+  async function workflowSetInterval(runId, intervalMs) {
+    return invoke("workflow/setInterval", {
+      runId: runId || "",
+      intervalMs: Number(intervalMs) || 0
+    }, 10000);
   }
 
   async function cancel(requestId) {
@@ -253,12 +287,18 @@
     onEnv,
     onProgress,
     onStream,
+    onWorkflow,
     notifyLocale,
     invoke,
     send,
     streamOpen,
     streamSend,
     streamClose,
+    workflowStart,
+    workflowStop,
+    workflowStatus,
+    workflowPause,
+    workflowSetInterval,
     cancel,
     readBody,
     saveBody,

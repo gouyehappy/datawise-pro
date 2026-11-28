@@ -33,9 +33,21 @@ node community-plugins/http-client/package.mjs --sign-key-file .signing/keys.jso
 Output (current OS/arch):
 
 ```text
-community-plugins/http-client/dist/io.datawise.community.httpclient-0.1.0-<os-arch>.dwp
-community-plugins/http-client/dist/io.datawise.community.httpclient-0.1.0-<os-arch>-signed.dwp
+community-plugins/http-client/dist/io.datawise.community.httpclient-0.2.22-<os-arch>.dwp
+community-plugins/http-client/dist/io.datawise.community.httpclient-0.2.22-<os-arch>-signed.dwp
 ```
+
+## Folder workflow (Run)
+
+Right-click a collection **folder** → **运行文件夹…** / **Run folder…**.
+
+- Modes: once / N rounds / forever (sidecar loop + interval)
+- Steps run in tree order; environment variables are shared across steps
+- Pre/post scripts run in the sidecar (`pm` / `apt`), so token extract → next step works while looping
+- Pre-script may mutate the outgoing request: `pm.request.body.update(...)`, `pm.request.headers.set(k, v)`
+- Optional auth step: on HTTP 401, re-run that step once then retry the failed step
+- Per-step run policy: **every round** vs **first round only** (login/token); order = folder drag order
+- Stop from the run panel; reopening the workbench can resume viewing via `workflow/status`
 
 ### Sign / trust (no allow-unsigned needed)
 

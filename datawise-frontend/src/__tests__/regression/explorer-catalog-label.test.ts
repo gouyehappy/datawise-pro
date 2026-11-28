@@ -51,11 +51,17 @@ describe('explorer-catalog-label', () => {
         )
     })
 
-    test('marks models/workspaces/ai as extension folders', () => {
+    test('marks models/workspaces as extension folders; scripts/ai stay regular', () => {
         assert.equal(isExplorerExtensionCatalogFolder({type: 'folder', label: 'models'}), true)
         assert.equal(isExplorerExtensionCatalogFolder({type: 'folder', label: 'workspaces'}), true)
-        assert.equal(isExplorerExtensionCatalogFolder({type: 'folder', label: 'ai'}), true)
+        assert.equal(isExplorerExtensionCatalogFolder({type: 'folder', label: 'ai'}), false)
+        assert.equal(isExplorerExtensionCatalogFolder({type: 'folder', label: 'scripts'}), false)
         assert.equal(isExplorerExtensionCatalogFolder({type: 'folder', label: 'tables'}), false)
         assert.equal(isExplorerExtensionCatalogFolder({type: 'folder', label: 'views'}), false)
+    })
+
+    test('scripts folder always displays as scripts', () => {
+        const scripts: TreeNode = {id: 's1', label: 'scripts', type: 'folder'}
+        assert.equal(resolveExplorerCatalogLabel(scripts, t), 'scripts')
     })
 })

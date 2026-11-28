@@ -19,6 +19,10 @@ public final class CatalogSchemaSession {
                              Connection connection,
                              CatalogSchemaScope scope,
                              CatalogSwitcher catalogSwitcher) throws SQLException {
+        // Connection-level scripts / AI folders are workspace keys, not JDBC catalogs.
+        if (scope.isConnectionScripts() || scope.isConnectionPlatform()) {
+            return;
+        }
         if (scope.catalog() != null && !scope.catalog().isBlank()) {
             catalogSwitcher.apply(connection, scope.catalog());
         }
@@ -28,6 +32,9 @@ public final class CatalogSchemaSession {
     }
 
     public static boolean isApplied(Connection connection, CatalogSchemaScope scope) throws SQLException {
+        if (scope.isConnectionScripts() || scope.isConnectionPlatform()) {
+            return true;
+        }
         if (scope.catalog() != null && !scope.catalog().isBlank()
                 && !equalsIgnoreCase(scope.catalog(), connection.getCatalog())) {
             return false;

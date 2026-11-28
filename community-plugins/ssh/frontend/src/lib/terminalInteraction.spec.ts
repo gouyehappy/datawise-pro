@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAcceptTerminalDrop, isApplePlatform, isTerminalSelectAllShortcut, normalizeDropTargetDir, resolveTerminalKeyAction, resolveTerminalRightClickAction, sanitizeClickCursorEnabled, sanitizeSearchOptions, sanitizeSelectCopyEnabled, terminalSearchSeedFromSelection } from "./terminalInteraction";
+import { canAcceptTerminalDrop, isApplePlatform, isTerminalSelectAllShortcut, normalizeDropTargetDir, resolveTerminalKeyAction, resolveTerminalMottyMenuShortcut, resolveTerminalRightClickAction, sanitizeClickCursorEnabled, sanitizeSearchOptions, sanitizeSelectCopyEnabled, terminalMottyShortcutLabels, terminalSearchSeedFromSelection } from "./terminalInteraction";
 
 describe("terminal interaction preferences (select-to-copy / right-click-paste)", () => {
   it("defaults select-to-copy to enabled and only honors an explicit 'false'", () => {
@@ -15,14 +15,11 @@ describe("terminal interaction preferences (select-to-copy / right-click-paste)"
     expect(sanitizeClickCursorEnabled("false")).toBe(false);
   });
 
-  it("opens the menu when there is a selection, even with copy-on-select paste mode", () => {
+  it("always opens the Motty-style menu (paste is a menu item / Ctrl+V)", () => {
     expect(resolveTerminalRightClickAction({ selectCopy: true, shiftKey: false, hasSelection: true })).toBe("menu");
-    // Empty-area right-click still quick-pastes when the mode is on.
-    expect(resolveTerminalRightClickAction({ selectCopy: true, shiftKey: false, hasSelection: false })).toBe("paste");
-    expect(resolveTerminalRightClickAction({ selectCopy: true, shiftKey: false })).toBe("paste");
-    // Shift+right-click keeps the context menu reachable even in paste mode.
+    expect(resolveTerminalRightClickAction({ selectCopy: true, shiftKey: false, hasSelection: false })).toBe("menu");
+    expect(resolveTerminalRightClickAction({ selectCopy: true, shiftKey: false })).toBe("menu");
     expect(resolveTerminalRightClickAction({ selectCopy: true, shiftKey: true })).toBe("menu");
-    // Mode off: right-click always opens the menu.
     expect(resolveTerminalRightClickAction({ selectCopy: false, shiftKey: false })).toBe("menu");
     expect(resolveTerminalRightClickAction({ selectCopy: false, shiftKey: true })).toBe("menu");
   });
@@ -69,6 +66,40 @@ describe("terminal keyboard shortcuts (copy/paste routing)", () => {
     expect(resolveTerminalKeyAction({ mod: true, shiftKey: false, key: "v", hasSelection: false })).toBe("paste");
     expect(resolveTerminalKeyAction({ mod: true, shiftKey: true, key: "V", hasSelection: false })).toBe("paste");
     expect(resolveTerminalKeyAction({ mod: false, shiftKey: true, key: "v", hasSelection: false })).toBe("none");
+  });
+});
+
+describe("Motty menu shortcut chords", () => {
+  const win = { ctrlKey: true, metaKey: false, altKey: false, applePlatform: false };
+  const mac = { ctrlKey: false, metaKey: true, altKey: false, applePlatform: true };
+
+  it("maps Win/Linux clear + split chords", () => {
+    expect(resolveTerminalMottyMenuShortcut({ ...win, shiftKey: false, key: "k" })).toBe("clear");
+    expect(resolveTerminalMottyMenuShortcut({ ...win, shiftKey: true, key: "d" })).toBe("split-right");
+    expect(resolveTerminalMottyMenuShortcut({ ...win, shiftKey: true, key: "e" })).toBe("split-down");
+    expect(resolveTerminalMottyMenuShortcut({ ...win, shiftKey: true, key: "p" })).toBe("none");
+    expect(resolveTerminalMottyMenuShortcut({ ...win, shiftKey: false, key: "d" })).toBe("none");
+  });
+
+  it("maps macOS Motty split chords (⌘D / ⌘⇧D) and clear", () => {
+    expect(resolveTerminalMottyMenuShortcut({ ...mac, shiftKey: false, key: "k" })).toBe("clear");
+    expect(resolveTerminalMottyMenuShortcut({ ...mac, shiftKey: false, key: "d" })).toBe("split-right");
+    expect(resolveTerminalMottyMenuShortcut({ ...mac, shiftKey: true, key: "d" })).toBe("split-down");
+    expect(resolveTerminalMottyMenuShortcut({ ...mac, shiftKey: true, key: "e" })).toBe("none");
+  });
+
+  it("ignores Alt and leaves copy/paste/select-all chords alone", () => {
+    expect(resolveTerminalMottyMenuShortcut({ ...win, shiftKey: false, altKey: true, key: "k" })).toBe("none");
+    expect(resolveTerminalMottyMenuShortcut({ ...win, shiftKey: true, key: "a" })).toBe("none");
+    expect(resolveTerminalMottyMenuShortcut({ ...win, shiftKey: false, key: "c" })).toBe("none");
+    expect(resolveTerminalMottyMenuShortcut({ ...win, shiftKey: false, key: "v" })).toBe("none");
+  });
+
+  it("formats Motty-style menu labels per platform", () => {
+    expect(terminalMottyShortcutLabels(false).splitRight).toBe("Ctrl Shift D");
+    expect(terminalMottyShortcutLabels(false).history).toBe("Ctrl Shift H");
+    expect(terminalMottyShortcutLabels(true).splitRight).toBe("⌘ D");
+    expect(terminalMottyShortcutLabels(true).splitDown).toBe("⌘ Shift D");
   });
 });
 

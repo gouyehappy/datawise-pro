@@ -27,7 +27,7 @@ public class JdbcStatementExecutor {
 
     public JdbcStatementExecutor(
             JdbcPoolProperties poolProperties,
-            @Value("${datawise.query.timeout-seconds:0}") int queryTimeoutSeconds
+            @Value("${datawise.query.timeout-seconds:60}") int queryTimeoutSeconds
     ) {
         this.poolProperties = poolProperties != null ? poolProperties : new JdbcPoolProperties();
         this.queryTimeoutSeconds = Math.max(0, queryTimeoutSeconds);

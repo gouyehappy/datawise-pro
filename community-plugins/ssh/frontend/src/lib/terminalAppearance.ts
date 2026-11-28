@@ -35,6 +35,12 @@ export const CUSTOM_THEME_LIMIT = 30;
 
 export type TerminalCursorStyle = "bar" | "block" | "underline";
 export type TerminalCursorInactiveStyle = "outline" | "block" | "bar" | "underline" | "none";
+/** Motty intenseTextStyle: how SGR bold is rendered. */
+export type TerminalIntenseMode = "both" | "bright" | "bold" | "plain";
+/** Approximate bar cursor thickness via CSS (xterm has no thickness option). */
+export type TerminalCursorThickness = "thin" | "normal" | "thick";
+
+export const FONT_FALLBACK_LIMIT = 5;
 
 export interface TerminalAppearanceSettings {
   /** 配色来源：host=跟随 DBX 宿主色板（默认）；custom=用下方两槽方案。 */
@@ -60,7 +66,16 @@ export interface TerminalAppearanceSettings {
   cursorStyle: TerminalCursorStyle;
   cursorBlink: boolean;
   cursorInactiveStyle: TerminalCursorInactiveStyle;
-  /** 粗体优先用亮色 ANSI（xterm 默认开）。 */
+  /** Motty-style bold rendering; drives drawBoldTextInBrightColors + bold weight. */
+  intenseMode: TerminalIntenseMode;
+  /** Approximate bar cursor width (CSS). Block/underline may ignore. */
+  cursorThickness: TerminalCursorThickness;
+  /**
+   * Ordered system monospace fallbacks (CJK etc.). Applied only when a custom
+   * primary family is set; host-follow mode leaves the host stack alone.
+   */
+  fontFallbacks: string[];
+  /** 粗体优先用亮色 ANSI（xterm 默认开）。Derived from intenseMode when sanitizing. */
   drawBoldTextInBrightColors: boolean;
   /** 最小对比度（1-21）：xterm 会据此微调前景色保证可读（1 = 关闭）。 */
   minimumContrastRatio: number;
@@ -103,9 +118,89 @@ export const DEFAULT_TERMINAL_APPEARANCE_SETTINGS: TerminalAppearanceSettings = 
   cursorStyle: "bar",
   cursorBlink: true,
   cursorInactiveStyle: "outline",
+  // Motty default intenseBoth ≈ bright + bold face.
+  intenseMode: "both",
+  cursorThickness: "normal",
+  fontFallbacks: [],
   drawBoldTextInBrightColors: true,
   minimumContrastRatio: 1,
 };
+
+export function sanitizeIntenseMode(raw: unknown, drawBoldFallback?: boolean): TerminalIntenseMode {
+  if (raw === "both" || raw === "bright" || raw === "bold" || raw === "plain") return raw;
+  // Legacy boolean only: true → both (historical bright+bold), false → bold face only.
+  return drawBoldFallback === false ? "bold" : "both";
+}
+
+export function sanitizeCursorThickness(raw: unknown): TerminalCursorThickness {
+  return raw === "thin" || raw === "thick" || raw === "normal" ? raw : "normal";
+}
+
+/** CSS pixel width for bar cursor approximation. */
+export function cursorThicknessCss(thickness: TerminalCursorThickness): string {
+  switch (thickness) {
+    case "thin":
+      return "1px";
+    case "thick":
+      return "3px";
+    default:
+      return "2px";
+  }
+}
+
+export function sanitizeFontFallbacks(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const trimmed = item.trim().replace(/[;"'<>\\]/g, "");
+    if (!trimmed || trimmed.toLowerCase() === "monospace") continue;
+    if (out.some((existing) => existing.toLowerCase() === trimmed.toLowerCase())) continue;
+    out.push(trimmed.slice(0, 64));
+    if (out.length >= FONT_FALLBACK_LIMIT) break;
+  }
+  return out;
+}
+
+/** Quote a font family token for CSS font-family lists. */
+export function quoteFontFamily(family: string): string {
+  const trimmed = family.trim();
+  if (!trimmed) return "";
+  if (/^[a-zA-Z0-9-]+$/.test(trimmed)) return trimmed;
+  return `"${trimmed.replace(/"/g, "")}"`;
+}
+
+/** Compose primary + fallbacks + monospace for xterm options.fontFamily. */
+export function composeFontFamilyStack(primary: string, fallbacks: readonly string[]): string {
+  const parts: string[] = [];
+  for (const family of [primary, ...fallbacks]) {
+    const quoted = quoteFontFamily(family);
+    if (!quoted) continue;
+    if (parts.some((existing) => existing.toLowerCase() === quoted.toLowerCase())) continue;
+    parts.push(quoted);
+  }
+  if (!parts.some((part) => part.toLowerCase() === "monospace")) parts.push("monospace");
+  return parts.join(", ");
+}
+
+/** Map Motty intense mode onto xterm bold/bright options. */
+export function intenseToTerminalOptions(
+  mode: TerminalIntenseMode,
+  settings: Pick<TerminalAppearanceSettings, "fontWeight" | "fontWeightBold">,
+): { drawBoldTextInBrightColors: boolean; fontWeightBold: number } {
+  const normal = settings.fontWeight ?? 400;
+  const bold = settings.fontWeightBold ?? 700;
+  switch (mode) {
+    case "bright":
+      return { drawBoldTextInBrightColors: true, fontWeightBold: normal };
+    case "bold":
+      return { drawBoldTextInBrightColors: false, fontWeightBold: bold };
+    case "plain":
+      return { drawBoldTextInBrightColors: false, fontWeightBold: normal };
+    default:
+      return { drawBoldTextInBrightColors: true, fontWeightBold: bold };
+  }
+}
 
 /** 内置预设主题：可直接套用的几套成品配置（对标 Tabby 的「配色 + 字体」组合）。 */
 export const TERMINAL_APPEARANCE_PRESETS: readonly TerminalAppearanceProfile[] = [
@@ -220,13 +315,17 @@ export function sanitizeAppearanceSettings(raw: unknown): TerminalAppearanceSett
     ? (record.cursorInactiveStyle as TerminalCursorInactiveStyle)
     : "outline";
   const ratio = clampNumber(record.minimumContrastRatio, 1, 21);
+  const fontWeight = clampNumber(record.fontWeight, 100, 900, true);
+  const fontWeightBold = clampNumber(record.fontWeightBold, 100, 900, true);
+  const intenseMode = sanitizeIntenseMode(record.intenseMode, record.drawBoldTextInBrightColors !== false);
+  const intense = intenseToTerminalOptions(intenseMode, { fontWeight, fontWeightBold });
   return {
     schemeSource,
     darkSchemeId: optionalString(record.darkSchemeId),
     lightSchemeId: optionalString(record.lightSchemeId),
     backgroundSource,
-    fontWeight: clampNumber(record.fontWeight, 100, 900, true),
-    fontWeightBold: clampNumber(record.fontWeightBold, 100, 900, true),
+    fontWeight,
+    fontWeightBold,
     lineHeight: clampNumber(record.lineHeight, 1, 3),
     letterSpacing: clampNumber(record.letterSpacing, -5, 10, true),
     paddingX: clampNumber(record.paddingX, 0, 32, true),
@@ -234,7 +333,10 @@ export function sanitizeAppearanceSettings(raw: unknown): TerminalAppearanceSett
     cursorStyle,
     cursorBlink: record.cursorBlink !== false,
     cursorInactiveStyle,
-    drawBoldTextInBrightColors: record.drawBoldTextInBrightColors !== false,
+    intenseMode,
+    cursorThickness: sanitizeCursorThickness(record.cursorThickness),
+    fontFallbacks: sanitizeFontFallbacks(record.fontFallbacks),
+    drawBoldTextInBrightColors: intense.drawBoldTextInBrightColors,
     minimumContrastRatio: ratio ?? 1,
   };
 }
@@ -423,15 +525,16 @@ export const TERMINAL_OPTION_DEFAULTS: TerminalOptionPatch = {
 
 /** 偏好 → xterm 选项补丁：null 字段落回既有默认（1.15 行高、bar 光标等）。 */
 export function terminalOptionPatch(settings: TerminalAppearanceSettings): TerminalOptionPatch {
+  const intense = intenseToTerminalOptions(settings.intenseMode, settings);
   return {
     fontWeight: settings.fontWeight ?? TERMINAL_OPTION_DEFAULTS.fontWeight,
-    fontWeightBold: settings.fontWeightBold ?? TERMINAL_OPTION_DEFAULTS.fontWeightBold,
+    fontWeightBold: intense.fontWeightBold,
     lineHeight: settings.lineHeight ?? TERMINAL_OPTION_DEFAULTS.lineHeight,
     letterSpacing: settings.letterSpacing ?? TERMINAL_OPTION_DEFAULTS.letterSpacing,
     cursorStyle: settings.cursorStyle,
     cursorBlink: settings.cursorBlink,
     cursorInactiveStyle: settings.cursorInactiveStyle,
-    drawBoldTextInBrightColors: settings.drawBoldTextInBrightColors,
+    drawBoldTextInBrightColors: intense.drawBoldTextInBrightColors,
     minimumContrastRatio: settings.minimumContrastRatio,
   };
 }
@@ -463,10 +566,17 @@ export function appearanceProfileEquals(a: TerminalAppearanceProfile, b: Termina
     && settingsEqual(a.settings, b.settings);
 }
 
-/** 设置深比较（字段少且扁平，逐键比较即可）。 */
+/** 设置深比较（字段少且扁平；fontFallbacks 按序比较）。 */
 export function settingsEqual(a: TerminalAppearanceSettings, b: TerminalAppearanceSettings): boolean {
   return (Object.keys(DEFAULT_TERMINAL_APPEARANCE_SETTINGS) as Array<keyof TerminalAppearanceSettings>)
-    .every((key) => a[key] === b[key]);
+    .every((key) => {
+      if (key === "fontFallbacks") {
+        const left = a.fontFallbacks;
+        const right = b.fontFallbacks;
+        return left.length === right.length && left.every((item, index) => item === right[index]);
+      }
+      return a[key] === b[key];
+    });
 }
 
 /** 主题列表：内置预设在前，用户主题在后（同名不合并，用户可覆盖预设意图）。 */

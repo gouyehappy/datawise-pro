@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "io.datawise.community.ssh",
   "name": "SSH Terminal",
-  "version": "0.7.11-beta.17",
+  "version": "0.7.11-beta.49",
   "publisher": "datawise-community",
   "description": "SSH terminal, SFTP, and remote operations.",
   "license": "MIT",
@@ -778,6 +778,24 @@
       "label": "SSH Terminal",
       "description": "SSH workbench",
       "icon": "assets/plugin.svg"
+    },
+    {
+      "type": "workbench",
+      "id": "io.datawise.community.ssh.monitor",
+      "label": "Monitor",
+      "description": "Live resource monitor for multiple SSH servers, grouped and colour-coded.",
+      "icon": "assets/plugin.svg"
+    },
+    {
+      "type": "context-menu",
+      "id": "manage-monitor",
+      "label": "Monitor",
+      "description": "Open the multi-server resource monitor.",
+      "menu": "connection",
+      "action": {
+        "type": "open-workbench",
+        "workbench": "io.datawise.community.ssh.monitor"
+      }
     },
     {
       "type": "filesystem-provider",

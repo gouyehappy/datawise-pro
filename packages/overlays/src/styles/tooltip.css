@@ -1,0 +1,92 @@
+/**
+ * Theme-matched hover tooltip.
+ * 本体与箭头同色填充、不加硬描边；用 drop-shadow 勾出整块外轮廓，避免菱形接缝露线。
+ * 短中文 width:max-content，避免 shrink-to-fit 竖排。
+ */
+.dw-hover-tooltip {
+  --dw-tooltip-bg: color-mix(
+    in srgb,
+    var(--dw-surface-raised, var(--dw-bg-panel, var(--dw-bg-editor, var(--dw-bg, #1e1f22)))) 90%,
+    var(--dw-text, #fff) 10%
+  );
+  --dw-tooltip-arrow: 8px;
+  position: fixed;
+  z-index: var(--dw-z-tooltip, 1300);
+  transform: translate(-50%, 0) scale(1);
+  transform-origin: 50% 0%;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 6px 10px;
+  border: 0;
+  border-radius: calc(var(--dw-control-radius-sm, var(--dw-radius-sm, 4px)) + 1px);
+  background: var(--dw-tooltip-bg);
+  color: var(--dw-text, #f0f0f3);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  pointer-events: none;
+  /* 轮廓 + 纵深都打在整块 alpha 上（含箭头），视觉上是一块 */
+  filter:
+    drop-shadow(0 0 0.55px color-mix(in srgb, var(--dw-text, #fff) 42%, transparent))
+    drop-shadow(0 5px 14px color-mix(in srgb, #000 38%, transparent));
+  animation: dw-hover-tooltip-in var(--dw-duration-slow, 0.2s) cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+.dw-hover-tooltip.is-above {
+  transform: translate(-50%, -100%) scale(1);
+  transform-origin: 50% 100%;
+  animation-name: dw-hover-tooltip-in-above;
+}
+
+/* 旋转方块箭头：纯填充，半截埋进气泡，与本体连成一体 */
+.dw-hover-tooltip::after {
+  content: '';
+  position: absolute;
+  left: calc(50% + var(--dw-tooltip-arrow-offset, 0px));
+  top: calc(var(--dw-tooltip-arrow) / -2 + 1.5px);
+  width: var(--dw-tooltip-arrow);
+  height: var(--dw-tooltip-arrow);
+  background: var(--dw-tooltip-bg);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.dw-hover-tooltip.is-above::after {
+  top: auto;
+  bottom: calc(var(--dw-tooltip-arrow) / -2 + 1.5px);
+}
+
+@keyframes dw-hover-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 5px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes dw-hover-tooltip-in-above {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 5px)) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dw-hover-tooltip,
+  .dw-hover-tooltip.is-above {
+    animation: none;
+    will-change: auto;
+  }
+}

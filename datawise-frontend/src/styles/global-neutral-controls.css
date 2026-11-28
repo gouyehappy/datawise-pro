@@ -1,0 +1,154 @@
+/**
+ * 全局控件中性化 —— 让所有页面与设置页保持同一套朴素观感。
+ *
+ * 加载顺序：@datawise/ui/styles/buttons.css → 本文件 → settings-panel.css
+ * （settings/06-neutral-controls.css 是设置页内的局部增强，规则更精确，不会冲突）
+ *
+ * 约定：
+ * 1) 所有按钮（含主操作、危险操作）统一中性描边，不依赖颜色表达层级，
+ *    靠文案、位置与禁用态区分语义；
+ * 2) 圆角/边框/尺寸全部读皮肤 token，classic/ide/atelier/ledger 自动适配；
+ * 3) 状态语义色（成功/警告/危险的状态徽标）保留，仅把"主色蓝"这一类
+ *    装饰性着色中性化，避免信息丢失；
+ * 4) 选中态用中性抬升/文字加粗表达，不用主色块。
+ */
+
+/* ---- 主/次/文字按钮：统一中性描边 ---- */
+:is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .btn-soft,
+    .btn-outline,
+    .btn-link
+) {
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-btn-radius);
+    background: var(--dw-bg-editor, var(--dw-bg-panel));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+:is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .btn-soft,
+    .btn-outline,
+    .btn-link
+):hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--dw-text) 26%, var(--dw-border));
+    background: var(--dw-bg-hover, color-mix(in srgb, var(--dw-text) 6%, var(--dw-bg-editor, var(--dw-bg-panel))));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+:is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .btn-soft,
+    .btn-outline,
+    .btn-link
+):active:not(:disabled) {
+    background: color-mix(in srgb, var(--dw-text) 10%, var(--dw-bg-editor, var(--dw-bg-panel)));
+    box-shadow: none;
+}
+
+/* 危险操作：中性底 + 偏红描边，保留风险提示但不破坏整体中性观感 */
+.btn-primary.btn-danger {
+    border-color: color-mix(in srgb, var(--dw-danger) 46%, var(--dw-border));
+    background: var(--dw-bg-editor, var(--dw-bg-panel));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+.btn-primary.btn-danger:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--dw-danger) 68%, var(--dw-border));
+    background: color-mix(in srgb, var(--dw-danger) 8%, var(--dw-bg-editor, var(--dw-bg-panel)));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+.btn-link {
+    border-color: transparent;
+    background: transparent;
+    text-decoration: none;
+}
+
+.btn-link:hover:not(:disabled) {
+    border-color: transparent;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+}
+
+/* ---- 文字按钮：去掉主色 hover/强调 ---- */
+.dw-text-btn,
+.dw-text-btn--accent,
+.dw-text-btn--solid {
+    border-color: var(--dw-border);
+    background: var(--dw-bg-editor, var(--dw-bg-panel));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+.dw-text-btn:hover:not(:disabled),
+.dw-text-btn--accent:hover:not(:disabled),
+.dw-text-btn--solid:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--dw-text) 26%, var(--dw-border));
+    background: var(--dw-bg-hover, color-mix(in srgb, var(--dw-text) 6%, var(--dw-bg-editor, var(--dw-bg-panel))));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+.dw-text-btn:active:not(:disabled),
+.dw-text-btn--accent:active:not(:disabled),
+.dw-text-btn--solid:active:not(:disabled) {
+    background: color-mix(in srgb, var(--dw-text) 10%, var(--dw-bg-editor, var(--dw-bg-panel)));
+    box-shadow: none;
+}
+
+/* ---- 网格/工具栏轻量按钮 hover 去主色 ---- */
+.grid-label-btn:hover:not(:disabled) {
+    background: var(--dw-bg-hover, color-mix(in srgb, var(--dw-text) 6%, transparent));
+    border-color: transparent;
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+.grid-label-btn:active:not(:disabled) {
+    background: color-mix(in srgb, var(--dw-text) 10%, transparent);
+    box-shadow: none;
+}
+
+/* ---- 分段控件选中态：中性文字 + 加粗/下划线，不用主色 ---- */
+.dw-segment__btn--label.is-active {
+    color: var(--dw-text);
+    font-weight: 600;
+}
+
+.dw-segment--underline .dw-segment__btn.is-active {
+    color: var(--dw-text);
+    border-bottom-color: var(--dw-text);
+}
+
+/* ---- 状态徽标：仅中性化"主色/强调"两类，保留成功/警告/危险语义 ---- */
+.dw-status--primary,
+.dw-status--accent {
+    --dw-status-bg: var(--dw-bg-muted);
+    --dw-status-fg: var(--dw-text-secondary);
+}
+
+/* ---- 自定义可选卡片：补中性聚焦环（原生按钮/链接已由组件库提供） ---- */
+:is(
+    .mode-pick,
+    .theme-tile,
+    .skin-card,
+    .layout-toggle,
+    .locale-card,
+    .color-swatch
+):focus-visible {
+    outline: none;
+    border-color: var(--dw-border-strong, var(--dw-text-secondary));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--dw-text) 28%, transparent);
+}

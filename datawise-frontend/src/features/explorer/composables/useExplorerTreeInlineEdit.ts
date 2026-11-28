@@ -10,6 +10,7 @@ import {resolveConnectionCatalogErrorMessage} from '@/features/connection/servic
 import {canMutateConnectionCatalog} from '@/features/auth/services/feature-permission.service'
 import {sqlFileNameFromTabLabel} from '@/features/workspace/services/console-tab-title'
 import {instanceSqlApi} from '@/api'
+import {renameCachedSqlScript} from '@/features/explorer/services/sql-script-content-cache'
 import type {useExplorerStore} from '@/features/explorer/stores/explorer'
 import type {useLayoutStore} from '@/features/layout/stores/layout'
 import type {useWorkspaceStore} from '@/features/workspace/stores/workspace'
@@ -395,6 +396,14 @@ export function useExplorerTreeInlineEdit(deps: ExplorerTreeInlineEditDeps) {
                     oldFileName: node.label,
                     newFileName: plan.newBaseName,
                 })
+                renameCachedSqlScript(
+                    {
+                        connectionId,
+                        instanceName: scope.instanceLabel,
+                        fileName: node.label,
+                    },
+                    result.fileName,
+                )
                 await explorer.reloadWorkspacesFolder(
                     connectionId,
                     scope.instanceLabel,

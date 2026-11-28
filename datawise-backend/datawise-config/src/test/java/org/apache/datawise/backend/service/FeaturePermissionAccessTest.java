@@ -69,6 +69,37 @@ class FeaturePermissionAccessTest {
     }
 
     @Test
+    void requireSqlExecute_deniesCommentSplitUpdateBypass() {
+        UserEntity guest = guestUser();
+        when(userStore.findById(2L)).thenReturn(Optional.of(guest));
+
+        // SEC-03: keyword regex alone could miss UPD/**/ATE; classifier must still demand write perm.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> access.requireSqlExecute("UPD/**/ATE t SET a = 1"));
+    }
+
+    @Test
+    void requireSqlExecute_deniesCteDeleteBypass() {
+        UserEntity guest = guestUser();
+        when(userStore.findById(2L)).thenReturn(Optional.of(guest));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> access.requireSqlExecute("WITH x AS (SELECT 1) DELETE FROM t"));
+    }
+
+    @Test
+    void requireSqlExecute_deniesMultiStatementWriteAfterSelect() {
+        UserEntity guest = guestUser();
+        when(userStore.findById(2L)).thenReturn(Optional.of(guest));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> access.requireSqlExecute("SELECT 1; DELETE FROM t"));
+    }
+
+    @Test
     void requireExplorerCatalogMutation_allowsGuestSessionCatalogWrite() {
         assertDoesNotThrow(() -> access.requireExplorerCatalogMutation());
     }

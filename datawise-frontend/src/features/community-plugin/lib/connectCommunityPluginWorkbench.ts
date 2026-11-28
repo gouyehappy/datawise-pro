@@ -176,3 +176,198 @@ export function isSessionBoundFilesystemContribution(contribution: {
   if ((contribution.openTarget || '').toLowerCase() === 'workbench') return true
   return false
 }
+
+export type RestoredCommunityWorkbenchTab = {
+  id: string
+  type: string
+  connectionId?: string
+  pluginId?: string
+  pluginHostContext?: Record<string, unknown>
+}
+
+/** Resolve connectionId/pluginId from tab fields or pluginHostContext (legacy snapshots). */
+export function resolveCommunityWorkbenchIdentity(tab: {
+  connectionId?: string
+  pluginId?: string
+  pluginHostContext?: Record<string, unknown>
+}): {connectionId: string; pluginId: string} | null {
+  const ctx = tab.pluginHostContext
+  const fromConnection =
+    ctx?.connection && typeof ctx.connection === 'object' && !Array.isArray(ctx.connection)
+      ? String((ctx.connection as {id?: unknown}).id ?? '').trim()
+      : ''
+  const connectionId =
+    tab.connectionId?.trim()
+    || (typeof ctx?.connectionId === 'string' ? ctx.connectionId.trim() : '')
+    || fromConnection
+  const pluginId =
+    tab.pluginId?.trim()
+    || (typeof ctx?.pluginId === 'string' ? ctx.pluginId.trim() : '')
+  if (!connectionId || !pluginId) return null
+  return {connectionId, pluginId}
+}
+
+/**
+ * Activate plugin sidecar and replay connection/connect for a catalog connection.
+ * Used by session restore and by CommunityWorkbenchHost before issuing a UI ticket
+ * so plugins that do not self-call host.reopenConnection (Nacos/Polaris/…) still work.
+ */
+export async function ensureCommunityPluginSidecarConnection(
+  connectionId: string,
+  pluginIdHint?: string,
+): Promise<{
+  pluginId: string
+  connection: CommunityPluginWorkbenchConnection
+}> {
+  const trimmedId = connectionId.trim()
+  if (!trimmedId) throw new Error('connectionId required')
+
+  const explorerApi = createHttpExplorerApi()
+  const pluginsApi = createHttpCommunityPluginsApi()
+  // silent: workbench ensure is best-effort; a missing id must not toast the shell
+  // (e.g. SSH monitor contribution opened without a catalog connection).
+  const config = await explorerApi.fetchConnection(trimmedId, {silent: true})
+  const pluginId = config.pluginId?.trim() || pluginIdHint?.trim() || ''
+  if (!pluginId) throw new Error('pluginId missing on connection')
+
+  await pluginsApi.activate(pluginId)
+  await pluginsApi.connect(config)
+
+  try {
+    const {useExplorerStore} = await import('@/features/explorer/stores/explorer')
+    useExplorerStore().markConnectionPooled(trimmedId)
+  } catch {
+    // Explorer store may be unavailable in unit tests / early boot.
+  }
+
+  return {
+    pluginId,
+    connection: {
+      id: config.id || trimmedId,
+      name: config.name,
+      host: config.host,
+      port: config.port,
+      user: config.user,
+    },
+  }
+}
+
+/**
+ * Replay activate+connect for community workbench tabs restored from workspace-session.
+ * Without this, sidecars have no credentials and SSH/etc. loops on "Connection is not active".
+ * Also rebuilds non-secret host context so the connect card shows name/host instead of raw ids.
+ */
+export async function reconnectRestoredCommunityWorkbenchTabs(
+  tabs: readonly RestoredCommunityWorkbenchTab[],
+  options?: {
+    patchHostContext?: (tabId: string, context: Record<string, unknown>) => void
+  },
+): Promise<void> {
+  const seen = new Set<string>()
+
+  for (const tab of tabs) {
+    if (tab.type !== 'community-workbench') continue
+    const identity = resolveCommunityWorkbenchIdentity(tab)
+    if (!identity) continue
+
+    const {connectionId, pluginId} = identity
+    const dedupeKey = `${pluginId}::${connectionId}`
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+
+    try {
+      const ensured = await ensureCommunityPluginSidecarConnection(connectionId, pluginId)
+      const resolvedPluginId = ensured.pluginId
+
+      for (const target of tabs) {
+        if (target.type !== 'community-workbench') continue
+        const targetIdentity = resolveCommunityWorkbenchIdentity(target)
+        if (!targetIdentity || targetIdentity.connectionId !== connectionId) continue
+        if (
+          targetIdentity.pluginId
+          && targetIdentity.pluginId !== pluginId
+          && targetIdentity.pluginId !== resolvedPluginId
+        ) {
+          continue
+        }
+        const workbenchInstanceId =
+          typeof target.pluginHostContext?.workbenchId === 'string'
+            ? target.pluginHostContext.workbenchId.trim()
+            : undefined
+        options?.patchHostContext?.(
+          target.id,
+          buildCommunityPluginHostContext({
+            pluginId: resolvedPluginId,
+            connectionId,
+            connection: ensured.connection,
+            workbenchInstanceId: workbenchInstanceId || undefined,
+          }),
+        )
+      }
+    } catch (error) {
+      console.warn(
+        '[community-plugin] failed to reconnect restored workbench',
+        {connectionId, pluginId, error},
+      )
+    }
+  }
+}
+
+/**
+ * Mutates community-workbench snapshots in place: activate+connect sidecars and
+ * enrich pluginHostContext with non-secret connection summary before restoreSession.
+ */
+export async function prepareCommunityWorkbenchSnapshotsForRestore(
+  tabs: Array<{
+    type: string
+    connectionId?: string
+    pluginId?: string
+    pluginHostContext?: Record<string, unknown>
+  }>,
+): Promise<void> {
+  const community = tabs.filter(
+    (tab) => tab.type === 'community-workbench' && resolveCommunityWorkbenchIdentity(tab),
+  )
+  if (!community.length) return
+
+  const enrichedByConnection = new Map<string, Record<string, unknown>>()
+  await reconnectRestoredCommunityWorkbenchTabs(
+    community.map((tab, index) => {
+      const identity = resolveCommunityWorkbenchIdentity(tab)!
+      return {
+        id: `pre-${index}`,
+        type: tab.type,
+        connectionId: identity.connectionId,
+        pluginId: identity.pluginId,
+        pluginHostContext: tab.pluginHostContext,
+      }
+    }),
+    {
+      patchHostContext: (_tabId, context) => {
+        const connectionId =
+          typeof context.connectionId === 'string' ? context.connectionId.trim() : ''
+        if (connectionId) enrichedByConnection.set(connectionId, context)
+      },
+    },
+  )
+
+  for (const tab of community) {
+    const identity = resolveCommunityWorkbenchIdentity(tab)
+    if (!identity) continue
+    const enriched = enrichedByConnection.get(identity.connectionId)
+    if (!enriched) continue
+    // Fill missing top-level ids so restoreSession + Host props stay consistent.
+    if (!tab.connectionId?.trim()) tab.connectionId = identity.connectionId
+    if (!tab.pluginId?.trim()) tab.pluginId = identity.pluginId
+    const workbenchId =
+      typeof tab.pluginHostContext?.workbenchId === 'string'
+        ? tab.pluginHostContext.workbenchId
+        : typeof enriched.workbenchId === 'string'
+          ? enriched.workbenchId
+          : undefined
+    tab.pluginHostContext = {
+      ...enriched,
+      ...(workbenchId ? {workbenchId} : {}),
+    }
+  }
+}

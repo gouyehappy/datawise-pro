@@ -86,7 +86,7 @@ function chipTitle(action: SqlQuickAction): string {
   height: 20px;
   padding: 0 6px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   font-weight: 600;

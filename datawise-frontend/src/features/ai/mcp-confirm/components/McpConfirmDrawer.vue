@@ -137,7 +137,7 @@ usePopoverEscape(drawerOpen, close)
 
 .mcp-confirm-card {
   border: 1px solid var(--dw-border, #333);
-  border-radius: 8px;
+  border-radius: var(--dw-surface-radius, 8px);
   padding: 12px;
   background: var(--dw-surface-raised, rgb(255 255 255 / 4%));
 }
@@ -154,7 +154,7 @@ usePopoverEscape(drawerOpen, close)
 
 .mcp-confirm-card__risk {
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   background: var(--dw-warning-soft, #5c4b1a);
 }
 
@@ -186,7 +186,7 @@ usePopoverEscape(drawerOpen, close)
   max-height: 140px;
   overflow: auto;
   font-size: var(--dw-text-sm);
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   background: var(--dw-code-bg, rgb(0 0 0 / 35%));
   white-space: pre-wrap;
   word-break: break-word;
@@ -200,7 +200,7 @@ usePopoverEscape(drawerOpen, close)
 
 .mcp-confirm-btn {
   border: 1px solid var(--dw-border, #444);
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   padding: 6px 12px;
   font-size: var(--dw-text-sm);
   cursor: pointer;
@@ -214,9 +214,13 @@ usePopoverEscape(drawerOpen, close)
 }
 
 .mcp-confirm-btn--primary {
-  background: var(--dw-accent, #3b82f6);
+  background: var(--dw-text);
   border-color: transparent;
-  color: #fff;
+  color: var(--dw-bg-panel);
+}
+
+.mcp-confirm-btn--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dw-text) 84%, var(--dw-bg-panel));
 }
 
 .mcp-confirm-card__expires {

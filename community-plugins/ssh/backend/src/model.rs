@@ -982,6 +982,11 @@ pub struct SessionOpenRequest {
     /// connection `remote_command`.
     #[serde(default)]
     pub spawn_command: Option<String>,
+    /// Open an extra PTY on the same workbench without tearing down the
+    /// existing session (in-pane Motty-style split). Implies transport reuse
+    /// against `reuse_authenticated_session_id` / a live peer on the connection.
+    #[serde(default)]
+    pub additional_shell: bool,
     #[serde(default = "default_cols")]
     pub cols: u32,
     #[serde(default = "default_rows")]
@@ -3352,6 +3357,7 @@ mod manifest_contract_tests {
         assert!(request.reuse_authenticated_session_id.is_none());
         assert!(request.requested_session_id.is_none());
         assert!(request.spawn_command.is_none());
+        assert!(!request.additional_shell);
         assert_eq!(request.cols, 120);
         assert_eq!(request.rows, 32);
     }
@@ -3365,6 +3371,7 @@ mod manifest_contract_tests {
             "reuseAuthenticatedSessionId": "sess-src",
             "requestedSessionId": "sess-new",
             "spawnCommand": "htop",
+            "additionalShell": true,
             "cols": 80,
             "rows": 24
         }))
@@ -3376,6 +3383,7 @@ mod manifest_contract_tests {
         );
         assert_eq!(request.requested_session_id.as_deref(), Some("sess-new"));
         assert_eq!(request.spawn_command.as_deref(), Some("htop"));
+        assert!(request.additional_shell);
         assert_eq!(request.cols, 80);
         assert_eq!(request.rows, 24);
     }

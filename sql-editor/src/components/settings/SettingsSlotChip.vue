@@ -18,7 +18,7 @@ defineProps<{
   align-items: center;
   max-width: 72px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   font-size: 9px;
   font-weight: 700;
   line-height: 1.2;

@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import {defineAsyncComponent} from 'vue'
+import {defineEditionAsyncComponent} from '@/features/pack/define-edition-async-component'
 import type {TeamSharedAiSessionDetail, TeamSharedAiSessionSummary} from '@/core/types'
 
-const TeamSharedAiSessionViewer = defineAsyncComponent((() =>
-    import.meta.env.VITE_DATAWISE_EDITION === 'standard'
-        ? import('@/features/pack/stubs/TeamAiSessionStub.vue')
-        : import('@/features/team/components/TeamSharedAiSessionViewer.vue')
-) as any)
+const TeamSharedAiSessionViewer = defineEditionAsyncComponent(
+    () => import('@/features/team/components/TeamSharedAiSessionViewer.vue'),
+    () => import('@/features/pack/stubs/TeamAiSessionStub.vue'),
+)
 
 defineProps<{
   loadingList: boolean

@@ -880,7 +880,7 @@ function onHeroMenuSelect(id: string) {
   display: inline-block;
   margin-left: var(--dw-space-2);
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   font-size: var(--dw-font-size-badge);
   text-transform: uppercase;
   letter-spacing: 0.04em;

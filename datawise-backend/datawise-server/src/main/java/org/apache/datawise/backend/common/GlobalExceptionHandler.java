@@ -53,7 +53,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("errorCode", ex.errorCode() != null ? ex.errorCode().name() : DatawiseErrorCodes.DDL);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(-1, ex.getMessage(), data));
+                .body(new ApiResponse<>(-1, ClientErrorMessageSupport.forClient(ex.getMessage()), data));
     }
 
     @ExceptionHandler(ExplorerConnectionException.class)
@@ -81,7 +81,7 @@ public class GlobalExceptionHandler {
         }
         data.putIfAbsent("errorCode", ex.getErrorCode() != null ? ex.getErrorCode() : DatawiseErrorCodes.TABLE_DATA);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(-1, ex.getMessage(), data));
+                .body(new ApiResponse<>(-1, ClientErrorMessageSupport.forClient(ex.getMessage()), data));
     }
 
     @ExceptionHandler(DatabaseServiceException.class)
@@ -308,7 +308,9 @@ public class GlobalExceptionHandler {
                  "PASSPHRASE_INCORRECT",
                  "SCHEMA_UNSUPPORTED",
                  "LEGACY_UNSUPPORTED",
-                 "CONNECTION_NOT_FOUND" -> true;
+                 "CONNECTION_NOT_FOUND",
+                 DatawiseErrorCodes.CONNECTION_SHARE_NOT_FOUND,
+                 DatawiseErrorCodes.CONNECTION_SHARE_FORBIDDEN -> true;
             default -> false;
         };
     }

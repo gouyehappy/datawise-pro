@@ -12,6 +12,6 @@ defineProps<{
       class="settings-nav-icon"
       :name="settingsSectionDwIcon(section)"
       size="md"
-      :stroke-width="2.05"
+      :stroke-width="1.6"
   />
 </template>

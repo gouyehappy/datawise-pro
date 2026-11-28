@@ -5,8 +5,11 @@ import {
   commandInputAction,
   formatHistoryAge,
   historyForScope,
+  historyResultBadge,
   isNoiseHistoryLine,
   markHistoryExit,
+  markHistoryResult,
+  HISTORY_HOST_MAX_LENGTH,
   normalizeHistoryCommand,
   pushCommandHistory,
   removeHistoryEntry,
@@ -107,5 +110,94 @@ describe("browseCommandHistory", () => {
     const history = [{ command: "ls" }, { command: "pwd" }];
     expect(browseCommandHistory(history, -1, "up").draft).toBe("ls");
     expect(browseCommandHistory(history, 0, "up").draft).toBe("pwd");
+  });
+});
+
+describe("history result metadata (OSC 633 D)", () => {
+  const labels = { exit: "exit {code}", ok: "ok" };
+
+  it("stamps exit code, duration and host on the matching command", () => {
+    let history = pushCommandHistory([], "make test", 10, { connectionId: "a" });
+    history = markHistoryResult(history, "make test", { exitCode: 2, durationMs: 1234, host: "prod-web" }, "a");
+    expect(history[0]).toMatchObject({ exitCode: 2, durationMs: 1234, host: "prod-web", failed: true });
+    expect(history[0].command).toBe("make test");
+  });
+
+  it("marks a zero exit as successful", () => {
+    const history = markHistoryResult([{ command: "ls", failed: true }], "ls", { exitCode: 0 });
+    expect(history[0]).toMatchObject({ exitCode: 0, failed: false });
+  });
+
+  it("does not erase fields the D frame did not supply", () => {
+    let history = markHistoryResult([{ command: "ls" }], "ls", { exitCode: 1, durationMs: 900, host: "db-1" });
+    history = markHistoryResult(history, "ls", { exitCode: 0 });
+    expect(history[0]).toMatchObject({ exitCode: 0, durationMs: 900, host: "db-1", failed: false });
+  });
+
+  it("respects connection scope and leaves unknown / invalid results untouched", () => {
+    const original = [{ command: "ls", connectionId: "a" }];
+    expect(markHistoryResult(original, "ls", { exitCode: 1 }, "b")).toEqual(original);
+    expect(markHistoryResult(original, "missing", { exitCode: 1 }, "a")).toEqual(original);
+    expect(markHistoryResult(original, "ls", { exitCode: Number.NaN }, "a")).toEqual(original);
+    expect(markHistoryResult(original, "ls", { exitCode: Number.POSITIVE_INFINITY }, "a")).toEqual(original);
+    // A D frame without a duration must not record "0ms" (Number(null) === 0).
+    expect(markHistoryResult([{ command: "ls" }], "ls", { exitCode: 0, durationMs: null })[0].durationMs).toBeUndefined();
+    expect(original).toEqual([{ command: "ls", connectionId: "a" }]);
+  });
+
+  it("sanitizes the host label before stamping", () => {
+    const history = markHistoryResult([{ command: "ls" }], "ls", {
+      exitCode: 0,
+      durationMs: -5,
+      host: `  web\u0007-${"x".repeat(200)}  `,
+    });
+    expect(history[0].host).toHaveLength(HISTORY_HOST_MAX_LENGTH);
+    expect(history[0].host).not.toMatch(/[\u0000-\u001f\u007f]/);
+    expect(history[0].durationMs).toBeUndefined();
+  });
+
+  it("keeps the legacy markHistoryExit signature working", () => {
+    const history = markHistoryExit([{ command: "false" }], "false", 1, "a");
+    expect(history[0]).toMatchObject({ exitCode: 1, failed: true });
+    expect(history[0].durationMs).toBeUndefined();
+  });
+
+  it("re-running a command carries the last result forward until the next D frame", () => {
+    let history = markHistoryResult([{ command: "ls" }], "ls", { exitCode: 0, durationMs: 12, host: "web" });
+    history = pushCommandHistory(history, "ls");
+    expect(history[0]).toMatchObject({ exitCode: 0, durationMs: 12, host: "web" });
+  });
+
+  it("sanitizeCommandHistory reads metadata but rejects poisoned values", () => {
+    const entries = sanitizeCommandHistory([
+      { command: "ls", exitCode: 0, durationMs: 1500, host: "prod" },
+      { command: "pwd", exitCode: "NaN", durationMs: -1, host: 42 },
+      "legacy-cmd",
+    ]);
+    expect(entries[0]).toMatchObject({ exitCode: 0, durationMs: 1500, host: "prod" });
+    expect(entries[1].exitCode).toBeUndefined();
+    expect(entries[1].durationMs).toBeUndefined();
+    expect(entries[1].host).toBeUndefined();
+    expect(entries.map((e) => e.command)).toContain("legacy-cmd");
+  });
+
+  it("builds a display badge only when result metadata exists", () => {
+    expect(historyResultBadge({ command: "ls" }, labels)).toBeNull();
+    expect(historyResultBadge({ command: "ls", exitCode: 0 }, labels)).toMatchObject({ tone: "ok", exitText: "ok" });
+    expect(historyResultBadge({ command: "ls", exitCode: 127, durationMs: 2500, host: "db-1" }, labels)).toMatchObject({
+      tone: "fail",
+      exitText: "exit 127",
+      durationText: "2.5s",
+      hostText: "db-1",
+      text: "exit 127 · 2.5s · db-1",
+    });
+    expect(historyResultBadge({ command: "ls", host: "only-host" }, labels)).toMatchObject({
+      tone: "neutral",
+      exitText: "",
+      text: "only-host",
+    });
+    expect(
+      historyResultBadge({ command: "ls", exitCode: 1 }, { exit: "退出码 {code}", ok: "成功", separator: " | " })?.text,
+    ).toBe("退出码 1");
   });
 });

@@ -12,6 +12,7 @@ import org.apache.datawise.desktop.staticserver.RendererStaticServer;
 import org.apache.datawise.desktop.ui.DesktopLookAndFeel;
 import org.apache.datawise.desktop.ui.DesktopMainFrame;
 import org.apache.datawise.desktop.updater.DesktopUpdaterService;
+import org.apache.datawise.desktop.util.DesktopRendererTrust;
 
 import javax.swing.SwingUtilities;
 import java.nio.file.Files;
@@ -210,9 +211,10 @@ public final class DesktopUiLauncher {
 
     private static String resolveRendererUrl(boolean packaged, String apiBaseUrl, String bridgeScript)
             throws java.io.IOException {
-        String override = System.getenv("DATAWISE_RENDERER_URL");
-        if (override != null && !override.isBlank()) {
-            return override.trim();
+        String trustedOverride = DesktopRendererTrust.sanitizeRendererUrlOverride(
+                System.getenv("DATAWISE_RENDERER_URL"));
+        if (trustedOverride != null) {
+            return trustedOverride;
         }
         if (!packaged) {
             return "http://127.0.0.1:" + DesktopRuntimePorts.devFrontend() + "/";

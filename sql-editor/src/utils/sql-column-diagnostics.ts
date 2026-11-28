@@ -90,6 +90,37 @@ function isTableReferencePosition(masked: string, matchStart: number): boolean {
     return /,\s*$/i.test(before)
 }
 
+/**
+ * DDL / SHOW / USE 等对象名位置的 catalog.schema / schema.table，
+ * 不是 SELECT 里的 alias.column（如 CREATE SCHEMA IF NOT EXISTS kudu.a008）。
+ */
+function isObjectNamePosition(masked: string, matchStart: number): boolean {
+    const before = masked.slice(0, matchStart)
+    if (/\b(?:CREATE|DROP|ALTER)\s+SCHEMA\b(?:\s+IF\s+(?:NOT\s+)?EXISTS)?\s*$/i.test(before)) {
+        return true
+    }
+    if (
+        /\b(?:CREATE|DROP|ALTER|TRUNCATE)\s+(?:TEMPORARY\s+)?(?:TABLE|VIEW|MATERIALIZED\s+VIEW)\b(?:\s+IF\s+(?:NOT\s+)?EXISTS)?\s*$/i.test(
+            before,
+        )
+    ) {
+        return true
+    }
+    if (/\bSHOW\s+(?:TABLES|SCHEMAS|COLUMNS|CATALOGS)\s+(?:FROM|IN)\s*$/i.test(before)) {
+        return true
+    }
+    if (/\b(?:DESCRIBE|DESC|EXPLAIN(?:\s+ANALYZE)?)\s*$/i.test(before)) {
+        return true
+    }
+    if (/\bUSE\s*$/i.test(before)) {
+        return true
+    }
+    if (/\bCOMMENT\s+ON\s+(?:TABLE|COLUMN|VIEW|SCHEMA)\s*$/i.test(before)) {
+        return true
+    }
+    return false
+}
+
 /** schema.table 限定表名，避免误判为 alias.column */
 function isQualifiedTableReference(
     alias: string,
@@ -126,6 +157,7 @@ export function collectSqlColumnDiagnostics(sql: string, schema: SqlEditorSchema
             const column = unquoteTableIdent(match[2])
 
             if (isTableReferencePosition(masked, match.index)) continue
+            if (isObjectNamePosition(masked, match.index)) continue
             if (isQualifiedTableReference(alias, column, schema)) continue
 
             const table = resolveAliasTable(alias, aliases)

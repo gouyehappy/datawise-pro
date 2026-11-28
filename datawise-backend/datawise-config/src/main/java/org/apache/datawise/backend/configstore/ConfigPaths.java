@@ -117,6 +117,28 @@ public final class ConfigPaths {
         return tenantProjectDir(tenantId, projectId) + "/" + CONNECTIONS;
     }
 
+    /**
+     * 项目 docs/scripts 按创建者隔离的根目录（{@code {projectDir}/users}）。
+     * 与连接一样：每个注册账号只看到自己创建的文件树。
+     */
+    public static String tenantProjectUsersDir(String tenantId, String projectId) {
+        return tenantProjectDir(tenantId, projectId) + "/users";
+    }
+
+    /** 单个创建者账号下的项目文件根（其下为 docs/、scripts/）。 */
+    public static String tenantProjectUserDir(String tenantId, String projectId, long userId) {
+        return tenantProjectUsersDir(tenantId, projectId) + "/u" + userId;
+    }
+
+    /**
+     * 项目级「私有目录共享清单」（{@code {projectDir}/file-shares.json}）。
+     * 记录哪些账号把私有 docs/scripts 下的哪个目录共享给了项目内其它账号；
+     * 共享内容仍留在归属账号的私有目录里，不另外复制一份。
+     */
+    public static String tenantProjectFileShares(String tenantId, String projectId) {
+        return tenantProjectDir(tenantId, projectId) + "/file-shares.json";
+    }
+
     /** 统一 connections.xml 迁移后的备份名。 */
     public static final String CONNECTIONS_MIGRATED_SUFFIX = ".migrated";
 

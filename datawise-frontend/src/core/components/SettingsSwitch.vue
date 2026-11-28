@@ -4,11 +4,15 @@ import {SettingsSwitch as PackageSettingsSwitch} from '@datawise/ui'
 
 const model = defineModel<boolean>({required: true})
 
-defineProps<{
-  label: string
-  hint?: string
-  disabled?: boolean
-}>()
+withDefaults(
+    defineProps<{
+      label?: string
+      hint?: string
+      disabled?: boolean
+      bare?: boolean
+    }>(),
+    {disabled: false, bare: false},
+)
 </script>
 
 <template>
@@ -17,5 +21,6 @@ defineProps<{
       :label="label"
       :hint="hint"
       :disabled="disabled"
+      :bare="bare"
   />
 </template>

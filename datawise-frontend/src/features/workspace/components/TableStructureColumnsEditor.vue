@@ -653,7 +653,7 @@ function lineageLabel(name: string) {
   height: 28px;
   padding: 0 10px 0 28px;
   border: 1px solid var(--dw-border);
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   background: var(--dw-bg-panel);
   color: var(--dw-text-primary);
   font-size: var(--se-font);
@@ -678,7 +678,7 @@ function lineageLabel(name: string) {
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--dw-border);
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   background: transparent;
   color: var(--dw-text-secondary);
   font-size: var(--se-font);
@@ -709,14 +709,14 @@ function lineageLabel(name: string) {
 }
 
 .structure-editor__btn--accent.is-busy:not(:disabled) {
-  border-color: var(--dw-primary);
-  background: var(--dw-primary);
-  color: #fff;
+  border-color: var(--dw-border-strong, var(--dw-text-secondary));
+  background: var(--dw-bg-hover);
+  color: var(--dw-text);
 }
 
 .structure-editor__btn--accent.is-busy:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--dw-primary) 88%, black);
-  color: #fff;
+  background: color-mix(in srgb, var(--dw-text) 10%, var(--dw-bg-panel));
+  color: var(--dw-text);
 }
 
 .structure-editor__note {
@@ -731,7 +731,7 @@ function lineageLabel(name: string) {
   min-height: 200px;
   overflow: auto;
   border: 1px solid var(--dw-border-light);
-  border-radius: 8px;
+  border-radius: var(--dw-surface-radius, 8px);
   background: var(--dw-bg-editor);
 }
 
@@ -944,7 +944,7 @@ function lineageLabel(name: string) {
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--dw-surface-radius, 5px);
   background: transparent;
   color: color-mix(in srgb, var(--dw-text-primary) 72%, var(--dw-text-muted));
   opacity: 0.78;
@@ -1103,7 +1103,7 @@ function lineageLabel(name: string) {
 
 .structure-editor__preview {
   border: 1px solid var(--dw-border-light);
-  border-radius: 8px;
+  border-radius: var(--dw-surface-radius, 8px);
   background: var(--dw-bg-panel);
   overflow: hidden;
   flex-shrink: 0;
@@ -1136,7 +1136,7 @@ function lineageLabel(name: string) {
   min-width: 18px;
   height: 16px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   background: var(--dw-primary-soft);
   color: var(--dw-primary);
   font-size: var(--dw-font-size-badge);
@@ -1179,7 +1179,7 @@ function lineageLabel(name: string) {
 .structure-editor__confirm-sql {
   margin-top: var(--dw-space-4);
   border: 1px solid var(--dw-border-light);
-  border-radius: 8px;
+  border-radius: var(--dw-surface-radius, 8px);
   overflow: hidden;
 }
 

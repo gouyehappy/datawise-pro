@@ -1,0 +1,47 @@
+name: Community plugin Docker package
+
+# Build+test the Docker community plugin on Windows (unsigned .dwp).
+# Store publishing requires a signed asset — do that locally:
+#   node community-plugins/docker/package.mjs --sign-key-file .signing/keys.json
+#   node community-plugins/docker/scripts/publish-release.mjs
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "community-plugins/docker/**"
+      - ".github/workflows/community-plugin-docker-release.yml"
+  pull_request:
+    paths:
+      - "community-plugins/docker/**"
+      - ".github/workflows/community-plugin-docker-release.yml"
+
+jobs:
+  package:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: community-plugins/docker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: community-plugins/docker/package-lock.json
+      - name: Test and package
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          go -C backend test ./...
+          node package.mjs
+          node ../scripts/verify-plugin.mjs .
+      - name: Upload unsigned artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-plugin-unsigned-dwp
+          path: community-plugins/docker/dist/*.dwp
+          if-no-files-found: error

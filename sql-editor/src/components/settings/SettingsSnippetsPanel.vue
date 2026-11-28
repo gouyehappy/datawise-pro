@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
 .add-context-field .dw-input {
   padding: 4px 6px;
   border: 1px solid var(--se-border, rgba(0, 0, 0, 0.08));
-  border-radius: 5px;
+  border-radius: var(--dw-surface-radius, 5px);
   background: var(--se-bg, #fff);
   font-size: 10px;
   color: var(--se-text, #111827);
@@ -233,7 +233,7 @@ onBeforeUnmount(() => {
 .pill-count {
   min-width: 16px;
   padding: 1px 5px;
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   font-size: 9px;
   font-weight: 700;
   text-align: center;
@@ -254,7 +254,7 @@ onBeforeUnmount(() => {
 
 .slot-card {
   border: 1px solid var(--se-border, rgba(0, 0, 0, 0.08));
-  border-radius: 7px;
+  border-radius: var(--dw-surface-radius, 7px);
   background: color-mix(in srgb, var(--se-bg-muted, #f8f9fb) 24%, var(--se-bg, #fff));
   overflow: hidden;
   transition: border-color 0.12s, box-shadow 0.12s;
@@ -292,7 +292,7 @@ onBeforeUnmount(() => {
 
 .pill-custom {
   padding: 1px 5px;
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -320,7 +320,7 @@ onBeforeUnmount(() => {
   display: block;
   width: 26px;
   height: 14px;
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   background: var(--se-bg-muted, #f8f9fb);
   border: 1px solid var(--se-border, rgba(0, 0, 0, 0.08));
   transition: background 0.12s, border-color 0.12s;
@@ -333,7 +333,7 @@ onBeforeUnmount(() => {
   left: 2px;
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: var(--dw-radius-pill, 999px);
   background: #fff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
   transition: transform 0.12s;
@@ -405,7 +405,7 @@ onBeforeUnmount(() => {
 .btn-mini {
   padding: 3px 8px;
   border: 1px solid var(--se-border, rgba(0, 0, 0, 0.08));
-  border-radius: 5px;
+  border-radius: var(--dw-surface-radius, 5px);
   background: var(--se-bg-muted, #f8f9fb);
   font-size: 10px;
   font-weight: 600;
@@ -451,7 +451,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 18px;
   height: 18px;
-  border-radius: 5px;
+  border-radius: var(--dw-surface-radius, 5px);
   font-size: 14px;
   font-weight: 700;
   color: var(--se-accent, #0969da);

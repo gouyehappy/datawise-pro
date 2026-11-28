@@ -48,10 +48,16 @@ import {
     getSshTerminalHandle,
 } from '@/features/terminal/services/ssh-terminal-session.service'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
+import {isGuestOrAnonymousSession} from '@/features/auth/services/user-access-policy'
 import {
+    isConnectionScriptsInstance,
     resolveConsoleWorkspaceInstance,
     resolveWorkspaceInstanceNodeId,
 } from '@/features/workspace/services/console-workspace-instance'
+import {
+    renameCachedSqlScript,
+    setCachedSqlScript,
+} from '@/features/explorer/services/sql-script-content-cache'
 import {createWorkspaceConsoleDomain} from '@/features/workspace/stores/workspace-console.domain'
 import {createWorkspaceTabChromeDomain} from '@/features/workspace/stores/workspace-tab-chrome.domain'
 import {createWorkspaceChromeSignalsDomain} from '@/features/workspace/stores/workspace-chrome-signals.domain'
@@ -370,7 +376,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         const tab = tabs.value.find((item) => item.id === tabId)
         if (!tab || tab.type !== 'console') return false
 
-        let fileName = getBoundConsoleSqlFile(tab)
+        // Prefer the file bound to the tab; for an unsaved console fall back to the
+        // file name implied by its visible title (e.g. `<host> Script 5` -> Script-5.sql),
+        // so Ctrl+S saves to the script the user is looking at instead of reassigning a new name.
+        let fileName = resolveConsoleSqlFileName(tab)
         if (fileName && isLocalAbsolutePath(fileName)) {
             try {
                 await writeLocalTextFile(fileName, tab.sql ?? '')
@@ -394,7 +403,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                 if (!written) return false
                 markConsoleTabSaved(tabId)
                 setStatus(t('console.savedToWorkspace', {path: written.path}))
-                void refreshProjectScriptsExplorerRoot()
+                void refreshProjectScriptsExplorerRoot(written.root)
                 return true
             } catch {
                 return false
@@ -573,11 +582,23 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                 sql,
                 fileName,
             })
+            setCachedSqlScript(
+                {
+                    connectionId: scope.connectionId,
+                    instanceName: scope.instanceName,
+                    fileName: result.fileName,
+                },
+                sql,
+            )
             if (options.bindToTab) {
                 bindConsoleSqlFile(tab.id, result.fileName)
+                // `_scripts` is a disk workspace key only — never overwrite JDBC catalog/schema.
+                const nextDatabase = isConnectionScriptsInstance(scope.instanceName)
+                    ? (isConnectionScriptsInstance(tab.database) ? undefined : tab.database)
+                    : scope.instanceName
                 updateTabContext(tab.id, {
                     connectionId: scope.connectionId,
-                    database: scope.instanceName,
+                    database: nextDatabase,
                     instanceId: scope.scopeNodeId ?? tab.instanceId,
                 })
                 markConsoleTabSaved(tab.id)
@@ -585,10 +606,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             setStatus(t('console.savedToWorkspace', {path: result.relativePath}))
             try {
                 const explorer = useExplorerStore()
+                // Ensure connection roots (scripts/ai) exist before refreshing the folder.
+                await explorer.ensureChildrenLoaded(scope.connectionId)
+                const refreshedScope = resolveConsoleTabSaveScope(tab)
                 await explorer.reloadWorkspacesFolder(
                     scope.connectionId,
-                    scope.instanceName,
-                    scope.scopeNodeId ?? tab.instanceId,
+                    refreshedScope?.instanceName ?? scope.instanceName,
+                    refreshedScope?.scopeNodeId ?? scope.scopeNodeId,
                 )
             } catch (reloadError) {
                 console.error('[reloadWorkspacesFolder]', reloadError)
@@ -621,6 +645,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             .catch(() => undefined)
     }
 
+    /** Last plugin workbench tab gone → disconnect (skip guest / JDBC). */
+    function releaseOrphanedWorkbenchConnections(connectionIds: string[]) {
+        if (!connectionIds.length || isGuestOrAnonymousSession()) return
+        const explorer = useExplorerStore()
+        for (const connectionId of connectionIds) {
+            const node = explorer.findNode(connectionId)
+            if (node?.type !== 'connection' || node.dbType !== 'plugin') continue
+            void explorer.disconnectConnection(connectionId)
+        }
+    }
+
     const tabChrome = createWorkspaceTabChromeDomain({
         tabs,
         tabGroups,
@@ -631,6 +666,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             void disposeSshTerminalHandle(tabId)
         },
         disposeCommunityWorkbenchTab,
+        releaseOrphanedWorkbenchConnections,
         resetConsoleQueryBag,
         ensureConsoleQueryState,
         hydrateDiskBackedTabIfNeeded,
@@ -662,6 +698,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         resetAllTabFloats()
         const result = restoreSessionBase(...args)
         contentDirtyByTabId.value = {}
+        const communityTabs = tabs.value.filter((tab) => tab.type === 'community-workbench')
+        if (communityTabs.length) {
+            ensureCommunityWorkbenchIframeCapacity({
+                tabs: tabs.value,
+                activeTabId: activeTabId.value,
+                closeTab: (tabId) => closeTabImpl(tabId),
+            })
+            for (const tab of communityTabs) {
+                beginCommunityWorkbenchPaint(tab.id)
+                touchCommunityWorkbenchFocus(tab.id)
+            }
+        }
         for (const tab of tabs.value) syncContentDirtyFlag(tab)
         return result
     }
@@ -682,11 +730,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         if (!tab.connectionId) return false
 
         const explorer = useExplorerStore()
-        const instanceName = resolveConsoleInstanceLabel({
-            tabInstanceId: tab.instanceId,
-            tabDatabase: tab.database,
-            findNodeLabel: (nodeId) => explorer.findNode(nodeId)?.label,
-        })
+        const connectionNode = explorer.findNode(tab.connectionId)
+        const scriptScope = resolveConsoleTabSaveScope(tab)
+        const instanceName = scriptScope?.instanceName
+            ?? resolveConsoleWorkspaceInstance({
+                dbType: connectionNode?.dbType,
+                sql: tab.sql ?? '',
+                tabDatabase: tab.database,
+                tree: explorer.tree,
+                connectionId: tab.connectionId,
+                selectedNodeId: explorer.selectedNodeId,
+                findNode: (nodeId) => explorer.findNode(nodeId) ?? null,
+            })
         if (!instanceName) return false
 
         let currentFileName = resolveConsoleSqlFileName(tab)
@@ -706,7 +761,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                 sqlFile: currentFileName,
                 kind: 'script',
             }) ?? buildConsoleTabTitleFromParts(hostLabel, formatSqlFileTabLabel(currentFileName))
-            if (!tab.database) tab.database = instanceName
             return true
         }
 
@@ -740,14 +794,41 @@ export const useWorkspaceStore = defineStore('workspace', () => {
                 })
             }
             tab.sqlFile = result.fileName
-            tab.database = instanceName
+            if (scriptScope?.scopeNodeId) {
+                tab.instanceId = scriptScope.scopeNodeId
+            }
             tab.explorerNodeId = undefined
             tab.title = resolveConsoleTabTitle({
                 connectionHost: hostLabel,
                 sqlFile: result.fileName,
                 kind: 'script',
             }) ?? buildConsoleTabTitleFromParts(hostLabel, formatSqlFileTabLabel(result.fileName))
+            renameCachedSqlScript(
+                {
+                    connectionId: tab.connectionId,
+                    instanceName,
+                    fileName: currentFileName,
+                },
+                result.fileName,
+            )
+            setCachedSqlScript(
+                {
+                    connectionId: tab.connectionId,
+                    instanceName,
+                    fileName: result.fileName,
+                },
+                tab.sql ?? '',
+            )
             markConsoleTabSaved(tabId)
+            try {
+                await useExplorerStore().reloadWorkspacesFolder(
+                    tab.connectionId,
+                    instanceName,
+                    scriptScope?.scopeNodeId ?? tab.instanceId,
+                )
+            } catch (reloadError) {
+                console.error('[reloadWorkspacesFolder]', reloadError)
+            }
             return true
         } catch (error) {
             console.error('[renameConsoleTab]', error)

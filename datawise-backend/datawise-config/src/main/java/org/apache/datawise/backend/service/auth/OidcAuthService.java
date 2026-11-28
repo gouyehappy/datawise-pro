@@ -177,8 +177,9 @@ public class OidcAuthService {
         purgeExpired();
         String state = randomUrlSafe(24);
         String verifier = randomUrlSafe(32);
+        String nonce = randomUrlSafe(24);
         String challenge = pkceChallenge(verifier);
-        pending.put(state, new PendingAuth(verifier, Instant.now().plus(STATE_TTL)));
+        pending.put(state, new PendingAuth(verifier, nonce, Instant.now().plus(STATE_TTL)));
         String authorizeEndpoint = discovery(config.issuer).authorizationEndpoint();
         StringBuilder url = new StringBuilder(authorizeEndpoint)
                 .append(authorizeEndpoint.contains("?") ? "&" : "?")
@@ -187,6 +188,7 @@ public class OidcAuthService {
                 .append("&redirect_uri=").append(enc(config.redirectUri))
                 .append("&scope=").append(enc(config.scopes))
                 .append("&state=").append(enc(state))
+                .append("&nonce=").append(enc(nonce))
                 .append("&code_challenge=").append(enc(challenge))
                 .append("&code_challenge_method=S256");
         return url.toString();
@@ -208,7 +210,13 @@ public class OidcAuthService {
         Discovery discovery = discovery(config.issuer);
         JsonNode token = exchangeCode(discovery.tokenEndpoint(), config, code.trim(), pendingAuth.verifier());
         String idToken = text(token, "id_token");
-        JsonNode claims = idTokenVerifier.verify(idToken, config.issuer, config.clientId, discovery.jwksUri());
+        JsonNode claims = idTokenVerifier.verify(
+                idToken,
+                config.issuer,
+                config.clientId,
+                discovery.jwksUri(),
+                pendingAuth.nonce()
+        );
         String email = firstNonBlank(text(claims, "email"), text(claims, "preferred_username"));
         String preferredUsername = firstNonBlank(text(claims, "preferred_username"), email, text(claims, "sub"));
         String displayName = firstNonBlank(text(claims, "name"), preferredUsername);
@@ -471,7 +479,7 @@ public class OidcAuthService {
         } catch (IllegalArgumentException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.warn("OIDC token exchange failed: {}", ex.toString());
+            log.warn("OIDC token exchange failed: {}", ex.getClass().getName());
             throw new IllegalArgumentException("OIDC_TOKEN_EXCHANGE_FAILED");
         }
     }
@@ -565,7 +573,7 @@ public class OidcAuthService {
                 config.deprovisionMissingRoleClaim);
     }
 
-    private record PendingAuth(String verifier, Instant expiresAt) {
+    private record PendingAuth(String verifier, String nonce, Instant expiresAt) {
     }
 
     private record Discovery(String authorizationEndpoint, String tokenEndpoint, String jwksUri) {

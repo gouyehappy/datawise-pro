@@ -5,9 +5,11 @@
  */
 import {computed, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {DwCheckbox, DwInput, DwSecretInput, DwSelect} from '@/core/components'
+import {DwInput, DwSecretInput, SettingsSelect} from '@/core/components'
 import ConnectionFormField from '@/features/connection/components/ConnectionFormField.vue'
+import ConnectionToggleField from '@/features/connection/components/ConnectionToggleField.vue'
 import type {ConnectionConfig} from '@/core/types'
+import {isConnectionFieldWide} from '@/features/connection/forms/connection-field-layout'
 import {
   collectFieldValues,
   filterVisibleDescriptorFields,
@@ -128,23 +130,9 @@ function fieldError(field: DescriptorFormField): string {
 }
 
 function isWide(field: DescriptorFormField): boolean {
-  return (
-    field.type === 'textarea'
-    || field.type === 'select'
-    || field.type === 'boolean'
-    || field.binding === 'database'
-    || field.binding === 'url'
-    || field.binding === 'sid'
-    || field.binding === 'auth'
-    || field.binding === 'kafka_bootstrap'
-    || field.binding === 'kudu_masters'
-    || field.binding === 'http_endpoint'
-    || field.binding === 'kafka_skip_tls'
-    || field.binding === 'es_kibana'
-    || field.binding === 'sshPrivateKey'
-    || field.binding === 'jumpPrivateKey'
-    || field.binding === 'sshEnabled'
-  )
+  return isConnectionFieldWide(field, {
+    optionCount: selectOptions(field).length,
+  })
 }
 
 function onUpdate(field: DescriptorFormField, value: string) {
@@ -187,7 +175,16 @@ function isMonoTextarea(field: DescriptorFormField): boolean {
 
 <template>
   <template v-for="field in visibleFields" :key="field.key">
+    <ConnectionToggleField
+        v-if="field.type === 'boolean'"
+        :model-value="booleanModel(field)"
+        :disabled="readOnly || field.readonly"
+        :label="fieldLabel(field)"
+        :hint="fieldHint(field) || undefined"
+        @update:model-value="onUpdate(field, $event ? 'true' : 'false')"
+    />
     <ConnectionFormField
+        v-else
         :wide="isWide(field)"
         :label="fieldLabel(field)"
         :hint="fieldHint(field)"
@@ -214,21 +211,13 @@ function isMonoTextarea(field: DescriptorFormField): boolean {
           spellcheck="false"
           @input="onUpdate(field, ($event.target as HTMLTextAreaElement).value)"
       />
-      <DwSelect
+      <SettingsSelect
           v-else-if="field.type === 'select' && selectOptions(field).length"
           :model-value="readValue(field)"
           :options="selectOptions(field)"
-          size="sm"
           :disabled="readOnly || field.readonly"
           :placeholder="fieldPlaceholder(field) || fieldLabel(field)"
-          :clearable="false"
           @update:model-value="onUpdate(field, String($event ?? ''))"
-      />
-      <DwCheckbox
-          v-else-if="field.type === 'boolean'"
-          :model-value="booleanModel(field)"
-          :disabled="readOnly || field.readonly"
-          @update:model-value="onUpdate(field, $event ? 'true' : 'false')"
       />
       <DwInput
           v-else-if="isHttpEndpointField(field)"
@@ -267,17 +256,17 @@ function isMonoTextarea(field: DescriptorFormField): boolean {
 
 .descriptor-conn-fields__textarea {
   width: 100%;
-  min-height: 88px;
+  min-height: 7.5rem;
   box-sizing: border-box;
   resize: vertical;
   border: 1px solid var(--dw-border);
-  border-radius: var(--dw-radius-sm, 6px);
+  border-radius: var(--dw-control-radius-sm, var(--dw-radius-sm, 6px));
   background: var(--dw-surface);
   color: var(--dw-text);
   font: inherit;
   font-family: var(--dw-mono, ui-monospace, monospace);
   font-size: var(--dw-text-sm);
-  padding: 8px 10px;
+  padding: var(--dw-space-3) var(--dw-space-4);
 }
 
 .descriptor-conn-fields__textarea:disabled {

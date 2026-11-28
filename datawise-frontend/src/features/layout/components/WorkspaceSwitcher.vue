@@ -383,7 +383,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   width: 18px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0;
@@ -573,7 +573,7 @@ onUnmounted(() => {
   justify-content: center;
   width: 22px;
   height: 22px;
-  border-radius: 5px;
+  border-radius: var(--dw-surface-radius, 5px);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;

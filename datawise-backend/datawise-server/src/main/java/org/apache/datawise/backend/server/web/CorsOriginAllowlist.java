@@ -10,13 +10,13 @@ import java.util.regex.Pattern;
  */
 public final class CorsOriginAllowlist {
 
+    /** Desktop/dev defaults — no {@code app://*} wildcard (SEC-09). Cloud empties this list. */
     public static final List<String> DEFAULT_ORIGIN_PATTERNS = List.of(
             "http://localhost:*",
             "http://127.0.0.1:*",
             "https://localhost:*",
             "https://127.0.0.1:*",
-            "app://local",
-            "app://*"
+            "app://local"
     );
 
     private final String[] springPatterns;

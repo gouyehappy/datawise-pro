@@ -103,4 +103,68 @@ describe('explorer-ai-tree', () => {
         assert.ok(ai)
         assert.equal(ai?.id, 'folder-ai-conn-1-default')
     })
+
+    test('Trino: AI + scripts at connection root; schema drops workspaces/ai', () => {
+        const schema: TreeNode = {
+            id: 'schema-a003',
+            label: 'a003',
+            type: 'schema',
+            children: [
+                {id: 'folder-tables', label: 'tables', type: 'folder', children: []},
+                {id: 'folder-models', label: 'models', type: 'folder', children: []},
+                {id: 'folder-ws', label: 'workspaces', type: 'folder', children: []},
+                {id: 'folder-ai-schema', label: 'ai', type: 'folder', children: []},
+            ],
+        }
+        const catalog: TreeNode = {
+            id: 'db-kudu',
+            label: 'kudu',
+            type: 'database',
+            children: [schema],
+        }
+        const connection: TreeNode = {
+            id: 'conn-trino',
+            label: 'Trino',
+            type: 'connection',
+            dbType: 'trino',
+            children: [
+                {id: 'folder-scripts', label: 'scripts', type: 'folder', children: []},
+                catalog,
+            ],
+        }
+
+        migrateExplorerTreeAiStructure([connection])
+
+        assert.equal(
+            connection.children?.some((child) => isAiFolder(child)),
+            true,
+        )
+        assert.equal(
+            connection.children?.map((child) => child.label).includes('scripts'),
+            true,
+        )
+        assert.equal(schema.children?.some((child) => isAiFolder(child)), false)
+        assert.equal(
+            schema.children?.some(
+                (child) => child.label.localeCompare('workspaces', undefined, {sensitivity: 'accent'}) === 0,
+            ),
+            false,
+        )
+        assert.deepEqual(
+            schema.children?.map((child) => child.label),
+            ['tables', 'models'],
+        )
+    })
+
+    test('Trino: empty connection stays empty so catalogs can lazy-load', () => {
+        const connection: TreeNode = {
+            id: 'conn-empty',
+            label: 'Trino',
+            type: 'connection',
+            dbType: 'trino',
+            children: [],
+        }
+        migrateExplorerTreeAiStructure([connection])
+        assert.deepEqual(connection.children, [])
+    })
 })

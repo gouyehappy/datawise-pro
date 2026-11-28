@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {DwButton, DwCheckbox, DwIcon, DwInput, DwSecretInput, DwSelect} from '@/core/components'
+import {DwButton, DwIcon, DwInput, DwSecretInput, SettingsSelect} from '@/core/components'
 import ConnectionFormField from '@/features/connection/components/ConnectionFormField.vue'
+import ConnectionToggleField from '@/features/connection/components/ConnectionToggleField.vue'
+import {isConnectionFieldWide} from '@/features/connection/forms/connection-field-layout'
 import {
   createHttpCommunityPluginsApi,
   type CommunityPluginInfo,
@@ -459,116 +461,119 @@ watch(
           :accept="pendingPickerField ? pickerAccept(pendingPickerField) : undefined"
           @change="onWebFileChosen"
       />
-      <ConnectionFormField
-          v-for="field in visibleFields"
-          :key="field.key"
-          :wide="field.type === 'textarea' || field.type === 'select' || hasFilePicker(field)"
-          :label="fieldLabel(field)"
-          :hint="fieldHint(field)"
-          :error="fieldError(field)"
-          :required="isFieldRequired(field)"
-      >
-        <DwSecretInput
-            v-if="isSecretField(field) && field.type !== 'textarea'"
-            :model-value="readFieldValue(field)"
-            variant="sm"
+      <template v-for="field in visibleFields" :key="field.key">
+        <ConnectionToggleField
+            v-if="field.type === 'boolean'"
+            :model-value="booleanModel(field)"
             :disabled="readOnly"
-            :placeholder="fieldPlaceholder(field)"
-            :show-label="t('connection.showPassword')"
-            :hide-label="t('connection.hidePassword')"
-            @update:model-value="writeFieldValue(field, $event)"
+            :label="fieldLabel(field)"
+            :hint="fieldHint(field) || undefined"
+            @update:model-value="writeFieldValue(field, $event ? 'true' : 'false')"
         />
-        <div v-else-if="isSecretTextarea(field)" class="plugin-conn-fields__secret-textarea">
+        <ConnectionFormField
+            v-else
+            :wide="isConnectionFieldWide(field, {
+              optionCount: selectOptions(field).length,
+              hasFilePicker: hasFilePicker(field),
+            })"
+            :label="fieldLabel(field)"
+            :hint="fieldHint(field)"
+            :error="fieldError(field)"
+            :required="isFieldRequired(field)"
+        >
+          <DwSecretInput
+              v-if="isSecretField(field) && field.type !== 'textarea'"
+              :model-value="readFieldValue(field)"
+              variant="sm"
+              :disabled="readOnly"
+              :placeholder="fieldPlaceholder(field)"
+              :show-label="t('connection.showPassword')"
+              :hide-label="t('connection.hidePassword')"
+              @update:model-value="writeFieldValue(field, $event)"
+          />
+          <div v-else-if="isSecretTextarea(field)" class="plugin-conn-fields__secret-textarea">
+            <textarea
+                v-if="revealedSecretTextareas[field.key] || !readFieldValue(field)"
+                class="plugin-conn-fields__textarea"
+                :value="readFieldValue(field)"
+                :disabled="readOnly"
+                :placeholder="fieldPlaceholder(field)"
+                rows="6"
+                spellcheck="false"
+                @input="writeFieldValue(field, ($event.target as HTMLTextAreaElement).value)"
+            />
+            <div
+                v-else
+                class="plugin-conn-fields__textarea plugin-conn-fields__textarea--masked"
+                :aria-label="t('communityPlugin.connection.secretHidden')"
+            >
+              <span aria-hidden="true">••••••••••••••••</span>
+            </div>
+            <button
+                v-if="readFieldValue(field)"
+                type="button"
+                class="plugin-conn-fields__secret-toggle"
+                :title="revealedSecretTextareas[field.key]
+                  ? t('communityPlugin.connection.hideSecret')
+                  : t('communityPlugin.connection.showSecret')"
+                @click="toggleSecretTextarea(field.key)"
+            >
+              <DwIcon
+                  :name="revealedSecretTextareas[field.key] ? 'visibility-off' : 'visibility'"
+                  size="sm"
+                  :stroke-width="1.75"
+              />
+            </button>
+          </div>
           <textarea
-              v-if="revealedSecretTextareas[field.key] || !readFieldValue(field)"
+              v-else-if="field.type === 'textarea'"
               class="plugin-conn-fields__textarea"
+              :class="{ 'plugin-conn-fields__textarea--invalid': !!fieldError(field) }"
               :value="readFieldValue(field)"
               :disabled="readOnly"
               :placeholder="fieldPlaceholder(field)"
               rows="6"
               spellcheck="false"
-              @input="writeFieldValue(field, ($event.target as HTMLTextAreaElement).value)"
+              @input="isJumpHostsField(field)
+                ? onConfigFieldInput(field, ($event.target as HTMLTextAreaElement).value)
+                : writeFieldValue(field, ($event.target as HTMLTextAreaElement).value)"
+              @blur="isJumpHostsField(field) && validateJumpHostsField(readFieldValue(field))"
           />
-          <div
-              v-else
-              class="plugin-conn-fields__textarea plugin-conn-fields__textarea--masked"
-              :aria-label="t('communityPlugin.connection.secretHidden')"
-          >
-            <span aria-hidden="true">••••••••••••••••</span>
-          </div>
-          <button
-              v-if="readFieldValue(field)"
-              type="button"
-              class="plugin-conn-fields__secret-toggle"
-              :title="revealedSecretTextareas[field.key]
-                ? t('communityPlugin.connection.hideSecret')
-                : t('communityPlugin.connection.showSecret')"
-              @click="toggleSecretTextarea(field.key)"
-          >
-            <DwIcon
-                :name="revealedSecretTextareas[field.key] ? 'visibility-off' : 'visibility'"
-                size="sm"
-                :stroke-width="1.75"
+          <SettingsSelect
+              v-else-if="field.type === 'select' && selectOptions(field).length"
+              :model-value="readFieldValue(field)"
+              :options="selectOptions(field)"
+              :disabled="readOnly"
+              :placeholder="fieldPlaceholder(field) || fieldLabel(field)"
+              @update:model-value="writeFieldValue(field, String($event ?? ''))"
+          />
+          <div v-else-if="hasFilePicker(field)" class="plugin-conn-fields__picker">
+            <DwInput
+                :model-value="readFieldValue(field)"
+                variant="sm"
+                :disabled="readOnly"
+                :placeholder="fieldPlaceholder(field)"
+                @update:model-value="writeFieldValue(field, String($event ?? ''))"
             />
-          </button>
-        </div>
-        <textarea
-            v-else-if="field.type === 'textarea'"
-            class="plugin-conn-fields__textarea"
-            :class="{ 'plugin-conn-fields__textarea--invalid': !!fieldError(field) }"
-            :value="readFieldValue(field)"
-            :disabled="readOnly"
-            :placeholder="fieldPlaceholder(field)"
-            rows="6"
-            spellcheck="false"
-            @input="isJumpHostsField(field)
-              ? onConfigFieldInput(field, ($event.target as HTMLTextAreaElement).value)
-              : writeFieldValue(field, ($event.target as HTMLTextAreaElement).value)"
-            @blur="isJumpHostsField(field) && validateJumpHostsField(readFieldValue(field))"
-        />
-        <DwSelect
-            v-else-if="field.type === 'select' && selectOptions(field).length"
-            :model-value="readFieldValue(field)"
-            :options="selectOptions(field)"
-            size="sm"
-            :disabled="readOnly"
-            :placeholder="fieldPlaceholder(field) || fieldLabel(field)"
-            :clearable="false"
-            @update:model-value="writeFieldValue(field, String($event ?? ''))"
-        />
-        <DwCheckbox
-            v-else-if="field.type === 'boolean'"
-            :model-value="booleanModel(field)"
-            :disabled="readOnly"
-            @update:model-value="writeFieldValue(field, $event ? 'true' : 'false')"
-        />
-        <div v-else-if="hasFilePicker(field)" class="plugin-conn-fields__picker">
+            <DwButton
+                variant="secondary"
+                size="sm"
+                :disabled="readOnly"
+                @click="pickFile(field)"
+            >
+              {{ t('communityPlugin.connection.chooseFile') }}
+            </DwButton>
+          </div>
           <DwInput
+              v-else
               :model-value="readFieldValue(field)"
               variant="sm"
+              :type="field.type === 'number' ? 'number' : 'text'"
               :disabled="readOnly"
               :placeholder="fieldPlaceholder(field)"
               @update:model-value="writeFieldValue(field, String($event ?? ''))"
           />
-          <DwButton
-              variant="secondary"
-              size="sm"
-              :disabled="readOnly"
-              @click="pickFile(field)"
-          >
-            {{ t('communityPlugin.connection.chooseFile') }}
-          </DwButton>
-        </div>
-        <DwInput
-            v-else
-            :model-value="readFieldValue(field)"
-            variant="sm"
-            :type="field.type === 'number' ? 'number' : 'text'"
-            :disabled="readOnly"
-            :placeholder="fieldPlaceholder(field)"
-            @update:model-value="writeFieldValue(field, String($event ?? ''))"
-        />
-      </ConnectionFormField>
+        </ConnectionFormField>
       </template>
 
       <div v-if="providerActions.length && !readOnly" class="plugin-conn-fields__actions">
@@ -588,6 +593,7 @@ watch(
           v-if="actionStatus"
           class="plugin-conn-fields__hint plugin-conn-fields__action-status"
       >{{ actionStatus }}</p>
+    </template>
   </div>
 </template>
 
@@ -620,7 +626,7 @@ watch(
 .plugin-conn-fields__picker {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--dw-gap);
   align-items: center;
 }
 
@@ -628,7 +634,7 @@ watch(
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--dw-gap);
   align-items: center;
 }
 
@@ -654,7 +660,7 @@ watch(
   font: inherit;
   font-family: var(--dw-font-mono, ui-monospace, monospace);
   font-size: var(--dw-text-sm);
-  padding: 8px 10px;
+  padding: var(--dw-space-3) var(--dw-space-4);
 }
 
 .plugin-conn-fields__textarea:disabled {
@@ -684,15 +690,15 @@ watch(
 
 .plugin-conn-fields__secret-toggle {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: var(--dw-space-2);
+  right: var(--dw-space-2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: var(--dw-icon-size-lg, 26px);
+  height: var(--dw-icon-size-lg, 26px);
   border: none;
-  border-radius: var(--dw-radius-sm, 6px);
+  border-radius: var(--dw-control-radius-sm, var(--dw-radius-sm, 6px));
   background: transparent;
   color: var(--dw-text-muted);
   cursor: pointer;

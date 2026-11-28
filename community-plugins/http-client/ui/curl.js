@@ -63,6 +63,35 @@
     try { return decodeURIComponent(value); } catch (error) { return value; }
   }
 
+  function fileLimitWarning(fileName) {
+    const base = (typeof HC !== "undefined" && HC.i18n && HC.i18n.t)
+      ? HC.i18n.t("toast.fileTooLarge")
+      : "File exceeds 1 MiB and cannot cross the UI bridge";
+    return `${base} (${fileName})`;
+  }
+
+  /* curl file references cannot be sized from the UI, so keep the field and
+     warn about the 1 MiB bridge limit instead of dropping it silently. */
+  function pushFormField(request, warnings, key, raw) {
+    const segments = String(raw).split(";");
+    const value = segments.shift().trim();
+    const meta = {};
+    segments.forEach((segment) => {
+      const [name, ...rest] = segment.trim().split("=");
+      if (name) meta[name] = rest.join("=");
+    });
+    if (value.startsWith("@") || value.startsWith("<")) {
+      const fileName = meta.filename || value.slice(1);
+      request.body.fields.push({
+        key, value: "", enabled: true, kind: "file", fileName,
+        contentType: meta.type || "", dataBase64: "", size: 0
+      });
+      warnings.push(fileLimitWarning(fileName));
+    } else {
+      request.body.fields.push({ key, value, enabled: true, kind: "text" });
+    }
+  }
+
   /**
    * Parses a curl command into the workbench request shape.
    * Returns { request, warnings } or null when the input is not a cURL command.
@@ -107,7 +136,18 @@
       if (token === "--url") { request.url = takeValue(); continue; }
       if (token === "-X" || token === "--request") { request.method = takeValue().toUpperCase(); changedMethod = true; continue; }
       if (token === "-H" || token === "--header") { request.headers.push(parseHeader(takeValue())); continue; }
-      if (token === "-d" || token === "--data" || token === "--data-raw" || token === "--data-ascii" || token === "--data-binary") {
+      if (token === "--data-binary") {
+        const raw = takeValue();
+        if (raw.startsWith("@") || raw.startsWith("<")) {
+          multipart = true;
+          const fileName = raw.slice(1).split(";")[0].replace(/^.*[\\/]/, "");
+          pushFormField(request, warnings, fileName || "file", raw);
+        } else {
+          dataParts.push(raw);
+        }
+        continue;
+      }
+      if (token === "-d" || token === "--data" || token === "--data-raw" || token === "--data-ascii") {
         dataParts.push(takeValue()); continue;
       }
       if (token === "--data-urlencode") {
@@ -122,12 +162,7 @@
         multipart = true;
         const raw = takeValue();
         const [key, value] = splitOnce(raw, "=");
-        if (value.startsWith("@") || value.startsWith("<")) {
-          warnings.push(HC.i18n.t("toast.importCurlFailed"));
-          request.body.fields.push({ key: key.split(";")[0], value: value, enabled: true, kind: "text" });
-        } else {
-          request.body.fields.push({ key: key.split(";")[0], value, enabled: true, kind: "text" });
-        }
+        pushFormField(request, warnings, key.split(";")[0], value);
         continue;
       }
       if (token === "-u" || token === "--user") {
@@ -141,6 +176,10 @@
       if (token === "-I" || token === "--head") { request.method = "HEAD"; changedMethod = true; continue; }
       if (token === "-G" || token === "--get") { request.method = "GET"; changedMethod = true; continue; }
       if (token === "-m" || token === "--max-time") { request.options.timeoutMs = Math.round(Number(takeValue()) * 1000) || 30000; continue; }
+      if (token === "--connect-timeout") {
+        request.options.timeoutMs = Math.round(Number(takeValue()) * 1000) || request.options.timeoutMs;
+        continue;
+      }
       if (token === "-x" || token === "--proxy") {
         request.options.proxyMode = "custom";
         request.options.proxyUrl = takeValue();
@@ -160,16 +199,23 @@
         continue;
       }
       if (token.startsWith("-")) {
-        if (FLAGS_WITH_VALUE.has(token) && inlineValue === null) index += 1;
+        if (FLAGS_WITH_VALUE.has(token)) {
+          if (inlineValue === null) index += 1;
+          warnings.push(`Ignored unsupported cURL flag: ${token}`);
+        }
         continue;
       }
       if (!request.url) request.url = token;
     }
 
-    if (dataParts.length) {
-      const raw = dataParts.join("&");
+    if (multipart) {
+      request.body.mode = "formdata";
+      if (dataParts.length) warnings.push("cURL --data and --form cannot be combined; --form fields were kept");
+    } else if (dataParts.length) {
       const contentTypeHeader = request.headers.find((header) => /^content-type$/i.test(header.key));
       const contentType = dataContentType || (contentTypeHeader ? contentTypeHeader.value : "");
+      // Only urlencoded bodies use "&"; JSON/raw keep the original concatenation.
+      const raw = dataParts.join(/x-www-form-urlencoded/i.test(contentType) ? "&" : "");
       if (/x-www-form-urlencoded/i.test(contentType)) {
         request.body.mode = "urlencoded";
         request.body.fields = parseUrlEncoded(raw);
@@ -178,8 +224,6 @@
         request.body.raw = raw;
         request.body.contentType = contentType || "application/json";
       }
-    } else if (multipart) {
-      request.body.mode = "formdata";
     }
 
     if (request.auth.type !== "none" && !changedMethod && request.method === "GET") request.method = "POST";
@@ -204,11 +248,30 @@
     return `'${String(value).replace(/'/g, "'\\''")}'`;
   }
 
+  /* tab.params may not have been synced back into tab.url yet, and an apikey
+     auth can live in the query string, so fold both into the generated URL. */
+  function urlWithParams(tab, resolve) {
+    const raw = resolve(tab.url || "");
+    try {
+      const url = new URL(raw);
+      (tab.params || []).forEach((row) => {
+        if (!row || row.enabled === false || !row.key) return;
+        url.searchParams.set(resolve(row.key), resolve(row.value == null ? "" : row.value));
+      });
+      if (tab.auth && tab.auth.type === "apikey" && tab.auth.in === "query" && tab.auth.key) {
+        url.searchParams.set(resolve(tab.auth.key), resolve(tab.auth.value || ""));
+      }
+      return url.toString();
+    } catch (error) {
+      return raw;
+    }
+  }
+
   /** Renders the current tab as a reproducible curl command. */
   function generateCurl(tab, options) {
     const settings = options || {};
     const resolve = settings.resolve || ((value) => value);
-    const lines = [`curl -X ${tab.method} ${quote(resolve(tab.url) || "")}`];
+    const lines = [`curl -X ${tab.method} ${quote(urlWithParams(tab, resolve) || "")}`];
     const rows = (tab.headers || []).filter((row) => row.enabled !== false && row.key);
     rows.forEach((row) => lines.push(`  -H ${quote(`${resolve(row.key)}: ${resolve(row.value)}`)}`));
     if (tab.auth.type === "basic") lines.push(`  -u ${quote(`${resolve(tab.auth.username)}:${resolve(tab.auth.password)}`)}`);

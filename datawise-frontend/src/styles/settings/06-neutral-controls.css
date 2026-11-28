@@ -1,0 +1,177 @@
+/**
+ * 设置页控件中性化 —— 作用域 .module-shell__main（覆盖全部设置面板）
+ *
+ * 1) 去掉 primary/secondary/danger/soft 等按钮的主色着色，统一成中性描边控件；
+ *    危险/警告操作也中性化，靠文字与操作顺序区分。
+ * 2) 圆角/边框/尺寸全部走皮肤 token，4 套皮肤（classic/ide/atelier/ledger）
+ *    各自决定直角或圆角，组件层不写死观感。
+ * 3) 开关（SettingsSwitch）的绿色改为中性轨道：选中用文字色填充、未选用弱底，
+ *    靠滑块位置区分状态，不再出现彩色。
+ */
+
+/* ---- 按钮：全部中性化 ---- */
+.module-shell__main :is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .btn-soft,
+    .btn-outline,
+    .btn-link
+) {
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-btn-radius);
+    background: var(--dw-bg-editor, var(--dw-bg-panel));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+.module-shell__main :is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .btn-soft,
+    .btn-outline,
+    .btn-link
+):hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--dw-text) 26%, var(--dw-border));
+    background: var(--dw-bg-hover, color-mix(in srgb, var(--dw-text) 6%, var(--dw-bg-editor, var(--dw-bg-panel))));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+.module-shell__main :is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .btn-soft,
+    .btn-outline,
+    .btn-link
+):active:not(:disabled) {
+    background: color-mix(in srgb, var(--dw-text) 10%, var(--dw-bg-editor, var(--dw-bg-panel)));
+    box-shadow: none;
+}
+
+/* 危险操作：中性底 + 偏红描边，与全局策略一致（保留风险提示） */
+.module-shell__main :is(.btn-primary.btn-danger) {
+    border-color: color-mix(in srgb, var(--dw-danger) 46%, var(--dw-border));
+    background: var(--dw-bg-editor, var(--dw-bg-panel));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+.module-shell__main :is(.btn-primary.btn-danger):hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--dw-danger) 68%, var(--dw-border));
+    background: color-mix(in srgb, var(--dw-danger) 8%, var(--dw-bg-editor, var(--dw-bg-panel)));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+/* link 按钮去掉下划线与主色，作为朴素文本按钮 */
+.module-shell__main .btn-link {
+    border-color: transparent;
+    background: transparent;
+    text-decoration: none;
+}
+
+.module-shell__main .btn-link:hover:not(:disabled) {
+    border-color: transparent;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+}
+
+/* 通用头部按钮（settings-head-btn / reset-all-btn / action-btn）hover 也去主色 */
+.module-shell__main :is(.settings-head-btn, .reset-all-btn, .action-btn):hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--dw-text) 26%, var(--dw-border));
+    background: var(--dw-bg-hover, color-mix(in srgb, var(--dw-text) 6%, var(--dw-bg-panel)));
+    color: var(--dw-text);
+}
+
+/* ---- 开关：中性轨道与焦点环已在 @datawise/ui SettingsSwitch 源头统一，此处无需覆盖 ---- */
+
+/* ---- 色板选中态：中性描边替代主色 ring ---- */
+.module-shell__main .color-swatch.active {
+    border-color: var(--dw-text);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--dw-text) 18%, transparent);
+}
+
+/* ---- 语言卡片选中态：中性抬升替代主色底 ---- */
+.module-shell__main .locale-card:hover {
+    border-color: color-mix(in srgb, var(--dw-text) 26%, var(--dw-border));
+}
+
+.module-shell__main .locale-card.active {
+    border-color: var(--dw-text-secondary);
+    background: color-mix(in srgb, var(--dw-text) 8%, var(--dw-bg-panel));
+    color: var(--dw-text);
+    box-shadow: none;
+}
+
+.module-shell__main .locale-card.active .locale-flag {
+    background: color-mix(in srgb, var(--dw-text) 12%, var(--dw-bg-muted));
+    color: var(--dw-text);
+}
+
+/* ---- 最近工作区徽标/激活态：中性 ---- */
+.module-shell__main .workspace-recent__item.is-active {
+    border-color: var(--dw-border-strong, var(--dw-text-secondary));
+    background: color-mix(in srgb, var(--dw-text) 6%, var(--dw-bg-muted));
+}
+
+.module-shell__main .workspace-recent__switch:not(:disabled):hover .workspace-recent__name {
+    color: var(--dw-text);
+}
+
+.module-shell__main .workspace-recent__badge {
+    color: var(--dw-text-secondary);
+    background: color-mix(in srgb, var(--dw-text) 10%, transparent);
+}
+
+/* ---- 输入框/下拉聚焦环：中性替代主色 ---- */
+.module-shell__main :is(.dw-input, .dw-select__trigger, .dw-search):focus-within,
+.module-shell__main .dw-input:focus-visible {
+    border-color: var(--dw-border-strong, var(--dw-text-secondary));
+    box-shadow: none;
+}
+
+/* ---- 配置块（分组卡 / 面板卡）：中性、紧凑、成组 ----
+ * 卡片的透明/直角由皮肤层白名单决定（ide / ledger），此处只统一跨皮肤细节：
+ * 中性描边、图标去主色、块间距收紧、端点脚注套等宽容器。
+ * 覆盖「备份还原 / 插件 / 项目管理 / 配置云同步 / 配置迁移」等所有设置分组卡。
+ */
+.module-shell__main :is(.settings-section__card, .setting-card, .shortcut-card) {
+    border-color: color-mix(in srgb, var(--dw-text) 12%, transparent);
+}
+
+.module-shell__main .settings-section__card > .settings-section__block {
+    padding: var(--dw-space-2) 0;
+}
+
+/* 卡片图标：去掉 primary / sky / emerald 着色，与按钮、开关同源中性 */
+.module-shell__main :is(.setting-card__icon, .shortcut-card__icon) {
+    border-radius: var(--dw-control-radius-sm);
+    background: color-mix(in srgb, var(--dw-text) 8%, transparent);
+    color: var(--dw-text-secondary);
+}
+
+/* 指标来源脚注：裸两行灰字 -> 紧凑元信息 + 可辨识的等宽端点标签 */
+.module-shell__main .metrics-footnote {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dw-space-2);
+}
+
+.module-shell__main .metrics-footnote p {
+    margin: 0;
+}
+
+.module-shell__main .metrics-footnote code {
+    align-self: flex-start;
+    margin-top: 0;
+    padding: var(--dw-space-1) var(--dw-space-3);
+    border: 1px solid var(--dw-border);
+    border-radius: var(--dw-control-radius-sm);
+    background: color-mix(in srgb, var(--dw-text) 4%, transparent);
+    font-family: var(--dw-mono);
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-secondary);
+}

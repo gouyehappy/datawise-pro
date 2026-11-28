@@ -38,4 +38,34 @@ describe('migration-stream', () => {
         assert.deepEqual(completed, ['users', 'orders'])
         assert.equal(result.results.length, 2)
     })
+
+    it('skips malformed JSON events without aborting the stream', async () => {
+        const sse = [
+            'event: table_start',
+            'data: {"tableIndex":1,"tableTotal":1,"tableName":"users"}',
+            '',
+            'event: table_result',
+            'data: {not-json',
+            '',
+            'event: done',
+            'data: {"results":[{"tableName":"users","rowsMigrated":1,"batches":1,"durationMs":10,"status":"success"}]}',
+            '',
+        ].join('\n')
+
+        const started: string[] = []
+        const errors: string[] = []
+
+        const result = await consumeMigrationSseStreamForTest(encodeMigrationSseText(sse), {
+            onTableStart: (event) => started.push(event.tableName),
+            onTableResult: () => {
+                throw new Error('malformed table_result must be skipped')
+            },
+            onDone: () => {},
+            onError: (message) => errors.push(message),
+        })
+
+        assert.deepEqual(started, ['users'])
+        assert.ok(errors.some((message) => message.includes('Malformed')))
+        assert.equal(result.results.length, 1)
+    })
 })

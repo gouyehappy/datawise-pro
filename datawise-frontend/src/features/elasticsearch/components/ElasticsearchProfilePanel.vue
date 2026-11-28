@@ -116,7 +116,7 @@ function collapseAll() {
 .es-profile__btn {
   border: 1px solid var(--dw-border);
   background: transparent;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   padding: 2px 8px;
   font-size: var(--dw-text-sm);
   cursor: pointer;

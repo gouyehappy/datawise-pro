@@ -698,9 +698,9 @@ defineExpose({
 }
 
 .ssh-quick-ops__manage--primary:hover {
-  color: var(--dw-primary);
-  border-color: color-mix(in srgb, var(--dw-primary) 35%, var(--dw-border));
-  background: color-mix(in srgb, var(--dw-primary) 8%, transparent);
+  color: var(--dw-text);
+  border-color: color-mix(in srgb, var(--dw-text) 30%, var(--dw-border));
+  background: var(--dw-bg-hover);
 }
 
 .ssh-quick-ops__chips {

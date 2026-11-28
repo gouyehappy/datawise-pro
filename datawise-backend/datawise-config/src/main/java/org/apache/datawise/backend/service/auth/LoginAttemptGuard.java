@@ -4,7 +4,8 @@ import org.apache.datawise.backend.common.DatawiseErrorCodes;
 import org.springframework.stereotype.Service;
 
 /**
- * Login failure throttle (per username). Uses {@link LoginAttemptStore}:
+ * Login failure throttle keyed by {@code (username, clientIp)} so one IP cannot lock
+ * an arbitrary account for all callers (SEC-04). Uses {@link LoginAttemptStore}:
  * memory for desktop/file metadata, JDBC ({@code dw_login_attempt}) when
  * {@code datawise.storage.backend=jdbc} — see docs/DEPLOYMENT.md#affinity.
  */
@@ -27,8 +28,8 @@ public class LoginAttemptGuard {
         this(new MemoryLoginAttemptStore());
     }
 
-    public void assertNotLocked(String username) {
-        String key = normalize(username);
+    public void assertNotLocked(String username, String clientIp) {
+        String key = compositeKey(username, clientIp);
         if (key == null) {
             return;
         }
@@ -46,8 +47,8 @@ public class LoginAttemptGuard {
         }
     }
 
-    public void recordFailure(String username) {
-        String key = normalize(username);
+    public void recordFailure(String username, String clientIp) {
+        String key = compositeKey(username, clientIp);
         if (key == null) {
             return;
         }
@@ -62,17 +63,37 @@ public class LoginAttemptGuard {
         store.save(key, next);
     }
 
-    public void clearFailures(String username) {
-        String key = normalize(username);
+    public void clearFailures(String username, String clientIp) {
+        String key = compositeKey(username, clientIp);
         if (key != null) {
             store.delete(key);
         }
     }
 
-    private static String normalize(String username) {
+    /**
+     * Composite lock key: {@code username|ip}. Missing IP uses {@code unknown}
+     * so throttle still applies without collapsing all users into one bucket.
+     */
+    static String compositeKey(String username, String clientIp) {
+        String user = normalizeUsername(username);
+        if (user == null) {
+            return null;
+        }
+        String ip = normalizeIp(clientIp);
+        return user + "|" + ip;
+    }
+
+    private static String normalizeUsername(String username) {
         if (username == null || username.isBlank()) {
             return null;
         }
         return username.trim().toLowerCase();
+    }
+
+    private static String normalizeIp(String clientIp) {
+        if (clientIp == null || clientIp.isBlank()) {
+            return "unknown";
+        }
+        return clientIp.trim().toLowerCase();
     }
 }

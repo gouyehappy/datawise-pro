@@ -68,6 +68,14 @@ class JdbcDriverLoaderTest {
     void mavenCoordinate_parseRejectsInvalidInput() {
         assertThrows(IllegalArgumentException.class,
                 () -> JdbcMavenCoordinate.parse("bad-coordinates"));
+        assertThrows(IllegalArgumentException.class,
+                () -> JdbcMavenCoordinate.parse("com.mysql:../evil:1.0"));
+        assertThrows(IllegalArgumentException.class,
+                () -> JdbcMavenCoordinate.parse("com/mysql:mysql-connector-j:8.4.0"));
+        assertThrows(IllegalArgumentException.class,
+                () -> JdbcMavenCoordinate.parse("com.mysql:mysql\\connector:8.4.0"));
+        assertThrows(IllegalArgumentException.class,
+                () -> JdbcMavenCoordinate.parse("com.mysql:mysql connector:8.4.0"));
     }
 
     @Test

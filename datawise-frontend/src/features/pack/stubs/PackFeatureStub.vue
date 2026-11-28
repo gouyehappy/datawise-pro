@@ -109,8 +109,13 @@ function openStore() {
   font-weight: 600;
 }
 .pack-feature-stub__cta--primary {
-  border-color: transparent;
-  background: var(--dw-primary);
-  color: var(--dw-on-accent);
+  border-color: var(--dw-border);
+  background: var(--dw-bg-editor, var(--dw-bg-panel));
+  color: var(--dw-text);
+}
+
+.pack-feature-stub__cta--primary:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--dw-text) 26%, var(--dw-border));
+  background: var(--dw-bg-hover, var(--dw-bg-panel));
 }
 </style>

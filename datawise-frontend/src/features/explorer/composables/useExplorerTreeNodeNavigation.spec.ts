@@ -12,6 +12,9 @@ vi.mock('@/features/explorer/services/explorer-node-open.service', async (import
         ...actual,
         resolveExplorerNodeOpenKind: (node: TreeNode) =>
             node.type === 'connection' ? 'connection' : actual.resolveExplorerNodeOpenKind(node),
+        hasExplorerNodeActivateAction: (node: TreeNode) =>
+            node.type === 'connection'
+            || actual.hasExplorerNodeActivateAction(node),
     }
 })
 
@@ -72,5 +75,51 @@ describe('useExplorerTreeNodeNavigation', () => {
 
         expect(selectNode).toHaveBeenCalledWith('conn-1')
         expect(connectConnection).toHaveBeenCalledWith('conn-1', {notify: true})
+    })
+
+    it('onOpen leaf meta selects without activate side effects', async () => {
+        const selectNode = vi.fn()
+        const toggleExpand = vi.fn()
+        const openTable = vi.fn()
+        const connectConnection = vi.fn()
+        const nav = useExplorerTreeNodeNavigation({
+            t: ((key: string) => key) as never,
+            explorer: {
+                connectConnection,
+                selectNode,
+                findNode: vi.fn(),
+                toggleExpand,
+                showAllFavoriteTables: vi.fn(),
+                tree: [],
+            } as never,
+            workspace: {
+                openWithPlan: vi.fn(),
+                openTable,
+                openPlatformCatalog: vi.fn(),
+                openSshTerminal: vi.fn(),
+                openSshScriptRecord: vi.fn(),
+            } as never,
+            layout: {
+                setModule: vi.fn(),
+                showErrorToast: vi.fn(),
+            } as never,
+            auth: {isGuest: false} as never,
+            shortcutPanel: {syncExplorerInfo: vi.fn()} as never,
+            findConnectionId: () => 'conn-1',
+            findConnectionLabel: () => 'MySQL',
+            platformWorkspaceOpenHandlers: () => ({openWithPlan: vi.fn()} as never),
+        })
+
+        await nav.onOpen({
+            id: 'col-1',
+            label: 'id',
+            type: 'column',
+            children: [],
+        } as TreeNode)
+
+        expect(selectNode).toHaveBeenCalledWith('col-1')
+        expect(connectConnection).not.toHaveBeenCalled()
+        expect(toggleExpand).not.toHaveBeenCalled()
+        expect(openTable).not.toHaveBeenCalled()
     })
 })

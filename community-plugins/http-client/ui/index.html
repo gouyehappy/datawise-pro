@@ -9,56 +9,67 @@
   <body>
     <div class="hc-app" id="app">
       <header class="hc-topbar">
-        <button class="hc-icon-btn" id="btn-toggle-sidebar" type="button" title="折叠/展开侧栏">☰</button>
+        <button class="hc-icon-btn" id="btn-toggle-sidebar" type="button" data-i18n-title="side.toggle" data-i18n-aria="side.toggle">☰</button>
         <div class="hc-brand">
           <img class="hc-brand-mark" src="assets/plugin.svg" width="20" height="20" alt="" />
-          <span id="brand-name">HTTP Client</span>
+          <span id="brand-name" data-i18n="brand"></span>
         </div>
         <div class="hc-grow"></div>
+        <button class="hc-memory-badge" id="memory-badge" type="button" hidden
+                data-i18n="status.memoryBadge" data-i18n-title="status.memoryOnlyTitle"></button>
         <div class="hc-env-picker" id="env-picker">
           <button type="button" class="hc-env-picker-trigger" id="env-picker-trigger" aria-haspopup="listbox" aria-expanded="false">
             <span class="hc-env-picker-icon" aria-hidden="true"></span>
-            <span class="hc-env-picker-label" id="env-picker-label">无环境</span>
-            <span class="hc-env-picker-caret" aria-hidden="true">▾</span>
+            <span class="hc-env-picker-label" id="env-picker-label" data-i18n="env.none"></span>
+            <span class="hc-env-picker-caret" aria-hidden="true"></span>
           </button>
         </div>
-        <button class="hc-btn hc-btn-ghost" id="btn-import-curl" type="button">导入 cURL</button>
-        <button class="hc-btn hc-btn-ghost" id="btn-dynamic-vars" type="button">内置变量</button>
-        <button class="hc-btn hc-btn-ghost" id="btn-settings" type="button">设置</button>
+        <button class="hc-btn hc-btn-ghost" id="btn-import-curl" type="button" data-i18n="action.importCurl"></button>
+        <button class="hc-btn hc-btn-ghost" id="btn-dynamic-vars" type="button" data-i18n="action.dynamicVars"></button>
+        <button class="hc-btn hc-btn-ghost" id="btn-globals" type="button" data-i18n="action.globals"></button>
+        <button class="hc-btn hc-btn-ghost" id="btn-pane-layout" type="button" data-i18n="action.paneLayout" aria-haspopup="menu"></button>
+        <button class="hc-btn hc-btn-ghost" id="btn-settings" type="button" data-i18n="action.settings"></button>
       </header>
 
       <div class="hc-body">
         <aside class="hc-sidebar" id="sidebar">
           <div class="hc-side-chrome">
             <nav class="hc-side-tabs" role="tablist">
-              <button class="hc-side-tab is-active" data-side-view="collections" type="button">集合</button>
-              <button class="hc-side-tab" data-side-view="history" type="button">历史</button>
-              <button class="hc-side-tab" data-side-view="environments" type="button">环境</button>
+              <button class="hc-side-tab is-active" data-side-view="collections" type="button" data-i18n="side.collections"></button>
+              <button class="hc-side-tab" data-side-view="history" type="button" data-i18n="side.history"></button>
+              <button class="hc-side-tab" data-side-view="environments" type="button" data-i18n="side.environments"></button>
             </nav>
             <div class="hc-side-actions" id="sidebar-actions"></div>
           </div>
           <div class="hc-side-body" id="sidebar-body"></div>
         </aside>
-        <div class="hc-splitter" id="sidebar-splitter" title="拖动调整宽度"></div>
+        <div class="hc-splitter" id="sidebar-splitter" data-i18n-title="side.resizeHint" aria-label="Resize sidebar"></div>
 
         <main class="hc-main">
-          <div class="hc-tabstrip" id="tabstrip"></div>
+          <div class="hc-tabstrip" id="tabstrip-wrap">
+            <button type="button" class="hc-tab-nav" id="tabstrip-prev" hidden data-i18n-aria="tab.scrollLeft">‹</button>
+            <div class="hc-tabstrip-scroll" id="tabstrip"></div>
+            <button type="button" class="hc-tab-nav" id="tabstrip-next" hidden data-i18n-aria="tab.scrollRight">›</button>
+            <button type="button" class="hc-tab-add" id="tab-add" data-i18n-title="action.newRequest" data-i18n-aria="action.newRequest">+</button>
+          </div>
 
           <section class="hc-env-pane" id="env-pane" hidden></section>
 
           <section class="hc-request" id="request-pane">
             <div class="hc-request-name-row">
               <input id="request-title" class="hc-input hc-request-title" type="text" spellcheck="false"
-                     autocomplete="off" placeholder="未命名接口" />
+                     autocomplete="off" data-i18n-placeholder="request.namePlaceholder" />
               <div class="hc-request-tools">
-                <button class="hc-icon-btn" id="btn-save" type="button" title="保存到集合">☆</button>
-                <button class="hc-icon-btn" id="btn-copy-curl" type="button" title="复制为 cURL">⌘</button>
+                <button class="hc-icon-btn" id="btn-save" type="button" data-i18n-title="action.save" data-i18n-aria="action.save">☆</button>
+                <button class="hc-icon-btn" id="btn-copy-curl" type="button" data-i18n-title="action.copyCurl" data-i18n-aria="action.copyCurl">⌘</button>
+                <button class="hc-icon-btn" id="btn-cases" type="button" data-i18n-title="cases.title" data-i18n-aria="cases.title">▦</button>
+                <button class="hc-icon-btn" id="btn-cycle-pane" type="button" data-i18n-title="action.cyclePane" data-i18n-aria="action.cyclePane">⤢</button>
               </div>
             </div>
             <div class="hc-url-row" data-method="GET">
               <div class="hc-method-picker" id="method-picker">
                 <button type="button" class="hc-method-trigger" id="method-trigger"
-                        aria-haspopup="listbox" aria-expanded="false" aria-label="HTTP 方法">
+                        aria-haspopup="listbox" aria-expanded="false" data-i18n-aria="aria.method">
                   <span class="hc-method-label" id="method-label">GET</span>
                   <span class="hc-method-caret" aria-hidden="true"></span>
                 </button>
@@ -67,20 +78,22 @@
               <div class="hc-url-wrap">
                 <div class="hc-url-highlight" id="url-highlight" aria-hidden="true"></div>
                 <input id="url-input" class="hc-input hc-url" type="text" spellcheck="false" autocomplete="off"
-                       placeholder="https://api.example.com/users" />
+                       placeholder="https://api.example.com/users" aria-label="Request URL" />
                 <span class="hc-url-flag" id="url-flag" hidden></span>
               </div>
-              <button class="hc-btn hc-btn-send" id="btn-send" type="button">发送</button>
-              <button class="hc-btn hc-btn-danger" id="btn-cancel" type="button" hidden>取消</button>
+              <button class="hc-btn hc-btn-send" id="btn-send" type="button" data-i18n="action.send"></button>
+              <button class="hc-btn hc-btn-danger" id="btn-cancel" type="button" hidden data-i18n="action.cancel"></button>
             </div>
 
             <div class="hc-sections" id="request-sections"></div>
             <div class="hc-panels" id="request-panels"></div>
           </section>
 
-          <div class="hc-splitter hc-splitter-h" id="pane-splitter" title="拖动调整高度"></div>
+          <div class="hc-splitter hc-splitter-h" id="pane-splitter" data-i18n-title="pane.splitterHint" aria-label="Resize request and response panes"></div>
 
           <section class="hc-response" id="response-pane"></section>
+          <div class="hc-splitter hc-splitter-v hc-workflow-splitter" id="workflow-splitter" data-i18n-title="side.resizeHint" aria-label="Resize workflow panel" hidden></div>
+          <section class="hc-workflow-pane" id="workflow-pane" hidden></section>
         </main>
       </div>
 
@@ -93,14 +106,25 @@
     <script src="download-name.js"></script>
     <script src="bridge.js"></script>
     <script src="curl.js"></script>
+    <script src="diff.js"></script>
+    <script src="codegen.js"></script>
     <script src="apipost.js"></script>
+    <script src="postman.js"></script>
+    <script src="har.js"></script>
+    <script src="doc-export.js"></script>
     <script src="scripts.js"></script>
+    <script src="assert-gen.js"></script>
+    <script src="json-tree.js"></script>
     <script src="clients.js"></script>
     <script src="store.js"></script>
     <script src="view-sidebar.js"></script>
     <script src="view-env.js"></script>
     <script src="view-request.js"></script>
     <script src="view-response.js"></script>
+    <script src="workflow.js"></script>
+    <script src="actions.js"></script>
+    <script src="command-palette.js"></script>
+    <script src="shortcuts.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

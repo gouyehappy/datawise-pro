@@ -37,7 +37,7 @@ import {
     zipDirectoryContents,
 } from '../../datawise-frontend/scripts/desktop/lib.mjs'
 import {stripJreBloat} from '../../datawise-frontend/scripts/desktop/jlink-jre.mjs'
-import {ensureJbrJcef} from './ensure-jbr-jcef.mjs'
+import {ensureJbrJcef, JBR_JCEF_BUILD, JBR_JCEF_BUILD_SUFFIX} from './ensure-jbr-jcef.mjs'
 import {githubHttps, resolveRepoIdentity} from '../../scripts/repo-identity.mjs'
 import {ensureInnoSetup} from './ensure-inno-setup.mjs'
 
@@ -117,24 +117,35 @@ function sha256File(path) {
 /**
  * Package-local version manifest (foundation for incremental updates).
  * Written next to backend/frontend-dist and into jpackage resource roots.
+ * `components.*` fingerprints let the desktop updater skip unchanged layers
+ * (especially the ~400MB JCEF runtime) and download only FE / server packs.
  */
 function writeLocalVersionManifest(dir, version, target) {
     const files = {}
+    const components = {}
     const serverJar = join(dir, 'backend', 'datawise-server.jar')
     if (existsSync(serverJar)) {
         const st = statSync(serverJar)
-        files['backend/datawise-server.jar'] = {sha256: sha256File(serverJar), bytes: st.size}
+        const sha = sha256File(serverJar)
+        files['backend/datawise-server.jar'] = {sha256: sha, bytes: st.size}
+        components.serverJar = {sha256: sha, bytes: st.size}
     }
     const indexHtml = join(dir, 'frontend-dist', 'index.html')
     if (existsSync(indexHtml)) {
         const st = statSync(indexHtml)
-        files['frontend-dist/index.html'] = {sha256: sha256File(indexHtml), bytes: st.size}
+        const sha = sha256File(indexHtml)
+        files['frontend-dist/index.html'] = {sha256: sha, bytes: st.size}
+        components.frontend = {sha256: sha, bytes: st.size}
+    }
+    components.runtime = {
+        id: `${JBR_JCEF_BUILD}-${JBR_JCEF_BUILD_SUFFIX}`,
     }
     const manifest = {
-        schema: 1,
+        schema: 2,
         version: String(version),
         platform: `${target.osKey}-${target.zipArch}`,
         builtAt: buildTimestampIso(),
+        components,
         files,
     }
     writeFileSync(join(dir, 'local_version.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
@@ -1142,16 +1153,40 @@ function zipServerJarRelease(version, layoutDir) {
     return zipPath
 }
 
-function writeReleaseVersionJson(version, target, artifacts) {
+function writeReleaseVersionJson(version, target, artifacts, layoutDir) {
     const releaseDir = join(frontendRoot, 'release')
     mkdirSync(releaseDir, {recursive: true})
+    let components = {
+        runtime: {id: `${JBR_JCEF_BUILD}-${JBR_JCEF_BUILD_SUFFIX}`},
+    }
+    const localPath = layoutDir ? join(layoutDir, 'local_version.json') : null
+    if (localPath && existsSync(localPath)) {
+        try {
+            const local = JSON.parse(readFileSync(localPath, 'utf8'))
+            if (local?.components && typeof local.components === 'object') {
+                components = {...components, ...local.components}
+            }
+        } catch {
+            // keep runtime-only fallback
+        }
+    }
+    const sizes = {}
+    for (const [key, name] of Object.entries(artifacts)) {
+        if (!name || typeof name !== 'string') continue
+        const full = join(releaseDir, name)
+        if (existsSync(full)) {
+            sizes[key] = statSync(full).size
+        }
+    }
     const manifest = {
-        schema: 1,
+        schema: 2,
         version: String(version),
         platform: `${target.osKey}-${target.zipArch}`,
         builtAt: buildTimestampIso(),
-        // D-04: clients prefer frontend-dist / server-jar over full installer when present.
+        // Clients prefer frontend-dist / server-jar over full installer when runtime is unchanged.
         preferIncremental: true,
+        components,
+        sizes,
         artifacts: Object.fromEntries(
             Object.entries(artifacts).filter(([, v]) => Boolean(v)),
         ),
@@ -1412,7 +1447,7 @@ async function main() {
             serverJar: serverZip ? basename(serverZip) : null,
             installer: null,
             profile: opts.profile,
-        })
+        }, layout)
         if (opts.publish) {
             await publishRelease(version, [
                 zip,
@@ -1439,7 +1474,7 @@ async function main() {
                 serverJar: serverZip ? basename(serverZip) : null,
                 installer: basename(installer),
                 profile: opts.profile,
-            })
+            }, layout)
             if (opts.publish) {
                 await publishRelease(version, [
                     installer,

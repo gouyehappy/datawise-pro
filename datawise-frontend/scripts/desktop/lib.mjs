@@ -66,20 +66,29 @@ export function stopDesktopProcesses() {
             "CommandLine like '%datawise-frontend%release%'",
             "CommandLine like '%DataWiseCLI-%setup%'",
         ]
-        for (const filter of wmicFilters) {
-            try {
-                const raw = execSync(
-                    `wmic process where "${filter}" get ProcessId`,
-                    {encoding: 'utf8', windowsHide: true},
-                )
-                for (const line of raw.split(/\r?\n/)) {
-                    const pid = line.trim()
-                    if (/^\d+$/.test(pid)) {
-                        killTask(`taskkill /F /PID ${pid} /T`)
+        // 新版 Windows 常无 wmic；失败时静默，靠下面 PowerShell 兜底
+        let wmicOk = true
+        try {
+            execSync('where wmic', {stdio: 'ignore', windowsHide: true})
+        } catch {
+            wmicOk = false
+        }
+        if (wmicOk) {
+            for (const filter of wmicFilters) {
+                try {
+                    const raw = execSync(
+                        `wmic process where "${filter}" get ProcessId`,
+                        {encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore']},
+                    )
+                    for (const line of String(raw).split(/\r?\n/)) {
+                        const pid = line.trim()
+                        if (/^\d+$/.test(pid)) {
+                            killTask(`taskkill /F /PID ${pid} /T`)
+                        }
                     }
+                } catch {
+                    // no matches
                 }
-            } catch {
-                // wmic unavailable or no matches
             }
         }
 

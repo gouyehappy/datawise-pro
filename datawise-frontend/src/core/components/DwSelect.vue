@@ -16,15 +16,16 @@ withDefaults(
     placeholder?: string
     disabled?: boolean
     useOptionFont?: boolean
-    size?: 'default' | 'sm' | 'pill' | 'compact' | 'inline'
+    size?: 'default' | 'sm' | 'settings' | 'pill' | 'compact' | 'inline'
     menuMinWidth?: string
     menuMaxWidth?: string
+    matchTrigger?: boolean
     searchable?: boolean
     searchPlaceholder?: string
     clearable?: boolean
     side?: 'top' | 'bottom'
   }>(),
-  {size: 'default', side: 'bottom'},
+  {size: 'default', side: 'bottom', matchTrigger: false},
 )
 </script>
 
@@ -39,6 +40,7 @@ withDefaults(
       :size="size"
       :menu-min-width="menuMinWidth"
       :menu-max-width="menuMaxWidth"
+      :match-trigger="matchTrigger"
       :searchable="searchable"
       :search-placeholder="searchPlaceholder"
       :clearable="clearable"

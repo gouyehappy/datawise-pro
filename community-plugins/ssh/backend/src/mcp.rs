@@ -991,13 +991,18 @@ impl McpState {
         //    connection they reference was opened read-only (mirroring the
         //    workbench `ensure_writable` gate) or the operator forced the
         //    whole server read-only via DATAWISE_SSH_MCP_READ_ONLY.
-        // 2. Read-only command whitelist: `ssh_exec` stays available on
-        //    read-only connections, but only for provably read-only
-        //    commands (ls, df, systemctl status, ...).
-        // 3. Sensitive-path denylist: on read-only connections even
-        //    whitelisted inspection tools may not touch credential/key paths
-        //    (~/.ssh, /etc/shadow, .env, *.pem, ...) — the exfiltration
-        //    channel the command whitelist cannot see for SFTP tools.
+        // 2. Inspection-only gate: `ssh_exec` / `ssh_terminal_input` are
+        //    refused outright on read-only connections. The read-only command
+        //    whitelist is NOT sound against shell parsing (process
+        //    substitution `cat <(rm -rf /tmp/x)`, input redirection, verb
+        //    argument shapes such as `hostname NEW`, `date -s`,
+        //    `git log --output=FILE`, `journalctl --flush`) and a control-only
+        //    Enter can run whatever the live PTY already holds. Read-only
+        //    connections are inspection-only; SFTP read tools cover file
+        //    inspection.
+        // 3. Sensitive-path denylist: on read-only connections even the SFTP
+        //    read tools may not touch credential/key paths (~/.ssh,
+        //    /etc/shadow, .env, *.pem, ...).
         // 4. Destructive-command confirmation: recognized catastrophic
         //    patterns require an explicit confirmDestructive: true on every
         //    connection (and are refused outright on read-only ones).
@@ -1005,6 +1010,13 @@ impl McpState {
         if is_write_tool(name) && read_only {
             return Err(format!(
                 "Tool {name} is a write operation and the connection is read-only"
+            ));
+        }
+        if read_only && matches!(name, "ssh_exec" | "ssh_terminal_input" | "ssh_multi_exec") {
+            return Err(format!(
+                "Tool {name} runs shell input and is refused on read-only connections; \
+                 use the SFTP read tools (sftp_list_dir / sftp_stat / sftp_read_file) \
+                 for inspection"
             ));
         }
         if read_only {
@@ -4755,6 +4767,7 @@ mod tests {
             "ssh_alert_triage",
             "ssh_test_connection",
             "ssh_task_status",
+            "ssh_session_context",
             "sftp_list_dir",
             "sftp_stat",
             "sftp_exists",
@@ -5364,7 +5377,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn exec_whitelist_refuses_sensitive_paths_on_read_only() {
+    async fn read_only_refuses_exec_before_any_path_inspection() {
+        // inspection-only 硬门在任何命令文本检查之前触发：只读连接上
+        // `ssh_exec` 不再有机会读取敏感路径（SFTP 读工具另由
+        // `sensitive_read_path` 拦截）。
         let mut state = state();
         state.global_read_only = true;
         let error = state
@@ -5380,8 +5396,8 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            error.contains("not recognized"),
-            "expected whitelist refusal for a sensitive path, got: {error}"
+            error.contains("refused on read-only") && error.contains("sftp_"),
+            "expected inspection-only refusal, got: {error}"
         );
     }
 
@@ -7505,57 +7521,35 @@ mod tests {
             assert!(error.contains("read-only"), "unexpected: {error}");
         }
 
-        // ssh_exec survives only for provably read-only commands: an
-        // unrecognized mutating command is refused by the whitelist (before
-        // any dialing), while a destructive pattern is refused outright.
-        let unknown = state
-            .call_datawise_with(
-                &json!({
-                    "tool": "ssh_exec",
-                    "arguments": { "command": "systemctl restart nginx" },
-                    "lifecycle": lifecycle,
-                }),
-                None,
-            )
-            .await
-            .err()
-            .unwrap();
-        assert!(unknown.contains("not recognized"), "unexpected: {unknown}");
-
-        let destructive = state
-            .call_datawise_with(
-                &json!({
-                    "tool": "ssh_exec",
-                    "arguments": { "command": "rm -rf /etc" },
-                    "lifecycle": lifecycle,
-                }),
-                None,
-            )
-            .await
-            .err()
-            .unwrap();
-        assert!(
-            destructive.contains("Refused on read-only"),
-            "unexpected: {destructive}"
-        );
-
-        // confirmDestructive cannot override a read-only connection.
-        let confirmed = state
-            .call_datawise_with(
-                &json!({
-                    "tool": "ssh_exec",
-                    "arguments": { "command": "rm -rf /etc", "confirmDestructive": true },
-                    "lifecycle": lifecycle,
-                }),
-                None,
-            )
-            .await
-            .err()
-            .unwrap();
-        assert!(
-            confirmed.contains("Refused on read-only"),
-            "unexpected: {confirmed}"
-        );
+        // 只读连接是 inspection-only：任何 `ssh_exec`（含白名单巡检命令、
+        // 未识别命令、灾难命令，以及带 confirmDestructive 的命令）都在拨号
+        // 之前被拒。旧版「只读命令白名单」对 shell 解析不 sound：进程替换
+        // `cat <(rm -rf /tmp/x)`、输入重定向、`hostname NEW` / `date -s` /
+        // `git log --output=FILE` 等形状都能穿透。
+        for command in [
+            "systemctl restart nginx",
+            "rm -rf /etc",
+            "ls /tmp",
+            "df -h",
+            "cat <(rm -rf /tmp/x)",
+        ] {
+            let error = state
+                .call_datawise_with(
+                    &json!({
+                        "tool": "ssh_exec",
+                        "arguments": { "command": command, "confirmDestructive": true },
+                        "lifecycle": lifecycle,
+                    }),
+                    None,
+                )
+                .await
+                .err()
+                .unwrap();
+            assert!(
+                error.contains("refused on read-only") && error.contains("sftp_"),
+                "unexpected: {error}"
+            );
+        }
     }
 
     // —— MCP 容错性专项（2026-09-13 测试覆盖审计）———
@@ -8045,7 +8039,7 @@ mod tests {
         );
 
         // 组合 5：只读连接 + 白名单巡检命令 + confirmDestructive:true →
-        // 确认位不改变白名单判定，调用照常走到拨号。
+        // inspection-only 硬门先行，确认位救不回命令执行。
         let error = ro_state
             .call_tool(
                 "ssh_exec",
@@ -8059,8 +8053,8 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            !error.contains("read-only") && !error.contains("not recognized"),
-            "inspection command must stay available on read-only, got: {error}"
+            error.contains("refused on read-only") && error.contains("sftp_"),
+            "inspection command must be refused on read-only, got: {error}"
         );
 
         // 组合 6：只读连接 + 灾难命令 + confirmDestructive:true →
@@ -8078,8 +8072,8 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            error.contains("Refused on read-only"),
-            "read-only must refuse destructive commands outright, got: {error}"
+            error.contains("refused on read-only"),
+            "read-only must refuse command execution outright, got: {error}"
         );
 
         // 组合 7：进程级只读开关（DATAWISE_SSH_MCP_READ_ONLY）× 非只读注册连接
@@ -8103,11 +8097,10 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            error.contains("Refused on read-only"),
+            error.contains("refused on read-only"),
             "process kill switch must dominate the connection flag, got: {error}"
         );
-        // 同开关下白名单巡检命令仍可用（fail-closed 不等于全拒）：错误来自
-        // 拨号层而不是任何一道门。
+        // 同开关下普通巡检命令同样被拒（inspection-only 不区分命令形状）。
         let error = killed_state
             .call_tool(
                 "ssh_exec",
@@ -8117,10 +8110,8 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            !error.contains("read-only")
-                && !error.contains("not recognized")
-                && !error.contains("confirmDestructive"),
-            "uptime must pass the gates and fail at dialing, got: {error}"
+            error.contains("refused on read-only"),
+            "uptime must be refused by the process kill switch, got: {error}"
         );
 
         // 组合 8：connectionScope 非空 × 内联凭据 × 灾难命令 → scope 是

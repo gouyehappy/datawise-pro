@@ -1,4 +1,4 @@
-import {ApiError, isUnauthorizedApiError} from '@/shared/api/http/api-error'
+import {ApiError, isGuestNotAllowedApiError, isUnauthorizedApiError} from '@/shared/api/http/api-error'
 import {SESSION_KEY} from '@/shared/auth/session'
 
 export type SessionGuardOptions = {
@@ -110,11 +110,13 @@ export function isQuietAuthFailure(error: unknown): boolean {
 /**
  * Background config sync (app.xml / snippets / detail JSON): also quiet when the
  * backend is simply not reachable — expected during boot / offline, not a code bug.
+ * Guest writes after logout / session recovery (GUEST_NOT_ALLOWED) are expected too.
  * (Message strings match {@link HTTP_NOT_READY} / {@link HTTP_TIMEOUT} in request.ts —
  * keep inline to avoid a circular import with request ↔ session-guard.)
  */
 export function isQuietBackgroundSyncFailure(error: unknown): boolean {
     if (isQuietAuthFailure(error)) return true
+    if (isGuestNotAllowedApiError(error)) return true
     const message = error instanceof Error ? error.message.trim() : String(error ?? '')
     return message === 'HTTP_TIMEOUT'
         || message.startsWith('HTTP API request failed')

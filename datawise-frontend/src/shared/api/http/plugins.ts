@@ -22,7 +22,7 @@ function mapPlugin(wire: PluginItemDto): PluginItem {
 export function createHttpPluginApi(): PluginApi {
     return {
         fetchAll: async () => {
-            const list = await getJson<PluginItemDto[]>(API_PATHS.plugins)
+            const list = await getJson<PluginItemDto[]>(API_PATHS.plugins, undefined, {background: true})
             return (list ?? []).map(mapPlugin)
         },
     }

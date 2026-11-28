@@ -5,6 +5,7 @@ import {DwInput, DwSecretInput, DwCheckbox} from '@/core/components'
 import SettingsSelect from '@/core/components/SettingsSelect.vue'
 import SettingsSwitch from '@/core/components/SettingsSwitch.vue'
 import ConnectionFormField from '@/features/connection/components/ConnectionFormField.vue'
+import ConnectionToggleField from '@/features/connection/components/ConnectionToggleField.vue'
 import ConnectionMoreOptions from '@/features/connection/components/ConnectionMoreOptions.vue'
 import DescriptorConnectionFields from '@/features/connection/components/DescriptorConnectionFields.vue'
 import PluginConnectionFields from '@/features/connection/components/PluginConnectionFields.vue'
@@ -56,6 +57,7 @@ import {
 } from '@/features/connection/utils/kafka-security'
 import {applyKuduMasters, readKuduMasters} from '@/features/connection/utils/kudu-masters'
 import type {ConnectionConfig, DbType} from '@/core/types'
+import {needsEngineWriteOverrideOption} from '@/shared/capabilities/supports-connection-feature'
 
 const form = defineModel<ConnectionConfig>('form', {required: true})
 
@@ -396,11 +398,14 @@ const k8sAuthOptions = computed(() => [
 
 /** MetaForge S1: JDBC/standard/redis/oracle/mongo packs; specialized types stay below. */
 const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(props.dbType))
+const showAllowEngineWrites = computed(() => needsEngineWriteOverrideOption(props.dbType))
 </script>
 
 <template>
   <div class="conn-grid">
-    <ConnectionFormField wide :label="t('connection.name')" :hint="t('connection.hints.name')">
+    <div class="conn-section-title" role="heading" aria-level="2">{{ t('connection.sectionBasic') }}</div>
+
+    <ConnectionFormField wide :label="t('connection.name')">
       <DwInput
           v-model="form.name"
           variant="sm"
@@ -409,11 +414,16 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
       />
     </ConnectionFormField>
 
-    <ConnectionFormField :label="t('connection.env')" :hint="t('connection.hints.env')">
-      <SettingsSelect v-model="form.env" size="sm" :disabled="readOnly" :options="envOptions"/>
+    <ConnectionFormField :label="t('connection.env')">
+      <SettingsSelect v-model="form.env" :disabled="readOnly" :options="envOptions"/>
     </ConnectionFormField>
+    <ConnectionFormField :label="t('connection.storage')">
+      <SettingsSelect v-model="form.storage" :disabled="readOnly" :options="storageOptions"/>
+    </ConnectionFormField>
+    <p class="conn-pair-hint">{{ t('connection.hints.envStorage') }}</p>
     <ConnectionFormField
         v-if="showEnvCustom"
+        wide
         :label="t('connection.envCustom')"
         :hint="t('connection.hints.envCustom')"
     >
@@ -424,23 +434,25 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
           :placeholder="t('connection.envCustomPlaceholder')"
       />
     </ConnectionFormField>
-    <ConnectionFormField :label="t('connection.storage')">
-      <SettingsSelect v-model="form.storage" size="sm" :disabled="readOnly" :options="storageOptions"/>
-    </ConnectionFormField>
-    <ConnectionFormField
-        :label="t('connection.writeGuard')"
+
+    <div class="conn-section-title" role="heading" aria-level="2">{{ t('connection.sectionSafety') }}</div>
+    <ConnectionToggleField
+        :model-value="!!form.writeGuard"
+        :disabled="readOnly"
+        :label="t('connection.writeGuardEnable')"
         :hint="t('connection.hints.writeGuard')"
-    >
-      <label class="connection-write-guard">
-        <input
-            type="checkbox"
-            :checked="!!form.writeGuard"
-            :disabled="readOnly"
-            @change="form.writeGuard = ($event.target as HTMLInputElement).checked"
-        />
-        <span>{{ t('connection.writeGuardEnable') }}</span>
-      </label>
-    </ConnectionFormField>
+        @update:model-value="form.writeGuard = $event"
+    />
+    <ConnectionToggleField
+        v-if="showAllowEngineWrites"
+        :model-value="!!form.allowEngineWrites"
+        :disabled="readOnly"
+        :label="t('connection.allowEngineWritesEnable')"
+        :hint="t('connection.hints.allowEngineWrites')"
+        @update:model-value="form.allowEngineWrites = $event"
+    />
+
+    <div class="conn-section-title" role="heading" aria-level="2">{{ t('connection.sectionConnection') }}</div>
 
     <PluginConnectionFields
         v-if="dbType === 'plugin'"
@@ -477,13 +489,12 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
       <ConnectionFormField :label="t('connection.kafkaSecurity')">
         <SettingsSelect
             v-model="kafkaSecurityProtocol"
-            size="sm"
             :disabled="readOnly"
             :options="kafkaSecurityOptions"
         />
       </ConnectionFormField>
       <ConnectionFormField :label="t('connection.auth')">
-        <SettingsSelect v-model="form.auth" size="sm" :disabled="readOnly" :options="authOptions"/>
+        <SettingsSelect v-model="form.auth" :disabled="readOnly" :options="authOptions"/>
       </ConnectionFormField>
       <template v-if="form.auth !== 'NONE'">
         <ConnectionFormField :label="t('connection.username')">
@@ -501,7 +512,6 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
         <ConnectionFormField wide :label="t('connection.kafkaSaslMechanism')">
           <SettingsSelect
               v-model="kafkaSaslMechanism"
-              size="sm"
               :disabled="readOnly"
               :options="kafkaSaslOptions"
           />
@@ -552,7 +562,6 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
       <ConnectionFormField :label="t('connection.nacosImplementation')" :hint="t('connection.hints.nacosImplementation')">
         <SettingsSelect
             v-model="nacosImplementation"
-            size="sm"
             :disabled="readOnly"
             :options="nacosImplementationOptions"
         />
@@ -564,7 +573,6 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
       >
         <SettingsSelect
             v-model="nacosVersionMode"
-            size="sm"
             :disabled="readOnly"
             :options="nacosVersionOptions"
         />
@@ -770,7 +778,7 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
 
     <template v-else-if="dbType === 'kubernetes'">
       <ConnectionFormField wide :label="t('connection.auth')">
-        <SettingsSelect v-model="form.auth" size="sm" :disabled="readOnly" :options="k8sAuthOptions"/>
+        <SettingsSelect v-model="form.auth" :disabled="readOnly" :options="k8sAuthOptions"/>
       </ConnectionFormField>
       <ConnectionFormField
           wide
@@ -826,7 +834,7 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
 
     <template v-else-if="dbType !== 'kafka' && dbType !== 'kudu'">
     <ConnectionFormField wide :label="t('connection.auth')">
-      <SettingsSelect v-model="form.auth" size="sm" :disabled="readOnly" :options="authOptions"/>
+      <SettingsSelect v-model="form.auth" :disabled="readOnly" :options="authOptions"/>
     </ConnectionFormField>
 
     <template v-if="form.auth !== 'NONE'">
@@ -857,8 +865,37 @@ const builtinFormFields = computed(() => resolveBuiltinConnectionFormFields(prop
 <style scoped>
 .conn-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--dw-space-6) var(--dw-space-7);
+  width: 100%;
+  max-width: 500px;
+}
+
+.conn-section-title {
+  grid-column: 1 / -1;
+  margin: var(--dw-space-2) 0 0;
+  padding-top: var(--dw-space-4);
+  border-top: 1px solid var(--dw-border-light);
+  color: var(--dw-text-muted);
+  font-size: var(--dw-text-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: var(--dw-leading-tight);
+}
+
+.conn-section-title:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.conn-pair-hint {
+  grid-column: 1 / -1;
+  margin: calc(var(--dw-space-2) * -1) 0 0;
+  color: var(--dw-text-muted);
+  font-size: var(--dw-text-xs);
+  line-height: var(--dw-leading);
 }
 
 .url-input {

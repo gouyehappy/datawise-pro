@@ -1,6 +1,7 @@
 package org.apache.datawise.backend.configstore.jdbc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.datawise.backend.common.support.TeamSharedAccessMigration;
 import org.apache.datawise.backend.configstore.TeamStore;
 import org.apache.datawise.backend.configstore.TenantScopedConfigSupport;
 import org.apache.datawise.backend.configstore.support.TeamAuditLogFilters;
@@ -392,6 +393,9 @@ public class JdbcTeamStore implements TeamStore {
             sharedQueries.addAll(snapshot.sharedQueries() != null ? snapshot.sharedQueries() : List.of());
             productionApprovals.clear();
             productionApprovals.addAll(snapshot.productionApprovals() != null ? snapshot.productionApprovals() : List.of());
+            if (TeamSharedAccessMigration.migrateAll(teams)) {
+                persist();
+            }
         }
 
         private void persist() {

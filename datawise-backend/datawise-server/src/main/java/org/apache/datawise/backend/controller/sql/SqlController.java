@@ -15,7 +15,7 @@ import org.apache.datawise.backend.database.session.LockWaitService;
 import org.apache.datawise.backend.database.session.SessionKillService;
 import org.apache.datawise.backend.database.sql.ConsoleSqlCancelService;
 import org.apache.datawise.backend.database.sql.SqlService;
-import org.apache.datawise.backend.connector.api.support.SqlWriteClassifier;
+import org.apache.datawise.sqlparser.support.SqlWriteClassifier;
 import org.apache.datawise.backend.security.HeadlessSqlAuth;
 import org.apache.datawise.backend.security.RequiresFeature;
 import org.apache.datawise.backend.security.RequiresSqlExecute;

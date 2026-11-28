@@ -3,7 +3,12 @@
  * 规则对齐 tiny-rdm `frontend/src/modules/ssh/dangerous-commands.js`：尽量精确，
  * 避免误杀正常命令（如 `rm foo.tmp`），仅命中带破坏性参数或目标的形态。
  * `label` 是语言无关的命令片段，直接展示在确认弹窗中。
+ *
+ * 同一弹窗还承载「全角 / 智能标点纠错」（terminalGlyphFix）：纠错是**可选**
+ * 动作，用户必须显式选择「使用 ASCII」才会替换待发送文本，绝不静默改写。
  */
+
+import { suggestAsciiFix } from "./terminalGlyphFix";
 
 export interface DangerousCommandPattern {
   id: string;
@@ -64,6 +69,13 @@ export interface PasteConfirmation {
   danger: boolean;
   hits: DangerousCommandHit[];
   required: boolean;
+  /** 仅因排版字符触发确认（无危险/多行/大文本），用于切换弹窗文案。 */
+  glyphOnly: boolean;
+  /** 可选：检测到排版字符时的 ASCII 修正方案（用户显式选择后才使用）。 */
+  glyphFix?: {
+    fixed: string;
+    details: string[];
+  };
 }
 
 /**
@@ -75,6 +87,7 @@ export function buildPasteConfirmation(text: string): PasteConfirmation {
   const danger = inspection.level === "danger";
   const multiLine = PASTE_NEWLINE_RE.test(text);
   const large = text.length >= PASTE_CONFIRM_CHAR_THRESHOLD;
+  const glyph = suggestAsciiFix(text);
   return {
     text,
     lines: text.split(PASTE_NEWLINE_RE).length,
@@ -82,6 +95,12 @@ export function buildPasteConfirmation(text: string): PasteConfirmation {
     preview: text.length <= PASTE_PREVIEW_LIMIT ? text : `${text.slice(0, PASTE_PREVIEW_LIMIT)}…`,
     danger,
     hits: inspection.hits,
-    required: danger || multiLine || large,
+    // 短命令里的智能引号/全角空格同样需要一次显式确认，否则最常见的
+    // 「从文档复制一行命令」场景根本看不到纠错选项。
+    required: danger || multiLine || large || glyph.applicable,
+    glyphOnly: glyph.applicable && !danger && !multiLine && !large,
+    ...(glyph.applicable
+      ? { glyphFix: { fixed: glyph.fixed, details: glyph.replacements.map((item) => item.detail) } }
+      : {}),
   };
 }

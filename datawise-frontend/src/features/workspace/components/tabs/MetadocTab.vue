@@ -142,7 +142,8 @@ function downloadCurrent() {
 .metadoc-tab__subspinner {
   width: var(--dw-icon-size-xs);
   height: var(--dw-icon-size-xs);
-  border-radius: var(--dw-radius-pill);
+  /* 旋转加载圈须恒为正圆，不跟随胶囊圆角 token */
+  border-radius: var(--dw-radius-full, 50%);
   border: 2px solid var(--dw-border);
   border-top-color: var(--dw-link);
   animation: metadoc-spin 1s linear infinite;

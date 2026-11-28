@@ -30,8 +30,9 @@ import {
     DwButton,
     DwInlineAlert,
     DwInput,
-    DwSelect,
     DwSecretInput,
+    SettingsRow,
+    SettingsSelect,
     DwSplitPane,
     EmptyState,
     FormField,
@@ -176,6 +177,18 @@ const vectorStoreModes = computed(() => {
         hint: t(`settings.knowledge.ragVectorStore.${mode.hintKey}`),
     }))
 })
+
+const vectorStoreOptions = computed(() =>
+    vectorStoreModes.value.map((mode) => ({
+        value: mode.id,
+        label: mode.title,
+    })),
+)
+
+const vectorStoreHint = computed(() =>
+    vectorStoreModes.value.find((mode) => mode.id === ragDraft.value.vectorStore)?.hint
+        ?? t('settings.knowledge.ragVectorStore.label'),
+)
 
 const effectiveVectorStore = computed(() => ragStatus.value?.vectorStore ?? 'none')
 
@@ -635,24 +648,20 @@ watch([ragScopeConnectionId, ragScopeDatabase], () => {
             </div>
           </header>
 
-          <div class="kb-rag-store-grid" role="radiogroup" :aria-label="t('settings.knowledge.ragVectorStore.label')">
-            <button
-                v-for="mode in vectorStoreModes"
-                :key="mode.id || 'inherit'"
-                class="kb-rag-store-tile"
-                :class="{
-                  'is-active': ragDraft.vectorStore === mode.id,
-                  'is-inherit': mode.id === '',
-                }"
-                type="button"
-                role="radio"
-                :aria-checked="ragDraft.vectorStore === mode.id"
+          <div class="settings-section__card kb-rag-store-select">
+            <SettingsRow
+                :label="t('settings.knowledge.ragVectorStore.label')"
+                :hint="vectorStoreHint"
                 :disabled="readOnly"
-                @click="selectVectorStore(mode.id)"
             >
-              <span class="kb-rag-store-tile__title">{{ mode.title }}</span>
-              <span class="kb-rag-store-tile__hint">{{ mode.hint }}</span>
-            </button>
+              <SettingsSelect
+                  id="kb-rag-vector-store"
+                  :model-value="ragDraft.vectorStore"
+                  :options="vectorStoreOptions"
+                  :disabled="readOnly"
+                  @update:model-value="(v) => selectVectorStore(v as AiVectorStorePreference)"
+              />
+            </SettingsRow>
           </div>
 
           <div v-if="showPgVectorFields" class="kb-rag-pg">
@@ -759,10 +768,10 @@ watch([ragScopeConnectionId, ragScopeDatabase], () => {
             <div class="kb-rag-scope-form">
               <FormField :label="t('settings.knowledge.ragScopeConnection')" input-id="rag-scope-connection">
                 <template #default="{ id }">
-                  <DwSelect
+                  <SettingsSelect
                       :id="id"
                       v-model="ragScopeConnectionId"
-                      size="sm"
+                      searchable
                       :options="ragConnectionSelectOptions"
                   />
                 </template>
@@ -938,10 +947,10 @@ watch([ragScopeConnectionId, ragScopeDatabase], () => {
                 <div class="kb-entry-section__form kb-entry-section__form--grid">
                   <FormField :label="t('settings.knowledge.columns.connection')" input-id="kb-selected-connection">
                     <template #default="{ id }">
-                      <DwSelect
+                      <SettingsSelect
                           :id="id"
                           v-model="selectedRow.connectionId"
-                          size="sm"
+                          searchable
                           :disabled="readOnly"
                           :options="entryConnectionSelectOptions"
                       />
@@ -949,11 +958,10 @@ watch([ragScopeConnectionId, ragScopeDatabase], () => {
                   </FormField>
                   <FormField :label="t('settings.knowledge.columns.database')" input-id="kb-selected-database">
                     <template #default="{ id }">
-                      <DwSelect
+                      <SettingsSelect
                           v-if="selectedRow.connectionId.trim() && selectedConnectionDatabaseOptions.length"
                           :id="id"
                           v-model="selectedRow.database"
-                          size="sm"
                           :disabled="readOnly"
                           :options="[
                             {value: '', label: t('settings.knowledge.scopeAllDatabases')},

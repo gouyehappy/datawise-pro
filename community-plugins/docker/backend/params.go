@@ -38,6 +38,7 @@ type connectionPayload struct {
 type pluginConfig struct {
 	Protocol                string `json:"protocol"`
 	SocketPath              string `json:"socket_path"`
+	PipePath                string `json:"pipe_path"`
 	APIVersion              string `json:"api_version"`
 	AllowInsecureRemoteHTTP bool   `json:"allow_insecure_remote_http"`
 	CACertPath              string `json:"ca_cert_path"`
@@ -55,13 +56,14 @@ type pluginConfig struct {
 func (c connectionPayload) config() pluginConfig {
 	cfg := pluginConfig{
 		Protocol:   "http",
-		SocketPath: "/var/run/docker.sock",
+		SocketPath: defaultSocketPath,
+		PipePath:   defaultPipePath,
 		APIVersion: "auto",
 		SSHPort:    22,
 	}
 	raw := c.ExternalConfig
 	if raw == nil {
-		return cfg
+		return resolveLocalSocket(cfg)
 	}
 	get := func(key string, dst *string) {
 		if v, ok := raw[key].(string); ok && v != "" {
@@ -70,6 +72,7 @@ func (c connectionPayload) config() pluginConfig {
 	}
 	get("protocol", &cfg.Protocol)
 	get("socket_path", &cfg.SocketPath)
+	get("pipe_path", &cfg.PipePath)
 	get("api_version", &cfg.APIVersion)
 	get("ca_cert_path", &cfg.CACertPath)
 	get("client_cert_path", &cfg.ClientCertPath)
@@ -78,8 +81,11 @@ func (c connectionPayload) config() pluginConfig {
 	get("ssh_username", &cfg.SSHUsername)
 	get("ssh_private_key_path", &cfg.SSHPrivateKeyPath)
 	get("ssh_known_hosts_path", &cfg.SSHKnownHostsPath)
-	if v, ok := raw["ssh_port"].(float64); ok && v > 0 {
+	if v, ok := raw["ssh_port"].(float64); ok {
 		cfg.SSHPort = int(v)
+		if v != float64(cfg.SSHPort) {
+			cfg.SSHPort = -1
+		}
 	}
 	if v, ok := raw["allow_insecure_remote_http"].(bool); ok {
 		cfg.AllowInsecureRemoteHTTP = v
@@ -90,7 +96,7 @@ func (c connectionPayload) config() pluginConfig {
 	if v, ok := raw["is_production"].(bool); ok {
 		cfg.IsProduction = v
 	}
-	return cfg
+	return resolveLocalSocket(cfg)
 }
 
 // effectiveReadOnly 与 xxl-job 先例一致：内建 read_only 与插件自声明字段取或。

@@ -23,7 +23,11 @@ function toAppNotification(dto: NotificationDto): AppNotification {
 export function createHttpNotificationApi(): NotificationApi {
     return {
         fetchAll: async () => {
-            const list = await getJson<NotificationDto[]>(API_PATHS.notifications.list)
+            const list = await getJson<NotificationDto[]>(
+                API_PATHS.notifications.list,
+                undefined,
+                {background: true},
+            )
             return (list ?? []).map(toAppNotification)
         },
 

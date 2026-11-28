@@ -48,7 +48,7 @@ async function unlock(durationSec: 60 | 300) {
   try {
     status.value = await requestWriteUnlock(props.connectionId, durationSec)
   } catch (err) {
-    toast.error(resolveCaughtApiErrorMessage(err, t('connection.writeUnlockFailed')))
+    toast.error(resolveCaughtApiErrorMessage(err, t, 'connection.writeUnlockFailed'))
   } finally {
     busy.value = false
   }
@@ -61,7 +61,7 @@ async function endUnlock() {
     await clearWriteUnlock(props.connectionId)
     status.value = null
   } catch (err) {
-    toast.error(resolveCaughtApiErrorMessage(err, t('connection.writeUnlockFailed')))
+    toast.error(resolveCaughtApiErrorMessage(err, t, 'connection.writeUnlockFailed'))
   } finally {
     busy.value = false
   }

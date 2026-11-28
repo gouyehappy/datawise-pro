@@ -371,6 +371,75 @@ export function ghostRemainder(typedLine: string, item: SuggestItem | string | u
 }
 
 /**
+ * Motty paintGhost: cells free from the cursor to the first non-blank cell
+ * (right prompt / shell completion) or the row edge.
+ */
+export function ghostRowAvailableCells(buffer: CursorLineBuffer, cols: number): number {
+  if (cols <= 0) return 0;
+  const start = Math.max(0, Math.min(buffer.cursorX, cols));
+  const line = buffer.getLine(buffer.viewportY + buffer.cursorY);
+  if (!line) return Math.max(0, cols - start);
+  for (let column = start; column < cols; column += 1) {
+    const ch = line.translateToString(false, column, column + 1);
+    if (ch && ch !== " " && ch !== "\t" && ch !== "\0") {
+      return Math.max(0, column - start);
+    }
+  }
+  return Math.max(0, cols - start);
+}
+
+/** Truncate ghost text so it fits Motty's free-cell budget (wide runes count 2). */
+export function clipGhostToCells(rest: string, availableCells: number): string {
+  if (!(availableCells > 0) || !rest) return "";
+  let used = 0;
+  let end = 0;
+  for (const cell of ghostTextCells(rest)) {
+    if (used + cell.cells > availableCells) break;
+    used += cell.cells;
+    end += cell.ch.length;
+  }
+  return rest.slice(0, end);
+}
+
+/**
+ * Keep the same suggestion command selected across refreshes while it still
+ * matches — avoids gray text jumping to another history hit mid-keystroke.
+ */
+export function stickySuggestIndex(
+  items: readonly SuggestItem[],
+  previousCommand: string | undefined,
+  typedLine: string,
+  pathPrefix?: string,
+): number {
+  if (!items.length) return 0;
+  if (!previousCommand) return 0;
+  const idx = items.findIndex((item) => {
+    if (item.command !== previousCommand) return false;
+    const prefix = item.source === "path" ? pathPrefix : undefined;
+    return ghostRemainder(typedLine, item, prefix) !== ""
+      || item.command.toLowerCase().startsWith(typedLine.trimEnd().toLowerCase());
+  });
+  return idx >= 0 ? idx : 0;
+}
+
+/**
+ * After accept (Tab/→), hold the remainder until echo catches the target line.
+ * Motty uses local prediction for this; we bridge with a full-opacity overlay.
+ * Returns the remaining suffix, or null when the hold should clear
+ * (echo caught up or diverged).
+ */
+export function ghostCommitRemainder(echoedLine: string, targetLine: string): string | null {
+  if (!targetLine) return null;
+  if (echoedLine === targetLine) return null;
+  const echoedLower = echoedLine.toLowerCase();
+  const targetLower = targetLine.toLowerCase();
+  if (targetLower.startsWith(echoedLower) && targetLine.length > echoedLine.length) {
+    return targetLine.slice(echoedLine.length);
+  }
+  return null;
+}
+
+/**
  * Build PTY bytes to fill a suggestion (replaceTerminalLineWith):
  * - history/quick/command: erase typed line + write full command
  * - path: append suffix onto the last path token only
@@ -387,8 +456,20 @@ export function fillSuggestPayload(typedLine: string, item: SuggestItem, pathPre
   return `${"\u007f".repeat(typedLine.length)}${item.command}`;
 }
 
-/** Tab fill rule: Tab fills only strict prefix extension or when user ↑↓-armed. */
-export function resolveSuggestionTabKey(command: string, line: string, tabArmed: boolean): "fill" | "shell" {
+export type GhostAcceptKey = "arrowRight" | "tab" | "shiftArrowRight";
+
+/**
+ * Tab fill rule (only when accept key is Tab, Motty-style):
+ * - Tab is the configured accept key → fill on prefix extension or ↑↓-armed selection
+ * - accept key is → / Shift+→ → Tab always goes to the shell (never fills the ghost)
+ */
+export function resolveSuggestionTabKey(
+  command: string,
+  line: string,
+  tabArmed: boolean,
+  acceptKey: GhostAcceptKey = "arrowRight",
+): "fill" | "shell" {
+  if (acceptKey !== "tab") return "shell";
   if (tabArmed) return "fill";
   return command.length > line.length && command.startsWith(line) ? "fill" : "shell";
 }
@@ -411,18 +492,27 @@ export function suggestHighlightSegments(command: string, indices: number[]): Ar
 }
 
 /**
- * Warp/fish ghost accept: bare → / Ctrl+F / Ctrl+E.
- * Ctrl+F only (not Cmd+F) — Cmd+F stays terminal Find on Apple.
- * Search uses Ctrl/Cmd+Shift+F, or Ctrl/Cmd+F when no ghost is showing.
+ * Motty/Warp ghost accept: the configured primary key, plus Ctrl+F / Ctrl+E
+ * aliases when the primary is → (Cmd+F stays Find on Apple).
  */
-export function matchesGhostFullAccept(options: {
-  key: string;
-  ctrlKey: boolean;
-  metaKey: boolean;
-  altKey: boolean;
-  shiftKey: boolean;
-}): boolean {
+export function matchesGhostFullAccept(
+  options: {
+    key: string;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+  },
+  acceptKey: GhostAcceptKey = "arrowRight",
+): boolean {
   const { key, ctrlKey, metaKey, altKey, shiftKey } = options;
+  if (acceptKey === "tab") {
+    return key === "Tab" && !ctrlKey && !metaKey && !altKey && !shiftKey;
+  }
+  if (acceptKey === "shiftArrowRight") {
+    return key === "ArrowRight" && shiftKey && !ctrlKey && !metaKey && !altKey;
+  }
+  // arrowRight (default): bare →, plus Ctrl+F / Ctrl+E convenience aliases.
   if (key === "ArrowRight") return !ctrlKey && !metaKey && !altKey && !shiftKey;
   if (ctrlKey && !metaKey && !altKey && !shiftKey) {
     const k = key.toLowerCase();
@@ -457,6 +547,7 @@ export function ghostWordRemainder(ghost: string): string {
 /**
  * Suggest overlay keys. Shell history owns ↑ until the user explicitly enters
  * the menu (↓ or Tab-armed): otherwise one ↑ would trap readline history.
+ * Tab only accepts when it is the configured accept key (Motty).
  */
 export function resolveCommandSuggestKey(options: {
   key: string;
@@ -466,6 +557,8 @@ export function resolveCommandSuggestKey(options: {
   shiftKey: boolean;
   /** True after ↓ / Tab has focused the suggest list. */
   menuArmed?: boolean;
+  /** Configured ghost accept key — Tab fills only when this is "tab". */
+  acceptKey?: GhostAcceptKey;
 }): CommandSuggestKey {
   if (options.ctrlKey || options.metaKey || options.altKey) return { action: "ignore" };
   const armed = options.menuArmed === true;
@@ -475,10 +568,32 @@ export function resolveCommandSuggestKey(options: {
     if (!armed) return { action: "passthrough" };
     return { action: "move", delta: -1 };
   }
-  if (options.key === "Tab" && !options.shiftKey) return { action: "accept" };
+  if (options.key === "Tab" && !options.shiftKey) {
+    // Motty: Tab accepts the ghost only when bound as the accept key.
+    if ((options.acceptKey ?? "arrowRight") !== "tab") return { action: "passthrough" };
+    return { action: "accept" };
+  }
   if (options.key === "Enter") return { action: "ignore" };
   if (options.key === "Escape") return { action: "dismiss" };
   return { action: "ignore" };
+}
+
+/**
+ * Split ghost text into terminal cells (ASCII/Latin = 1; wide CJK approx = 2).
+ * Used to lock each glyph to xterm cellWidth like Motty LabelRuns.
+ */
+export function ghostTextCells(text: string): Array<{ ch: string; cells: number }> {
+  const out: Array<{ ch: string; cells: number }> = [];
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    // Rough east-asian width: treat non-ASCII BMP ideographs / fullwidth as 2 cells.
+    const wide =
+      code > 0xff
+      && !(code >= 0x2500 && code <= 0x257f) // box drawing stays 1 in most terms
+      && (code >= 0x1100 && code <= 0xffff);
+    out.push({ ch, cells: wide ? 2 : 1 });
+  }
+  return out;
 }
 
 /** Apply a PTY keystroke chunk to the in-progress token (command or path). */
@@ -512,6 +627,60 @@ export function cursorLineTextBeforeCursor(buffer: CursorLineBuffer): string {
   return line.translateToString(false, 0, buffer.cursorX);
 }
 
+/**
+ * Ghost column while local typing leads remote echo.
+ * Compare pending (shell input only) to extractShellInput(visible) — never the
+ * full prompt line, or the lead-echo advance never fires on real SSH prompts.
+ */
+export function ghostAnchorCol(
+  buffer: CursorLineBuffer,
+  pendingLine: string,
+  cellCount: (text: string) => number = (text) =>
+    ghostTextCells(text).reduce((sum, cell) => sum + cell.cells, 0),
+): number {
+  const visibleInput = extractShellInput(cursorLineTextBeforeCursor(buffer));
+  const pending = pendingLine;
+  if (pending.length > visibleInput.length && pending.startsWith(visibleInput)) {
+    return Math.max(0, buffer.cursorX + cellCount(pending.slice(visibleInput.length)));
+  }
+  if (visibleInput.length > pending.length && visibleInput.startsWith(pending) && pending.length > 0) {
+    return Math.max(0, buffer.cursorX - cellCount(visibleInput.slice(pending.length)));
+  }
+  return Math.max(0, buffer.cursorX);
+}
+
+export type OverlayCellOffset = {
+  left: number;
+  top: number;
+  /** Row pixel height — Motty paints ghost inside this cell box. */
+  cellHeight?: number;
+  /** Column pixel width — DOM ghost locks char advance to this (Motty LabelRuns). */
+  cellWidth?: number;
+};
+
+/**
+ * Letter-spacing so each mono glyph advances exactly one xterm cell.
+ * xterm DomRenderer uses width('W'); compensate trailing spacing with negative margin.
+ */
+export function ghostCellLetterSpacing(cellWidth: number, measuredCharAdvance: number): number {
+  if (!(cellWidth > 0) || !(measuredCharAdvance > 0)) return 0;
+  return cellWidth - measuredCharAdvance;
+}
+
+/** Prefer xterm's own css.cell metrics (DomRenderer / Webgl) over clientWidth÷cols. */
+export function readXtermCssCellSize(term: unknown): { cellWidth: number; cellHeight: number } | null {
+  try {
+    const cell = (term as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } } })
+      ?._core?._renderService?.dimensions?.css?.cell;
+    if (cell && cell.width > 0 && cell.height > 0) {
+      return { cellWidth: cell.width, cellHeight: cell.height };
+    }
+  } catch {
+    // ignore private API shape changes
+  }
+  return null;
+}
+
 export function overlayOffsetForCell(
   host: HTMLElement,
   grid: { cols: number; rows: number },
@@ -519,17 +688,28 @@ export function overlayOffsetForCell(
   row: number,
   pane: HTMLElement,
   placement: "above" | "below" | "inline" = "above",
-): { left: number; top: number } | null {
+  cellSize?: { cellWidth: number; cellHeight: number } | null,
+): OverlayCellOffset | null {
   if (grid.cols <= 0 || grid.rows <= 0) return null;
   const screen = host.querySelector<HTMLElement>(".xterm-screen") ?? host;
   const screenRect = screen.getBoundingClientRect();
   const paneRect = pane.getBoundingClientRect();
-  if (!screenRect.width || !screenRect.height) return null;
-  const cellW = screenRect.width / grid.cols;
-  const cellH = screenRect.height / grid.rows;
-  const left = Math.max(8, screenRect.left - paneRect.left + col * cellW);
-  const rowTop = screenRect.top - paneRect.top + row * cellH;
-  if (placement === "inline") return { left, top: rowTop };
+  // Fallback matches measureTerminalCellSize (exclude scrollbars).
+  const gridW = screen.clientWidth || screenRect.width;
+  const gridH = screen.clientHeight || screenRect.height;
+  if (!gridW || !gridH) return null;
+  const cellW = cellSize && cellSize.cellWidth > 0 ? cellSize.cellWidth : gridW / grid.cols;
+  const cellH = cellSize && cellSize.cellHeight > 0 ? cellSize.cellHeight : gridH / grid.rows;
+  // Quantize to device pixels so subpixel getBoundingClientRect noise does not jitter the ghost.
+  const dpr = typeof window !== "undefined" && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
+  const snap = (n: number) => Math.round(n * dpr) / dpr;
+  const rawLeft = snap(screenRect.left - paneRect.left + col * cellW);
+  const rowTop = snap(screenRect.top - paneRect.top + row * cellH);
+  // Inline ghost must sit on the cursor cell — never pad/clamp (Motty: geometry.left + cursor.X * cellWidth).
+  if (placement === "inline") {
+    return { left: rawLeft, top: rowTop, cellHeight: cellH, cellWidth: cellW };
+  }
+  const left = Math.max(8, rawLeft);
   if (placement === "below") return { left, top: rowTop + cellH + 4 };
   return { left, top: rowTop - 4 };
 }

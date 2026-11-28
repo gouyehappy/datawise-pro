@@ -11,13 +11,14 @@ withDefaults(
     options: SelectOption[]
     id?: string
     useOptionFont?: boolean
-    size?: 'default' | 'sm'
+    size?: 'default' | 'sm' | 'settings'
     disabled?: boolean
     placeholder?: string
     searchable?: boolean
+    matchTrigger?: boolean
     side?: 'top' | 'bottom'
   }>(),
-  {size: 'default', side: 'bottom'},
+  {size: 'settings', side: 'bottom', searchable: undefined, matchTrigger: false},
 )
 </script>
 
@@ -31,6 +32,7 @@ withDefaults(
       :disabled="disabled"
       :placeholder="placeholder"
       :searchable="searchable"
+      :match-trigger="matchTrigger"
       :side="side"
   />
 </template>

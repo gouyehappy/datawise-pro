@@ -4,4 +4,6 @@ export interface AiSqlConfirmPending {
     threadId: string
     checkpointId: string
     sql: string
+    /** Server-issued grant from interrupt (optional). */
+    grantId?: string | null
 }

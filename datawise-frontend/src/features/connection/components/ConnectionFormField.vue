@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import {provide} from 'vue'
+
 defineProps<{
   label?: string
   hint?: string
@@ -8,6 +10,9 @@ defineProps<{
   wide?: boolean
   required?: boolean
 }>()
+
+/** SettingsSelect menus inside connection fields match the trigger (no left overhang). */
+provide('dw-select-match-trigger', true)
 </script>
 
 <template>
@@ -42,6 +47,32 @@ defineProps<{
   margin-left: 2px;
   color: var(--dw-danger);
   font-weight: 700;
+}
+
+.conn-form-field__control {
+  width: 100%;
+  min-width: 0;
+}
+
+/*
+ * SettingsSelect defaults to size=settings (hug content). Inside connection
+ * fields stretch to the grid cell so env/storage and host/port stay aligned.
+ */
+.conn-form-field__control :deep(.dw-select-host),
+.conn-form-field__control :deep(.dw-select) {
+  width: 100%;
+  max-width: none;
+}
+
+.conn-form-field__control :deep(.dw-select__trigger) {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.conn-form-field__control :deep(.dw-select__value) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .conn-form-field__hint {

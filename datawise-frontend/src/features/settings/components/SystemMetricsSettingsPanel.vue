@@ -17,7 +17,7 @@ import {
 } from '@/features/settings/services/deployment-profile.service'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useAuthStore} from '@/features/auth/stores/auth-store'
-import {DwButton, DwCheckbox, DwInlineAlert} from '@/core/components'
+import {DwButton, DwInlineAlert, SettingsSwitch} from '@/core/components'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
 
@@ -154,13 +154,15 @@ function showRefreshToast() {
   >
     <template #actions>
       <div class="panel-actions">
-        <DwCheckbox
-            class="auto-refresh"
-            :model-value="autoRefresh"
-            @update:model-value="onToggleAutoRefresh"
-        >
-          {{ t('settings.systemMetrics.autoRefresh') }}
-        </DwCheckbox>
+        <label class="auto-refresh">
+          <span>{{ t('settings.systemMetrics.autoRefresh') }}</span>
+          <SettingsSwitch
+              bare
+              :label="t('settings.systemMetrics.autoRefresh')"
+              :model-value="autoRefresh"
+              @update:model-value="onToggleAutoRefresh"
+          />
+        </label>
         <DwButton
             variant="secondary"
             :loading="loading"

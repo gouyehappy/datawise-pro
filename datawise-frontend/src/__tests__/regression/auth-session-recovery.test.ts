@@ -5,6 +5,7 @@ import {SESSION_KEY} from '../../shared/auth/session.ts'
 import {
     isApiSessionBlocked,
     isQuietAuthFailure,
+    isQuietBackgroundSyncFailure,
     isUnauthorizedRecoveryInProgress,
     markApiSessionBlockedForTest,
     maybeRejectBlockedRequest,
@@ -77,6 +78,15 @@ describe('auth session recovery guard', () => {
         assert.equal(isQuietAuthFailure(new ApiError('boom')), false)
         markApiSessionBlockedForTest()
         assert.equal(isQuietAuthFailure(new ApiError('HTTP API request failed')), true)
+    })
+
+    it('quiets GUEST_NOT_ALLOWED on background config sync after logout', () => {
+        assert.equal(isQuietBackgroundSyncFailure(new ApiError('GUEST_NOT_ALLOWED')), true)
+        assert.equal(
+            isQuietBackgroundSyncFailure(new ApiError('forbidden', {errorCode: 'GUEST_NOT_ALLOWED'})),
+            true,
+        )
+        assert.equal(isQuietBackgroundSyncFailure(new ApiError('SQL_FAILED')), false)
     })
 
     it('ignores re-entrant recovery while scoped state reload is in progress', () => {

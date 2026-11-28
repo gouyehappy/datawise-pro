@@ -66,9 +66,28 @@ class MigrationOrderBySupportTest {
                 "updated_at",
                 "2026-01-01 00:00:00",
                 List.of("updated_at", "id"));
-        assertTrue(sql.contains("updated_at > '2026-01-01 00:00:00'"));
+        assertTrue(sql.contains("`updated_at` > '2026-01-01 00:00:00'"));
         assertTrue(sql.contains("ORDER BY updated_at ASC, id ASC"));
         assertTrue(signature.contains("/*INCR_APPEND watermark=updated_at ORDER BY=updated_at,id*/"));
+    }
+
+    @Test
+    void validateWatermarkColumnRejectsInjection() {
+        assertThrows(IllegalArgumentException.class,
+                () -> MigrationOrderBySupport.validateWatermarkColumn("updated_at; DROP TABLE t"));
+        assertThrows(IllegalArgumentException.class,
+                () -> MigrationOrderBySupport.validateWatermarkColumn("../secret"));
+        assertThrows(IllegalArgumentException.class,
+                () -> MigrationOrderBySupport.validateWatermarkColumn("1updated_at"));
+        MigrationOrderBySupport.validateWatermarkColumn("t.updated_at");
+    }
+
+    @Test
+    void appendOrderByAscFailsClosedOnUnparseableSql() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> MigrationOrderBySupport.appendOrderByAsc("NOT A SELECT", List.of("id"))
+        );
     }
 
     @Test

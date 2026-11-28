@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {ConfirmDialog, DwButton, DwInput, DwSelect, DwSplitPane, EmptyState, FormField} from '@/core/components'
+import {ConfirmDialog, DwButton, DwInput, DwSplitPane, EmptyState, FormField} from '@/core/components'
+import SettingsSelect from '@/core/components/SettingsSelect.vue'
 import type {SelectOption} from '@/core/components/select.types'
 import {DwIcon} from '@/core/icons'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
@@ -403,7 +404,7 @@ onMounted(() => {
                   </template>
                 </FormField>
                 <FormField :label="t('settings.projects.fields.defaultEnv')">
-                  <DwSelect v-model="editDefaultEnv" :options="defaultEnvOptions"/>
+                  <SettingsSelect v-model="editDefaultEnv" :options="defaultEnvOptions"/>
                 </FormField>
                 <div class="pj-actions">
                   <DwButton variant="primary" size="sm" :disabled="saving" @click="saveSelected">
@@ -420,7 +421,7 @@ onMounted(() => {
               </div>
               <div class="pj-stack">
                 <FormField :label="t('settings.projects.deleteModeLabel')">
-                  <DwSelect v-model="deleteMode" :options="deleteModeOptions"/>
+                  <SettingsSelect v-model="deleteMode" :options="deleteModeOptions"/>
                 </FormField>
                 <div class="pj-actions">
                   <DwButton variant="danger" size="sm" :disabled="saving" @click="deleteSelected">

@@ -51,6 +51,7 @@ public final class ConnectionMapper {
         config.setDriverClass(entity.getDriverClass());
         config.setSshEnabled(entity.isSshEnabled());
         config.setWriteGuard(entity.isWriteGuard());
+        config.setAllowEngineWrites(entity.isAllowEngineWrites());
         config.setSshHost(entity.getSshHost());
         config.setSshPort(entity.getSshPort());
         config.setSshUser(entity.getSshUser());
@@ -116,6 +117,9 @@ public final class ConnectionMapper {
         }
         if (config.getWriteGuard() != null) {
             entity.setWriteGuard(config.getWriteGuard());
+        }
+        if (config.getAllowEngineWrites() != null) {
+            entity.setAllowEngineWrites(config.getAllowEngineWrites());
         }
         if (config.getSshHost() != null) {
             entity.setSshHost(config.getSshHost());

@@ -680,7 +680,7 @@ function codeLabel(lang: string) {
 }
 
 .msg-row--compact .bubble.user {
-  border-radius: 14px;
+  border-radius: var(--dw-surface-radius, 14px);
   border-color: transparent;
   background: color-mix(in srgb, var(--dw-bg-panel) 72%, var(--dw-bg));
   padding: 8px 12px;
@@ -1105,7 +1105,7 @@ function codeLabel(lang: string) {
   gap: 4px;
   max-width: 160px;
   padding: 3px 8px 3px 6px;
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   border: 1px solid color-mix(in srgb, var(--dw-border) 75%, transparent);
   background: color-mix(in srgb, var(--dw-bg-panel) 55%, transparent);
   color: color-mix(in srgb, var(--dw-text) 78%, var(--dw-text-secondary));

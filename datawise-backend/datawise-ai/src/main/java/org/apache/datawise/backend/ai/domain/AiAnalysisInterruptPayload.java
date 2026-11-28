@@ -7,6 +7,15 @@ public record AiAnalysisInterruptPayload(
         String threadId,
         String checkpointId,
         String sql,
-        String nextStep
+        String nextStep,
+        String grantId
 ) {
+    public AiAnalysisInterruptPayload(
+            String threadId,
+            String checkpointId,
+            String sql,
+            String nextStep
+    ) {
+        this(threadId, checkpointId, sql, nextStep, null);
+    }
 }

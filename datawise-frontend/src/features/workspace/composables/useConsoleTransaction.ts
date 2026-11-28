@@ -88,14 +88,35 @@ export function useConsoleTransaction(options: {
         void runAction(() => sqlApi.rollbackSession(payload), 'console.transaction.rollbackDone')
     }
 
-    function toggleAutocommit() {
+    async function toggleAutocommit() {
         const payload = sessionOptions()
         if (!payload) return
         const next = !status.value.autocommit
-        void runAction(
-            () => sqlApi.setSessionAutocommit({...payload, autocommit: next}),
-            next ? 'console.transaction.autocommitOn' : 'console.transaction.autocommitOff',
-        )
+        loading.value = true
+        try {
+            status.value = await sqlApi.setSessionAutocommit({...payload, autocommit: next})
+            registerConnectionHealthCheck(payload.connectionId, 'ok')
+            layout.showSuccessToast(
+                t(next ? 'console.transaction.autocommitOn' : 'console.transaction.autocommitOff'),
+            )
+        } catch (error) {
+            // Switching back to Auto must unblock the console even if the JDBC txn is
+            // already aborted/expired (Trino "Unknown transaction ID"). Drop the session.
+            if (next) {
+                try {
+                    await sqlApi.closeSession(payload.sessionKey)
+                } catch {
+                    // ignore
+                }
+                status.value = {...DEFAULT_SQL_SESSION_STATUS}
+                layout.showSuccessToast(t('console.transaction.autocommitOn'))
+                return
+            }
+            layout.showErrorToast(resolveTransactionErrorMessage(error, t))
+            await refreshStatus()
+        } finally {
+            loading.value = false
+        }
     }
 
     async function closeSession() {

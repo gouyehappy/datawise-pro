@@ -1,14 +1,12 @@
 import {computed, ref} from 'vue'
 import type {ComposerTranslation} from 'vue-i18n'
 import type {TreeNode} from '@/core/types'
-import {findAncestorByType} from '@/core/utils/tree'
-import {resolveCatalogDeletedMessageKey} from '@/features/explorer/services/explorer-menu-intents.service'
 import {resolveDeleteCatalogDialogCopy} from '@/features/explorer/services/explorer-context-menu-builders.service'
-import {resolveExplorerCatalogMessageKey} from '@/features/explorer/services/explorer-catalog-messages'
 import {resolveExplorerFeatureMessageKey} from '@/features/explorer/services/explorer-feature-messages'
 import {resolveExplorerSqlFileMessageKey} from '@/features/explorer/services/explorer-sql-file-messages'
 import {resolveViewModelMessageKey} from '@/features/explorer/services/view-model-messages'
 import {resolveTableMigrationContext} from '@/features/explorer/services/table-migration.service'
+import {resolveTablesRefreshScope} from '@/features/explorer/services/explorer-refresh-scope.service'
 import {
     buildDropTableSql,
     buildTruncateTableSql,
@@ -20,6 +18,7 @@ import {resolveRenameViewModelPlan} from '@/features/explorer/services/view-mode
 import {resolveConnectionCatalogErrorMessage} from '@/features/connection/services/connection-catalog.service'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
 import {deleteInstanceSqlScript} from '@/features/explorer/services/sql-script.service'
+import {invalidateCachedSqlScript} from '@/features/explorer/services/sql-script-content-cache'
 import {resolveExplorerSqlFileScope} from '@/features/explorer/services/explorer-database-scope'
 import {resolveViewModelScope, viewModelApi} from '@/api/modules/view-model'
 import {explorerApi, sqlApi} from '@/api'
@@ -95,8 +94,8 @@ export function useExplorerTreeDangerDialogs(deps: ExplorerTreeDangerDialogsDeps
         layout.showErrorToast(t(resolveTableDataIoMessageKey('contextMissing')))
         return
     }
-    
-    const databaseNode = findAncestorByType(explorer.tree, pending.node.id, 'database')
+
+    const refreshScope = resolveTablesRefreshScope(explorer.tree, pending.node)
     const sql =
         pending.type === 'truncate'
             ? buildTruncateTableSql(ctx)
@@ -114,16 +113,27 @@ export function useExplorerTreeDangerDialogs(deps: ExplorerTreeDangerDialogsDeps
                 database: ctx.database,
                 tableName: ctx.tableName,
             })
-            if (explorer.selectedNodeId === pending.node.id && databaseNode) {
-                explorer.selectNode(databaseNode.id)
+            if (explorer.selectedNodeId === pending.node.id && refreshScope) {
+                explorer.selectNode(refreshScope.scopeNodeId)
             }
         }
-    
-        await explorer.reloadTablesFolder(
-            ctx.connectionId,
-            ctx.database,
-            databaseNode?.id,
-        )
+
+        if (!refreshScope) {
+            layout.showErrorToast(t('explorer.refreshFailed'))
+            return
+        }
+
+        try {
+            await explorer.reloadTablesFolder(
+                refreshScope.connectionId,
+                refreshScope.scopeLabel,
+                refreshScope.scopeNodeId,
+            )
+        } catch (error) {
+            layout.showErrorToast(
+                resolveCaughtApiErrorMessage(error, t, 'explorer.refreshFailed'),
+            )
+        }
     
     } catch (error) {
         layout.showErrorToast(
@@ -195,6 +205,11 @@ export function useExplorerTreeDangerDialogs(deps: ExplorerTreeDangerDialogsDeps
     
     try {
         await deleteInstanceSqlScript({
+            connectionId,
+            instanceName: scope.instanceLabel,
+            fileName: node.label,
+        })
+        invalidateCachedSqlScript({
             connectionId,
             instanceName: scope.instanceLabel,
             fileName: node.label,

@@ -77,9 +77,17 @@ export function awaitUnauthorizedRecovery(): Promise<void> {
 export function installUnauthorizedSessionRecovery(): void {
     registerUnauthorizedRecoveryHandler(() => {
         if (!recoveryPromise) {
-            recoveryPromise = runUnauthorizedRecovery().finally(() => {
-                recoveryPromise = null
-            })
+            // 兜底：恢复链路里任何一步失败都只在控制台留痕，
+            // 不能变成 Uncaught (in promise) 刷屏。
+            recoveryPromise = runUnauthorizedRecovery()
+                .catch((error) => {
+                    if (import.meta.env.DEV) {
+                        console.warn('[auth] unauthorized recovery failed', error)
+                    }
+                })
+                .finally(() => {
+                    recoveryPromise = null
+                })
         }
         void recoveryPromise
     })

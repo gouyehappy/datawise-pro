@@ -102,7 +102,7 @@ const {t} = useSqlEditorI18n()
   min-width: 220px;
   max-width: min(300px, 90vw);
   padding: 0 0 4px;
-  border-radius: 8px;
+  border-radius: var(--dw-surface-radius, 8px);
   background: var(--hs-bg);
   border: 1px solid var(--hs-border);
   box-shadow: var(--hs-shadow);
@@ -169,7 +169,7 @@ const {t} = useSqlEditorI18n()
   align-items: center;
   gap: 10px;
   padding: 5px 6px;
-  border-radius: 5px;
+  border-radius: var(--dw-surface-radius, 5px);
 }
 
 .hint-shortcuts-row:hover {
@@ -180,7 +180,7 @@ const {t} = useSqlEditorI18n()
   flex-shrink: 0;
   min-width: 88px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 9px;
   font-weight: 600;

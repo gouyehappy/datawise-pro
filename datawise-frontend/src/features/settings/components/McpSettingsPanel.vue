@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import {computed, onMounted, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {DwButton, DwInput} from '@/core/components'
+import {DwButton, DwInput, SettingsRow} from '@/core/components'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
-import SettingsSectionCard from '@/features/settings/components/SettingsSectionCard.vue'
+import SettingsGroup from '@/features/settings/components/SettingsGroup.vue'
+import SettingsActions from '@/features/settings/components/SettingsActions.vue'
 import SettingsTipsCard from '@/features/settings/components/SettingsTipsCard.vue'
 import {useAppToast} from '@/features/layout/composables/useAppToast'
 import {useLayoutStore} from '@/features/layout/stores/layout'
@@ -76,82 +77,73 @@ onMounted(() => {
         :title="t('settings.mcp.title')"
         :subtitle="t('settings.mcp.subtitle')"
     >
-      <SettingsTipsCard
-          :title="t('settings.mcp.tipsTitle')"
-          :content="t('settings.mcp.tipsContent')"
-      />
+      <template #tips>
+        <SettingsTipsCard
+            :title="t('settings.mcp.tipsTitle')"
+            :content="t('settings.mcp.tipsContent')"
+        />
+      </template>
 
-      <SettingsSectionCard :title="t('settings.mcp.configTitle')">
-        <p class="mcp-hint">{{ t('settings.mcp.configHint') }}</p>
-        <div class="mcp-fields">
-          <label class="mcp-field">
-            <span>{{ t('settings.mcp.apiUrl') }}</span>
+      <div class="settings-groups">
+        <SettingsGroup
+            :title="t('settings.mcp.configTitle')"
+            :hint="t('settings.mcp.configHint')"
+        >
+          <SettingsRow :label="t('settings.mcp.apiUrl')">
             <DwInput v-model="apiUrl" :placeholder="t('settings.mcp.apiUrlPlaceholder')"/>
-          </label>
-          <label class="mcp-field">
-            <span>{{ t('settings.mcp.allowlist') }}</span>
+          </SettingsRow>
+          <SettingsRow
+              :label="t('settings.mcp.allowlist')"
+              :hint="t('settings.mcp.allowlistHint')"
+          >
             <DwInput
                 v-model="allowlistText"
                 :rows="4"
                 :placeholder="t('settings.mcp.allowlistPlaceholder')"
             />
-            <small>{{ t('settings.mcp.allowlistHint') }}</small>
-          </label>
-          <p class="mcp-field mcp-field--note">
-            <strong>{{ t('settings.mcp.permissionTier') }}</strong>
-            <small>{{ t('settings.mcp.permissionTierHint') }}</small>
-          </p>
-        </div>
-        <pre class="mcp-json">{{ configJson }}</pre>
-        <div class="mcp-actions">
-          <DwButton variant="primary" @click="copyConfig">
-            {{ copied ? t('settings.mcp.copied') : t('settings.mcp.copyConfig') }}
-          </DwButton>
-        </div>
-      </SettingsSectionCard>
+          </SettingsRow>
+          <SettingsRow
+              :label="t('settings.mcp.permissionTier')"
+              :hint="t('settings.mcp.permissionTierHint')"
+          >
+            <span class="mcp-tier">readonly</span>
+          </SettingsRow>
+          <div class="settings-section__block">
+            <pre class="mcp-json">{{ configJson }}</pre>
+            <SettingsActions align="end">
+              <DwButton variant="primary" @click="copyConfig">
+                {{ copied ? t('settings.mcp.copied') : t('settings.mcp.copyConfig') }}
+              </DwButton>
+            </SettingsActions>
+          </div>
+        </SettingsGroup>
 
-      <SettingsSectionCard :title="t('settings.mcp.governanceTitle')">
-        <p class="mcp-hint">{{ t('settings.mcp.governanceBody') }}</p>
-        <ul class="mcp-list">
-          <li>{{ t('settings.mcp.toolReadonly') }}</li>
-          <li>{{ t('settings.mcp.toolReview') }}</li>
-          <li>{{ t('settings.mcp.toolNoWrite') }}</li>
-        </ul>
-      </SettingsSectionCard>
+        <SettingsGroup
+            :title="t('settings.mcp.governanceTitle')"
+            :hint="t('settings.mcp.governanceBody')"
+        >
+          <ul class="mcp-list">
+            <li>{{ t('settings.mcp.toolReadonly') }}</li>
+            <li>{{ t('settings.mcp.toolReview') }}</li>
+            <li>{{ t('settings.mcp.toolNoWrite') }}</li>
+          </ul>
+        </SettingsGroup>
+      </div>
     </SettingsPageShell>
   </div>
 </template>
 
 <style scoped>
-.mcp-hint {
-  margin: 0 0 var(--dw-space-4);
-  font-size: var(--dw-text-sm);
+.mcp-tier {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--dw-border);
+  border-radius: var(--dw-control-radius-sm);
+  background: var(--dw-bg-muted);
   color: var(--dw-text-secondary);
-  line-height: 1.5;
-}
-
-.mcp-fields {
-  display: flex;
-  flex-direction: column;
-  gap: var(--dw-space-4);
-  margin-bottom: var(--dw-space-4);
-}
-
-.mcp-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--dw-space-2);
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text);
-}
-
-.mcp-field small {
-  color: var(--dw-text-muted);
   font-size: var(--dw-text-xs);
-}
-
-.mcp-field--note strong {
-  font-weight: 600;
+  font-family: var(--dw-mono);
 }
 
 .mcp-json {
@@ -166,11 +158,6 @@ onMounted(() => {
   word-break: break-word;
   max-height: 280px;
   overflow: auto;
-}
-
-.mcp-actions {
-  display: flex;
-  gap: var(--dw-gap);
 }
 
 .mcp-list {

@@ -59,17 +59,33 @@ func hasEnabledTunnel(c connectionPayload, runtime runtimeEndpoint) bool {
 	return false
 }
 
-// validate 复刻分支 config.rs 的安全约束。
+// validateConfig 在拨号前校验逻辑目标和宿主提供的实际端点。
 func validateConfig(c connectionPayload, cfg pluginConfig, runtime runtimeEndpoint) error {
 	switch cfg.Protocol {
+	case "npipe":
+		if !namedPipeSupported() {
+			return errors.New("Docker Named Pipe connections are only supported on Windows")
+		}
+		if hasEnabledTunnel(c, runtime) {
+			return errors.New("Named Pipe connections cannot use Tunnel / Proxy")
+		}
+		if !strings.HasPrefix(cfg.PipePath, "//./pipe/") || len(cfg.PipePath) <= len("//./pipe/") || strings.ContainsAny(strings.TrimPrefix(cfg.PipePath, "//./pipe/"), "/\\\x00\r\n") {
+			return errors.New("Named Pipe path must be //./pipe/<name>")
+		}
 	case "http", "https":
 		if strings.TrimSpace(c.Host) == "" && runtime.Port == 0 {
 			return errors.New("Docker HTTP/HTTPS connections require a host")
 		}
-	if cfg.Protocol == "http" && !isLoopbackHost(c.Host) && !hasEnabledTunnel(c, runtime) && !cfg.AllowInsecureRemoteHTTP {
-		return errors.New("Remote Docker HTTP is disabled. Enable insecure remote HTTP explicitly, or use HTTPS or an SSH tunnel.")
-	}
+		if c.Port < 0 || c.Port > 65535 {
+			return errors.New("Docker port must be between 1 and 65535")
+		}
+		if cfg.Protocol == "http" && !isLoopbackHost(c.Host) && !hasEnabledTunnel(c, runtime) && !cfg.AllowInsecureRemoteHTTP {
+			return errors.New("Remote Docker HTTP is disabled. Enable insecure remote HTTP explicitly, or use HTTPS or an SSH tunnel.")
+		}
 	case "unix", "unix-over-nc", "unix-over-nc-sudo":
+		if hasEnabledTunnel(c, runtime) {
+			return errors.New("Socket connections cannot use TCP transport layers. Clear Tunnel / Proxy for this connection, or select HTTP/HTTPS to use a host tunnel")
+		}
 		if !strings.HasPrefix(cfg.SocketPath, "/") || strings.ContainsAny(cfg.SocketPath, "\x00\n\r") {
 			return fmt.Errorf("Invalid Docker socket path: %q", cfg.SocketPath)
 		}
@@ -78,6 +94,12 @@ func validateConfig(c connectionPayload, cfg pluginConfig, runtime runtimeEndpoi
 		} else {
 			if strings.TrimSpace(cfg.SSHHost) == "" {
 				return errors.New("Unix-over-NC requires an SSH host (see the connection form)")
+			}
+			if strings.TrimSpace(cfg.SSHUsername) == "" {
+				return errors.New("SSH connections require a username")
+			}
+			if cfg.SSHPort < 1 || cfg.SSHPort > 65535 {
+				return errors.New("SSH port must be between 1 and 65535")
 			}
 		}
 	default:
@@ -142,6 +164,8 @@ func connect(ctx context.Context, c connectionPayload, runtime runtimeEndpoint) 
 	var tlsCfg *tls.Config
 
 	switch cfg.Protocol {
+	case "npipe":
+		opts = append(opts, client.WithHost("npipe://"+cfg.PipePath))
 	case "http", "https":
 		host := strings.TrimSpace(c.Host)
 		port := c.Port
@@ -194,6 +218,12 @@ func connect(ctx context.Context, c connectionPayload, runtime runtimeEndpoint) 
 
 	if dialContext != nil || tlsCfg != nil {
 		transport := &http.Transport{TLSClientConfig: tlsCfg, DialContext: dialContext}
+		if cfg.Protocol == "unix-over-nc" || cfg.Protocol == "unix-over-nc-sudo" {
+			transport.MaxConnsPerHost = 6
+			transport.MaxIdleConns = 2
+			transport.MaxIdleConnsPerHost = 2
+			transport.IdleConnTimeout = 10 * time.Second
+		}
 		opts = append(opts, client.WithHTTPClient(&http.Client{Transport: transport}))
 	}
 

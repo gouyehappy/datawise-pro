@@ -329,9 +329,20 @@ public class JdbcDriverLoader {
 
     private Path resolveMissingJarPath(JdbcMavenCoordinate coordinate) {
         if (HiveJdbcDriverBundle.isHiveDriverArtifact(coordinate)) {
-            return jarLocator.hiveBundleDirectory().resolve(coordinate.fileName());
+            return requirePathInsideDriversDir(jarLocator.hiveBundleDirectory().resolve(coordinate.fileName()));
         }
-        return driversDir.resolve(coordinate.fileName());
+        return requirePathInsideDriversDir(driversDir.resolve(coordinate.fileName()));
+    }
+
+    /** Normalize and ensure the path stays under {@link #driversDir} (blocks path traversal). */
+    private Path requirePathInsideDriversDir(Path candidate) {
+        Path normalized = candidate.toAbsolutePath().normalize();
+        if (!normalized.startsWith(driversDir)) {
+            throw new IllegalArgumentException(
+                    "JDBC driver path escapes drivers directory: " + normalized
+            );
+        }
+        return normalized;
     }
 
     private void ensureHiveDriverBundle(String version) throws IOException {
@@ -347,8 +358,9 @@ public class JdbcDriverLoader {
     }
 
     private void downloadJar(JdbcMavenCoordinate coordinate, Path target) throws IOException {
-        Files.createDirectories(target.getParent());
-        Path temp = target.resolveSibling(target.getFileName() + ".download");
+        Path safeTarget = requirePathInsideDriversDir(target);
+        Files.createDirectories(safeTarget.getParent());
+        Path temp = requirePathInsideDriversDir(safeTarget.resolveSibling(safeTarget.getFileName() + ".download"));
         String key = coordinate.cacheKey();
         markDownload(key, 0, -1, true, false, null);
         IOException lastFailure = null;
@@ -358,12 +370,16 @@ public class JdbcDriverLoader {
             attempted.add(uri.toString());
             log.info("Downloading JDBC driver {} from {}", key, uri);
             HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
-            connection.setInstanceFollowRedirects(true);
+            // Fail closed: do not follow redirects to untrusted / private hosts.
+            connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(20_000);
             connection.setReadTimeout(180_000);
             connection.setRequestProperty("User-Agent", "DataWise-JDBC-DriverLoader");
             try {
                 int status = connection.getResponseCode();
+                if (status >= 300 && status < 400) {
+                    throw new IOException("HTTP redirect " + status + " from " + uri + " (redirects disabled)");
+                }
                 if (status >= 400) {
                     throw new IOException("HTTP " + status + " from " + uri);
                 }
@@ -381,9 +397,9 @@ public class JdbcDriverLoader {
                     }
                 }
                 try {
-                    Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                    Files.move(temp, safeTarget, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
                 } catch (IOException atomic) {
-                    Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+                    Files.move(temp, safeTarget, StandardCopyOption.REPLACE_EXISTING);
                 }
                 long size = total > 0 ? total : downloaded;
                 markDownload(key, downloaded, size, false, true, null);

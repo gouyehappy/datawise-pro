@@ -847,7 +847,6 @@ function startResize(event: PointerEvent) {
   gap: 18px;
   overflow: auto;
   padding: 8px var(--copilot-pad) 18px;
-  scrollbar-width: thin;
 }
 .copilot-messages[data-empty="true"] { justify-content: center; gap: 0; }
 

@@ -148,14 +148,24 @@ function openNewConsole() {
  */
 async function checkUpdate() {
     try {
-        const result = await updateSettings.runUpdateCheck()
+        const result = await updateSettings.runUpdateCheck({force: true})
         if (result?.hasUpdate) {
             layout.openSettingsModule('about')
+            const size = result.downloadBytes
+                ? `${Math.max(1, Math.round(result.downloadBytes / (1024 * 1024)))} MB`
+                : ''
+            const saved = result.savedBytes
+                ? `${Math.max(1, Math.round(result.savedBytes / (1024 * 1024)))} MB`
+                : ''
             layout.notifyQuiet({
                 category: 'system',
                 titleKey: 'updateAvailable',
-                bodyKey: 'updateAvailable',
-                params: {version: result.latestVersion || ''},
+                bodyKey: size ? 'updateAvailableIncremental' : 'updateAvailable',
+                params: {
+                    version: result.latestVersion || '',
+                    size,
+                    saved,
+                },
             })
             return
         }
@@ -1131,13 +1141,13 @@ onUnmounted(() => {
 .tw-context__type :deep(.community-plugin-icon.is-sm) {
   width: 18px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
 }
 
 .tw-context__type.is-warn {
   outline: 1px solid color-mix(in srgb, var(--dw-warning, #d97706) 55%, transparent);
   outline-offset: 1px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
 }
 
 .tw-context__icon-fallback {
@@ -1471,7 +1481,7 @@ onUnmounted(() => {
   gap: 6px;
   flex-shrink: 0;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   background: color-mix(in srgb, var(--dw-success-fg, var(--dw-primary)) 12%, transparent);
   color: var(--dw-success-fg, var(--dw-primary));
   font-size: 11px;
@@ -1569,7 +1579,7 @@ onUnmounted(() => {
   min-width: 0;
   padding: 6px 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--dw-surface-radius, 8px);
   background: transparent;
   color: var(--dw-text);
   text-align: left;

@@ -7,6 +7,8 @@ type Props = {
   readOnly?: boolean
   language?: string
   fontSize?: number
+  /** Monaco model path — isolate buffers when switching open config tabs. */
+  path?: string
   onChange?: (value: string) => void
 }
 
@@ -19,6 +21,7 @@ const MonacoLazy = lazy(async () => {
       readOnly?: boolean
       theme: string
       fontSize: number
+      path?: string
       onChange?: (v: string) => void
     }) {
       const Editor = mod.default
@@ -27,6 +30,7 @@ const MonacoLazy = lazy(async () => {
           height="100%"
           language={props.language}
           theme={props.theme}
+          path={props.path}
           value={props.value}
           onChange={(v) => props.onChange?.(v ?? '')}
           options={{
@@ -96,6 +100,7 @@ export function CodeEditor({
   readOnly,
   language,
   fontSize = DEFAULT_EDITOR_FONT_SIZE,
+  path,
   onChange,
 }: Props) {
   const [theme, setTheme] = useState('vs-dark')
@@ -143,6 +148,7 @@ export function CodeEditor({
             readOnly={readOnly}
             theme={theme}
             fontSize={fontSize}
+            path={path}
             onChange={onChange}
           />
         </Suspense>

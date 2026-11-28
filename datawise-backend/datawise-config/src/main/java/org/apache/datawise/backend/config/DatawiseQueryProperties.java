@@ -15,8 +15,9 @@ public class DatawiseQueryProperties {
      * Absolute heap-safety ceiling for interactive SQL materialization.
      * Applied even when {@link #maxResultRows} is 0 (legacy "unlimited").
      * Set to 0 only for deliberate local debugging.
+     * Default 20_000 aligns with JDBC {@code SAFETY_MAX_ROWS} to limit heap blow-ups.
      */
-    private int absoluteMaxResultRows = 100_000;
+    private int absoluteMaxResultRows = 20_000;
 
     /**
      * JDBC {@link java.sql.Statement#setQueryTimeout(int)}；0 表示不限制（保持兼容）。

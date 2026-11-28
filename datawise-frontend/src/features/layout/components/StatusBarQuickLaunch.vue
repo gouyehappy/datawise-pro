@@ -248,7 +248,7 @@ function onWidthUpdate(value: number) {
   bottom: 2px;
   width: 6px;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   background: var(--dw-success, #3ecf8e);
   box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--dw-bg-chrome) 88%, transparent);
 }

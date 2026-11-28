@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createZmodemDetectionFeeder,
   createZmodemSentry,
   decideZmodemDetection,
   mergeZmodemChunks,
@@ -163,6 +164,86 @@ describe("createZmodemSentry", () => {
       onRetract: vi.fn(),
     };
     expect(createZmodemSentry(handlers)).toBeDefined();
+  });
+});
+
+describe("createZmodemDetectionFeeder (合帧后检测定界, #307)", () => {
+  const encoder = new TextEncoder();
+  const ascii = (text: string) => encoder.encode(text);
+  const concat = (...parts: Uint8Array[]) => {
+    const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+    let at = 0;
+    for (const part of parts) {
+      out.set(part, at);
+      at += part.length;
+    }
+    return out;
+  };
+  // `**` + ZDLE + 'B' + 14 hex + CRLF —— lrzsz 的 ZRQINIT hex 首帧。
+  const hexHeader = () => ascii("**\x18B00000000000000\r\n");
+
+  function capture() {
+    const bursts: Uint8Array[] = [];
+    const feeder = createZmodemDetectionFeeder((chunk) => bursts.push(chunk.slice()));
+    return { feeder, bursts };
+  }
+
+  it("无哨兵的普通输出整批转发，字节不增不减", () => {
+    const { feeder, bursts } = capture();
+    const data = ascii("$ ls -la\r\nPROMPT> ");
+    feeder.feed(data);
+    expect(bursts).toHaveLength(1);
+    expect(bursts[0]).toEqual(data);
+  });
+
+  it("合帧里 hex 首帧独占一个 burst，尾随回显另起一个（sz 检测不再丢失）", () => {
+    const { feeder, bursts } = capture();
+    const header = hexHeader();
+    const noise = ascii("$ sz report.log\r\nPROMPT> ");
+    feeder.feed(concat(ascii("\x1b[?25l"), header, noise));
+    expect(bursts).toHaveLength(3);
+    expect(bursts[1]).toEqual(header);
+    expect(bursts[2]).toEqual(noise);
+    // 所有字节恰好喂入一次、顺序不变。
+    expect(concat(...bursts)).toEqual(concat(ascii("\x1b[?25l"), header, noise));
+  });
+
+  it("首帧被帧边界切开时留到下一帧拼成独立 burst", () => {
+    const { feeder, bursts } = capture();
+    const header = hexHeader();
+    feeder.feed(header.subarray(0, 10));
+    expect(bursts).toHaveLength(0);
+    feeder.feed(concat(header.subarray(10), ascii("tail")));
+    expect(bursts).toHaveLength(2);
+    expect(bursts[0]).toEqual(header);
+    expect(bursts[1]).toEqual(ascii("tail"));
+  });
+
+  it("帧尾挂着哨兵前缀时只留前缀，正文立即放行", () => {
+    const { feeder, bursts } = capture();
+    feeder.feed(ascii("hello**"));
+    expect(bursts).toHaveLength(1);
+    expect(bursts[0]).toEqual(ascii("hello"));
+    feeder.feed(concat(ascii("\x18B00000000000000\r\n"), ascii("world")));
+    expect(bursts).toHaveLength(3);
+    expect(bursts[1]).toEqual(hexHeader());
+    expect(bursts[2]).toEqual(ascii("world"));
+  });
+
+  it("形状破坏的哨兵按显示字节放行，不丢字节也不误判", () => {
+    const { feeder, bursts } = capture();
+    const data = ascii("**\x18Bzz-not-hexzz\r\nrest");
+    feeder.feed(data);
+    expect(concat(...bursts)).toEqual(data);
+    expect(bursts.length).toBeGreaterThan(1);
+  });
+
+  it("多次 feed 后字节总量守恒（含 XON 首帧）", () => {
+    const { feeder, bursts } = capture();
+    const withXon = concat(hexHeader(), new Uint8Array([0x11]));
+    const parts = [ascii("boot\r\n"), withXon, ascii("after"), hexHeader(), ascii("end")];
+    for (const part of parts) feeder.feed(part);
+    expect(concat(...bursts)).toEqual(concat(...parts));
   });
 });
 

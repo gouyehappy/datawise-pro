@@ -113,16 +113,16 @@ const envLabel = computed(() =>
 .conn-preview {
   display: flex;
   flex-direction: column;
-  gap: var(--dw-space-6);
+  gap: var(--dw-space-3);
   min-height: 0;
   height: 100%;
-  padding: var(--dw-space-9) var(--dw-space-10) var(--dw-space-10);
+  padding: var(--dw-space-5);
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
 
 .preview-card {
-  padding: var(--dw-space-7) var(--dw-space-8);
+  padding: var(--dw-space-5) var(--dw-space-6);
   border: 1px solid var(--dw-border-light);
   background: var(--dw-bg);
 }

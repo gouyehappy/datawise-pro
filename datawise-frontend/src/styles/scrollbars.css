@@ -23,7 +23,7 @@
     background-color: var(--dw-scrollbar-thumb);
     border: calc((var(--dw-scrollbar-hit, 10px) - var(--dw-scrollbar-size, 4px)) / 2) solid transparent;
     background-clip: content-box;
-    border-radius: 999px;
+    border-radius: var(--dw-radius-pill, 999px);
 }
 
 *::-webkit-scrollbar-thumb:hover,
@@ -83,8 +83,7 @@
     .dw-embedded-panel,
     .messages-log,
     .overview,
-    .error-pane,
-    .exec-result-pane,
+    .result-status-pane,
     .explain-plan__body,
     .explain-graph,
     .result-diff__table-wrap,
@@ -140,7 +139,7 @@
         background-color: transparent;
         border: calc((var(--dw-scrollbar-hit, 10px) - var(--dw-scrollbar-size, 4px)) / 2) solid transparent;
         background-clip: content-box;
-        border-radius: 999px;
+        border-radius: var(--dw-radius-pill, 999px);
         transition: background-color 0.15s ease, border-width 0.12s ease;
     }
 
@@ -186,8 +185,7 @@
         .dw-embedded-panel,
         .messages-log,
         .overview,
-        .error-pane,
-        .exec-result-pane,
+        .result-status-pane,
         .explain-plan__body,
         .explain-graph,
         .result-diff__table-wrap,

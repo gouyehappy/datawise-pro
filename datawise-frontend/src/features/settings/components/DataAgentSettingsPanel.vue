@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {DwIcon} from '@/core/icons'
 import {
   AI_ANALYSIS_CONFIGURABLE_STEPS,
   type AiAnalysisConfigurableStepId,
@@ -21,11 +20,10 @@ import {useLayoutStore} from '@/features/layout/stores/layout'
 import {UserResource} from '@/features/auth/types/user-resource.types'
 import {useResourceWriteGuard} from '@/features/auth/composables/useResourceWriteGuard'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
-import SettingsSectionCard from '@/features/settings/components/SettingsSectionCard.vue'
 import SettingsTipsCard from '@/features/settings/components/SettingsTipsCard.vue'
-import LayoutToggleChip from '@/features/settings/components/LayoutToggleChip.vue'
-import DwSelect from '@/core/components/DwSelect.vue'
-import {StatusPill, DwInlineAlert, DwInput, FormField} from '@/core/components'
+import SettingsGroup from '@/features/settings/components/SettingsGroup.vue'
+import SettingsSelect from '@/core/components/SettingsSelect.vue'
+import {StatusPill, DwInlineAlert, DwInput, SettingsRow, SettingsSwitch} from '@/core/components'
 import type {SelectOption} from '@/core/components/select.types'
 import {
   ASSISTANT_HISTORY_LIMIT_MAX,
@@ -73,14 +71,22 @@ const analysisMode = computed(() => appConfig.aiPreferences.analysisMode ?? 'sma
 
 const showCustomSteps = computed(() => analysisMode.value === 'custom')
 
-const analysisModeLabel = computed(() =>
-    t(`settings.dataAgent.analysisPreset${analysisMode.value === 'custom' ? 'CustomMode' : analysisMode.value === 'quick' ? 'Quick' : 'Smart'}`),
+function analysisModeTitle(mode: AiAnalysisMode): string {
+  return t(`settings.dataAgent.analysisPreset${mode === 'custom' ? 'CustomMode' : mode === 'quick' ? 'Quick' : 'Smart'}`)
+}
+
+function analysisModeDesc(mode: AiAnalysisMode): string {
+  return t(`settings.dataAgent.analysisPreset${mode === 'custom' ? 'CustomMode' : mode === 'quick' ? 'Quick' : 'Smart'}Hint`)
+}
+
+const analysisModeOptions = computed(() =>
+  ANALYSIS_MODES.map((mode) => ({
+    value: mode,
+    label: analysisModeTitle(mode),
+  })),
 )
 
-const pythonRuntimeBadge = computed(() => {
-  if (!pythonRuntime.value) return ''
-  return pythonRuntime.value.enabled ? t('common.yes') : t('common.no')
-})
+const analysisModeHint = computed(() => analysisModeDesc(analysisMode.value))
 
 const llmProfiles = computed(() => appConfig.aiPreferences.llmProfiles)
 
@@ -121,10 +127,6 @@ function isAnalysisStepEnabled(step: AiAnalysisConfigurableStepId): boolean {
   return !(appConfig.aiPreferences.disabledAnalysisSteps ?? []).includes(step)
 }
 
-function toggleAnalysisStep(step: AiAnalysisConfigurableStepId) {
-  setAnalysisStepEnabled(step, !isAnalysisStepEnabled(step))
-}
-
 function setAnalysisStepEnabled(step: AiAnalysisConfigurableStepId, enabled: boolean) {
   if (denyIfReadOnly()) return
   appConfig.setAnalysisMode('custom')
@@ -143,10 +145,6 @@ function setAnalysisStepEnabled(step: AiAnalysisConfigurableStepId, enabled: boo
   }
   analysisStepError.value = ''
   appConfig.setDisabledAnalysisSteps([...disabled])
-}
-
-function toggleSkipSqlConfirmation() {
-  skipSqlConfirmation.value = !skipSqlConfirmation.value
 }
 
 const runtimeSpecs = computed(() => {
@@ -247,155 +245,127 @@ onMounted(() => {
     </template>
 
     <div class="settings-groups settings-stack">
-      <SettingsSectionCard
+      <SettingsGroup
           :title="t('settings.dataAgent.executionTitle')"
           :hint="t('settings.dataAgent.executionHint')"
-          icon="run"
-          tone="primary"
-          compact-head
       >
-        <LayoutToggleChip
+        <SettingsSwitch
             :label="t('settings.dataAgent.skipSqlConfirmation')"
-            :caption="t('settings.dataAgent.skipSqlConfirmationHint')"
-            :active="skipSqlConfirmation"
-            @toggle="toggleSkipSqlConfirmation"
+            :hint="t('settings.dataAgent.skipSqlConfirmationHint')"
+            :model-value="skipSqlConfirmation"
+            :disabled="readOnly"
+            @update:model-value="skipSqlConfirmation = $event"
         />
-        <FormField
-            class="assistant-history-limit"
+        <SettingsRow
             :label="t('settings.dataAgent.assistantHistoryLimit')"
-            input-id="assistant-history-limit"
+            :hint="t('settings.dataAgent.assistantHistoryLimitHint')"
+            :disabled="readOnly"
         >
-          <template #default="{id}">
-            <div class="input-with-unit">
-              <DwInput
-                  :id="id"
-                  type="number"
-                  :min="ASSISTANT_HISTORY_LIMIT_MIN"
-                  :max="ASSISTANT_HISTORY_LIMIT_MAX"
-                  :disabled="readOnly"
-                  :model-value="assistantHistoryLimit"
-                  @update:model-value="assistantHistoryLimit = Number($event)"
-              />
-              <span class="unit-chip">{{ t('settings.dataAgent.assistantHistoryLimitUnit') }}</span>
-            </div>
-          </template>
-        </FormField>
-        <p class="field-hint">{{ t('settings.dataAgent.assistantHistoryLimitHint') }}</p>
-      </SettingsSectionCard>
+          <div class="input-with-unit">
+            <DwInput
+                id="assistant-history-limit"
+                type="number"
+                :min="ASSISTANT_HISTORY_LIMIT_MIN"
+                :max="ASSISTANT_HISTORY_LIMIT_MAX"
+                :disabled="readOnly"
+                :model-value="assistantHistoryLimit"
+                @update:model-value="assistantHistoryLimit = Number($event)"
+            />
+            <span class="unit-chip">{{ t('settings.dataAgent.assistantHistoryLimitUnit') }}</span>
+          </div>
+        </SettingsRow>
+      </SettingsGroup>
 
-      <SettingsSectionCard
+      <SettingsGroup
           :title="t('settings.dataAgent.analysisStepsTitle')"
           :hint="t('settings.dataAgent.analysisStepsHint')"
-          icon="list-ordered"
-          tone="sky"
-          :badge="analysisModeLabel"
       >
-        <div class="mode-pick-grid" role="group" :aria-label="t('settings.dataAgent.analysisPresetGroup')">
-          <button
-              v-for="mode in ANALYSIS_MODES"
-              :key="mode"
-              type="button"
-              class="mode-pick"
-              :class="{ 'is-active': analysisMode === mode }"
-              @click="applyAnalysisMode(mode)"
-          >
-            <span class="mode-pick__icon" aria-hidden="true">
-              <DwIcon v-if="mode === 'quick'" name="zap" size="sm" :stroke-width="1.5"/>
-              <DwIcon v-else-if="mode === 'smart'" name="star" size="sm" :stroke-width="1.5"/>
-              <DwIcon v-else name="editor" size="sm" :stroke-width="1.5"/>
-            </span>
-            <span class="mode-pick__body">
-              <span class="mode-pick__title">{{ t(`settings.dataAgent.analysisPreset${mode === 'custom' ? 'CustomMode' : mode === 'quick' ? 'Quick' : 'Smart'}`) }}</span>
-              <span class="mode-pick__desc">{{ t(`settings.dataAgent.analysisPreset${mode === 'custom' ? 'CustomMode' : mode === 'quick' ? 'Quick' : 'Smart'}Hint`) }}</span>
-            </span>
-            <span v-if="analysisMode === mode" class="mode-pick__check" aria-hidden="true">✓</span>
-          </button>
+        <SettingsRow
+            :label="t('settings.dataAgent.analysisPresetGroup')"
+            :hint="analysisModeHint"
+            :disabled="readOnly"
+        >
+          <SettingsSelect
+              id="data-agent-analysis-mode"
+              :model-value="analysisMode"
+              :options="analysisModeOptions"
+              :disabled="readOnly"
+              @update:model-value="(v) => applyAnalysisMode(v as AiAnalysisMode)"
+          />
+        </SettingsRow>
+        <div v-if="analysisMode === 'smart'" class="settings-section__block">
+          <p class="settings-section__block-hint">{{ t('settings.dataAgent.analysisSmartRuntimeHint') }}</p>
         </div>
-
-        <p v-if="analysisMode === 'smart'" class="setting-callout">
-          {{ t('settings.dataAgent.analysisSmartRuntimeHint') }}
-        </p>
-
-        <div v-if="showCustomSteps" class="step-toggle-group">
-          <span class="step-toggle-group__label">{{ t('settings.dataAgent.analysisPresetCustomMode') }}</span>
-          <div class="step-toggle-list">
-            <LayoutToggleChip
-                v-for="step in AI_ANALYSIS_CONFIGURABLE_STEPS"
-                :key="step"
-                :label="t(`ai.analysis.steps.${step}`)"
-                :caption="t(`settings.dataAgent.analysisStepHints.${step}`)"
-                :active="isAnalysisStepEnabled(step)"
-                @toggle="toggleAnalysisStep(step)"
-            />
+        <template v-if="showCustomSteps">
+          <SettingsSwitch
+              v-for="step in AI_ANALYSIS_CONFIGURABLE_STEPS"
+              :key="step"
+              :label="t(`ai.analysis.steps.${step}`)"
+              :hint="t(`settings.dataAgent.analysisStepHints.${step}`)"
+              :model-value="isAnalysisStepEnabled(step)"
+              :disabled="readOnly"
+              @update:model-value="(v) => setAnalysisStepEnabled(step, v)"
+          />
+          <div v-if="analysisStepError" class="settings-section__block">
+            <DwInlineAlert :message="analysisStepError"/>
           </div>
-          <DwInlineAlert :message="analysisStepError"/>
-        </div>
-      </SettingsSectionCard>
+        </template>
+      </SettingsGroup>
 
-      <SettingsSectionCard
+      <SettingsGroup
           :title="t('settings.dataAgent.llmRoutingTitle')"
           :hint="t('settings.dataAgent.llmRoutingHint')"
-          icon="optimize"
-          tone="violet"
       >
-        <div class="route-list">
-          <div
-              v-for="step in AI_LLM_ROUTE_STEPS"
-              :key="step"
-              class="route-row"
-          >
-            <div class="route-row__meta">
-              <span class="route-row__badge">{{ t(`settings.dataAgent.llmRouteSteps.${step}`) }}</span>
-              <span class="route-row__hint">{{ t(`settings.dataAgent.llmRouteHints.${step}`) }}</span>
-            </div>
-            <DwSelect
-                class="route-row__select"
-                :model-value="routeProfileId(step)"
-                size="sm"
-                :options="llmRouteOptions"
-                @update:model-value="setRouteProfile(step, $event)"
-            />
-          </div>
+        <SettingsRow
+            v-for="step in AI_LLM_ROUTE_STEPS"
+            :key="step"
+            :label="t(`settings.dataAgent.llmRouteSteps.${step}`)"
+            :hint="t(`settings.dataAgent.llmRouteHints.${step}`)"
+        >
+          <SettingsSelect
+              :model-value="routeProfileId(step)"
+              :options="llmRouteOptions"
+              @update:model-value="setRouteProfile(step, $event)"
+          />
+        </SettingsRow>
+        <div class="settings-section__block">
+          <p class="settings-section__block-hint">
+            {{ t('settings.dataAgent.llmRouteFallbackHint', {name: defaultRouteProfileName}) }}
+          </p>
         </div>
+      </SettingsGroup>
 
-        <p class="setting-callout setting-callout--muted">
-          {{ t('settings.dataAgent.llmRouteFallbackHint', {name: defaultRouteProfileName}) }}
-        </p>
-      </SettingsSectionCard>
-
-      <SettingsSectionCard
+      <SettingsGroup
           :title="t('settings.dataAgent.pythonRuntimeTitle')"
           :hint="t('settings.dataAgent.pythonRuntimeHint')"
-          icon="terminal"
-          tone="panel"
-          compact-head
-          :badge="pythonRuntimeBadge"
       >
-        <p v-if="pythonRuntimeLoading" class="runtime-loading">
-          <span class="runtime-loading__dot" aria-hidden="true"/>
-          {{ t('settings.dataAgent.pythonRuntimeLoading') }}
-        </p>
+        <div class="settings-section__block">
+          <p v-if="pythonRuntimeLoading" class="runtime-loading">
+            <span class="runtime-loading__dot" aria-hidden="true"/>
+            {{ t('settings.dataAgent.pythonRuntimeLoading') }}
+          </p>
 
-        <DwInlineAlert v-else-if="pythonRuntimeError" :message="pythonRuntimeError"/>
+          <DwInlineAlert v-else-if="pythonRuntimeError" :message="pythonRuntimeError"/>
 
-        <div v-else-if="pythonRuntime" class="runtime-spec-grid">
-          <div
-              v-for="spec in runtimeSpecs"
-              :key="spec.key"
-              class="runtime-spec"
-          >
-            <span class="runtime-spec__label">{{ spec.label }}</span>
-            <StatusPill
-                v-if="spec.variant"
-                :variant="spec.variant"
-                chip
+          <div v-else-if="pythonRuntime" class="runtime-spec-grid">
+            <div
+                v-for="spec in runtimeSpecs"
+                :key="spec.key"
+                class="runtime-spec"
             >
-              {{ spec.value }}
-            </StatusPill>
-            <span v-else class="runtime-spec__value" :class="{'is-mono': spec.mono}">{{ spec.value }}</span>
+              <span class="runtime-spec__label">{{ spec.label }}</span>
+              <StatusPill
+                  v-if="spec.variant"
+                  :variant="spec.variant"
+                  chip
+              >
+                {{ spec.value }}
+              </StatusPill>
+              <span v-else class="runtime-spec__value" :class="{'is-mono': spec.mono}">{{ spec.value }}</span>
+            </div>
           </div>
         </div>
-      </SettingsSectionCard>
+      </SettingsGroup>
     </div>
   </SettingsPageShell>
 </template>
@@ -429,14 +399,14 @@ onMounted(() => {
 }
 
 .mode-pick:hover {
-  border-color: color-mix(in srgb, var(--dw-primary) 28%, var(--dw-border));
+  border-color: color-mix(in srgb, var(--dw-text) 26%, var(--dw-border));
   background: var(--dw-bg-hover);
 }
 
 .mode-pick.is-active {
-  border-color: var(--dw-primary-border);
-  background: var(--dw-primary-softer);
-  box-shadow: inset 0 0 0 1px var(--dw-primary-ring);
+  border-color: var(--dw-border-strong, var(--dw-text-secondary));
+  background: var(--dw-bg-hover);
+  box-shadow: none;
 }
 
 .mode-pick__icon {
@@ -447,12 +417,13 @@ onMounted(() => {
   width: var(--dw-control-h-sm);
   height: var(--dw-control-h-sm);
   border-radius: var(--dw-radius-pill);
-  color: var(--dw-primary);
-  background: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg-panel));
+  color: var(--dw-text-secondary);
+  background: var(--dw-bg-muted);
 }
 
 .mode-pick.is-active .mode-pick__icon {
-  background: color-mix(in srgb, var(--dw-primary) 18%, var(--dw-bg-panel));
+  background: color-mix(in srgb, var(--dw-text) 12%, var(--dw-bg-muted));
+  color: var(--dw-text);
 }
 
 .mode-pick__body {
@@ -482,15 +453,15 @@ onMounted(() => {
   right: clamp(8px, 1vmin, 10px);
   font-size: var(--dw-text-xs);
   font-weight: 700;
-  color: var(--dw-primary);
+  color: var(--dw-text);
 }
 
 .setting-callout {
   margin: var(--dw-space-6) 0 0;
   padding: var(--dw-pad-control-lg);
   border-radius: var(--dw-control-radius-sm);
-  border: 1px solid color-mix(in srgb, var(--dw-primary) 14%, var(--dw-border-light));
-  background: color-mix(in srgb, var(--dw-primary) 5%, var(--dw-bg-panel));
+  border: 1px solid var(--dw-border-light);
+  background: var(--dw-bg-muted);
   font-size: var(--dw-text-xs);
   line-height: var(--dw-leading-relaxed);
   color: var(--dw-text-secondary);
@@ -553,9 +524,9 @@ onMounted(() => {
   align-self: flex-start;
   padding: 1px var(--dw-space-3);
   border-radius: var(--dw-radius-pill);
-  background: color-mix(in srgb, var(--dw-primary) 10%, var(--dw-bg-panel));
-  border: 1px solid color-mix(in srgb, var(--dw-primary) 16%, var(--dw-border-light));
-  color: var(--dw-primary);
+  background: var(--dw-bg-muted);
+  border: 1px solid var(--dw-border-light);
+  color: var(--dw-text-secondary);
   font-size: var(--dw-text-xs);
   font-weight: 600;
   line-height: var(--dw-leading-relaxed);
@@ -585,7 +556,7 @@ onMounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--dw-primary);
+  background: var(--dw-text-secondary);
   animation: runtime-pulse 1.2s ease-in-out infinite;
 }
 

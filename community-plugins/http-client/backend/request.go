@@ -76,6 +76,10 @@ type requestOptions struct {
 	ProgressEvents bool   `json:"progressEvents"`
 	ProxyMode      string `json:"proxyMode"` // environment | direct | custom
 	ProxyURL       string `json:"proxyUrl"`
+	RetryCount     int    `json:"retryCount"`
+	RetryBackoffMs int    `json:"retryBackoffMs"`
+	RetryStatuses  []int  `json:"retryStatuses"`
+	RetryOnNetwork bool   `json:"retryOnNetwork"`
 }
 
 type sendRequest struct {

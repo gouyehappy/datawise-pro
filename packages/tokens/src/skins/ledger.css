@@ -52,6 +52,14 @@ html[data-ui-skin='ledger'] {
     --dw-control-radius-sm: 0;
     --dw-input-radius: 2px;
     --dw-btn-radius: 2px;
+    /* ledger 同为直角皮肤：胶囊类组件（徽章/标签/chip/开关）在此收口，与 ide 一致，
+     * 避免切换皮肤时这些零散组件又变回胶囊。classic / atelier 保持 :root 的 999px。 */
+    --dw-radius-pill: 0;
+    --dw-chip-radius: 0;
+    /* 与 ide 一致：写死 8~14px 的表面/浮层圆角统一收口为 0（classic/atelier 走 fallback 原值） */
+    --dw-surface-radius: 0;
+    /* 与 ide 一致：勾选 / 复选强调色中性化 */
+    --dw-check-accent: var(--dw-text);
 
     --dw-menu-radius: 2px;
     --dw-menu-item-radius: 0;
@@ -254,6 +262,26 @@ html[data-ui-skin='ledger'] .module-shell__main .setting-block {
     box-shadow: none;
     border-color: var(--dw-panel-outline);
     background: color-mix(in srgb, var(--dw-bg-panel) 60%, var(--dw-bg));
+}
+
+/* 配置分组卡：与 ide 一样收敛为「透明 + 单分隔线 + 直角」，避免同页两套壳 */
+html[data-ui-skin='ledger'] .module-shell__main :is(
+    .settings-section__card,
+    .editor-card,
+    .shortcut-card,
+    .setting-card
+) {
+    border: 0;
+    border-bottom: 1px solid var(--dw-panel-outline);
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+html[data-ui-skin='ledger'] :is(.dw-select__menu, .dw-select__menu--settings) {
+    box-shadow: none;
 }
 
 html[data-ui-skin='ledger'] .status-bar {

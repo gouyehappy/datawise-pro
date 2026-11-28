@@ -10,6 +10,7 @@ import org.apache.datawise.desktop.cef.DesktopOpenLinksLifeSpanHandler;
 import org.apache.datawise.desktop.deeplink.SingleInstanceGuard;
 import org.apache.datawise.desktop.prefs.WindowStateStore;
 import org.apache.datawise.desktop.updater.DesktopUpdaterService;
+import org.apache.datawise.desktop.util.DesktopRendererTrust;
 import org.cef.CefApp;
 import org.cef.CefClient;
 import org.cef.browser.CefBrowser;
@@ -112,34 +113,48 @@ public final class DesktopMainFrame extends JFrame {
         client.addLoadHandler(new CefLoadHandlerAdapter() {
             @Override
             public void onLoadStart(CefBrowser browser, CefFrame frame, CefRequest.TransitionType transitionType) {
-                if (frame != null && frame.isMain()) {
-                    browser.executeJavaScript(SplashThemeInjector.earlyPaintJs(), frame.getURL(), 0);
-                    browser.executeJavaScript(bridgeScript, frame.getURL(), 0);
+                if (frame == null || !frame.isMain()) {
+                    return;
+                }
+                if (isTrustedFrame(frame, browser)) {
+                    String frameUrl = frame.getURL();
+                    browser.executeJavaScript(SplashThemeInjector.earlyPaintJs(), frameUrl, 0);
+                    browser.executeJavaScript(bridgeScript, frameUrl, 0);
+                } else {
+                    System.err.println("[datawise-desktop] skip bridge inject on untrusted frame url="
+                            + frame.getURL());
                 }
             }
 
             @Override
             public void onLoadEnd(CefBrowser browser, CefFrame frame, int httpStatusCode) {
-                if (frame != null && frame.isMain()) {
-                    browser.executeJavaScript(bridgeScript, frame.getURL(), 0);
-                    spaLoadOk = httpStatusCode >= 200 && httpStatusCode < 400;
-                    if (spaLoadOk) {
-                        appRendererLoaded = true;
-                        postReadyLoadRetries = 0;
-                        if (loadRetryTimer != null) {
-                            loadRetryTimer.stop();
-                            loadRetryTimer = null;
-                        }
-                    }
-                    mainDocumentLoaded = true;
-                    // 等开屏脚本/首帧 chrome 落地后再 reveal，避免 CEF 默认白屏抢一帧
-                    if (revealPaintTimer != null) {
-                        revealPaintTimer.stop();
-                    }
-                    revealPaintTimer = new Timer(64, e -> tryRevealWindow());
-                    revealPaintTimer.setRepeats(false);
-                    revealPaintTimer.start();
+                if (frame == null || !frame.isMain()) {
+                    return;
                 }
+                if (isTrustedFrame(frame, browser)) {
+                    browser.executeJavaScript(bridgeScript, frame.getURL(), 0);
+                } else {
+                    System.err.println("[datawise-desktop] skip bridge inject on untrusted frame url="
+                            + frame.getURL());
+                }
+                spaLoadOk = httpStatusCode >= 200 && httpStatusCode < 400
+                        && isTrustedFrame(frame, browser);
+                if (spaLoadOk) {
+                    appRendererLoaded = true;
+                    postReadyLoadRetries = 0;
+                    if (loadRetryTimer != null) {
+                        loadRetryTimer.stop();
+                        loadRetryTimer = null;
+                    }
+                }
+                mainDocumentLoaded = true;
+                // 等开屏脚本/首帧 chrome 落地后再 reveal，避免 CEF 默认白屏抢一帧
+                if (revealPaintTimer != null) {
+                    revealPaintTimer.stop();
+                }
+                revealPaintTimer = new Timer(64, e -> tryRevealWindow());
+                revealPaintTimer.setRepeats(false);
+                revealPaintTimer.start();
             }
 
             @Override
@@ -341,6 +356,22 @@ public final class DesktopMainFrame extends JFrame {
         DesktopFileDropSupport.install(cefUi, open);
         DesktopFileDropSupport.install(getContentPane(), open);
         DesktopFileDropSupport.install(this, open);
+    }
+
+    /** Bridge / early-paint scripts only for loopback SPA origins. */
+    private boolean isTrustedFrame(CefFrame frame, CefBrowser browser) {
+        String frameUrl = frame != null ? frame.getURL() : null;
+        if (DesktopRendererTrust.isTrustedRendererUrl(frameUrl)) {
+            return true;
+        }
+        // Early onLoadStart can report an empty/about URL; fall back to the host start URL.
+        if (DesktopRendererTrust.isTrustedRendererUrl(startUrl)) {
+            if (frameUrl == null || frameUrl.isBlank() || "about:blank".equalsIgnoreCase(frameUrl)) {
+                return true;
+            }
+        }
+        String browserUrl = browser != null ? browser.getURL() : null;
+        return DesktopRendererTrust.isTrustedRendererUrl(browserUrl);
     }
 
     public static boolean isDevToolsEnabled() {

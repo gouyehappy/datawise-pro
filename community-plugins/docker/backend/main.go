@@ -15,7 +15,7 @@ import (
 
 const (
 	pluginID      = "io.datawise.community.docker"
-	pluginVersion = "0.1.0"
+	pluginVersion = "0.1.7"
 )
 
 // session 是一条已建立的 Docker 连接（按 connectionId 缓存，disconnect 关闭）。
@@ -82,8 +82,11 @@ func (p *plugin) dispatch(method string, v params, raw json.RawMessage, emitter 
 		defer p.lifecycle.Unlock()
 		return p.disconnect(v)
 	case "workbench/close":
-		// Host closes a workbench tab; optional cleanup. Connection stays until disconnect.
-		return map[string]any{"ok": true}, nil
+		// Tab closed; clients stay until connection/disconnect (host on last peer tab).
+		p.mu.RLock()
+		remaining := len(p.sessions)
+		p.mu.RUnlock()
+		return map[string]any{"ok": true, "sessionsRemaining": remaining}, nil
 	}
 
 	// 业务方法按 connectionId 路由到会话；宿主（尤其开发宿主在 sidecar 重建后）

@@ -32,7 +32,7 @@ describe('connection-access.service', () => {
     it('respects readonly and readwrite access for members', () => {
         assert.equal(resolveConnectionAccess('conn-1', teams), 'readonly')
         assert.equal(resolveConnectionAccess('conn-2', teams), 'readwrite')
-        assert.equal(resolveConnectionAccess('conn-3', teams), 'ddl')
+        assert.equal(resolveConnectionAccess('conn-3', teams), 'readonly')
     })
 
     it('viewer is always readonly on shared connections', () => {
@@ -43,6 +43,7 @@ describe('connection-access.service', () => {
     it('maps legacy read/write storage values', () => {
         assert.equal(normalizeStoredAccess('read'), 'readonly')
         assert.equal(normalizeStoredAccess('write'), 'ddl')
+        assert.equal(normalizeStoredAccess(undefined), 'readonly')
     })
 
     it('detects write and ddl SQL', () => {
@@ -57,17 +58,17 @@ describe('connection-access.service', () => {
         assert.equal(canDmlConnection('conn-2', teams), true)
         assert.equal(canDmlConnection('new-123456', teams), false)
         assert.equal(canDdlConnection('conn-2', teams), false)
-        assert.equal(canDdlConnection('conn-3', teams), true)
+        assert.equal(canDdlConnection('conn-3', teams), false)
     })
 
-    it('builds access map and stores only non-default levels', () => {
+    it('builds access map and stores only elevations above readonly', () => {
         assert.deepEqual(
             buildConnectionAccessMap(['a', 'b'], {a: 'read', b: 'readwrite'}),
             {a: 'readonly', b: 'readwrite'},
         )
         assert.deepEqual(
             toStoredConnectionAccess({a: 'readonly', b: 'readwrite', c: 'ddl'}),
-            {a: 'readonly', b: 'readwrite'},
+            {b: 'readwrite', c: 'ddl'},
         )
     })
 })

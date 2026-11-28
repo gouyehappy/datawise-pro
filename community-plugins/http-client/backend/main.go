@@ -19,13 +19,14 @@ import (
 
 const (
 	pluginID      = "io.datawise.community.httpclient"
-	pluginVersion = "0.1.0"
+	pluginVersion = "0.2.22"
 )
 
 type plugin struct {
-	executor *executor
-	store    *storeManager
-	streams  *streamHub
+	executor  *executor
+	store     *storeManager
+	streams   *streamHub
+	workflows *workflowHub
 
 	connectionMu sync.Mutex
 	connections  map[string]struct{}
@@ -76,9 +77,14 @@ func (p *plugin) Handle(
 			"configured": dirConfigured(),
 		}, nil
 	case "workbench/close":
+		if p.workflows != nil {
+			p.workflows.stop("")
+		}
 		return map[string]any{"ok": true}, nil
 	case "http/send":
 		return p.handleSend(params, emitter)
+	case "script/run":
+		return p.handleScriptRun(params)
 	case "http/cancel":
 		return p.handleCancel(params)
 	case "http/body":
@@ -103,6 +109,16 @@ func (p *plugin) Handle(
 		return p.handleStreamSend(params)
 	case "stream/close":
 		return p.handleStreamClose(params, emitter)
+	case "workflow/start":
+		return p.handleWorkflowStart(params, emitter)
+	case "workflow/stop":
+		return p.handleWorkflowStop(params)
+	case "workflow/status":
+		return p.handleWorkflowStatus(params)
+	case "workflow/pause":
+		return p.handleWorkflowPause(params)
+	case "workflow/setInterval":
+		return p.handleWorkflowSetInterval(params)
 	default:
 		return nil, rpc.MethodNotFound(method)
 	}
@@ -121,14 +137,15 @@ func decodeParams(params json.RawMessage, target any) *rpc.PluginError {
 func main() {
 	loadConfig()
 	instance := &plugin{
-		executor: newExecutor(),
-		store:    newStoreManager(),
-		streams:  newStreamHub(),
+		executor:  newExecutor(),
+		store:     newStoreManager(),
+		streams:   newStreamHub(),
+		workflows: newWorkflowHub(),
 	}
 	metadata := rpc.Metadata{
 		ID:           pluginID,
 		Version:      pluginVersion,
-		Capabilities: []string{"http", "events", "connections", "storage", "stream"},
+		Capabilities: []string{"http", "events", "connections", "storage", "stream", "workflow"},
 	}
 	server := rpc.NewServer(metadata, instance)
 	if err := server.Serve(); err != nil {

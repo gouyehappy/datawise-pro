@@ -206,7 +206,7 @@ export default {
         'ops/lock': 'Lock-wait analysis',
         'ops/kill': 'Kill session',
         'ops/explain/pro': 'Pro Explain',
-        'datagen/fake': 'Test data generation',
+        'datagen/fake': 'Generate data',
         'security/export/mask': 'Masked export',
         'security/audit/pro': 'Enhanced audit',
         'security/webhook': 'Webhook integrations',

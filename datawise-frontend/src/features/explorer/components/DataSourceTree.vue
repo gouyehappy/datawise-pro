@@ -673,6 +673,20 @@ function onCatalogPointerDown(event: MouseEvent, node: TreeNode) {
   }
 }
 
+/** Hover: warm SQL script content cache before open. */
+function onRowPointerEnter(node: TreeNode) {
+  if (props.selectable) return
+  if (node.type !== 'sql_file' || node.id.startsWith('project-file:')) return
+  const tree = props.explorerTree
+  if (!tree?.length) return
+  void import('@/features/explorer/services/sql-script-content.service').then(
+    ({prefetchSqlScriptFromTreeNode}) => {
+      prefetchSqlScriptFromTreeNode(tree, node)
+    },
+  )
+}
+
+/** 单击：仅选中（+ Info）；不展开、不开 Tab。拖拽后的 click 会被吞掉。 */
 function onRowClick(node: TreeNode) {
   if (suppressNextClick.value) {
     suppressNextClick.value = false
@@ -695,6 +709,7 @@ function onRowClick(node: TreeNode) {
   emit('select', node)
 }
 
+/** 双击：主激活（开 Tab / 连接 / 纯文件夹展开）。与 Enter、打开快捷键同路径。 */
 function onRowDblClick(node: TreeNode) {
   if (props.selectable) return
   commitInlineIfLeaving(node)
@@ -707,6 +722,7 @@ function onRowDblClick(node: TreeNode) {
   emit('open', node)
 }
 
+/** 三角：只展开/折叠，不走 open。 */
 function onTwistieClick(node: TreeNode) {
   commitInlineIfLeaving(node)
   emit('toggleExpand', node.id)
@@ -730,6 +746,20 @@ function displayNodeLabel(node: TreeNode) {
     return platformFeatureTreeLabel(resolvePlatformFeatureId(node) as import('@/features/platform/types/platform.types').PlatformFeatureId, t)
   }
   return resolveExplorerCatalogLabel(node, t)
+}
+
+/** Native title only when text is ellipsized — repeating fully visible text is noise. */
+function syncOverflowTitle(event: PointerEvent, selector?: string) {
+  const root = event.currentTarget as HTMLElement | null
+  if (!root) return
+  const text = (selector ? root.querySelector(selector) : root) as HTMLElement | null
+  if (!text) {
+    root.removeAttribute('title')
+    return
+  }
+  const overflow = text.scrollWidth > text.clientWidth + 1
+  if (overflow) root.title = text.textContent?.trim() || ''
+  else root.removeAttribute('title')
 }
 
 function shouldShowComment(node: TreeNode) {
@@ -829,12 +859,8 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
           : undefined"
         :data-tree-node-id="node.id"
         :style="rowStyle(depth)"
-        :title="isPointerDraggable(node)
-          ? (isProjectSandboxMovableNode(node)
-            ? t('explorer.projectFiles.moveDragHint')
-            : t('explorer.reorderCatalogDragHint'))
-          : undefined"
         @mousedown="onCatalogPointerDown($event, node)"
+        @pointerenter="onRowPointerEnter(node)"
         @click="onRowClick(node)"
         @dblclick="onRowDblClick(node)"
         @contextmenu="!selectable && emit('contextmenu', $event, node)"
@@ -904,7 +930,11 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
             @keydown="onDraftKeydown"
             @blur="onDraftBlur"
         >
-        <span v-else class="tree-label" :title="displayNodeLabel(node)">
+        <span
+            v-else
+            class="tree-label"
+            @pointerenter="syncOverflowTitle($event, '.tree-label__text')"
+        >
           <span class="tree-label__text">{{ displayNodeLabel(node) }}</span>
           <span
               v-if="folderItemCountLabel(node) != null"
@@ -919,7 +949,6 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
             inline
             class="tree-env-pill tree-default-db-pill"
             variant="neutral"
-            :title="t('explorer.defaultDatabaseBadge')"
         >
           {{ t('explorer.defaultDatabaseBadge') }}
         </StatusPill>
@@ -936,7 +965,7 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
         <span
             v-if="shouldShowComment(node)"
             class="tree-comment"
-            :title="node.comment"
+            @pointerenter="syncOverflowTitle($event)"
         >
           {{ node.comment }}
         </span>
@@ -944,7 +973,7 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
         <span
             v-if="node.meta && node.type !== 'load_more' && node.type !== 'project-files-draft' && node.type !== 'group-draft' && !isInlineEditing(node) && !isConnectionFeatureNode(node) && !isViewModelStatusMeta(node.meta) && !isInternalTreeMeta(node.meta)"
             class="tree-meta"
-            :title="node.meta"
+            @pointerenter="syncOverflowTitle($event)"
         >
           {{ node.meta }}
         </span>
@@ -1113,6 +1142,17 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
   border-radius: var(--dw-radius-xs);
   background: transparent;
   transition: var(--dw-transition-bg);
+}
+
+/* 置顶节点：用主色轻点缀标签与左侧竖条，让置顶项在树中更容易被注意到。
+   放在选中态规则之前，选中时竖条会被选中色覆盖，避免两种强调冲突。 */
+.tree-node.is-pinned .tree-label__text {
+  color: var(--dw-primary);
+  font-weight: 500;
+}
+
+.tree-node.is-pinned .tree-node__body::before {
+  background: color-mix(in srgb, var(--dw-primary) 55%, transparent);
 }
 
 .tree-node:hover .tree-node__body {
@@ -1487,7 +1527,7 @@ function isConnectionDefaultDatabase(node: TreeNode, index: number): boolean {
   max-width: 132px;
   height: 22px;
   padding: 0 8px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   border: 1px solid color-mix(in srgb, var(--dw-border, #444) 80%, transparent);
   background: color-mix(in srgb, var(--dw-bg-elevated, #2a2a2a) 94%, #000);
   color: var(--dw-text, #f0f0f0);

@@ -4,12 +4,11 @@ import {useI18n} from 'vue-i18n'
 import {storeToRefs} from 'pinia'
 import MonacoEditor from '@/core/components/MonacoEditor.vue'
 import SettingsSelect from '@/core/components/SettingsSelect.vue'
-import LayoutToggleChip from '@/features/settings/components/LayoutToggleChip.vue'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
-import SettingsSectionCard from '@/features/settings/components/SettingsSectionCard.vue'
-import SettingsSegmentTabs from '@/features/settings/components/SettingsSegmentTabs.vue'
+import SettingsTabStrip from '@/features/settings/components/SettingsTabStrip.vue'
 import SettingsTipsCard from '@/features/settings/components/SettingsTipsCard.vue'
-import {DwCheckbox, DwInput, DwSplitPane, FormField} from '@/core/components'
+import SettingsGroup from '@/features/settings/components/SettingsGroup.vue'
+import {DwInput, DwSplitPane, FormField, SettingsRow, SettingsSwitch} from '@/core/components'
 import {
   EDITOR_FONT_OPTIONS,
   EDITOR_FONT_SIZE_MAX,
@@ -171,9 +170,6 @@ function setFontFamily(fontFamily: string) {
   preserveScrollPatch({fontFamily})
 }
 
-function toggleSetting(key: 'lineNumbers' | 'minimap' | 'wordWrap' | 'folding') {
-  preserveScrollPatch({[key]: !editorSettings.settings[key]})
-}
 </script>
 
 <template>
@@ -193,15 +189,12 @@ function toggleSetting(key: 'lineNumbers' | 'minimap' | 'wordWrap' | 'folding') 
     </template>
 
     <div ref="settingsScrollEl" class="editor-settings editor-settings--v2">
-      <div class="settings-tab-strip">
-        <SettingsSegmentTabs
-            stretch
-            :model-value="editorTab"
-            :tabs="editorTabs"
-            :aria-label="t('settings.nav.groups.editor')"
-            @update:model-value="onEditorTabChange"
-        />
-      </div>
+      <SettingsTabStrip
+          :model-value="editorTab"
+          :tabs="editorTabs"
+          :aria-label="t('settings.nav.groups.editor')"
+          @update:model-value="onEditorTabChange"
+      />
 
       <DwSplitPane
           v-if="editorTab === 'appearance'"
@@ -217,111 +210,104 @@ function toggleSetting(key: 'lineNumbers' | 'minimap' | 'wordWrap' | 'folding') 
           end-class="editor-preview"
       >
         <template #start>
-        <SettingsSectionCard
+        <SettingsGroup
             :title="t('settings.editor.sectionAppearance')"
             :hint="t('settings.editor.sectionAppearanceHint')"
-            icon="settings-editor"
-            tone="primary"
         >
-          <FormField :label="t('settings.editor.theme')" input-id="editor-theme">
-              <template #default="{ id }">
-                <div class="theme-grid">
-                  <button
-                      v-for="option in themeOptions"
-                      :key="option.value"
-                      type="button"
-                      class="theme-tile"
-                      :class="{'is-active': editorSettings.settings.theme === option.value}"
-                      @click="setTheme(option.value)"
-                  >
-                    <span class="theme-tile__label">{{ option.label }}</span>
-                    <span
-                        class="theme-tile__swatch"
-                        :class="`theme-tile__swatch--${option.value}`"
-                        aria-hidden="true"
-                    />
-                  </button>
-                </div>
-              </template>
-            </FormField>
-            <p class="field-note">{{ currentThemeDescription }}</p>
-            <p class="field-note muted">{{ t('settings.editor.themeNote') }}</p>
-
-            <div class="editor-card__grid">
-              <FormField class="editor-field--full" :label="t('settings.editor.fontFamily')" input-id="editor-font">
-                <template #default="{ id }">
-                  <SettingsSelect
-                      :id="id"
-                      :model-value="editorSettings.settings.fontFamily"
-                      :options="fontOptions"
-                      use-option-font
-                      @update:model-value="setFontFamily"
-                  />
-                </template>
-              </FormField>
-              <FormField :label="t('settings.editor.fontSize')" input-id="editor-font-size">
-                <template #default="{ id }">
-                  <div class="input-with-unit">
-                    <DwInput
-                        :id="id"
-                        type="number"
-                        :min="EDITOR_FONT_SIZE_MIN"
-                        :max="EDITOR_FONT_SIZE_MAX"
-                        :model-value="editorSettings.settings.fontSize"
-                        @update:model-value="setFontSize(Number($event))"
-                    />
-                    <span class="unit-chip">px</span>
-                  </div>
-                </template>
-              </FormField>
-              <FormField :label="t('settings.editor.lineHeight')" input-id="editor-line-height">
-                <template #default="{ id }">
-                  <DwInput
-                      :id="id"
-                      type="number"
-                      :min="EDITOR_LINE_HEIGHT_MIN"
-                      :max="EDITOR_LINE_HEIGHT_MAX"
-                      step="0.1"
-                      :model-value="editorSettings.settings.lineHeight"
-                      @update:model-value="setLineHeight(Number($event))"
-                  />
-                </template>
-              </FormField>
+          <div class="settings-section__block">
+            <p class="settings-section__block-label">{{ t('settings.editor.theme') }}</p>
+            <div class="theme-grid" role="radiogroup" :aria-label="t('settings.editor.theme')">
+              <button
+                  v-for="option in themeOptions"
+                  :key="option.value"
+                  type="button"
+                  class="theme-tile"
+                  :class="{'is-active': editorSettings.settings.theme === option.value}"
+                  role="radio"
+                  :aria-checked="editorSettings.settings.theme === option.value"
+                  @click="setTheme(option.value)"
+              >
+                <span class="theme-tile__label">{{ option.label }}</span>
+                <span
+                    class="theme-tile__swatch"
+                    :class="`theme-tile__swatch--${option.value}`"
+                    aria-hidden="true"
+                />
+              </button>
             </div>
-            <p class="field-hint">{{ t('settings.editor.fontSizeHint') }}</p>
-        </SettingsSectionCard>
+            <p class="settings-section__block-hint">{{ currentThemeDescription }}</p>
+            <p class="settings-section__block-hint">{{ t('settings.editor.themeNote') }}</p>
+          </div>
 
-        <SettingsSectionCard
+          <SettingsRow :label="t('settings.editor.fontFamily')">
+            <SettingsSelect
+                id="editor-font"
+                :model-value="editorSettings.settings.fontFamily"
+                :options="fontOptions"
+                use-option-font
+                @update:model-value="setFontFamily"
+            />
+          </SettingsRow>
+          <SettingsRow
+              :label="t('settings.editor.fontSize')"
+              :hint="t('settings.editor.fontSizeHint')"
+          >
+            <div class="input-with-unit">
+              <DwInput
+                  id="editor-font-size"
+                  type="number"
+                  :min="EDITOR_FONT_SIZE_MIN"
+                  :max="EDITOR_FONT_SIZE_MAX"
+                  :model-value="editorSettings.settings.fontSize"
+                  @update:model-value="setFontSize(Number($event))"
+              />
+              <span class="unit-chip">px</span>
+            </div>
+          </SettingsRow>
+          <SettingsRow :label="t('settings.editor.lineHeight')">
+            <div class="input-with-unit">
+              <DwInput
+                  id="editor-line-height"
+                  type="number"
+                  :min="EDITOR_LINE_HEIGHT_MIN"
+                  :max="EDITOR_LINE_HEIGHT_MAX"
+                  step="0.1"
+                  :model-value="editorSettings.settings.lineHeight"
+                  @update:model-value="setLineHeight(Number($event))"
+              />
+            </div>
+          </SettingsRow>
+        </SettingsGroup>
+
+        <SettingsGroup
             :title="t('settings.editor.sectionDisplay')"
             :hint="t('settings.editor.sectionDisplayHint')"
-            icon="layout"
-            tone="sky"
         >
-          <LayoutToggleChip
-                :label="t('settings.editor.lineNumbers')"
-                :caption="t('settings.editor.lineNumbersHint')"
-                :active="editorSettings.settings.lineNumbers"
-                @toggle="toggleSetting('lineNumbers')"
-            />
-            <LayoutToggleChip
-                :label="t('settings.editor.minimap')"
-                :caption="t('settings.editor.minimapHint')"
-                :active="editorSettings.settings.minimap"
-                @toggle="toggleSetting('minimap')"
-            />
-            <LayoutToggleChip
-                :label="t('settings.editor.wordWrap')"
-                :caption="t('settings.editor.wordWrapHint')"
-                :active="editorSettings.settings.wordWrap"
-                @toggle="toggleSetting('wordWrap')"
-            />
-            <LayoutToggleChip
-                :label="t('settings.editor.folding')"
-                :caption="t('settings.editor.foldingHint')"
-                :active="editorSettings.settings.folding"
-                @toggle="toggleSetting('folding')"
-            />
-        </SettingsSectionCard>
+          <SettingsSwitch
+              :label="t('settings.editor.lineNumbers')"
+              :hint="t('settings.editor.lineNumbersHint')"
+              :model-value="editorSettings.settings.lineNumbers"
+              @update:model-value="(v) => preserveScrollPatch({lineNumbers: v})"
+          />
+          <SettingsSwitch
+              :label="t('settings.editor.minimap')"
+              :hint="t('settings.editor.minimapHint')"
+              :model-value="editorSettings.settings.minimap"
+              @update:model-value="(v) => preserveScrollPatch({minimap: v})"
+          />
+          <SettingsSwitch
+              :label="t('settings.editor.wordWrap')"
+              :hint="t('settings.editor.wordWrapHint')"
+              :model-value="editorSettings.settings.wordWrap"
+              @update:model-value="(v) => preserveScrollPatch({wordWrap: v})"
+          />
+          <SettingsSwitch
+              :label="t('settings.editor.folding')"
+              :hint="t('settings.editor.foldingHint')"
+              :model-value="editorSettings.settings.folding"
+              @update:model-value="(v) => preserveScrollPatch({folding: v})"
+          />
+        </SettingsGroup>
         </template>
 
         <template #end>
@@ -351,88 +337,76 @@ function toggleSetting(key: 'lineNumbers' | 'minimap' | 'wordWrap' | 'folding') 
       </DwSplitPane>
 
       <div v-else class="settings-groups editor-settings__main editor-settings__query">
-        <SettingsSectionCard
+        <SettingsGroup
             :title="t('settings.editor.sectionQuery')"
             :hint="t('settings.editor.sectionQueryHint')"
-            icon="run"
-            tone="violet"
         >
-          <div class="editor-card__grid editor-card__grid--query">
-              <FormField :label="t('settings.editor.maxResultRows')" input-id="editor-max-result-rows">
-                <template #default="{ id }">
-                  <div class="input-with-unit">
-                    <DwInput
-                        :id="id"
-                        type="number"
-                        :min="MAX_RESULT_ROWS_MIN"
-                        :max="MAX_RESULT_ROWS_MAX"
-                        step="1"
-                        :model-value="editorSettings.settings.maxResultRows"
-                        @update:model-value="setMaxResultRows(Number($event))"
-                    />
-                    <span v-if="editorSettings.settings.maxResultRows <= 0" class="unit-chip">
-                      {{ t('settings.editor.maxResultRowsUnlimited') }}
-                    </span>
-                  </div>
-                </template>
-              </FormField>
-              <FormField :label="t('settings.editor.slowQueryThresholdMs')" input-id="editor-slow-query-threshold">
-                <template #default="{ id }">
-                  <div class="input-with-unit">
-                    <DwInput
-                        :id="id"
-                        type="number"
-                        :min="SLOW_QUERY_THRESHOLD_MIN"
-                        :max="SLOW_QUERY_THRESHOLD_MAX"
-                        step="100"
-                        :model-value="editorSettings.settings.slowQueryThresholdMs"
-                        @update:model-value="setSlowQueryThresholdMs(Number($event))"
-                    />
-                    <span class="unit-chip">ms</span>
-                  </div>
-                </template>
-              </FormField>
-              <FormField :label="t('settings.editor.defaultGridPageSize')" input-id="editor-default-grid-page-size">
-                <template #default="{ id }">
-                  <SettingsSelect
-                      :id="id"
-                      :model-value="String(editorSettings.settings.defaultGridPageSize)"
-                      :options="gridPageSizeOptions"
-                      @update:model-value="setDefaultGridPageSize"
-                  />
-                </template>
-              </FormField>
+          <SettingsRow
+              :label="t('settings.editor.maxResultRows')"
+              :hint="t('settings.editor.maxResultRowsHint')"
+          >
+            <div class="input-with-unit">
+              <DwInput
+                  id="editor-max-result-rows"
+                  type="number"
+                  :min="MAX_RESULT_ROWS_MIN"
+                  :max="MAX_RESULT_ROWS_MAX"
+                  step="1"
+                  :model-value="editorSettings.settings.maxResultRows"
+                  @update:model-value="setMaxResultRows(Number($event))"
+              />
+              <span v-if="editorSettings.settings.maxResultRows <= 0" class="unit-chip">
+                {{ t('settings.editor.maxResultRowsUnlimited') }}
+              </span>
             </div>
-            <p class="field-hint">{{ t('settings.editor.maxResultRowsHint') }}</p>
-            <p class="field-hint">{{ t('settings.editor.slowQueryThresholdMsHint') }}</p>
-            <p class="field-hint">{{ t('settings.editor.defaultGridPageSizeHint') }}</p>
-            <DwCheckbox
-                block
-                class="production-perf-toggle"
-                :model-value="editorSettings.settings.productionPerfMode"
-                @update:model-value="preserveScrollPatch({ productionPerfMode: $event })"
-            >
-              <strong>{{ t('settings.editor.productionPerfMode') }}</strong>
-              <span class="field-note">{{ t('settings.editor.productionPerfModeHint') }}</span>
-            </DwCheckbox>
-        </SettingsSectionCard>
+          </SettingsRow>
+          <SettingsRow
+              :label="t('settings.editor.slowQueryThresholdMs')"
+              :hint="t('settings.editor.slowQueryThresholdMsHint')"
+          >
+            <div class="input-with-unit">
+              <DwInput
+                  id="editor-slow-query-threshold"
+                  type="number"
+                  :min="SLOW_QUERY_THRESHOLD_MIN"
+                  :max="SLOW_QUERY_THRESHOLD_MAX"
+                  step="100"
+                  :model-value="editorSettings.settings.slowQueryThresholdMs"
+                  @update:model-value="setSlowQueryThresholdMs(Number($event))"
+              />
+              <span class="unit-chip">ms</span>
+            </div>
+          </SettingsRow>
+          <SettingsRow
+              :label="t('settings.editor.defaultGridPageSize')"
+              :hint="t('settings.editor.defaultGridPageSizeHint')"
+          >
+            <SettingsSelect
+                id="editor-default-grid-page-size"
+                :model-value="String(editorSettings.settings.defaultGridPageSize)"
+                :options="gridPageSizeOptions"
+                @update:model-value="setDefaultGridPageSize"
+            />
+          </SettingsRow>
+          <SettingsSwitch
+              :label="t('settings.editor.productionPerfMode')"
+              :hint="t('settings.editor.productionPerfModeHint')"
+              :model-value="editorSettings.settings.productionPerfMode"
+              @update:model-value="preserveScrollPatch({ productionPerfMode: $event })"
+          />
+        </SettingsGroup>
 
-        <SettingsSectionCard
-            class="editor-section--danger"
+        <SettingsGroup
             :title="t('settings.editor.dangerousSqlTitle')"
             :hint="t('settings.editor.dangerousSqlHint')"
-            icon="alert-triangle"
-            tone="panel"
         >
-          <DwCheckbox
-                block
-                class="danger-sql-toggle"
-                :model-value="dangerousSqlPrefs.confirmEnabled"
-                @update:model-value="appConfig.patchDangerousSql({ confirmEnabled: $event })"
-            >
-              <strong>{{ t('settings.editor.dangerousSqlConfirmEnabled') }}</strong>
-              <span class="field-note">{{ t('settings.editor.dangerousSqlConfirmEnabledHint') }}</span>
-            </DwCheckbox>
+          <SettingsSwitch
+              :label="t('settings.editor.dangerousSqlConfirmEnabled')"
+              :hint="t('settings.editor.dangerousSqlConfirmEnabledHint')"
+              :model-value="dangerousSqlPrefs.confirmEnabled"
+              @update:model-value="appConfig.patchDangerousSql({ confirmEnabled: $event })"
+          />
+          <div class="settings-section__block">
             <FormField
                 :label="t('settings.editor.dangerousSqlWhitelist')"
                 input-id="editor-danger-sql-whitelist"
@@ -449,8 +423,9 @@ function toggleSetting(key: 'lineNumbers' | 'minimap' | 'wordWrap' | 'folding') 
                 />
               </template>
             </FormField>
-            <p class="field-note muted">{{ t('settings.editor.dangerousSqlWhitelistHint') }}</p>
-        </SettingsSectionCard>
+            <p class="settings-section__block-hint">{{ t('settings.editor.dangerousSqlWhitelistHint') }}</p>
+          </div>
+        </SettingsGroup>
       </div>
     </div>
   </SettingsPageShell>
@@ -467,10 +442,6 @@ function toggleSetting(key: 'lineNumbers' | 'minimap' | 'wordWrap' | 'folding') 
   display: flex;
   flex-direction: column;
   gap: var(--dw-space-7);
-}
-
-.settings-tab-strip {
-  min-width: 0;
 }
 
 :deep(.editor-settings__main) {
@@ -522,13 +493,13 @@ function toggleSetting(key: 'lineNumbers' | 'minimap' | 'wordWrap' | 'folding') 
 }
 
 .theme-tile:hover {
-  border-color: color-mix(in srgb, var(--dw-primary) 28%, var(--dw-border));
+  border-color: color-mix(in srgb, var(--dw-text) 26%, var(--dw-border));
 }
 
 .theme-tile.is-active {
-  border-color: var(--dw-primary-border);
-  background: var(--dw-primary-softer);
-  box-shadow: inset 0 0 0 1px var(--dw-primary-ring);
+  border-color: var(--dw-border-strong, var(--dw-text-secondary));
+  background: var(--dw-bg-hover);
+  box-shadow: none;
 }
 
 .theme-tile__label {

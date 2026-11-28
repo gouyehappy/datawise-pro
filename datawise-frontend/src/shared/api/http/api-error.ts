@@ -22,6 +22,18 @@ export function isUnauthorizedApiError(error: unknown): boolean {
     return false
 }
 
+/** Backend rejected a write because the session is guest / anonymous. */
+export function isGuestNotAllowedApiError(error: unknown): boolean {
+    if (!(error instanceof ApiError)) return false
+    const message = error.message.trim()
+    if (message === 'GUEST_NOT_ALLOWED') return true
+    if (error.data && typeof error.data === 'object') {
+        const code = (error.data as {errorCode?: unknown}).errorCode
+        return code === 'GUEST_NOT_ALLOWED'
+    }
+    return false
+}
+
 /** Server blocked a production write that needs team approval (HTTP 403). */
 export function isProductionApprovalRequiredError(error: unknown): boolean {
     const code = 'SQL_PRODUCTION_APPROVAL_REQUIRED'

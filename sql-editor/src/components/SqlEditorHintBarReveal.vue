@@ -57,7 +57,7 @@ const {t} = useSqlEditorI18n()
   height: 28px;
   padding: 0;
   border: 1px solid var(--dw-border-light, rgba(0, 0, 0, 0.08));
-  border-radius: 7px;
+  border-radius: var(--dw-surface-radius, 7px);
   background: color-mix(in srgb, var(--dw-bg-panel, #fff) 92%, transparent);
   color: var(--dw-text-muted, #777);
   cursor: pointer;

@@ -644,7 +644,7 @@ watch(
   margin: 8px 10px 0;
   padding: 5px 9px 5px 7px;
   border: 1px solid color-mix(in srgb, var(--dw-border) 55%, transparent);
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   background: color-mix(in srgb, var(--dw-bg-panel) 55%, transparent);
   color: var(--dw-text-secondary);
   font-size: var(--dw-text-xs);
@@ -793,7 +793,7 @@ watch(
   width: 40px;
   height: 40px;
   margin-bottom: 2px;
-  border-radius: 14px;
+  border-radius: var(--dw-surface-radius, 14px);
   background: color-mix(in srgb, var(--dw-bg-panel) 70%, transparent);
   color: var(--dw-text-secondary);
   border: 1px solid color-mix(in srgb, var(--dw-border) 70%, transparent);

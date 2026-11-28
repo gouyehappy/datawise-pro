@@ -46,6 +46,15 @@ const selectedLabel = computed(() => {
 
 const isPlaceholder = computed(() => !model.value.length && !!props.placeholder)
 
+/** Portal menus sit outside the root — stamp size for shared Cursor chrome. */
+const menuSizeClass = computed(() => {
+  if (props.size === 'sm') return 'dw-select__menu--sm'
+  if (props.size === 'pill') return 'dw-select__menu--pill'
+  if (props.size === 'compact') return 'dw-select__menu--compact'
+  if (props.size === 'inline') return 'dw-select__menu--inline'
+  return 'dw-select__menu--default'
+})
+
 const menuStyle = computed(() => ({
   minWidth: props.menuMinWidth ?? 'var(--reka-dropdown-menu-trigger-width)',
   width: 'max-content',
@@ -100,6 +109,7 @@ function onCheckedChange(value: string, checked: boolean | 'indeterminate') {
       <DropdownMenuPortal>
         <DropdownMenuContent
             class="dw-select__menu dw-select__menu--portal"
+            :class="menuSizeClass"
             side="bottom"
             align="start"
             :side-offset="6"

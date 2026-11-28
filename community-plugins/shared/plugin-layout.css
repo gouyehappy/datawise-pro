@@ -46,3 +46,64 @@ html[data-ui-skin='ide'] :is(.shell, .main, .content, .workspace, .stage, .workb
   background: var(--color-background, var(--bg, #1a1b1e)) !important;
   background-clip: padding-box;
 }
+
+/*
+ * Widget-level square corners — mirror of the host-injected baseline in
+ * datawise-backend/.../community-plugin/workbench-bridge-bootstrap.js
+ * (ensurePluginLayoutBaseline). The runtime copy lives in the bootstrap because
+ * plugins render inside opaque-origin iframes and cannot read host stylesheets.
+ *
+ * Applies to square-corner skins (ide / ledger) only; classic / atelier keep
+ * plugin-local rounded corners. Genuine circular glyphs (dots, avatars,
+ * spinners, color picker) are excluded via :not() so they stay round.
+ * This file is a contract reference — no plugin imports it at runtime.
+ */
+:is(html[data-ui-skin='ide'], html[data-ui-skin='ledger']) {
+  --radius: 0;
+  --r: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --hc-radius: 0;
+  --hc-radius-sm: 0;
+  --hc-radius-lg: 0;
+  --color-radius: 0;
+  --dw-radius-pill: 0;
+  --dw-chip-radius: 0;
+  --dw-surface-radius: 0;
+}
+
+:is(html[data-ui-skin='ide'], html[data-ui-skin='ledger']) :is(
+  [class*='badge'], [class*='chip'], [class*='pill'], [class*='tag'],
+  [class*='count'], [class*='status'], [class*='label'], [class*='flag'],
+  [class*='btn'], [class*='button'], [class*='tab'], [class*='seg'],
+  [class*='switch'], [class*='toggle'], [class*='track'], [class*='thumb'],
+  [class*='bar'], [class*='progress'], [class*='kpi'], [class*='card'],
+  [class*='panel'], [class*='pane'], [class*='menu'], [class*='popover'],
+  [class*='dialog'], [class*='modal'], [class*='popup'], [class*='input'],
+  [class*='field'], [class*='select'], [class*='search'], [class*='step'],
+  [class*='level'], [class*='host'], [class*='crumb'], [class*='filter'],
+  [class*='toolbar'], [class*='rail'], [class*='group'], [class*='item'],
+  [class*='row'], [class*='cell'], [class*='hint'], [class*='meta'],
+  [class*='stat'], [class*='scroll'], [class*='slider'], [class*='dock'],
+  [class*='toast'], [class*='hero'], [class*='grid'], [class*='node'],
+  [class*='ctx'], [class*='combo'], [class*='pick'], [class*='dlg'],
+  [class*='pop'], [class*='log'], [class*='key'], [class*='value']
+/* Keep the :not() chain on ONE line: a line break between :not() selectors
+   becomes whitespace, i.e. a descendant combinator, and breaks the rule. */
+):not([class*='dot']):not([class*='circle']):not([class*='round']):not([class*='avatar']):not([class*='spinner']):not([class*='spin']):not([class*='saturation']):not([class*='colorpicker']):not([class*='glyph']):not([class*='twistie']):not([class*='chev']):not([class*='pulse']):not([class*='indicator']):not([class*='swatch']):not([class*='knob']):not([class*='grip']):not([class*='icon']):not([class*='ico']):not([class*='mark']):not([class*='clear']):not([class*='drag-image']):not([class*='gauge']):not([class*='ai-thinking']) {
+  border-radius: 0 !important;
+}
+
+:is(html[data-ui-skin='ide'], html[data-ui-skin='ledger'])
+  :is([class*='switch'], [class*='track'], [class*='thumb'], [class*='toggle'], [class*='progress'])::before,
+:is(html[data-ui-skin='ide'], html[data-ui-skin='ledger'])
+  :is([class*='switch'], [class*='track'], [class*='thumb'], [class*='toggle'], [class*='progress'])::after {
+  border-radius: 0 !important;
+}
+
+:is(html[data-ui-skin='ide'], html[data-ui-skin='ledger']) ::-webkit-scrollbar,
+:is(html[data-ui-skin='ide'], html[data-ui-skin='ledger']) ::-webkit-scrollbar-thumb,
+:is(html[data-ui-skin='ide'], html[data-ui-skin='ledger']) ::-webkit-scrollbar-track {
+  border-radius: 0 !important;
+}

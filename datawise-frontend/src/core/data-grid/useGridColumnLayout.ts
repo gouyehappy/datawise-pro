@@ -137,6 +137,14 @@ export function useGridColumnLayout<T>(options: {
     }))
   }
 
+  function allOrderedKeys(state = readLayout()): string[] {
+    return resolveOrderedColumns(
+        options.columns(),
+        state.columnOrder,
+        options.columnKey,
+    ).map((column) => options.columnKey(column))
+  }
+
   function moveColumn(fromKey: string, toKey: string) {
     if (fromKey === toKey) return
     writeLayout((state) => {
@@ -153,6 +161,53 @@ export function useGridColumnLayout<T>(options: {
       next.splice(toIndex, 0, moved)
       return {...state, columnOrder: next}
     })
+  }
+
+  /** Reorder among all columns (including hidden) — used by the field-filter panel. */
+  function moveColumnInFullOrder(fromKey: string, toKey: string) {
+    if (fromKey === toKey) return
+    writeLayout((state) => {
+      const current = allOrderedKeys(state)
+      const fromIndex = current.indexOf(fromKey)
+      const toIndex = current.indexOf(toKey)
+      if (fromIndex < 0 || toIndex < 0) return state
+      const next = [...current]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, moved)
+      return {...state, columnOrder: next}
+    })
+  }
+
+  function resetColumnOrder() {
+    writeLayout((state) => ({...state, columnOrder: []}))
+  }
+
+  function clearColumnWidths() {
+    writeLayout((state) => ({...state, columnWidths: {}}))
+  }
+
+  function showAllColumns() {
+    writeLayout((state) => ({...state, hiddenColumns: []}))
+  }
+
+  /**
+   * Invert visibility. Always keeps at least one column visible.
+   * @returns false when invert was adjusted to keep one column.
+   */
+  function invertColumnVisibility(): boolean {
+    let keptOne = false
+    writeLayout((state) => {
+      const keys = allOrderedKeys(state)
+      if (!keys.length) return state
+      const hidden = new Set(state.hiddenColumns ?? [])
+      let nextHidden = keys.filter((key) => !hidden.has(key))
+      if (nextHidden.length >= keys.length) {
+        nextHidden = keys.slice(1)
+        keptOne = true
+      }
+      return {...state, hiddenColumns: nextHidden}
+    })
+    return !keptOne
   }
 
   function togglePinned(columnKey: string, side: 'left' | 'right' = 'left') {
@@ -180,13 +235,28 @@ export function useGridColumnLayout<T>(options: {
     })
   }
 
-  function setColumnHidden(columnKey: string, hidden: boolean) {
+  /**
+   * Hide/show a column. Refuses to hide the last visible column.
+   * @returns false when the hide was refused.
+   */
+  function setColumnHidden(columnKey: string, hidden: boolean): boolean {
+    let applied = true
     writeLayout((state) => {
+      const keys = allOrderedKeys(state)
       const set = new Set(state.hiddenColumns ?? [])
-      if (hidden) set.add(columnKey)
-      else set.delete(columnKey)
+      if (hidden) {
+        const visibleCount = keys.filter((key) => !set.has(key)).length
+        if (visibleCount <= 1 && !set.has(columnKey)) {
+          applied = false
+          return state
+        }
+        set.add(columnKey)
+      } else {
+        set.delete(columnKey)
+      }
       return {...state, hiddenColumns: [...set]}
     })
+    return applied
   }
 
   function onResizeStart(event: MouseEvent, column: T) {
@@ -293,6 +363,11 @@ export function useGridColumnLayout<T>(options: {
     setColumnWidth,
     autoSizeColumn,
     moveColumn,
+    moveColumnInFullOrder,
+    resetColumnOrder,
+    clearColumnWidths,
+    showAllColumns,
+    invertColumnVisibility,
     togglePinned,
     setColumnHidden,
     writeLayout,

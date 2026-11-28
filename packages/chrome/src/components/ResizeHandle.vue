@@ -1,8 +1,5 @@
 <script setup lang="ts">
 import {computed, onMounted, onUnmounted, ref} from 'vue'
-import {useDwI18n} from '@datawise/ui'
-
-const t = useDwI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -67,16 +64,14 @@ onUnmounted(() => {
   window.removeEventListener('pointerup', onPointerUp)
 })
 
-const resizeTitle = computed(() =>
-  resolvedAxis.value === 'vertical' ? t('common.resizeHeight') : t('common.resizeWidth'),
-)
 </script>
 
 <template>
   <div
     class="resize-handle"
     :class="[resolvedAxis, `resize-handle--${variant}`, { dragging }]"
-    :title="resizeTitle"
+    role="separator"
+    :aria-orientation="resolvedAxis === 'vertical' ? 'horizontal' : 'vertical'"
     @pointerdown="onPointerDown"
   />
 </template>

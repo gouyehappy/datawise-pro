@@ -8,11 +8,11 @@ import org.apache.datawise.backend.security.ApiTokenFeatureScopes;
 import org.apache.datawise.backend.security.UserContext;
 import org.springframework.stereotype.Service;
 
-import java.util.regex.Pattern;
 import java.util.Locale;
 import java.util.Set;
 
 import org.apache.datawise.backend.domain.TreeNode;
+import org.apache.datawise.sqlparser.support.SqlWriteClassifier;
 
 /**
  * 当前会话用户的功能权限校验（API 层防绕过 UI/快捷键）。
@@ -29,10 +29,6 @@ public class FeaturePermissionAccess {
             "functions",
             "procedures",
             "triggers");
-
-    private static final Pattern SQL_WRITE = Pattern.compile(
-            "\\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE|MERGE|GRANT|REVOKE|CALL|EXEC|BEGIN|COMMIT|ROLLBACK)\\b",
-            Pattern.CASE_INSENSITIVE);
 
     private final UserStore userStore;
     private final UserPermissionPolicy permissionPolicy;
@@ -138,7 +134,7 @@ public class FeaturePermissionAccess {
             permissionPolicy.requirePermission(user, UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_MODELS);
             return;
         }
-        if ("workspaces".equals(label)) {
+        if ("workspaces".equals(label) || "scripts".equals(label)) {
             permissionPolicy.requirePermission(user, UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_WORKSPACES);
             return;
         }
@@ -183,7 +179,7 @@ public class FeaturePermissionAccess {
         if ("models".equals(label)) {
             return permissionPolicy.hasPermission(user, UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_MODELS);
         }
-        if ("workspaces".equals(label)) {
+        if ("workspaces".equals(label) || "scripts".equals(label)) {
             return permissionPolicy.hasPermission(user, UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_WORKSPACES);
         }
         if ("ai".equals(label) || "semantics".equals(label)) {
@@ -204,7 +200,7 @@ public class FeaturePermissionAccess {
             return ApiTokenFeatureScopes.allows(
                     currentApiTokenScopes(), UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_MODELS);
         }
-        if ("workspaces".equals(label)) {
+        if ("workspaces".equals(label) || "scripts".equals(label)) {
             return ApiTokenFeatureScopes.allows(
                     currentApiTokenScopes(), UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_WORKSPACES);
         }
@@ -228,7 +224,7 @@ public class FeaturePermissionAccess {
             requireApiTokenFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_MODELS);
             return;
         }
-        if ("workspaces".equals(label)) {
+        if ("workspaces".equals(label) || "scripts".equals(label)) {
             requireApiTokenFeature(UserFeaturePermission.WORKBENCH_EXPLORER_CATALOG_WORKSPACES);
             return;
         }
@@ -305,10 +301,11 @@ public class FeaturePermissionAccess {
         return REDIS_DANGEROUS_COMMANDS.contains(verb);
     }
 
+    /**
+     * Auth gate: reuse {@link SqlWriteClassifier} (JSqlParser + lexical fail-closed).
+     * Unparseable / ambiguous SQL is treated as write so dangerous permission is required.
+     */
     private static boolean requiresWriteAccess(String sql) {
-        if (sql == null || sql.isBlank()) {
-            return false;
-        }
-        return SQL_WRITE.matcher(sql.trim()).find();
+        return SqlWriteClassifier.requiresWriteAccess(sql);
     }
 }

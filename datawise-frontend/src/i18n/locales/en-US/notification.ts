@@ -66,6 +66,10 @@ export default {
             title: 'Update available',
             body: 'Version {version} is available. Open About for details.',
         },
+        updateAvailableIncremental: {
+            title: 'Incremental update available',
+            body: 'Version {version} — about {size} (saves ~{saved}). Open About for details.',
+        },
         importDone: {
             title: 'Import complete',
             body: '{detail}',

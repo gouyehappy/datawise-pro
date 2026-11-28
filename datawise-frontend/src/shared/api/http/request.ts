@@ -22,6 +22,11 @@ export const HTTP_TIMEOUT = 'HTTP_TIMEOUT'
 export type HttpRequestOptions = {
     /** 不弹出全局错误 Toast（调用方自行展示） */
     silent?: boolean
+    /**
+     * 启动 / 轮询 / 状态同步等后台请求：失败不发全局提示（控制台仍保留细节）。
+     * 用户主动触发的操作不要设置，以便按场景给出可读提示。
+     */
+    background?: boolean
     /** 请求超时（毫秒）；0 表示不限制 */
     timeoutMs?: number
     /** 会话失效拦截期间仍允许调用（登录/游客登录/退出） */

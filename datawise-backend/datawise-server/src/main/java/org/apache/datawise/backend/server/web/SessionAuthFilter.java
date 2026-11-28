@@ -1,11 +1,13 @@
 package org.apache.datawise.backend.server.web;
 
+import io.micrometer.core.instrument.Metrics;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.datawise.backend.common.UnauthorizedException;
+import org.apache.datawise.backend.common.support.DatawiseMetricsCatalog;
 import org.apache.datawise.backend.config.AuthSecurityProperties;
 import org.apache.datawise.backend.configstore.SessionStore;
 import org.apache.datawise.backend.model.ApiTokenEntity;
@@ -238,11 +240,15 @@ public class SessionAuthFilter extends OncePerRequestFilter {
         String sessionId = request.getParameter(WebSocketSessionAuthSupport.QUERY_SESSION);
         if (sessionId != null && !sessionId.isBlank()) {
             log.warn(
-                    "Deprecated community-plugin UI auth via ?{}= — prefer ?{}= (path={})",
+                    "SECURITY DEPRECATED: community-plugin UI auth via ?{}= still accepted — prefer "
+                            + "one-time ?{}= ticket; session id in query can leak via proxy logs/Referer "
+                            + "(path={}, remote={})",
                     WebSocketSessionAuthSupport.QUERY_SESSION,
                     CommunityPluginUiTicketService.QUERY_TICKET,
-                    path
+                    path,
+                    request.getRemoteAddr()
             );
+            Metrics.counter(DatawiseMetricsCatalog.WS_QUERY_SESSION_AUTH).increment();
             return sessionId.trim();
         }
         return null;
@@ -278,8 +284,7 @@ public class SessionAuthFilter extends OncePerRequestFilter {
             return;
         }
         String grant = uiTicketService.mintGrant(sessionId, pluginId);
-        boolean secure = request.isSecure()
-                || "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"));
+        boolean secure = resolveSecureCookieFlag(request);
         ResponseCookie cookie = ResponseCookie.from(CommunityPluginUiTicketService.COOKIE_NAME, grant)
                 .httpOnly(true)
                 .secure(secure)
@@ -288,6 +293,24 @@ public class SessionAuthFilter extends OncePerRequestFilter {
                 .sameSite("Lax")
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    /**
+     * Cookie Secure must not follow untrusted {@code X-Forwarded-Proto}. Only honor that header when
+     * the direct peer is in {@link AuthSecurityProperties#getTrustedProxyIps()}.
+     */
+    boolean resolveSecureCookieFlag(HttpServletRequest request) {
+        if (request.isSecure()) {
+            return true;
+        }
+        String remoteAddr = TerminalClientIpSupport.normalizeHost(request.getRemoteAddr());
+        if (!TerminalClientIpSupport.shouldTrustForwardedHeaders(
+                remoteAddr,
+                authSecurityProperties.getTrustedProxyIps()
+        )) {
+            return false;
+        }
+        return "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"));
     }
 
     private static String cookieValue(HttpServletRequest request, String name) {

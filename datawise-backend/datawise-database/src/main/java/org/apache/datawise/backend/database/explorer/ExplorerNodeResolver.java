@@ -128,6 +128,12 @@ public class ExplorerNodeResolver {
             );
             return page.appendLoadMoreNode(loadMoreNodeId(target), "Load more");
         }
+        if ("scripts".equalsIgnoreCase(target.getLabel())
+                && treeBuilder.findParentById(schemaRoots, target.getId()) == null) {
+            // Connection-level scripts folder → disk instance `_scripts`
+            return instanceWorkspaceService.listSqlFileNodes(
+                    session.connectionId(), CatalogSchemaScope.CONNECTION_SCRIPTS);
+        }
         if ("workspaces".equalsIgnoreCase(target.getLabel())) {
             ExplorerTreeBuilder.CatalogSchemaContext context = resolveTablesFolderContext(schemaRoots, target, dbType);
             String instanceKey = CatalogSchemaScope.formatInstanceKey(context.catalog(), context.schema());
@@ -161,6 +167,11 @@ public class ExplorerNodeResolver {
             return viewModelService.listViewModelNodes(session.connectionId(), instanceKey);
         }
         if ("ai".equalsIgnoreCase(target.getLabel()) || "semantics".equalsIgnoreCase(target.getLabel())) {
+            // Connection-level AI folder (Trino / Presto / …) — no catalog parent.
+            if (treeBuilder.findParentById(schemaRoots, target.getId()) == null) {
+                return aiPlatformExplorerService.listFeatureNodes(
+                        session.connectionId(), CatalogSchemaScope.CONNECTION_PLATFORM);
+            }
             ExplorerTreeBuilder.CatalogSchemaContext context = resolveTablesFolderContext(schemaRoots, target, dbType);
             String instanceKey = CatalogSchemaScope.formatInstanceKey(context.catalog(), context.schema());
             return aiPlatformExplorerService.listFeatureNodes(session.connectionId(), instanceKey);

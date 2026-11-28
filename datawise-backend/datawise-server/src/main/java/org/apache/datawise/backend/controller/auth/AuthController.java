@@ -1,10 +1,12 @@
 package org.apache.datawise.backend.controller.auth;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.datawise.backend.common.ApiResponse;
 import org.apache.datawise.backend.domain.AuthLoginOptionsDto;
 import org.apache.datawise.backend.domain.AuthSessionPolicyDto;
 import org.apache.datawise.backend.domain.ChangePasswordRequest;
+import org.apache.datawise.backend.domain.LoginRequest;
 import org.apache.datawise.backend.domain.LoginResult;
 import org.apache.datawise.backend.domain.OidcConfigDto;
 import org.apache.datawise.backend.domain.RegisterRequest;
@@ -18,6 +20,7 @@ import org.apache.datawise.backend.security.UserContext;
 import org.apache.datawise.backend.service.AuthService;
 import org.apache.datawise.backend.service.WriteUnlockService;
 import org.apache.datawise.backend.service.auth.OidcAuthService;
+import org.apache.datawise.backend.server.web.TerminalClientIpSupport;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -28,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -47,11 +51,10 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ApiResponse<LoginResult> login(
-            @RequestParam String userName,
-            @RequestParam String userPassword
-    ) {
-        return ApiResponse.ok(authService.login(userName, userPassword));
+    public ApiResponse<LoginResult> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        // Direct remoteAddr only (no XFF trust here) — throttle key is (user, IP).
+        String clientIp = TerminalClientIpSupport.resolveClientIp(httpRequest, List.of());
+        return ApiResponse.ok(authService.login(request.userName(), request.userPassword(), clientIp));
     }
 
     @PostMapping("/login/guest")
@@ -84,16 +87,19 @@ public class AuthController {
     ) throws IOException {
         String base = oidcAuthService.frontendRedirectBase();
         if (error != null && !error.isBlank()) {
-            response.sendRedirect(appendQuery(base, "oidcError", error));
+            // Errors stay off the query string so proxies/Referer never see OIDC details either.
+            response.sendRedirect(appendFragment(base, "oidcError", error));
             return;
         }
         try {
             LoginResult result = oidcAuthService.handleCallback(code, state);
-            String redirect = appendQuery(base, "oidcSession", result.sessionId());
-            redirect = appendQuery(redirect, "oidcUser", result.userName() != null ? result.userName() : "");
+            // SEC-02: sessionId is a bearer credential — put it in the URL fragment so it is not
+            // logged by proxies, written to history as a query, or leaked via Referer.
+            String redirect = appendFragment(base, "oidcSession", result.sessionId());
+            redirect = appendFragment(redirect, "oidcUser", result.userName() != null ? result.userName() : "");
             response.sendRedirect(redirect);
         } catch (IllegalArgumentException ex) {
-            response.sendRedirect(appendQuery(base, "oidcError", ex.getMessage() != null ? ex.getMessage() : "OIDC_FAILED"));
+            response.sendRedirect(appendFragment(base, "oidcError", ex.getMessage() != null ? ex.getMessage() : "OIDC_FAILED"));
         }
     }
 
@@ -151,9 +157,22 @@ public class AuthController {
         return ApiResponse.ok(null);
     }
 
-    private static String appendQuery(String base, String key, String value) {
+    /** Appends {@code key=value} to the URL fragment (not the query string). */
+    static String appendFragment(String base, String key, String value) {
         String encoded = URLEncoder.encode(value != null ? value : "", StandardCharsets.UTF_8);
-        String separator = base.contains("?") ? "&" : "?";
-        return base + separator + key + "=" + encoded;
+        String pair = key + "=" + encoded;
+        if (base == null || base.isBlank()) {
+            return "#" + pair;
+        }
+        int hash = base.indexOf('#');
+        if (hash < 0) {
+            return base + "#" + pair;
+        }
+        String before = base.substring(0, hash);
+        String frag = base.substring(hash + 1);
+        if (frag.isBlank()) {
+            return before + "#" + pair;
+        }
+        return before + "#" + frag + "&" + pair;
     }
 }

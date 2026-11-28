@@ -21,7 +21,12 @@ import {
   type DashboardQuickActionId,
   type DashboardStatKey,
 } from '@/features/dashboard/services/dashboard-summary.service'
-import {asDashboardPreferences, visibleWidgetIdsForColumn} from '@/features/dashboard/services/dashboard-widget.service'
+import {
+  asDashboardPreferences,
+  visibleWidgetIdsForColumn,
+  type DashboardPreferences,
+} from '@/features/dashboard/services/dashboard-widget.service'
+import type {ConnectionHealthPreferences} from '@/shared/config/app-config.types'
 import {
   chartWidgetsForColumn,
   removeDashboardChartWidget,
@@ -62,6 +67,13 @@ const STAT_META: Record<DashboardStatKey, { tone: string }> = {
 const {t} = useI18n()
 const layout = useLayoutStore()
 const appConfig = useAppConfigStore()
+/** FE-13: store exposes DeepReadonly; feature helpers still take mutable prefs shapes. */
+const dashboardPreferences = computed(
+  () => appConfig.dashboardPreferences as DashboardPreferences,
+)
+const connectionHealthPreferences = computed(
+  () => appConfig.connectionHealthPreferences as ConnectionHealthPreferences,
+)
 const shortcutPanel = useShortcutPanelStore()
 const pluginStore = usePluginStore()
 const entitlement = useEntitlementStore()
@@ -92,7 +104,7 @@ const {
     auditLogs,
     sharedAiSessions,
     loading: teamWidgetsLoading,
-} = useDashboardTeamWidgets(() => appConfig.dashboardPreferences.widgets)
+} = useDashboardTeamWidgets(() => dashboardPreferences.value.widgets)
 
 function onColumnDragOver(column: DashboardWidgetColumn, index: number) {
     if (layoutEditMode.value) onWidgetDragOver(column, index)
@@ -103,32 +115,32 @@ function onWidgetDragStartFor(column: DashboardWidgetColumn, index: number, widg
 }
 
 function onWidgetDropFor(column: DashboardWidgetColumn, index: number) {
-    onWidgetDrop(column, index, asDashboardPreferences(appConfig.dashboardPreferences))
+    onWidgetDrop(column, index, asDashboardPreferences(dashboardPreferences.value))
 }
 
 const leftWidgetIds = computed(() =>
-    visibleWidgetIdsForColumn(appConfig.dashboardPreferences, 'left'),
+    visibleWidgetIdsForColumn(dashboardPreferences.value, 'left'),
 )
 const mainWidgetIds = computed(() =>
-    visibleWidgetIdsForColumn(appConfig.dashboardPreferences, 'main'),
+    visibleWidgetIdsForColumn(dashboardPreferences.value, 'main'),
 )
 const rightWidgetIds = computed(() =>
-    visibleWidgetIdsForColumn(appConfig.dashboardPreferences, 'right'),
+    visibleWidgetIdsForColumn(dashboardPreferences.value, 'right'),
 )
 
 const leftChartWidgets = computed(() =>
-    chartWidgetsForColumn(appConfig.dashboardPreferences, 'left'),
+    chartWidgetsForColumn(dashboardPreferences.value, 'left'),
 )
 const mainChartWidgets = computed(() =>
-    chartWidgetsForColumn(appConfig.dashboardPreferences, 'main'),
+    chartWidgetsForColumn(dashboardPreferences.value, 'main'),
 )
 const rightChartWidgets = computed(() =>
-    chartWidgetsForColumn(appConfig.dashboardPreferences, 'right'),
+    chartWidgetsForColumn(dashboardPreferences.value, 'right'),
 )
 
 function removeChartWidget(id: string) {
   appConfig.patchDashboardPreferences(
-      removeDashboardChartWidget(asDashboardPreferences(appConfig.dashboardPreferences), id),
+      removeDashboardChartWidget(asDashboardPreferences(dashboardPreferences.value), id),
   )
 }
 
@@ -197,9 +209,9 @@ async function refreshConnectionHealth() {
   const before = {...explorer.connectionHealthById}
   await Promise.all([explorer.probeAllConnectionHealth(), refreshRuntimeMetrics()])
   const rows = extractDashboardConnections(explorer.tree, explorer.connectionHealthById)
-  const alerts = collectConnectionHealthAlerts(before, rows, appConfig.connectionHealthPreferences)
+  const alerts = collectConnectionHealthAlerts(before, rows, connectionHealthPreferences.value)
   for (const row of alerts) {
-    void dispatchConnectionHealthAlert(row, appConfig.connectionHealthPreferences, {
+    void dispatchConnectionHealthAlert(row, connectionHealthPreferences.value, {
       showToast: (message) => layout.showErrorToast(message),
       toastMessage: t('dashboard.connectionHealthFailed', {name: row.name}),
       pushNotification: (input) => notifications.push(input),
@@ -340,7 +352,7 @@ function openAiWidgetDialog() {
 
 function applyAiWidget(payload: { prompt: string; widgetId: DashboardWidgetId; column: DashboardWidgetColumn }) {
   const next = applySuggestedDashboardWidget(
-      asDashboardPreferences(appConfig.dashboardPreferences),
+      asDashboardPreferences(dashboardPreferences.value),
       payload.widgetId,
       payload.column,
   )
@@ -410,7 +422,7 @@ function applyAiWidget(payload: { prompt: string; widgetId: DashboardWidgetId; c
         <aside
             class="dash-col dash-col--side"
             @dragover.prevent="onColumnDragOver('left', leftWidgetIds.length)"
-            @drop.prevent="onColumnDrop('left', leftWidgetIds.length, asDashboardPreferences(appConfig.dashboardPreferences))"
+            @drop.prevent="onColumnDrop('left', leftWidgetIds.length, asDashboardPreferences(dashboardPreferences))"
         >
           <DashboardSavedChartWidget
               v-for="chartWidget in leftChartWidgets"
@@ -471,7 +483,7 @@ function applyAiWidget(payload: { prompt: string; widgetId: DashboardWidgetId; c
         <main
             class="dash-col dash-col--main"
             @dragover.prevent="onColumnDragOver('main', mainWidgetIds.length)"
-            @drop.prevent="onColumnDrop('main', mainWidgetIds.length, asDashboardPreferences(appConfig.dashboardPreferences))"
+            @drop.prevent="onColumnDrop('main', mainWidgetIds.length, asDashboardPreferences(dashboardPreferences))"
         >
           <DashboardSavedChartWidget
               v-for="chartWidget in mainChartWidgets"
@@ -532,7 +544,7 @@ function applyAiWidget(payload: { prompt: string; widgetId: DashboardWidgetId; c
         <aside
             class="dash-col dash-col--side"
             @dragover.prevent="onColumnDragOver('right', rightWidgetIds.length)"
-            @drop.prevent="onColumnDrop('right', rightWidgetIds.length, asDashboardPreferences(appConfig.dashboardPreferences))"
+            @drop.prevent="onColumnDrop('right', rightWidgetIds.length, asDashboardPreferences(dashboardPreferences))"
         >
           <DashboardSavedChartWidget
               v-for="chartWidget in rightChartWidgets"

@@ -42,9 +42,12 @@ public final class WebSocketSessionAuthSupport {
         String fromQuery = queryParam(request, QUERY_SESSION);
         if (fromQuery != null && !fromQuery.isBlank()) {
             log.warn(
-                    "Deprecated WebSocket auth via ?{}= — prefer Sec-WebSocket-Protocol (path={})",
+                    "SECURITY DEPRECATED: WebSocket auth via ?{}= still accepted — migrate to "
+                            + "Sec-WebSocket-Protocol; session id in query can leak via proxy logs/Referer "
+                            + "(path={}, remote={})",
                     QUERY_SESSION,
-                    request.getURI().getPath()
+                    request.getURI().getPath(),
+                    request.getRemoteAddress()
             );
             Metrics.counter(DatawiseMetricsCatalog.WS_QUERY_SESSION_AUTH).increment();
         }

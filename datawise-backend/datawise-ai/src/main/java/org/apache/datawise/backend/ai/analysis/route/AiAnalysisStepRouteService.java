@@ -1,5 +1,7 @@
 package org.apache.datawise.backend.ai.analysis.route;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.datawise.backend.ai.analysis.AiAnalysisSteps;
@@ -95,8 +97,7 @@ public class AiAnalysisStepRouteService {
             return mockRoute(promptFallback);
         }
         try {
-            String json = extractJsonObject(raw);
-            JsonNode root = objectMapper.readTree(json);
+            JsonNode root = extractFirstJsonObject(raw);
             List<String> disabled = new ArrayList<>();
             JsonNode stepsNode = root.get("disabledSteps");
             if (stepsNode != null && stepsNode.isArray()) {
@@ -109,7 +110,11 @@ public class AiAnalysisStepRouteService {
             String rationale = root.path("rationale").asText("已根据问题选择分析步骤");
             return sanitize(new AiAnalysisStepRoute(disabled, rationale));
         } catch (Exception ex) {
-            ExceptionLogging.recoverable(log, "AI step route LLM parse failed, using mock route", ex);
+            ExceptionLogging.recoverable(
+                    log,
+                    "AI step route LLM parse failed, using mock route; snippet=" + snippetForLog(raw),
+                    ex
+            );
             return mockRoute(promptFallback);
         }
     }
@@ -158,14 +163,79 @@ public class AiAnalysisStepRouteService {
         return new AiAnalysisStepRoute(List.copyOf(disabled), route.rationale());
     }
 
-    private static String extractJsonObject(String raw) {
+    /**
+     * Extract the first complete JSON object via Jackson {@link JsonParser}
+     * (ignores trailing prose / extra objects). Falls back to a brace-balanced
+     * scan when the parser cannot advance from the first '{'.
+     */
+    JsonNode extractFirstJsonObject(String raw) throws Exception {
+        if (objectMapper == null) {
+            throw new IllegalStateException("ObjectMapper is required to parse step-route JSON");
+        }
         String trimmed = AiLlmGateway.stripCodeFence(raw).trim();
         int start = trimmed.indexOf('{');
-        int end = trimmed.lastIndexOf('}');
-        if (start < 0 || end <= start) {
+        if (start < 0) {
             throw new IllegalArgumentException("No JSON object in LLM step-route reply");
         }
-        return trimmed.substring(start, end + 1);
+        String fromObject = trimmed.substring(start);
+        try (JsonParser parser = objectMapper.getFactory().createParser(fromObject)) {
+            JsonToken token = parser.nextToken();
+            if (token != JsonToken.START_OBJECT) {
+                throw new IllegalArgumentException("LLM step-route reply does not start with a JSON object");
+            }
+            return objectMapper.readTree(parser);
+        } catch (Exception parserEx) {
+            String balanced = extractBalancedJsonObject(fromObject);
+            if (balanced == null) {
+                throw parserEx;
+            }
+            return objectMapper.readTree(balanced);
+        }
+    }
+
+    /** Brace-balanced scan of the first `{...}` object; returns null when unbalanced. */
+    static String extractBalancedJsonObject(String fromFirstBrace) {
+        if (fromFirstBrace == null || fromFirstBrace.isEmpty() || fromFirstBrace.charAt(0) != '{') {
+            return null;
+        }
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = 0; i < fromFirstBrace.length(); i++) {
+            char c = fromFirstBrace.charAt(i);
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '"') {
+                inString = true;
+            } else if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    return fromFirstBrace.substring(0, i + 1);
+                }
+            }
+        }
+        return null;
+    }
+
+    static String snippetForLog(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String flat = raw.replaceAll("\\s+", " ").trim();
+        if (flat.length() <= 160) {
+            return flat;
+        }
+        return flat.substring(0, 160) + "...";
     }
 
     public static String normalizeMode(String mode) {

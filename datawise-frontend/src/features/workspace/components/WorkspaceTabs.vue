@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import {computed, defineAsyncComponent, nextTick, ref, watch} from 'vue'
+import {computed, nextTick, ref, watch} from 'vue'
+import {defineEditionAsyncComponent} from '@/features/pack/define-edition-async-component'
 import {useI18n} from 'vue-i18n'
 import {ContextMenuHost} from '@/core/context-menu'
 import TabAddButton from '@/core/components/TabAddButton.vue'
@@ -53,11 +54,10 @@ const props = withDefaults(
 
 const isStandardEdition = import.meta.env.VITE_DATAWISE_EDITION === 'standard'
 
-const FakeDataDialog = defineAsyncComponent((() =>
-    isStandardEdition
-        ? import('@/features/pack/stubs/DatagenFakeDataStub.vue')
-        : import('@/features/workspace/components/FakeDataDialog.vue')
-) as any)
+const FakeDataDialog = defineEditionAsyncComponent(
+    () => import('@/features/workspace/components/FakeDataDialog.vue'),
+    () => import('@/features/pack/stubs/DatagenFakeDataStub.vue'),
+)
 
 const {t} = useI18n()
 const workspace = useWorkspaceStore()
@@ -109,16 +109,6 @@ const {
   exportSql: onFakeDataExport,
   refreshPreview,
 } = fakeData
-
-watch(
-    () => workspace.fakeDataDialogRequest?.nonce,
-    () => {
-      const request = workspace.fakeDataDialogRequest
-      if (!request) return
-      const tab = workspace.tabs.find((item) => item.id === request.tabId)
-      if (tab) void openForTable(tab)
-    },
-)
 
 let unsavedDialogResolver: ((action: 'save' | 'discard' | 'cancel') => void) | null = null
 
@@ -272,6 +262,16 @@ async function openFakeDataDialog(tabId: string) {
   if (!tab) return
   await openForTable(tab)
 }
+
+// 工具栏 / 资源树「生成数据」都走 requestFakeDataDialog → 必须带套餐门禁（勿直接 openForTable）
+watch(
+    () => workspace.fakeDataDialogRequest?.nonce,
+    () => {
+      const request = workspace.fakeDataDialogRequest
+      if (!request) return
+      void openFakeDataDialog(request.tabId)
+    },
+)
 
 const {
   menuVisible,

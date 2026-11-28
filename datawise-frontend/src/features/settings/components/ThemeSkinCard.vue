@@ -64,10 +64,10 @@ defineEmits<{ click: [] }>()
 }
 
 .preview-frame.active {
-  border-color: var(--dw-primary-border);
+  border-color: var(--dw-border-strong, var(--dw-text-secondary));
   border-width: 2px;
   padding: 2px;
-  box-shadow: var(--dw-focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dw-text) 22%, transparent);
 }
 
 .preview-chrome {
@@ -152,7 +152,7 @@ defineEmits<{ click: [] }>()
 }
 
 .skin-card.active .card-label {
-  color: var(--dw-primary);
+  color: var(--dw-text);
   font-weight: 600;
 }
 

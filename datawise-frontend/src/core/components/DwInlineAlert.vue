@@ -19,6 +19,8 @@ withDefaults(defineProps<{
       :variant="variant"
       :density="density"
   >
-    <slot/>
+    <template v-if="$slots.default" #default>
+      <slot/>
+    </template>
   </PackageDwInlineAlert>
 </template>

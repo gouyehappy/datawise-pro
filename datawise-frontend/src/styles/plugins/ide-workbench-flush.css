@@ -106,3 +106,18 @@ html[data-ui-skin='ide'] .community-workbench-host__frame {
     border-radius: 0 !important;
     background: var(--dw-bg-chrome) !important;
 }
+
+/*
+ * 连接表单（IDE）：左编辑列略宽于 classic 但仍收窄封顶；右预览吃剩余空间。
+ * 表单区内边距加大，避免控件贴边。
+ */
+html[data-ui-skin='ide'] .conn-layout {
+    grid-template-columns: minmax(420px, 520px) minmax(280px, 1fr);
+}
+
+html[data-ui-skin='ide'] .conn-layout .conn-head,
+html[data-ui-skin='ide'] .conn-layout .conn-body,
+html[data-ui-skin='ide'] .conn-layout .conn-footer {
+    padding-left: var(--dw-space-5);
+    padding-right: var(--dw-space-5);
+}

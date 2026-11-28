@@ -561,7 +561,7 @@ onUnmounted(() => {
   height: 28px;
   padding: 0 7px 0 8px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   background: color-mix(in srgb, var(--dw-bg-editor, var(--dw-bg)) 55%, var(--dw-bg-muted));
   color: var(--dw-text-muted);
   transition:
@@ -622,7 +622,7 @@ onUnmounted(() => {
   margin: 0;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   background: transparent;
   color: var(--dw-text-muted);
   cursor: pointer;
@@ -637,7 +637,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   padding: 1px 5px;
   border: 1px solid color-mix(in srgb, var(--dw-border-light) 80%, transparent);
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   background: transparent;
   font-family: var(--dw-mono);
   font-size: 10px;

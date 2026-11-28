@@ -4,6 +4,7 @@ import {
     findClosableTabIdsAfter,
     findClosableTabIdsBefore,
     findConsoleTabIdsForSqlFile,
+    findOrphanedWorkbenchConnectionIds,
     findOtherTabIds,
     findTableTabIds,
     resolveBulkCloseActiveTabId,
@@ -68,5 +69,19 @@ describe('workspace-tab-lifecycle.service', () => {
     it('keeps the current active tab when it survives bulk close', () => {
         assert.equal(resolveBulkCloseActiveTabId([tab('c1'), tab('t1')], 't1', 'c1'), 'c1')
         assert.equal(resolveBulkCloseActiveTabId([tab('t1')], 't1', 'c1'), 't1')
+    })
+
+    it('finds orphaned workbench connections after the last peer tab closes', () => {
+        const closed = [
+            tab('wb1', {type: 'community-workbench', connectionId: 'docker-1'}),
+            tab('sql', {type: 'console', connectionId: 'mysql-1'}),
+        ]
+        assert.deepEqual(findOrphanedWorkbenchConnectionIds(closed, [tab('welcome')]), ['docker-1'])
+        assert.deepEqual(
+            findOrphanedWorkbenchConnectionIds(closed, [
+                tab('wb2', {type: 'community-workbench', connectionId: 'docker-1'}),
+            ]),
+            [],
+        )
     })
 })

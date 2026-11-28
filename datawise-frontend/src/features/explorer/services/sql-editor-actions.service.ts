@@ -2,6 +2,7 @@ import type {TreeNode} from '@/core/types'
 import {findAncestorByType} from '@/core/utils/tree'
 import {fetchConnectionHost} from '@/features/explorer/services/resolve-connection-host'
 import {resolveExplorerInstanceLabel} from '@/features/explorer/services/explorer-database-scope'
+import {isCatalogSchemaDbType} from '@/features/explorer/services/explorer-lazy-load'
 import {
     createEmptySqlScript,
     resolveNextScriptFileForOpen,
@@ -17,16 +18,26 @@ import {
     getBoundConsoleSqlFile,
     resolveConsoleTabTitle,
 } from '@/features/workspace/services/console-tab-title'
+import {
+    findConnectionScriptsFolder,
+    isConnectionScriptsInstance,
+    TRINO_CONNECTION_SCRIPTS_INSTANCE,
+} from '@/features/workspace/services/console-workspace-instance'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {t} from '@/i18n'
 import {instanceSqlApi} from '@/api'
+import {readSqlScriptContent} from '@/features/explorer/services/sql-script-content.service'
+import {setCachedSqlScript} from '@/features/explorer/services/sql-script-content-cache'
 
 export interface DatabaseConsoleContext {
     connectionId: string
     connectionName?: string
     connectionHost?: string
+    /** 脚本落盘 scope（Trino 族固定为连接级 scripts） */
     databaseNode: Pick<TreeNode, 'id' | 'label'>
+    /** JDBC catalog.schema；与脚本目录解耦，可为 undefined */
+    jdbcDatabase?: string
 }
 
 /** 从 Explorer 树同步解析控制台上下文，避免打开前等待 catalog API */
@@ -37,13 +48,31 @@ export function resolveDatabaseConsoleContextSync(
 ): DatabaseConsoleContext | null {
     const connection = findAncestorByType(tree, databaseNode.id, 'connection')
     const connectionId = connection?.id
-    if (!connectionId) return null
-    const instanceLabel =
-        resolveExplorerInstanceLabel(tree, databaseNode.id, connection?.dbType) ?? databaseNode.label
+    if (!connectionId || !connection) return null
+
+    const scopedLabel =
+        resolveExplorerInstanceLabel(tree, databaseNode.id, connection.dbType) ?? databaseNode.label
+
+    // 跨 catalog 引擎：脚本一律进连接级 scripts；JDBC 仍可用原 catalog.schema
+    if (isCatalogSchemaDbType(connection.dbType)) {
+        const scriptsFolder = findConnectionScriptsFolder(connection)
+        const jdbcDatabase = isConnectionScriptsInstance(scopedLabel) ? undefined : scopedLabel
+        return {
+            connectionId,
+            connectionName: connectionName ?? connection.label,
+            databaseNode: {
+                id: scriptsFolder?.id ?? databaseNode.id,
+                label: TRINO_CONNECTION_SCRIPTS_INSTANCE,
+            },
+            jdbcDatabase,
+        }
+    }
+
     return {
         connectionId,
-        connectionName: connectionName ?? connection?.label,
-        databaseNode: {id: databaseNode.id, label: instanceLabel},
+        connectionName: connectionName ?? connection.label,
+        databaseNode: {id: databaseNode.id, label: scopedLabel},
+        jdbcDatabase: scopedLabel,
     }
 }
 
@@ -84,6 +113,14 @@ async function loadLatestSqlIntoTab(ctx: DatabaseConsoleContext, placeholderTabI
             closeSiblingPlaceholders(placeholderTabId)
             return
         }
+        setCachedSqlScript(
+            {
+                connectionId: ctx.connectionId,
+                instanceName: ctx.databaseNode.label,
+                fileName: result.fileName,
+            },
+            result.sql,
+        )
 
         const existing = workspace.tabs.find(
             (item) =>
@@ -136,7 +173,7 @@ export async function openLatestSqlEditor(
             connectionId: ctx.connectionId,
             connectionName: ctx.connectionName,
             instanceId: ctx.databaseNode.id,
-            database: ctx.databaseNode.label,
+            database: ctx.jdbcDatabase ?? '',
             explorerNodeId: ctx.databaseNode.id,
             skipEnsureScriptFile: true,
         })
@@ -144,38 +181,44 @@ export async function openLatestSqlEditor(
     })
 }
 
-/** 打开指定 workspaces SQL 脚本 */
+/** 打开指定 workspaces / scripts SQL 脚本 */
 export async function openSqlScriptFile(
     ctx: DatabaseConsoleContext,
     fileName: string,
 ) {
     const guardKey = buildSqlFileOpenKey(ctx.connectionId, ctx.databaseNode.label, fileName)
     return withSqlConsoleOpenGuard(guardKey, async () => {
+        let sql = ''
+        let resolvedName = fileName
+        try {
+            const result = await readSqlScriptContent({
+                connectionId: ctx.connectionId,
+                instanceName: ctx.databaseNode.label,
+                fileName,
+            })
+            sql = result.sql
+            resolvedName = result.fileName
+        } catch {
+            useLayoutStore().showErrorToast(t('console.loadSqlFileFailed'))
+            return
+        }
+
         const tabId = await activateOrCreateConsoleTab({
             connectionId: ctx.connectionId,
             connectionName: ctx.connectionName,
             connectionHost: ctx.connectionHost,
             instanceId: ctx.databaseNode.id,
-            database: ctx.databaseNode.label,
-            sqlFile: fileName,
+            database: ctx.jdbcDatabase ?? '',
+            sql,
+            sqlFile: resolvedName,
+            skipEnsureScriptFile: true,
         })
 
-        void (async () => {
-            try {
-                const result = await instanceSqlApi.read({
-                    connectionId: ctx.connectionId,
-                    instanceName: ctx.databaseNode.label,
-                    fileName,
-                })
-                applySqlToConsoleTab(tabId, result.sql, {
-                    sqlFile: result.fileName,
-                    connectionName: ctx.connectionName,
-                    connectionHost: ctx.connectionHost,
-                })
-            } catch {
-                useLayoutStore().showErrorToast(t('console.loadSqlFileFailed'))
-            }
-        })()
+        applySqlToConsoleTab(tabId, sql, {
+            sqlFile: resolvedName,
+            connectionName: ctx.connectionName,
+            connectionHost: ctx.connectionHost,
+        })
     })
 }
 
@@ -204,7 +247,7 @@ export async function createNewSqlEditor(
             connectionId: ctx.connectionId,
             connectionName: ctx.connectionName,
             instanceId: ctx.databaseNode.id,
-            database: ctx.databaseNode.label,
+            database: ctx.jdbcDatabase ?? '',
             sql: '',
             sqlFile: fileName,
             explorerNodeId: ctx.databaseNode.id,
@@ -220,6 +263,14 @@ export async function createNewSqlEditor(
                     instanceName: ctx.databaseNode.label,
                     fileName,
                 })
+                setCachedSqlScript(
+                    {
+                        connectionId: ctx.connectionId,
+                        instanceName: ctx.databaseNode.label,
+                        fileName,
+                    },
+                    '',
+                )
                 void explorer.reloadWorkspacesFolder(
                     ctx.connectionId,
                     ctx.databaseNode.label,
@@ -247,7 +298,7 @@ export async function openBlankSqlConsole(
             connectionId: ctx.connectionId,
             connectionName: ctx.connectionName,
             instanceId: ctx.databaseNode.id,
-            database: ctx.databaseNode.label,
+            database: ctx.jdbcDatabase ?? '',
             explorerNodeId: ctx.databaseNode.id,
         })
     })

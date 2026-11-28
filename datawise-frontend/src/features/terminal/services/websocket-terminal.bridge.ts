@@ -45,6 +45,8 @@ function openAuthedSocket(url: string): WebSocket {
     return openAuthedWebSocket(url)
 }
 
+const CREATE_TIMEOUT_MS = 120_000
+
 export function createWebSocketTerminalBridge(path = '/ws/terminal'): NativeTerminalBridge {
     const sockets = new Map<string, WebSocket>()
     const outputHandlers = new Map<string, Set<OutputHandler>>()
@@ -80,11 +82,28 @@ export function createWebSocketTerminalBridge(path = '/ws/terminal'): NativeTerm
 
             const result = await new Promise<NativeTerminalCreateResult>((resolve) => {
                 let settled = false
+                let timeoutId: ReturnType<typeof setTimeout> | null = null
                 const settle = (value: NativeTerminalCreateResult) => {
                     if (settled) return
                     settled = true
+                    if (timeoutId) {
+                        clearTimeout(timeoutId)
+                        timeoutId = null
+                    }
                     resolve(value)
                 }
+
+                timeoutId = setTimeout(() => {
+                    try {
+                        socket.close()
+                    } catch {
+                        // ignore
+                    }
+                    settle({
+                        ok: false,
+                        error: SSH_BRIDGE_ERROR_CODES.CREATE_TIMEOUT,
+                    })
+                }, CREATE_TIMEOUT_MS)
 
                 socket.addEventListener('open', () => {
                     send(socket, {

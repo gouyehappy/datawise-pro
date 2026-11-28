@@ -30,6 +30,7 @@ export function settingsSectionDwIcon(section: SettingsSection): DwIconName {
         projects: 'folder',
         backupCenter: 'folder',
         configPortability: 'export',
+        configCloudSync: 'export',
     }
     return map[section]
 }

@@ -49,6 +49,7 @@ export function createDefaultConnection(
         driverClass: catalogItem?.defaultDriverClass ?? DRIVER_PRESETS[dbType]?.driverClass,
         database: '',
         writeGuard: false,
+        allowEngineWrites: false,
         sshEnabled: false,
         sshHost: '',
         sshPort: '22',

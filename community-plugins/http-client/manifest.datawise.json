@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "io.datawise.community.httpclient",
   "name": "HTTP Client",
-  "version": "0.1.0",
+  "version": "0.2.22",
   "publisher": "datawise-community",
   "description": "A Postman-style HTTP workbench: compose requests, send them through a native sidecar, and inspect responses.",
   "license": "Apache-2.0",

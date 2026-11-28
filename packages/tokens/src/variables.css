@@ -276,9 +276,10 @@
     --dw-icon-glyph-size: clamp(13px, 1.5vmin, 15px);
     /* Disabled controls stay readable (was ~0.3 and looked “missing”). */
     --dw-control-disabled-opacity: 0.55;
-    --dw-select-font: var(--dw-font-size-control);
-    --dw-select-trigger-h: var(--dw-input-height);
-    --dw-select-trigger-h-sm: var(--dw-input-height-sm);
+    --dw-select-font: var(--dw-text-sm);
+    /* Cursor SelectStyledButton: regular ~24px; default form fields slightly taller */
+    --dw-select-trigger-h: 28px;
+    --dw-select-trigger-h-sm: 24px;
     --dw-titlebar-chip-size: var(--dw-density-sm);
     --dw-titlebar-height: clamp(40px, 4.5vmin, 44px);
     --dw-wb-head-min-height: var(--dw-density-xl);

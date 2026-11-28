@@ -13,9 +13,10 @@ public class SshTunnelProperties {
 
     /**
      * Persist newly seen host keys (OpenSSH {@code accept-new} semantics). Ignored when
-     * {@link #strictHostKeyChecking} is false.
+     * {@link #strictHostKeyChecking} is false. Default false (DB-14) — first connect requires a
+     * pre-seeded known_hosts entry unless an operator explicitly enables accept-new.
      */
-    private boolean acceptNewHostKeys = true;
+    private boolean acceptNewHostKeys = false;
 
     /** Optional override; default resolves under the DataWise config directory. */
     private String knownHostsPath;

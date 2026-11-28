@@ -34,6 +34,7 @@ import {
     toAiLlmProfilePayload,
 } from '@/api'
 import {isAbortError} from '@/shared/api/http/ai-analysis-stream'
+import type {AiPreferences} from '@/shared/config/app-config.types'
 
 interface UseAnalysisStreamOptions {
     scrollToBottom: (opts?: {force?: boolean}) => Promise<void>
@@ -202,6 +203,7 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
                     threadId: payload.threadId,
                     checkpointId: payload.checkpointId,
                     sql: payload.sql,
+                    grantId: payload.grantId ?? null,
                 }
                 // Keep the same analysis turn visible while waiting for SQL confirm.
                 const messageId = ensureStreamingMessage(sessionId)
@@ -239,7 +241,8 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
         sessionId: string,
         analysisContext?: AiAnalysisContextPayload,
     ) {
-        const profile = resolveWorkbenchAiLlmProfile(appConfig.aiPreferences)
+        const aiPrefs = appConfig.aiPreferences as AiPreferences
+        const profile = resolveWorkbenchAiLlmProfile(aiPrefs)
         logAiChatRequest(text, targets.length)
         const started = performance.now()
         const signal = beginStreamSignal()
@@ -253,13 +256,13 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
                     prompt: text,
                     targets: targets.map(toAiDatabaseTargetPayload),
                     llm: toAiLlmProfilePayload(profile),
-                    stepLlms: buildAnalysisStepLlms(appConfig.aiPreferences),
+                    stepLlms: buildAnalysisStepLlms(aiPrefs),
                     analysisContext,
-                    skipSqlConfirmation: appConfig.aiPreferences.skipSqlConfirmation === true,
-                    analysisMode: appConfig.aiPreferences.analysisMode ?? 'smart',
+                    skipSqlConfirmation: aiPrefs.skipSqlConfirmation === true,
+                    analysisMode: aiPrefs.analysisMode ?? 'smart',
                     disabledAnalysisSteps:
-                        (appConfig.aiPreferences.analysisMode ?? 'smart') === 'custom'
-                            ? (appConfig.aiPreferences.disabledAnalysisSteps ?? [])
+                        (aiPrefs.analysisMode ?? 'smart') === 'custom'
+                            ? [...(aiPrefs.disabledAnalysisSteps ?? [])]
                             : [],
                 },
                 buildStreamHandlers(sessionId, started),
@@ -301,8 +304,8 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
         syncLiveProgress(sessionId)
 
         try {
-            let grantId: string | undefined
-            if (approved) {
+            let grantId: string | undefined = pending.grantId || undefined
+            if (approved && !grantId) {
                 const binding = session?.binding
                 const connectionId = binding?.connectionId
                     || session?.selectedTargetIds?.[0]?.split(':')[0]
@@ -318,6 +321,7 @@ export function useAnalysisStream(options: UseAnalysisStreamOptions) {
                     database: binding?.database,
                     schema: binding?.schema,
                     confirmedSql: pending.sql,
+                    threadId: pending.threadId,
                 })
                 grantId = grant.grantId
             }

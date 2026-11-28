@@ -1,6 +1,6 @@
 {
   "name": "datawise-monorepo",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "private": true,
   "description": "DataWise monorepo — 常用命令入口（详见 npm run help）",
   "workspaces": [
@@ -51,6 +51,19 @@
     "check:connection-capabilities": "node scripts/generate-connection-capabilities.mjs --check",
     "clean:dwp-staging": "node scripts/clean-dwp-staging.mjs",
     "ensure:sql-editor": "npm run ensure:sql-editor --prefix datawise-frontend",
-    "dev:frontend": "npm run dev --prefix datawise-frontend"
+    "dev:frontend": "npm run dev --prefix datawise-frontend",
+    "mirror:cnb": "node scripts/desktop/mirror-to-cnb.mjs",
+    "cnb:push-code": "node scripts/desktop/push-code-to-cnb.mjs",
+    "ship:status": "node scripts/desktop/ship-release.mjs --step status",
+    "ship:release": "node scripts/desktop/ship-release.mjs",
+    "ship:menu": "node scripts/desktop/ship-release-menu.mjs",
+    "menu": "node scripts/desktop/ship-release-menu.mjs",
+    "ops": "node scripts/desktop/ship-release-menu.mjs",
+    "ops:web": "node scripts/desktop/ops-web.mjs",
+    "ops:cli": "node scripts/desktop/ops-cli.mjs",
+    "ops:close": "node scripts/desktop/ops-close.mjs"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.9.0"
   }
 }

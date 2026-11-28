@@ -3,6 +3,10 @@ export type ResultPaneLayout = 'grid' | 'form'
 export type ResultPaneColumnDensity = 'compact' | 'standard' | 'relaxed'
 export type ResultPaneNumericAlign = 'left' | 'right'
 
+export const TABLE_FONT_SIZE_MIN = 8
+export const TABLE_FONT_SIZE_MAX = 16
+export const TABLE_FONT_SIZE_DEFAULT = 13
+
 export interface QueryResultPaneSettings {
     /** Tab / 输出日志排序：最早优先 | 最新优先 */
     sortOrder: ResultPaneSortOrder
@@ -22,8 +26,18 @@ export interface QueryResultPaneSettings {
     numericAlign: ResultPaneNumericAlign
     /** 隐藏整列均为 NULL 的列 */
     hideNullColumns: boolean
+    /** 隐藏整列均为 NULL 或空字符串的列 */
+    hideEmptyColumns: boolean
     /** 按数据类型着色单元格 */
     typeColoring: boolean
+    /** 全局冻结首列（渲染层；不写入单表 pin 状态） */
+    freezeFirstColumn: boolean
+    /** 工具栏仅显示图标 */
+    hideToolbarLabels: boolean
+    /** CSV 导出不写 UTF-8 BOM */
+    csvWithoutBom: boolean
+    /** 表格字号（px） */
+    tableFontSize: number
 }
 
 export const QUERY_RESULT_PANE_SETTINGS_KEY = 'dw-cli-query-result-pane-settings'
@@ -38,7 +52,12 @@ export const DEFAULT_QUERY_RESULT_PANE_SETTINGS: QueryResultPaneSettings = {
     columnDensity: 'standard',
     numericAlign: 'right',
     hideNullColumns: false,
+    hideEmptyColumns: false,
     typeColoring: false,
+    freezeFirstColumn: false,
+    hideToolbarLabels: false,
+    csvWithoutBom: false,
+    tableFontSize: TABLE_FONT_SIZE_DEFAULT,
 }
 
 function asBoolean(value: unknown, fallback: boolean): boolean {
@@ -61,6 +80,11 @@ function asColumnDensity(value: unknown): ResultPaneColumnDensity {
 
 function asNumericAlign(value: unknown): ResultPaneNumericAlign {
     return value === 'left' || value === 'right' ? value : DEFAULT_QUERY_RESULT_PANE_SETTINGS.numericAlign
+}
+
+export function normalizeTableFontSize(value: unknown): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return TABLE_FONT_SIZE_DEFAULT
+    return Math.min(TABLE_FONT_SIZE_MAX, Math.max(TABLE_FONT_SIZE_MIN, Math.round(value)))
 }
 
 export function columnDensityWidthScale(density: ResultPaneColumnDensity): number {
@@ -96,10 +120,27 @@ export function readStoredQueryResultPaneSettings(): QueryResultPaneSettings {
                 parsed.hideNullColumns,
                 DEFAULT_QUERY_RESULT_PANE_SETTINGS.hideNullColumns,
             ),
+            hideEmptyColumns: asBoolean(
+                parsed.hideEmptyColumns,
+                DEFAULT_QUERY_RESULT_PANE_SETTINGS.hideEmptyColumns,
+            ),
             typeColoring: asBoolean(
                 parsed.typeColoring,
                 DEFAULT_QUERY_RESULT_PANE_SETTINGS.typeColoring,
             ),
+            freezeFirstColumn: asBoolean(
+                parsed.freezeFirstColumn,
+                DEFAULT_QUERY_RESULT_PANE_SETTINGS.freezeFirstColumn,
+            ),
+            hideToolbarLabels: asBoolean(
+                parsed.hideToolbarLabels,
+                DEFAULT_QUERY_RESULT_PANE_SETTINGS.hideToolbarLabels,
+            ),
+            csvWithoutBom: asBoolean(
+                parsed.csvWithoutBom,
+                DEFAULT_QUERY_RESULT_PANE_SETTINGS.csvWithoutBom,
+            ),
+            tableFontSize: normalizeTableFontSize(parsed.tableFontSize),
         }
     } catch {
         return {...DEFAULT_QUERY_RESULT_PANE_SETTINGS}

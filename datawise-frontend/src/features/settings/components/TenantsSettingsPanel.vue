@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {DwButton, DwInput, DwSelect, DwSplitPane, FormField, ConfirmDialog, EmptyState} from '@/core/components'
+import {DwButton, DwInput, DwSplitPane, FormField, ConfirmDialog, EmptyState} from '@/core/components'
+import SettingsSelect from '@/core/components/SettingsSelect.vue'
 import type {SelectOption} from '@/core/components/select.types'
 import {DwIcon} from '@/core/icons'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
@@ -506,18 +507,17 @@ onMounted(async () => {
             </div>
             <div class="tn-invite__form">
               <FormField :label="t('settings.tenants.inviteUser')">
-                <DwSelect
+                <SettingsSelect
                     v-model="invite.userId"
-                    size="sm"
+                    searchable
                     :options="userOptions"
                     :placeholder="t('settings.tenants.inviteUserPlaceholder')"
                     :disabled="!userOptions.length || selectedTenant.status !== 'active'"
                 />
               </FormField>
               <FormField :label="t('settings.tenants.inviteRole')">
-                <DwSelect
+                <SettingsSelect
                     v-model="invite.roleKey"
-                    size="sm"
                     :options="roleOptions"
                     :disabled="selectedTenant.status !== 'active'"
                 />
@@ -561,9 +561,8 @@ onMounted(async () => {
                   <span class="meta">#{{ member.userId }} · {{ roleLabel(member.roleKeys) }}</span>
                 </div>
                 <div class="tn-member__actions">
-                  <DwSelect
+                  <SettingsSelect
                       :model-value="member.roleKeys?.[0] || 'developer'"
-                      size="sm"
                       :options="roleOptions"
                       :disabled="selectedTenant.status !== 'active'"
                       @update:model-value="(value) => changeMemberRole(member, value)"

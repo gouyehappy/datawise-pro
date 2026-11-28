@@ -10,6 +10,8 @@ import DataGrid from '@/core/components/DataGrid.vue'
 import {flattenDataGridProps} from '@/core/data-grid/types/data-grid-prop-groups'
 import QueryResultViewToggle from '@/features/workspace/components/QueryResultViewToggle.vue'
 import QueryResultPaneActions from '@/features/workspace/components/QueryResultPaneActions.vue'
+import TableDataToolsMenu from '@/features/workspace/components/TableDataToolsMenu.vue'
+import QueryResultAiMenu from '@/features/workspace/components/QueryResultAiMenu.vue'
 import QueryResultMessagesPanel from '@/features/workspace/components/QueryResultMessagesPanel.vue'
 import type {QueryResultMessageEntry} from '@/features/workspace/components/QueryResultMessagesPanel.vue'
 import QueryResultBatchSummary from '@/features/workspace/components/QueryResultBatchSummary.vue'
@@ -136,6 +138,8 @@ const props = withDefaults(
       enableCrossEnvCompare?: boolean
       showExport?: boolean
       enableFakeData?: boolean
+      /** 表数据页：用「数据工具」下拉归拢生成 / 导入 / 导出 */
+      showDataToolsMenu?: boolean
       enableRowDocumentView?: boolean
       /** 控制台：结果网格回填 SQL 到编辑器 */
       enableSqlFill?: boolean
@@ -153,6 +157,7 @@ const props = withDefaults(
       pkColumns: () => [],
       enableDmlGenerate: false,
       showExport: true,
+      showDataToolsMenu: false,
       enableRowDocumentView: false,
       enableSqlFill: false,
     },
@@ -177,6 +182,7 @@ const emit = defineEmits<{
   'close-ai-explain': []
   'open-cross-env-compare': [index: number]
   'generate-fake-data': []
+  'import-table-data': []
   'raise-max-rows': [maxRows: number]
   'insert-order-by': [payload: { column: string; direction: 'asc' | 'desc' }]
   'insert-where': [payload: { column: string; value: unknown }]
@@ -187,6 +193,15 @@ const emit = defineEmits<{
 
 const layout = useLayoutStore()
 const pluginStore = usePluginStore()
+const dataGridRef = ref<{openExportDialog?: () => void} | null>(null)
+
+const showToolbarExport = computed(
+    () => props.showExport && !props.showDataToolsMenu,
+)
+
+function onDataToolsExport() {
+  dataGridRef.value?.openExportDialog?.()
+}
 const entitlement = useEntitlementStore()
 const editorSettings = useEditorSettingsStore()
 const resultPaneSettings = useQueryResultPaneSettingsStore()
@@ -450,11 +465,10 @@ const canGenerateDml = computed(() => {
       && !activeResult.value.explainPlan?.length
 })
 
+/** 工具栏是否展示「生成数据」入口（不要求列已加载；对话框会自行拉结构） */
 const canShowFakeData = computed(() => {
   if (!props.enableFakeData) return false
-  if (!pluginStore.isEnabled('p-fake-data')) return false
-  const columns = props.columnDetails?.length ? props.columnDetails : activeResult.value?.columns
-  return Boolean(columns?.length)
+  return pluginStore.isEnabled('p-fake-data')
 })
 
 const canShowResultChart = computed(() => {
@@ -732,10 +746,10 @@ const activeDataGridFlatProps = computed(() => {
       exportBaseName: exportBaseName.value,
       exportTableName: exportTableName.value,
       suggestExportMask: props.exportSuggestMask,
-      showExport: props.showExport,
+      showExport: showToolbarExport.value,
       showAiSummary: canRequestAiSummary.value,
       aiSummaryLoading: !!props.aiSummaryLoading,
-      showFakeData: canShowFakeData.value,
+      showFakeData: canShowFakeData.value && !props.showDataToolsMenu,
       enableRowDocumentView: props.enableRowDocumentView,
       enableSqlFill: props.enableSqlFill,
       externalViewOptions: true,
@@ -748,7 +762,12 @@ const activeDataGridFlatProps = computed(() => {
       columnDensity: resultPaneSettings.settings.columnDensity,
       numericAlign: resultPaneSettings.settings.numericAlign,
       hideNullColumns: resultPaneSettings.settings.hideNullColumns,
+      hideEmptyColumns: resultPaneSettings.settings.hideEmptyColumns,
       typeColoring: resultPaneSettings.settings.typeColoring,
+      freezeFirstColumn: resultPaneSettings.settings.freezeFirstColumn,
+      hideToolbarLabels: resultPaneSettings.settings.hideToolbarLabels,
+      csvWithoutBom: resultPaneSettings.settings.csvWithoutBom,
+      tableFontSize: resultPaneSettings.settings.tableFontSize,
     },
   })
 })
@@ -996,6 +1015,7 @@ watch(
       />
       <DataGrid
           v-else
+          ref="dataGridRef"
           v-model:view-state="viewState"
           v-bind="activeDataGridFlatProps"
           @exported="onExported"
@@ -1013,10 +1033,17 @@ watch(
           @update:wrap-cells="resultPaneSettings.patchSettings({ wrapCells: $event })"
           @update:layout-mode="resultPaneSettings.patchSettings({ resultLayout: $event })"
       >
-        <template v-if="canShowFakeData || canShowResultChart" #toolbar-extra>
+        <template v-if="showDataToolsMenu || canShowFakeData || canShowResultChart" #toolbar-extra>
           <QueryResultViewToggle v-if="canShowResultChart" v-model="resultView"/>
+          <TableDataToolsMenu
+              v-if="showDataToolsMenu"
+              :show-generate="canShowFakeData"
+              @generate-data="emit('generate-fake-data')"
+              @import-data="emit('import-table-data')"
+              @export-data="onDataToolsExport"
+          />
           <button
-              v-if="canShowFakeData"
+              v-else-if="canShowFakeData"
               type="button"
               class="grid-label-btn"
               @click="emit('generate-fake-data')"
@@ -1025,26 +1052,24 @@ watch(
             <span>{{ t('workspace.fakeData.toolbar') }}</span>
           </button>
         </template>
-        <template v-if="canRequestAiSummary || showAiAsk" #toolbar-tail>
-          <button
-              v-if="showAiAsk"
-              type="button"
-              class="grid-label-btn"
-              @click="emit('request-ai-ask')"
-          >
-            <DwIcon class="grid-glyph grid-glyph--optical" name="bot" fit :stroke-width="1.75"/>
-            <span>{{ t('queryResult.askAi') }}</span>
-          </button>
-          <button
-              v-if="canRequestAiSummary"
-              type="button"
-              class="grid-label-btn"
-              :disabled="!!aiSummaryLoading"
-              @click="onRequestAiSummary"
-          >
-            <DwIcon class="grid-glyph grid-glyph--optical" name="bot" fit :stroke-width="1.75"/>
-            <span>{{ aiSummaryLoading ? t('queryResult.aiSummaryLoading') : t('queryResult.aiSummary') }}</span>
-          </button>
+        <template v-if="!showTabBar || canRequestAiSummary || showAiAsk" #toolbar-tail>
+          <QueryResultAiMenu
+              v-if="showAiAsk || canRequestAiSummary"
+              :show-ask="!!showAiAsk"
+              :show-summary="canRequestAiSummary"
+              :summary-loading="!!aiSummaryLoading"
+              @ask="emit('request-ai-ask')"
+              @summary="onRequestAiSummary"
+          />
+          <QueryResultPaneActions
+              v-if="!showTabBar"
+              :can-compare="false"
+              :active-result="activeResult ?? null"
+              :show-grid-view-options="showGridViewOptions"
+              :show-layout-view-option="showLayoutViewOption"
+              :show-console-options="false"
+              :collapsible="false"
+          />
         </template>
       </DataGrid>
     </div>

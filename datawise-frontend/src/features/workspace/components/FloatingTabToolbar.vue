@@ -91,7 +91,7 @@ function onOpacityInput(event: Event) {
   gap: 2px;
   padding: 3px 4px 3px 8px;
   border: 1px solid var(--dw-panel-border);
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   background: color-mix(in srgb, var(--dw-bg-panel) 88%, transparent);
   box-shadow: var(--dw-panel-shadow);
   backdrop-filter: blur(10px);

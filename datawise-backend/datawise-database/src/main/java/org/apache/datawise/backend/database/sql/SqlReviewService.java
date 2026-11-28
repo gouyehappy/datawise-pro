@@ -1,7 +1,7 @@
 package org.apache.datawise.backend.database.sql;
 
 import org.apache.datawise.backend.common.support.ConnectionEnvironmentSupport;
-import org.apache.datawise.backend.connector.api.support.SqlWriteClassifier;
+import org.apache.datawise.sqlparser.support.SqlWriteClassifier;
 import org.apache.datawise.sqlparser.ExplainSqlSupport;
 import org.apache.datawise.sqlparser.analysis.SqlAnalysisSupport;
 import org.apache.datawise.backend.domain.ExecuteSqlRequest;

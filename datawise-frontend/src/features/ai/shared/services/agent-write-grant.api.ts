@@ -18,6 +18,8 @@ export async function issueAgentWriteGrant(body: {
     database?: string | null
     schema?: string | null
     confirmedSql: string
+    /** When set, server verifies confirmedSql against checkpoint SAFE_SQL. */
+    threadId?: string | null
 }): Promise<AgentWriteGrant> {
     return postJson<AgentWriteGrant>(API_PATHS.ai.writeGrants, body)
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import {computed, defineAsyncComponent, onMounted, ref} from 'vue'
+import {computed, onMounted, ref} from 'vue'
+import {defineEditionAsyncComponent} from '@/features/pack/define-edition-async-component'
 import {useI18n} from 'vue-i18n'
 import {EmptyState, ProgressBar, SectionHeader, StatusPill} from '@/core/components'
 import {usePopoverEscape} from '@/core/composables/usePopoverEscape'
@@ -44,17 +45,15 @@ import type {SqlLogEntry} from '@/core/types'
 import type {ShareTeamSharedQueryPayload} from '@/core/types'
 import {useContextMenu} from '@/core/context-menu'
 
-const MigrationTasksPanel = defineAsyncComponent((() =>
-    import.meta.env.VITE_DATAWISE_EDITION === 'standard'
-        ? import('@/features/pack/stubs/MigrationTasksStub.vue')
-        : import('@/features/workspace/components/MigrationTasksPanel.vue')
-) as any)
+const MigrationTasksPanel = defineEditionAsyncComponent(
+    () => import('@/features/workspace/components/MigrationTasksPanel.vue'),
+    () => import('@/features/pack/stubs/MigrationTasksStub.vue'),
+)
 
-const SqlMonitorPanel = defineAsyncComponent((() =>
-    import.meta.env.VITE_DATAWISE_EDITION === 'standard'
-        ? import('@/features/pack/stubs/DataopsMonitorStub.vue')
-        : import('@/features/workspace/components/SqlMonitorPanel.vue')
-) as any)
+const SqlMonitorPanel = defineEditionAsyncComponent(
+    () => import('@/features/workspace/components/SqlMonitorPanel.vue'),
+    () => import('@/features/pack/stubs/DataopsMonitorStub.vue'),
+)
 
 withDefaults(
     defineProps<{

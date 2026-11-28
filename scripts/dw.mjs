@@ -89,13 +89,34 @@ const STANDARD_EXCLUDES =
     'org.apache.datawise:datawise-metadoc,org.apache.datawise:datawise-datagen,' +
     'org.apache.datawise:datawise-sync,org.apache.datawise:datawise-backup'
 
+/** @param {string} s */
+function quoteWinArg(s) {
+    const t = String(s)
+    if (!/[ \t"&<>|^%]/.test(t)) return t
+    return `"${t.replace(/"/g, '""')}"`
+}
+
 function run(command, args, cwd = root) {
-    const result = spawnSync(command, args, {
-        cwd,
-        stdio: 'inherit',
-        shell: isWin,
-        env: process.env,
-    })
+    // Windows 不能 shell:false 直接 spawn *.cmd（Node 24 → EINVAL）；
+    // 也不能 shell:true + args 数组（DEP0190 刷屏）。统一走 cmd /c 单行命令。
+    let result
+    if (isWin) {
+        const line = [command, ...args].map(quoteWinArg).join(' ')
+        result = spawnSync('cmd.exe', ['/d', '/s', '/c', line], {
+            cwd,
+            stdio: 'inherit',
+            shell: false,
+            windowsHide: true,
+            env: process.env,
+        })
+    } else {
+        result = spawnSync(command, args, {
+            cwd,
+            stdio: 'inherit',
+            shell: false,
+            env: process.env,
+        })
+    }
     if (result.error) throw result.error
     if (result.status !== 0) {
         process.exit(result.status ?? 1)
@@ -255,7 +276,8 @@ async function main() {
             return
         case 'stop':
             console.log(`\n▶ ${COMMANDS.stop.title}\n`)
-            npmFrontend('stop:dev')
+            // 直接跑 stop 脚本，少一层 npm 套娃噪音
+            run(process.execPath, [join(root, 'scripts/dev-stop.mjs')], root)
             return
         case 'smoke:community-plugin':
             console.log(`\n▶ ${COMMANDS['smoke:community-plugin'].title}\n`)

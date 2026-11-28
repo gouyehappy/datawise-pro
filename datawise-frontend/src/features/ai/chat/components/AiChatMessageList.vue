@@ -315,7 +315,7 @@ defineExpose({
   max-width: 100%;
   text-align: left;
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   border-color: color-mix(in srgb, var(--dw-border) 80%, transparent);
   background: color-mix(in srgb, var(--dw-bg-panel) 40%, transparent);
   font-size: var(--dw-text-xs);

@@ -4,6 +4,8 @@ import org.apache.datawise.backend.model.ConnectionEntity;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JdbcUrlBuilderTest {
 
@@ -255,5 +257,32 @@ class JdbcUrlBuilderTest {
         String url = JdbcUrlBuilder.buildJdbcUrlWithEndpoint(entity, "127.0.0.1", 8000);
 
         assertEquals("jdbc:gaussdb://127.0.0.1:8000/app", url);
+    }
+
+    @Test
+    void customJdbcUrl_rejectsLdapAndFileSchemes() {
+        ConnectionEntity ldap = new ConnectionEntity();
+        ldap.setDbType("mysql");
+        ldap.setJdbcUrl("jdbc:ldap://evil.example/cn=x");
+        IllegalArgumentException ldapEx = assertThrows(
+                IllegalArgumentException.class,
+                () -> JdbcUrlBuilder.buildJdbcUrl(ldap));
+        assertTrue(ldapEx.getMessage().contains("not allowed"));
+
+        ConnectionEntity file = new ConnectionEntity();
+        file.setDbType("mysql");
+        file.setJdbcUrl("jdbc:file:///etc/passwd");
+        IllegalArgumentException fileEx = assertThrows(
+                IllegalArgumentException.class,
+                () -> JdbcUrlBuilder.buildJdbcUrl(file));
+        assertTrue(fileEx.getMessage().contains("not allowed"));
+    }
+
+    @Test
+    void customJdbcUrl_allowsKnownMysqlScheme() {
+        ConnectionEntity entity = new ConnectionEntity();
+        entity.setDbType("mysql");
+        entity.setJdbcUrl("jdbc:mysql://db.example:3306/app");
+        assertEquals("jdbc:mysql://db.example:3306/app", JdbcUrlBuilder.buildJdbcUrl(entity));
     }
 }

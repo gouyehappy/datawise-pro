@@ -26,7 +26,7 @@ import org.apache.datawise.backend.service.InstanceWorkspaceService;
 import org.apache.datawise.backend.service.TeamService;
 import org.apache.datawise.backend.service.outbound.OutboundNotifySupport;
 import org.apache.datawise.backend.service.workspace.WorkspaceNotificationService;
-import org.apache.datawise.backend.connector.api.support.SqlWriteClassifier;
+import org.apache.datawise.sqlparser.support.SqlWriteClassifier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;

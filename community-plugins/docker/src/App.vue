@@ -6,13 +6,25 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { currentLocale, getPlugin, type PluginEnvPayload } from './bridge';
 import { setLocale, t } from './i18n';
 import * as api from './api';
-import { initStreams, registerExecStream, registerExportStream, registerFileStream, registerTransferStream, startLogStream, unregisterStream, type ExportProgress } from './streams';
+import { initStreams, registerExecStream, registerExportStream, registerFileStream, registerTransferStream, unregisterStream, type ExportProgress } from './streams';
 import { sendExecBytes } from './exec';
 import { createDockerProgressParseState, parseDockerProgressEvent, type DockerProgressParseState } from './progress';
 import { createPendingDockerPullTask, newSessionId } from './pullTask';
 import { copyToClipboard, directoryOf, formatBytes, formatDate, savedPathKind, shortId } from './format';
 import { computeRate, formatRate, timeLabels } from './metrics';
 import { toast, toasts } from './toast';
+import { friendlyDockerError, type FriendlyError } from './friendlyError';
+import { formatPublicPorts, parseContainerHealth } from './containerHealth';
+import { mergeContainerList, statsVisuallyEqual } from './containerListStable';
+import {
+  DEFAULT_SORT,
+  loadWorkbenchPrefs,
+  resolveColumnWidths,
+  saveWorkbenchPrefs,
+  type ContainerFilter,
+  type ResourceKind,
+  type SortDirection,
+} from './workbenchPrefs';
 import type {
   DockerComposeApplyRequest,
   DockerContainer,
@@ -44,21 +56,25 @@ import MetricChart, { type MetricSeries } from './components/MetricChart.vue';
 import JsonTree from './components/JsonTree.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import ContainerTerminal from './components/ContainerTerminal.vue';
+import ContainerLogs from './components/ContainerLogs.vue';
 
-type ResourceKind = 'containers' | 'images' | 'volumes' | 'networks';
-type ContainerFilter = 'all' | 'running' | 'stopped';
 type DetailTab = 'overview' | 'logs' | 'monitoring' | 'files' | 'terminal';
 type TrendPoint = DockerContainerStats;
-type SortDirection = 'asc' | 'desc';
+
+const initialPrefs = loadWorkbenchPrefs();
 
 const resource = ref<ResourceKind>('containers');
-const filter = ref<ContainerFilter>('all');
+const filter = ref<ContainerFilter>(initialPrefs.filter ?? 'all');
 const loading = ref(false);
+/** Background auto-refresh — must not flip empty/table or spin the toolbar. */
+const quietRefreshing = ref(false);
 const error = ref('');
+const errorTip = ref('');
 const query = ref('');
 const connectionId = ref('');
 const isReadOnly = ref(false);
 const isProduction = ref(false);
+const tableAreaRef = ref<HTMLElement | null>(null);
 const engineInfo = ref<api.ConnectionInfoResult['info']>();
 const engineDetails = ref<DockerEngineDetails>();
 const engineDetailsLoading = ref(false);
@@ -70,10 +86,16 @@ const images = ref<DockerImage[]>([]);
 const volumes = ref<DockerVolume[]>([]);
 const networks = ref<DockerNetwork[]>([]);
 const listStats = ref<Record<string, DockerContainerStats>>({});
+/** Frozen metrics for sort keys — live stats update cells without reordering rows every poll. */
+const sortStatsSnapshot = ref<Record<string, DockerContainerStats>>({});
 const expandedProjects = ref(new Set<string>());
+/** Projects already seen — auto-expand only on first sight (never re-open user collapses). */
+const seenComposeProjects = new Set<string>();
 const selectedContainerId = ref('');
 // 表格行选中：同一时刻只展示一张表，用单个 key 即可（切换资源时清空）。
 const selectedRowKey = ref('');
+const selectedContainerIds = ref<Set<string>>(new Set());
+const batchInFlight = ref(false);
 const detailTab = ref<DetailTab>('overview');
 const inspect = ref<Record<string, any>>({});
 const trend = ref<TrendPoint[]>([]);
@@ -105,17 +127,15 @@ const transferParseStates = new Map<string, DockerProgressParseState>();
 const transferOpen = ref(false);
 const pushImageOpen = ref(false);
 const pushDraft = ref({ sourceImageId: '', targetReference: '', serverAddress: '', username: '', password: '' });
-const autoRefresh = ref(true);
+const autoRefresh = ref(initialPrefs.autoRefresh ?? true);
 const refreshCountdown = ref(10);
 const lastRefreshAt = ref<Date>();
 const refreshInFlight = ref(false);
-const columnWidths = ref<Record<ResourceKind, number[]>>({
-  containers: [230, 110, 190, 150, 80, 160, 95, 260],
-  images: [280, 140, 110, 180, 260],
-  volumes: [220, 140, 140, 380],
-  networks: [220, 150, 120, 120, 100, 100],
-});
-const sortState = ref<{ key: string; direction: SortDirection }>({ key: 'name', direction: 'asc' });
+const columnWidths = ref<Record<ResourceKind, number[]>>(resolveColumnWidths(initialPrefs));
+const sortState = ref<{ key: string; direction: SortDirection }>(
+  initialPrefs.sortByResource?.containers ?? { ...DEFAULT_SORT },
+);
+const searchInputRef = ref<HTMLInputElement | null>(null);
 const dangerOpen = ref(false);
 const dangerMessage = ref('');
 let dangerResolve: ((confirmed: boolean) => void) | undefined;
@@ -181,15 +201,7 @@ const historyLayers = ref<DockerImageLayer[]>([]);
 const historyLoading = ref(false);
 const historyError = ref('');
 
-const logText = ref('');
-const pendingLogText = ref('');
-const logPaused = ref(false);
-const logSearch = ref('');
-const logStream = ref<DockerStreamHandle>();
 const pullStream = ref<DockerStreamHandle>();
-const logError = ref('');
-const logAutoFollow = ref(true);
-const logOutput = ref<HTMLPreElement>();
 const filePath = ref('/');
 const fileEntries = ref<DockerFileEntry[]>([]);
 const filePreview = ref<DockerFilePreview>();
@@ -452,8 +464,35 @@ function formatPorts(container: DockerContainer): string {
   return container.ports.map((port) => `${port.ip || ''}${port.publicPort ? `:${port.publicPort}→` : ''}${port.privatePort}/${port.portType}`).join(', ') || '—';
 }
 
+function portsCopyValue(container: DockerContainer): string {
+  return formatPublicPorts(container.ports) || formatPorts(container);
+}
+
+function persistSort() {
+  saveWorkbenchPrefs({ sortByResource: { [resource.value]: { ...sortState.value } } });
+}
+
+function persistColumnWidths() {
+  saveWorkbenchPrefs({ columnWidths: { [resource.value]: columnWidths.value[resource.value].slice() } });
+}
+
+function setFriendlyError(cause: unknown) {
+  const mapped: FriendlyError = friendlyDockerError(cause, t);
+  error.value = mapped.message;
+  errorTip.value = mapped.tip || '';
+}
+
+function clearError() {
+  error.value = '';
+  errorTip.value = '';
+}
+
 function toggleSort(key: string) {
+  if (key === 'cpu' || key === 'memory') {
+    sortStatsSnapshot.value = { ...listStats.value };
+  }
   sortState.value = sortState.value.key === key ? { key, direction: sortState.value.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' };
+  persistSort();
 }
 
 function sortedBy<T>(values: T[], getter: (value: T, key: string) => string | number | boolean): T[] {
@@ -473,8 +512,8 @@ function containerSortValue(container: DockerContainer, key: string): string | n
   if (key === 'image') return container.image;
   if (key === 'status') return isRunning(container) ? 2 : isPaused(container) ? 1 : 0;
   if (key === 'ports') return formatPorts(container);
-  if (key === 'cpu') return listStats.value[container.id]?.cpuPercent ?? -1;
-  if (key === 'memory') return listStats.value[container.id]?.memoryUsage ?? -1;
+  if (key === 'cpu') return sortStatsSnapshot.value[container.id]?.cpuPercent ?? -1;
+  if (key === 'memory') return sortStatsSnapshot.value[container.id]?.memoryUsage ?? -1;
   return '';
 }
 
@@ -488,6 +527,82 @@ function containerStatusLabel(container: DockerContainer): string {
   if (isPaused(container)) return t('paused');
   return t('stopped');
 }
+
+function containerHealthLabel(container: DockerContainer): string {
+  const health = parseContainerHealth(container.status);
+  if (health === 'healthy') return t('healthHealthy');
+  if (health === 'unhealthy') return t('healthUnhealthy');
+  if (health === 'starting') return t('healthStarting');
+  return '';
+}
+
+function containerHealthClass(container: DockerContainer): string {
+  return `health-${parseContainerHealth(container.status)}`;
+}
+
+const selectedCount = computed(() => selectedContainerIds.value.size);
+
+const allVisibleContainerIds = computed(() => matchingContainers.value.map((container) => container.id));
+
+const allVisibleSelected = computed(
+  () => allVisibleContainerIds.value.length > 0 && allVisibleContainerIds.value.every((id) => selectedContainerIds.value.has(id)),
+);
+
+const someVisibleSelected = computed(
+  () => !allVisibleSelected.value && allVisibleContainerIds.value.some((id) => selectedContainerIds.value.has(id)),
+);
+
+function clearContainerSelection() {
+  selectedContainerIds.value = new Set();
+}
+
+function toggleContainerSelected(id: string, event?: Event) {
+  event?.stopPropagation();
+  const next = new Set(selectedContainerIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selectedContainerIds.value = next;
+  selectedRowKey.value = id;
+}
+
+function toggleSelectAllVisible() {
+  if (allVisibleSelected.value) {
+    clearContainerSelection();
+    return;
+  }
+  selectedContainerIds.value = new Set(allVisibleContainerIds.value);
+}
+
+function selectedContainers(): DockerContainer[] {
+  return matchingContainers.value.filter((container) => selectedContainerIds.value.has(container.id));
+}
+
+const emptyState = computed(() => {
+  // Do not gate on `loading` — flipping empty↔table during refresh causes jump/flash.
+  if (error.value) return null;
+  const hasQuery = Boolean(normalizedQuery.value);
+  if (resource.value === 'containers') {
+    if (!matchingContainers.value.length) {
+      return hasQuery || filter.value !== 'all'
+        ? { title: t('emptySearch'), hint: t('emptySearchHint') }
+        : { title: t('emptyContainers'), hint: t('emptyContainersHint') };
+    }
+  } else if (resource.value === 'images' && !filteredImages.value.length) {
+    return hasQuery ? { title: t('emptySearch'), hint: t('emptySearchHint') } : { title: t('emptyImages'), hint: t('emptyImagesHint') };
+  } else if (resource.value === 'volumes' && !filteredVolumes.value.length) {
+    return hasQuery ? { title: t('emptySearch'), hint: t('emptySearchHint') } : { title: t('emptyVolumes'), hint: t('emptyVolumesHint') };
+  } else if (resource.value === 'networks' && !filteredNetworks.value.length) {
+    return hasQuery ? { title: t('emptySearch'), hint: t('emptySearchHint') } : { title: t('emptyNetworks'), hint: t('emptyNetworksHint') };
+  }
+  return null;
+});
+
+const headerResourceCount = computed(() => {
+  if (resource.value === 'containers') return matchingContainers.value.length;
+  if (resource.value === 'images') return filteredImages.value.length;
+  if (resource.value === 'volumes') return filteredVolumes.value.length;
+  return filteredNetworks.value.length;
+});
 
 const matchingContainers = computed(() =>
   sortedBy(
@@ -544,14 +659,6 @@ const filteredNetworks = computed(() =>
     (item, key) => String((item as any)[key] ?? ''),
   ),
 );
-const visibleLogs = computed(() => {
-  if (!logSearch.value.trim()) return logText.value;
-  const needle = logSearch.value.toLowerCase();
-  return logText.value
-    .split('\n')
-    .filter((line) => line.toLowerCase().includes(needle))
-    .join('\n');
-});
 const MIB = 1024 * 1024;
 
 const monitorLabels = computed(() => timeLabels(trend.value.map((point) => point.readAt)));
@@ -666,14 +773,16 @@ function handleHeaderPointer(event: PointerEvent, kind: ResourceKind) {
   const initialX = event.clientX;
   event.preventDefault();
   event.stopPropagation();
+  const minWidth = kind === 'containers' && index === 0 ? 32 : 64;
   const move = (moveEvent: PointerEvent) => {
     const next = [...columnWidths.value[kind]];
-    next[index] = Math.max(64, initialWidth + moveEvent.clientX - initialX);
+    next[index] = Math.max(minWidth, initialWidth + moveEvent.clientX - initialX);
     columnWidths.value = { ...columnWidths.value, [kind]: next };
   };
   const stop = () => {
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', stop);
+    persistColumnWidths();
   };
   window.addEventListener('pointermove', move);
   window.addEventListener('pointerup', stop, { once: true });
@@ -745,7 +854,7 @@ async function loadEngineInfo() {
     isReadOnly.value = result.readOnly;
     isProduction.value = result.isProduction;
   } catch (cause: any) {
-    error.value = cause?.message || String(cause);
+    setFriendlyError(cause);
   }
 }
 
@@ -763,16 +872,49 @@ async function loadEngineDetails(target: 'json' | 'summary') {
   }
 }
 
-async function loadContainers() {
-  containers.value = await api.listContainers(connectionId.value, true);
-  for (const [project] of composeGroups.value) expandedProjects.value.add(project);
+function syncComposeExpansion() {
+  const projects = composeGroups.value.map(([project]) => project);
+  const next = new Set(expandedProjects.value);
+  let changed = false;
+  for (const project of projects) {
+    if (!seenComposeProjects.has(project)) {
+      seenComposeProjects.add(project);
+      if (!next.has(project)) {
+        next.add(project);
+        changed = true;
+      }
+    }
+  }
+  for (const project of [...seenComposeProjects]) {
+    if (!projects.includes(project)) {
+      seenComposeProjects.delete(project);
+      if (next.delete(project)) changed = true;
+    }
+  }
+  if (changed) expandedProjects.value = next;
 }
 
-async function loadResource(kind = resource.value) {
+async function loadContainers() {
+  const next = await api.listContainers(connectionId.value, true);
+  // Preserve row object identity when only Docker relative Status clocks tick.
+  containers.value = mergeContainerList(containers.value, next);
+  // Refresh sort snapshot on list reload so CPU/memory order can catch up without 5s thrash.
+  if (sortState.value.key === 'cpu' || sortState.value.key === 'memory') {
+    sortStatsSnapshot.value = { ...listStats.value };
+  }
+  syncComposeExpansion();
+}
+
+async function loadResource(kind = resource.value, options: { silent?: boolean } = {}) {
   if (refreshInFlight.value) return;
   refreshInFlight.value = true;
-  loading.value = true;
-  error.value = '';
+  const silent = Boolean(options.silent);
+  if (silent) quietRefreshing.value = true;
+  else {
+    loading.value = true;
+    clearError();
+  }
+  const scrollTop = tableAreaRef.value?.scrollTop ?? 0;
   try {
     if (kind === 'containers') await loadContainers();
     if (kind === 'images') images.value = await api.listImages(connectionId.value);
@@ -783,19 +925,32 @@ async function loadResource(kind = resource.value) {
       refreshCountdown.value = 10;
     }
   } catch (cause: any) {
-    error.value = cause?.message || String(cause);
+    if (!silent) setFriendlyError(cause);
+    else toast(cause?.message || String(cause), 4000);
   } finally {
-    loading.value = false;
+    if (silent) quietRefreshing.value = false;
+    else loading.value = false;
     refreshInFlight.value = false;
+    await nextTick();
+    if (tableAreaRef.value) tableAreaRef.value.scrollTop = scrollTop;
   }
+}
+
+async function retryConnection() {
+  clearError();
+  await Promise.all([loadEngineInfo(), loadResource(resource.value)]);
+  restartListSampling();
+  restartResourceRefresh();
 }
 
 async function selectResource(kind: ResourceKind) {
   await closeDetail();
   resource.value = kind;
   selectedRowKey.value = '';
+  clearContainerSelection();
   query.value = '';
-  sortState.value = { key: 'name', direction: 'asc' };
+  const prefs = loadWorkbenchPrefs();
+  sortState.value = prefs.sortByResource?.[kind] ?? { ...DEFAULT_SORT };
   await loadResource(kind);
 }
 
@@ -820,7 +975,6 @@ async function openDetail(container: DockerContainer) {
 
 async function closeDetail() {
   stopDetailSampling();
-  await stopLogs();
   selectedContainerId.value = '';
   detailTab.value = 'overview';
   terminalTabRequested.value = false;
@@ -885,12 +1039,147 @@ async function removeContainer(container: DockerContainer) {
   try {
     await api.removeContainer(connectionId.value, container.id);
     toast(t('containerRemoved', { name: containerName(container) }), 2400);
+    selectedContainerIds.value = new Set([...selectedContainerIds.value].filter((id) => id !== container.id));
     await loadContainers();
     lastRefreshAt.value = new Date();
   } catch (cause: any) {
     toast(cause?.message || String(cause), 5000);
   } finally {
     actionInFlight.value = { ...actionInFlight.value, [container.id]: undefined };
+  }
+}
+
+async function runBatchAction(action: DockerContainerAction | 'remove') {
+  if (isReadOnly.value) {
+    toast(t('readOnly'), 2400);
+    return;
+  }
+  const targets = selectedContainers();
+  if (!targets.length || batchInFlight.value) return;
+  const actionLabel = t(`action.${action}`);
+  const dangerous = isProduction.value || ['stop', 'restart', 'remove'].includes(action);
+  if (dangerous && !(await requestConfirmation(t('confirmBatchAction', { action: actionLabel, count: targets.length })))) {
+    return;
+  }
+  batchInFlight.value = true;
+  let ok = 0;
+  const failed: string[] = [];
+  try {
+    for (const container of targets) {
+      actionInFlight.value = { ...actionInFlight.value, [container.id]: action };
+      try {
+        if (action === 'remove') await api.removeContainer(connectionId.value, container.id);
+        else await api.containerAction(connectionId.value, container.id, action);
+        ok += 1;
+      } catch (cause: any) {
+        failed.push(`${containerName(container)}: ${cause?.message || String(cause)}`);
+      } finally {
+        actionInFlight.value = { ...actionInFlight.value, [container.id]: undefined };
+      }
+    }
+    if (failed.length) toast(t('batchPartial', { ok, total: targets.length, failed: failed.slice(0, 3).join('; ') }), 6000);
+    else toast(t('batchSucceeded', { action: actionLabel, count: ok }), 3000);
+    clearContainerSelection();
+    await loadContainers();
+    lastRefreshAt.value = new Date();
+  } finally {
+    batchInFlight.value = false;
+  }
+}
+
+function focusSearch() {
+  nextTick(() => searchInputRef.value?.focus());
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+}
+
+function moveRowSelection(delta: number) {
+  const ids = allVisibleContainerIds.value;
+  if (!ids.length) return;
+  const current = selectedRowKey.value;
+  const index = Math.max(0, ids.indexOf(current));
+  const nextIndex = Math.min(ids.length - 1, Math.max(0, (current ? index : 0) + delta));
+  selectedRowKey.value = ids[nextIndex];
+}
+
+async function openSelectedRowDetail() {
+  const container = matchingContainers.value.find((item) => item.id === selectedRowKey.value);
+  if (container) await openDetail(container);
+}
+
+async function shortcutAction(action: DockerContainerAction | 'remove') {
+  const container = matchingContainers.value.find((item) => item.id === selectedRowKey.value);
+  if (!container) return;
+  if (action === 'remove') await removeContainer(container);
+  else await runAction(container, action);
+}
+
+function handleWorkbenchKeydown(event: KeyboardEvent) {
+  if (selectedContainerId.value) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      void closeDetail();
+    }
+    return;
+  }
+  if (isTypingTarget(event.target) && event.key !== 'Escape') return;
+  const key = event.key.toLowerCase();
+  if (key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    event.preventDefault();
+    focusSearch();
+    return;
+  }
+  if (key === 'escape') {
+    if (selectedContainerIds.value.size) {
+      event.preventDefault();
+      clearContainerSelection();
+    }
+    return;
+  }
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  if (key === 'r') {
+    event.preventDefault();
+    void loadResource();
+    return;
+  }
+  if (resource.value !== 'containers') return;
+  if (key === 'a' && !event.shiftKey) {
+    event.preventDefault();
+    toggleSelectAllVisible();
+    return;
+  }
+  if (key === 'j' || key === 'arrowdown') {
+    event.preventDefault();
+    moveRowSelection(1);
+    return;
+  }
+  if (key === 'k' || key === 'arrowup') {
+    event.preventDefault();
+    moveRowSelection(-1);
+    return;
+  }
+  if (key === 'enter') {
+    event.preventDefault();
+    void openSelectedRowDetail();
+    return;
+  }
+  if (key === 's') {
+    event.preventDefault();
+    void shortcutAction('start');
+    return;
+  }
+  if (key === 'x') {
+    event.preventDefault();
+    void shortcutAction('stop');
+    return;
+  }
+  if (key === 'delete' || key === 'backspace') {
+    event.preventDefault();
+    void shortcutAction('remove');
   }
 }
 
@@ -1329,70 +1618,6 @@ async function createNetwork() {
   }
 }
 
-function appendLogs(chunk: string) {
-  if (logPaused.value) {
-    pendingLogText.value += chunk;
-    if (pendingLogText.value.length > 5 * 1024 * 1024) pendingLogText.value = pendingLogText.value.slice(-5 * 1024 * 1024);
-    return;
-  }
-  logText.value += chunk;
-  const lines = logText.value.split('\n');
-  if (lines.length > 10_000) logText.value = lines.slice(-10_000).join('\n');
-  if (logText.value.length > 5 * 1024 * 1024) logText.value = logText.value.slice(-5 * 1024 * 1024);
-  if (logAutoFollow.value) void nextTick(scrollLogsToBottom);
-}
-
-function scrollLogsToBottom() {
-  const output = logOutput.value;
-  if (output) output.scrollTop = output.scrollHeight;
-}
-
-function handleLogScroll() {
-  const output = logOutput.value;
-  if (!output) return;
-  logAutoFollow.value = output.scrollHeight - output.scrollTop - output.clientHeight < 24;
-}
-
-async function startLogs() {
-  if (!selectedContainer.value || logStream.value) return;
-  logError.value = '';
-  logAutoFollow.value = true;
-  const sessionId = newSessionId();
-  try {
-    const handle = startLogStream(sessionId, (event) => {
-      if (event.chunk) appendLogs(event.chunk);
-      if (event.error) logError.value = event.error;
-      if (event.done) logStream.value = undefined;
-    });
-    await api.startLogs(connectionId.value, selectedContainer.value.id, { tail: 500, timestamps: false }, sessionId);
-    logStream.value = handle;
-  } catch (cause: any) {
-    unregisterStream(sessionId);
-    logError.value = cause?.message || String(cause);
-  }
-}
-
-async function stopLogs() {
-  const stream = logStream.value;
-  logStream.value = undefined;
-  if (stream) await stream.stop().catch(() => undefined);
-}
-
-function toggleLogPause() {
-  logPaused.value = !logPaused.value;
-  if (!logPaused.value && pendingLogText.value) {
-    const pending = pendingLogText.value;
-    pendingLogText.value = '';
-    appendLogs(pending);
-  }
-}
-
-function clearLogs() {
-  logText.value = '';
-  pendingLogText.value = '';
-  if (logAutoFollow.value) void nextTick(scrollLogsToBottom);
-}
-
 async function loadFiles(path = filePath.value) {
   if (!selectedContainer.value) return;
   fileLoading.value = true;
@@ -1593,24 +1818,52 @@ async function cancelFileTransfer(task: FileTransferTask) {
   }
 }
 
+/** Never overlap stats RPCs — piled-up invokes starved the host (服务暂不可用). */
+let statsSampleInFlight = false;
+/** Backend hard-caps; sending fewer keeps the sidecar responsive. */
+const LIST_STATS_MAX_IDS = 12;
+
 async function sampleVisibleContainers() {
   if (document.hidden || resource.value !== 'containers' || selectedContainer.value) return;
-  const ids = matchingContainers.value.filter(isRunning).map((container) => container.id);
+  if (statsSampleInFlight || refreshInFlight.value) return;
+  const ids = matchingContainers.value.filter(isRunning).map((container) => container.id).slice(0, LIST_STATS_MAX_IDS);
   if (!ids.length) {
-    listStats.value = {};
+    if (Object.keys(listStats.value).length) listStats.value = {};
     return;
   }
+  statsSampleInFlight = true;
   try {
     const stats = await api.containerStats(connectionId.value, ids);
-    listStats.value = Object.fromEntries(stats.map((value) => [value.containerId, value]));
+    const next: Record<string, DockerContainerStats> = {};
+    for (const value of stats) next[value.containerId] = value;
+    // Drop stale ids; ignore sub-display byte/cpu noise that only thrash cell text.
+    const prev = listStats.value;
+    let changed = Object.keys(prev).length !== Object.keys(next).length;
+    if (!changed) {
+      for (const id of Object.keys(next)) {
+        const a = prev[id];
+        const b = next[id];
+        if (!a || !statsVisuallyEqual(a, b, formatBytes)) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (changed) listStats.value = next;
   } catch {
     // 指标不可用时由资源刷新兜底。
+  } finally {
+    statsSampleInFlight = false;
   }
 }
+
+let detailStatsInFlight = false;
 
 async function sampleSelectedContainer() {
   const container = selectedContainer.value;
   if (!container || !isRunning(container) || document.hidden || detailTab.value !== 'monitoring') return;
+  if (detailStatsInFlight || statsSampleInFlight) return;
+  detailStatsInFlight = true;
   try {
     const [point] = await api.containerStats(connectionId.value, [container.id]);
     if (!point) return;
@@ -1618,12 +1871,15 @@ async function sampleSelectedContainer() {
     trend.value = [...trend.value, point].filter((value) => new Date(value.readAt || Date.now()).getTime() >= cutoff);
   } catch {
     // 保留最近一次成功采样。
+  } finally {
+    detailStatsInFlight = false;
   }
 }
 
 function restartListSampling() {
   if (listStatsTimer) window.clearInterval(listStatsTimer);
-  listStatsTimer = window.setInterval(() => void sampleVisibleContainers(), 5000);
+  // 10s is enough for list CPU/mem paint; 5s + slow Docker Desktop wedged the host.
+  listStatsTimer = window.setInterval(() => void sampleVisibleContainers(), 10_000);
   void sampleVisibleContainers();
 }
 
@@ -1642,7 +1898,7 @@ function restartResourceRefresh() {
     refreshCountdown.value -= 1;
     if (refreshCountdown.value <= 0) {
       refreshCountdown.value = 10;
-      void loadResource('containers');
+      void loadResource('containers', { silent: true });
     }
   }, 1000);
 }
@@ -1664,8 +1920,6 @@ function restartDetailSampling() {
 }
 
 watch(detailTab, async (tab) => {
-  if (tab === 'logs') await startLogs();
-  else await stopLogs();
   if (tab === 'files' && !fileEntries.value.length) await loadFiles('/');
   restartDetailSampling();
 });
@@ -1680,7 +1934,14 @@ watch(resource, () => {
   restartListSampling();
   restartResourceRefresh();
 });
-watch(autoRefresh, restartResourceRefresh);
+watch(autoRefresh, (value) => {
+  saveWorkbenchPrefs({ autoRefresh: value });
+  restartResourceRefresh();
+});
+watch(filter, (value) => {
+  saveWorkbenchPrefs({ filter: value });
+  clearContainerSelection();
+});
 watch(selectedContainerId, restartResourceRefresh);
 watch(pullImageOpen, (open) => {
   if (!open) pullProgress.value = '';
@@ -1741,8 +2002,9 @@ onMounted(async () => {
   connectionId.value = context.connectionId || context.connection?.id || readConnectionIdFromUrl();
   initStreams(connectionId.value);
   document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('keydown', handleWorkbenchKeydown);
   if (!connectionId.value) {
-    error.value = t('missingConnection');
+    setFriendlyError(t('missingConnection'));
     return;
   }
   await Promise.all([loadEngineInfo(), loadResource('containers')]);
@@ -1753,13 +2015,13 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('datawise-plugin-env', handleHostEnv);
   window.removeEventListener('datawise-plugin-env', handleHostEnv);
+  window.removeEventListener('keydown', handleWorkbenchKeydown);
   unsubscribeLocale?.();
   unsubscribeContext?.();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   if (listStatsTimer) window.clearInterval(listStatsTimer);
   if (resourceRefreshTimer) window.clearInterval(resourceRefreshTimer);
   stopDetailSampling();
-  void stopLogs();
   void stopImagePull();
   void cancelActiveTransfers();
 });
@@ -1771,8 +2033,15 @@ onUnmounted(() => {
       <nav class="header-tabs">
         <button v-for="kind in ['containers', 'images', 'volumes', 'networks'] as ResourceKind[]" :key="kind" class="docker-main-tab" :class="{ active: resource === kind }" @click="selectResource(kind)">
           {{ t(kind) }}
+          <span v-if="resource === kind && !error" class="tab-count">{{ headerResourceCount }}</span>
         </button>
       </nav>
+      <div class="header-right">
+      <div class="header-meta">
+        <span v-if="isProduction" class="env-badge env-badge--prod">{{ t('productionBadge') }}</span>
+        <span v-if="isReadOnly" class="env-badge env-badge--ro">{{ t('readOnlyBadge') }}</span>
+        <span v-if="engineInfo?.engineVersion" class="engine-chip" :title="engineInfo.engineVersion">{{ engineInfo.engineVersion }}</span>
+      </div>
       <div class="header-actions">
         <button class="icon-btn icon-cyan" :title="t('engineJson')" @click="loadEngineDetails('json')"><Icon name="settings" /></button>
         <button class="icon-btn icon-amber" :title="t('engineInformation')" @click="loadEngineDetails('summary')"><Icon name="circle-help" /></button>
@@ -1817,9 +2086,16 @@ onUnmounted(() => {
           </div>
         </Popover>
       </div>
+      </div>
     </header>
 
-    <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="error" class="error-banner">
+      <div class="error-banner__body">
+        <div class="error-banner__message">{{ error }}</div>
+        <div v-if="errorTip" class="error-banner__tip">{{ errorTip }}</div>
+      </div>
+      <button v-if="connectionId" class="btn btn-outline btn-sm" @click="retryConnection">{{ t('retry') }}</button>
+    </div>
 
     <main v-else class="main-area">
       <template v-if="selectedContainer">
@@ -1887,20 +2163,11 @@ onUnmounted(() => {
             </section>
           </div>
 
-          <div v-else-if="detailTab === 'logs'" class="logs-pane">
-            <div class="logs-toolbar">
-              <div class="search-box">
-                <Icon name="search" class="search-icon" />
-                <input v-model="logSearch" class="input search-input" :placeholder="t('searchLogs')" />
-              </div>
-              <button class="btn btn-outline btn-sm" @click="toggleLogPause"><Icon :name="logPaused ? 'play' : 'pause'" />{{ logPaused ? t('resume') : t('pause') }}</button>
-              <label class="check-label"><input v-model="logAutoFollow" type="checkbox" @change="logAutoFollow && scrollLogsToBottom()" />{{ t('autoFollowLogs') }}</label>
-              <button class="btn btn-outline btn-sm" @click="clearLogs">{{ t('clear') }}</button>
-              <span v-if="pendingLogText" class="warn-text">{{ t('bufferedLogs') }}</span>
-            </div>
-            <div v-if="logError" class="error-text">{{ logError }}</div>
-            <pre ref="logOutput" class="log-output" @scroll.passive="handleLogScroll">{{ visibleLogs || t('waitingForLogs') }}</pre>
-          </div>
+          <ContainerLogs
+            v-else-if="detailTab === 'logs' && selectedContainer"
+            :connection-id="connectionId"
+            :container-id="selectedContainer.id"
+          />
 
           <div v-else-if="detailTab === 'monitoring'" class="monitoring-pane">
             <div class="monitor-summary">
@@ -2024,7 +2291,7 @@ onUnmounted(() => {
         <div class="toolbar">
           <div class="search-box">
             <Icon name="search" class="search-icon" />
-            <input v-model="query" class="input search-input" :placeholder="t('search')" />
+            <input ref="searchInputRef" v-model="query" class="input search-input" :placeholder="t('search')" :title="t('shortcutsHint')" />
           </div>
           <template v-if="resource === 'containers'">
             <button class="btn btn-primary" :disabled="isReadOnly" @click="openCreateContainer"><Icon name="plus" />{{ t('createContainer') }}</button>
@@ -2040,19 +2307,61 @@ onUnmounted(() => {
           <button v-else-if="resource === 'volumes'" class="btn btn-primary" :disabled="isReadOnly" @click="createVolumeOpen = true"><Icon name="plus" />{{ t('createVolume') }}</button>
           <button v-else class="btn btn-primary" :disabled="isReadOnly" @click="createNetworkOpen = true"><Icon name="plus" />{{ t('createNetwork') }}</button>
           <template v-if="resource === 'containers'">
-            <span class="last-refresh">{{ t('lastRefreshed') }}: {{ lastRefreshAt?.toLocaleTimeString() || '—' }}</span>
-            <label class="check-label"><Switch v-model="autoRefresh" />{{ t('autoRefresh', { seconds: refreshCountdown }) }}</label>
+            <span class="last-refresh" :class="{ 'is-quiet-refreshing': quietRefreshing }">
+              {{ t('lastRefreshed') }}: {{ lastRefreshAt?.toLocaleTimeString() || '—' }}
+            </span>
+            <label class="check-label">
+              <Switch v-model="autoRefresh" />
+              <span class="auto-refresh-label">{{ t('autoRefresh', { seconds: refreshCountdown }) }}</span>
+            </label>
           </template>
-          <button class="btn btn-ghost" :class="{ 'ml-auto': resource !== 'containers' }" :disabled="loading" @click="loadResource()"><Icon name="refresh-cw" :class="{ spin: loading }" />{{ t('refresh') }}</button>
+          <button
+            class="btn btn-ghost"
+            :class="{ 'ml-auto': resource !== 'containers' }"
+            :disabled="loading || quietRefreshing"
+            @click="loadResource()"
+          >
+            <Icon name="refresh-cw" :class="{ spin: loading }" />{{ t('refresh') }}
+          </button>
         </div>
 
-        <div class="table-area">
+        <div v-if="resource === 'containers' && selectedCount" class="batch-bar">
+          <span class="batch-bar__count">{{ t('selectedCount', { count: selectedCount }) }}</span>
+          <button class="btn btn-ghost btn-sm" :disabled="isReadOnly || batchInFlight" @click="runBatchAction('start')"><Icon name="play" />{{ t('batchStart') }}</button>
+          <button class="btn btn-ghost btn-sm" :disabled="isReadOnly || batchInFlight" @click="runBatchAction('stop')"><Icon name="square" />{{ t('batchStop') }}</button>
+          <button class="btn btn-ghost btn-sm" :disabled="isReadOnly || batchInFlight" @click="runBatchAction('restart')"><Icon name="rotate-cw" />{{ t('batchRestart') }}</button>
+          <button class="btn btn-ghost btn-sm" :disabled="isReadOnly || batchInFlight" @click="runBatchAction('remove')"><Icon name="trash-2" />{{ t('batchRemove') }}</button>
+          <button class="btn btn-ghost btn-sm" @click="clearContainerSelection">{{ t('clearSelection') }}</button>
+        </div>
+
+        <div v-if="emptyState" class="empty-state">
+          <div class="empty-state__title">{{ emptyState.title }}</div>
+          <div class="empty-state__hint">{{ emptyState.hint }}</div>
+          <div class="empty-state__actions">
+            <button v-if="resource === 'containers' && !normalizedQuery && filter === 'all'" class="btn btn-primary" :disabled="isReadOnly" @click="openCreateContainer"><Icon name="plus" />{{ t('createContainer') }}</button>
+            <button v-else-if="resource === 'images' && !normalizedQuery" class="btn btn-primary" :disabled="isReadOnly" @click="pullImageOpen = true"><Icon name="download" />{{ t('pullImage') }}</button>
+            <button v-else-if="resource === 'volumes' && !normalizedQuery" class="btn btn-primary" :disabled="isReadOnly" @click="createVolumeOpen = true"><Icon name="plus" />{{ t('createVolume') }}</button>
+            <button v-else-if="resource === 'networks' && !normalizedQuery" class="btn btn-primary" :disabled="isReadOnly" @click="createNetworkOpen = true"><Icon name="plus" />{{ t('createNetwork') }}</button>
+          </div>
+        </div>
+
+        <div v-else ref="tableAreaRef" class="table-area">
           <table v-if="resource === 'containers'" class="docker-table" :style="tableStyle('containers')">
             <colgroup>
               <col v-for="(width, index) in columnWidths.containers" :key="index" :style="{ width: `${width}px` }" />
             </colgroup>
             <thead @pointerdown="handleHeaderPointer($event, 'containers')">
               <tr>
+                <th class="th-check">
+                  <input
+                    type="checkbox"
+                    class="row-check"
+                    :checked="allVisibleSelected"
+                    :indeterminate.prop="someVisibleSelected"
+                    :aria-label="t('selectedCount', { count: selectedCount })"
+                    @click.stop="toggleSelectAllVisible"
+                  />
+                </th>
                 <th><button class="docker-sort" @click="toggleSort('name')">{{ t('name') }}<Icon name="arrow-up-down" /></button></th>
                 <th><button class="docker-sort" @click="toggleSort('id')">ID<Icon name="arrow-up-down" /></button></th>
                 <th><button class="docker-sort" @click="toggleSort('image')">{{ t('image') }}<Icon name="arrow-up-down" /></button></th>
@@ -2066,7 +2375,7 @@ onUnmounted(() => {
             <tbody>
               <template v-for="[project, values] in composeGroups" :key="project">
                 <tr class="compose-header">
-                  <td colspan="7">
+                  <td colspan="8">
                     <button class="compose-toggle" @click="toggleProject(project)">
                       <Icon :name="expandedProjects.has(project) ? 'chevron-down' : 'chevron-right'" />
                       <Icon name="box" class="compose-icon" />{{ project }}<span class="compose-count">{{ values.length }}</span>
@@ -2078,7 +2387,15 @@ onUnmounted(() => {
                     </div>
                   </td>
                 </tr>
-                <tr v-for="container in expandedProjects.has(project) ? values : []" :key="container.id" :class="{ 'row-selected': selectedRowKey === container.id }" @click="selectedRowKey = container.id">
+                <tr
+                  v-for="container in expandedProjects.has(project) ? values : []"
+                  :key="container.id"
+                  :class="{ 'row-selected': selectedRowKey === container.id, 'row-checked': selectedContainerIds.has(container.id) }"
+                  @click="selectedRowKey = container.id"
+                >
+                  <td class="td-check" @click.stop>
+                    <input type="checkbox" class="row-check" :checked="selectedContainerIds.has(container.id)" @change="toggleContainerSelected(container.id, $event)" />
+                  </td>
                   <td>
                     <div class="docker-copy-cell cell-indent">
                       <span class="status-dot" :class="isRunning(container) ? 'dot-running' : isPaused(container) ? 'dot-paused' : 'dot-stopped'" /><button class="link-btn" @click="openDetail(container)">{{ containerName(container) }}</button
@@ -2097,10 +2414,25 @@ onUnmounted(() => {
                       ><button class="docker-copy-button" :title="t('copy')" @click="copyValue(container.image)"><Icon name="copy" /></button>
                     </div>
                   </td>
-                  <td :title="formatPorts(container)"><div class="docker-truncated-cell mono-xs">{{ formatPorts(container) }}</div></td>
-                  <td>{{ listStats[container.id] ? `${listStats[container.id].cpuPercent.toFixed(1)}%` : '—' }}</td>
-                  <td>{{ listStats[container.id] ? `${formatBytes(listStats[container.id].memoryUsage)} / ${formatBytes(listStats[container.id].memoryLimit)}` : '—' }}</td>
-                  <td><span class="docker-status" :class="isRunning(container) ? 'running' : isPaused(container) ? 'paused' : 'stopped'">{{ containerStatusLabel(container) }}</span></td>
+                  <td :title="formatPorts(container)">
+                    <div class="docker-copy-cell docker-truncated-cell mono-xs">
+                      <span class="truncate">{{ formatPorts(container) }}</span>
+                      <button
+                        v-if="formatPorts(container) !== '—'"
+                        class="docker-copy-button"
+                        :title="t('copyPorts')"
+                        @click="copyValue(portsCopyValue(container))"
+                      ><Icon name="copy" /></button>
+                    </div>
+                  </td>
+                  <td class="cell-metric">{{ listStats[container.id] ? `${listStats[container.id].cpuPercent.toFixed(1)}%` : '—' }}</td>
+                  <td class="cell-metric">{{ listStats[container.id] ? `${formatBytes(listStats[container.id].memoryUsage)} / ${formatBytes(listStats[container.id].memoryLimit)}` : '—' }}</td>
+                  <td>
+                    <div class="status-stack">
+                      <span class="docker-status" :class="isRunning(container) ? 'running' : isPaused(container) ? 'paused' : 'stopped'">{{ containerStatusLabel(container) }}</span>
+                      <span v-if="containerHealthLabel(container)" class="health-badge" :class="containerHealthClass(container)">{{ containerHealthLabel(container) }}</span>
+                    </div>
+                  </td>
                   <td>
                     <div class="row-actions">
                       <button v-if="isRunning(container)" class="icon-btn icon-sm" :disabled="!!actionInFlight[container.id]" :title="t('pause')" @click="runAction(container, 'pause')"
@@ -2121,7 +2453,15 @@ onUnmounted(() => {
                   </td>
                 </tr>
               </template>
-              <tr v-for="container in standaloneContainers" :key="container.id" :class="{ 'row-selected': selectedRowKey === container.id }" @click="selectedRowKey = container.id">
+              <tr
+                v-for="container in standaloneContainers"
+                :key="container.id"
+                :class="{ 'row-selected': selectedRowKey === container.id, 'row-checked': selectedContainerIds.has(container.id) }"
+                @click="selectedRowKey = container.id"
+              >
+                <td class="td-check" @click.stop>
+                  <input type="checkbox" class="row-check" :checked="selectedContainerIds.has(container.id)" @change="toggleContainerSelected(container.id, $event)" />
+                </td>
                 <td>
                   <div class="docker-copy-cell">
                     <span class="status-dot" :class="isRunning(container) ? 'dot-running' : isPaused(container) ? 'dot-paused' : 'dot-stopped'" /><button class="link-btn" @click="openDetail(container)">{{ containerName(container) }}</button
@@ -2140,10 +2480,25 @@ onUnmounted(() => {
                     ><button class="docker-copy-button" :title="t('copy')" @click="copyValue(container.image)"><Icon name="copy" /></button>
                   </div>
                 </td>
-                <td :title="formatPorts(container)"><div class="docker-truncated-cell mono-xs">{{ formatPorts(container) }}</div></td>
-                <td>{{ listStats[container.id] ? `${listStats[container.id].cpuPercent.toFixed(1)}%` : '—' }}</td>
-                <td>{{ listStats[container.id] ? `${formatBytes(listStats[container.id].memoryUsage)} / ${formatBytes(listStats[container.id].memoryLimit)}` : '—' }}</td>
-                <td><span class="docker-status" :class="isRunning(container) ? 'running' : isPaused(container) ? 'paused' : 'stopped'">{{ containerStatusLabel(container) }}</span></td>
+                <td :title="formatPorts(container)">
+                  <div class="docker-copy-cell docker-truncated-cell mono-xs">
+                    <span class="truncate">{{ formatPorts(container) }}</span>
+                    <button
+                      v-if="formatPorts(container) !== '—'"
+                      class="docker-copy-button"
+                      :title="t('copyPorts')"
+                      @click="copyValue(portsCopyValue(container))"
+                    ><Icon name="copy" /></button>
+                  </div>
+                </td>
+                <td class="cell-metric">{{ listStats[container.id] ? `${listStats[container.id].cpuPercent.toFixed(1)}%` : '—' }}</td>
+                <td class="cell-metric">{{ listStats[container.id] ? `${formatBytes(listStats[container.id].memoryUsage)} / ${formatBytes(listStats[container.id].memoryLimit)}` : '—' }}</td>
+                <td>
+                  <div class="status-stack">
+                    <span class="docker-status" :class="isRunning(container) ? 'running' : isPaused(container) ? 'paused' : 'stopped'">{{ containerStatusLabel(container) }}</span>
+                    <span v-if="containerHealthLabel(container)" class="health-badge" :class="containerHealthClass(container)">{{ containerHealthLabel(container) }}</span>
+                  </div>
+                </td>
                 <td>
                   <div class="row-actions">
                     <button v-if="isRunning(container)" class="icon-btn icon-sm" :disabled="!!actionInFlight[container.id]" :title="t('pause')" @click="runAction(container, 'pause')"

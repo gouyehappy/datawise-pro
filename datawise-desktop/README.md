@@ -18,7 +18,7 @@ Windows `Setup.exe` is **Inno Setup** ([`installer/windows/DataWiseCLI.iss`](ins
 | Dual-process host (`DatawiseDesktopApp`) | Dev/legacy optional |
 | In-app splash / tray / icons / window state | Done |
 | Workspace switch relaunch | Done |
-| Updater (GitHub Releases) | Done — FE / server-jar incremental + full installer fallback |
+| Updater (GitHub Releases) | Done — multi-component incremental (skip JCEF unless runtime id changes) + full installer fallback |
 | Zip + native installers | Done |
 | Native Edit menu + clipboard | Done (`DesktopMenuBar`) |
 | CEF focus after modals | Done |

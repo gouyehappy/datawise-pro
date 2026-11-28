@@ -10,7 +10,7 @@
 import {computed, onBeforeUnmount, ref, toRef, watch, watchEffect} from 'vue'
 import {useGridVirtualWindow} from '../useGridVirtualWindow'
 import {useGridColumnVirtualWindow} from '../useGridColumnVirtualWindow'
-import {useGridColumnLayout} from '../useGridColumnLayout'
+import {resolveOrderedColumns, useGridColumnLayout} from '../useGridColumnLayout'
 import {useGridSelection} from '../useGridSelection'
 import {useGridKeyboard} from '../useGridKeyboard'
 import {useGridClipboard} from '../useGridClipboard'
@@ -67,6 +67,7 @@ import {useContextMenuAnchor} from '@/core/context-menu'
 import {useDataGridHost} from '@/core/data-grid/data-grid-host'
 import {
   columnDensityWidthScale,
+  TABLE_FONT_SIZE_DEFAULT,
 } from '@/core/data-grid/services/query-result-pane-settings.service'
 import {
   readGridCellValue,
@@ -179,7 +180,12 @@ const props = withDefaults(
       columnDensity?: 'compact' | 'standard' | 'relaxed'
       numericAlign?: 'left' | 'right'
       hideNullColumns?: boolean
+      hideEmptyColumns?: boolean
       typeColoring?: boolean
+      freezeFirstColumn?: boolean
+      hideToolbarLabels?: boolean
+      csvWithoutBom?: boolean
+      tableFontSize?: number
     }>(),
     {
       total: 0,
@@ -211,7 +217,12 @@ const props = withDefaults(
       columnDensity: 'standard',
       numericAlign: 'right',
       hideNullColumns: false,
+      hideEmptyColumns: false,
       typeColoring: false,
+      freezeFirstColumn: false,
+      hideToolbarLabels: false,
+      csvWithoutBom: false,
+      tableFontSize: TABLE_FONT_SIZE_DEFAULT,
     },
 )
 
@@ -277,25 +288,75 @@ const viewState = defineModel<GridViewState>('viewState')
 
 const columnFiltersEnabled = computed(() => viewState.value !== undefined)
 
+function resolveFreezeFirstColumnKey(
+    pinnedRight: readonly string[],
+    hidden: readonly string[],
+    columnOrder: string[] | undefined,
+): string | null {
+  if (!props.freezeFirstColumn) return null
+  const hiddenSet = new Set(hidden)
+  const rightSet = new Set(pinnedRight)
+  const ordered = resolveOrderedColumns(
+      gridColumns.value.filter((column) => {
+        const key = columnRowKey(column)
+        return !hiddenSet.has(key) && !rightSet.has(key)
+      }),
+      columnOrder,
+      columnRowKey,
+  )
+  const rows = gridRows.value
+  const hideEmpty = props.hideEmptyColumns
+  const hideNull = props.hideNullColumns
+  for (const column of ordered) {
+    if (!rows.length || (!hideEmpty && !hideNull)) return columnRowKey(column)
+    const hasValue = rows.some((row) => {
+      const value = readGridCellValue(row, column)
+      if (hideEmpty) return value != null && value !== ''
+      return value != null
+    })
+    if (hasValue) return columnRowKey(column)
+  }
+  return ordered[0] ? columnRowKey(ordered[0]) : null
+}
+
+function withFreezeFirstColumn(pinned: readonly string[], freezeKey: string | null): string[] {
+  if (!freezeKey) return [...pinned]
+  return [freezeKey, ...pinned.filter((key) => key !== freezeKey)]
+}
+
 /** Bridge GridViewState layout fields → generic column layout (or local when unbound). */
 const columnLayout = computed<GridColumnLayoutState | undefined>({
   get() {
     if (!viewState.value) return undefined
+    const pinnedRight = viewState.value.pinnedRightColumns ?? []
+    const hidden = viewState.value.hiddenColumns ?? []
+    const freezeKey = resolveFreezeFirstColumnKey(
+        pinnedRight,
+        hidden,
+        viewState.value.columnOrder,
+    )
     return {
       columnWidths: viewState.value.columnWidths,
       columnOrder: viewState.value.columnOrder,
-      pinnedColumns: viewState.value.pinnedColumns ?? [],
-      pinnedRightColumns: viewState.value.pinnedRightColumns ?? [],
-      hiddenColumns: viewState.value.hiddenColumns ?? [],
+      pinnedColumns: withFreezeFirstColumn(viewState.value.pinnedColumns ?? [], freezeKey),
+      pinnedRightColumns: pinnedRight,
+      hiddenColumns: hidden,
     }
   },
   set(next) {
     if (!next || !viewState.value) return
+    const freezeKey = resolveFreezeFirstColumnKey(
+        next.pinnedRightColumns ?? [],
+        next.hiddenColumns ?? [],
+        next.columnOrder,
+    )
+    // Drop the rendering-floor pin so per-grid layout stays user-owned.
+    const pinned = (next.pinnedColumns ?? []).filter((key) => key !== freezeKey)
     viewState.value = {
       ...viewState.value,
       columnWidths: next.columnWidths,
       columnOrder: next.columnOrder,
-      pinnedColumns: next.pinnedColumns ?? [],
+      pinnedColumns: pinned,
       pinnedRightColumns: next.pinnedRightColumns ?? [],
       hiddenColumns: next.hiddenColumns ?? [],
     }
@@ -319,6 +380,11 @@ const {
   consumeSuppressSortClick,
   togglePinned,
   setColumnHidden,
+  moveColumnInFullOrder,
+  resetColumnOrder,
+  clearColumnWidths,
+  showAllColumns,
+  invertColumnVisibility,
   autoSizeColumn,
   pinnedColumnKeys,
   pinnedRightColumnKeys,
@@ -330,19 +396,32 @@ const {
   resolveDefaultWidth: (_key, column) => suggestGridColumnWidth(column, props.columnDetails),
 })
 
-function isNullishCellValue(value: unknown): boolean {
+function isNullCellValue(value: unknown): boolean {
+  return value == null
+}
+
+function isEmptyCellValue(value: unknown): boolean {
   return value == null || value === ''
 }
 
 const displayColumns = computed(() => {
   const columns = layoutDisplayColumns.value
-  if (!props.hideNullColumns) return columns
+  const hideEmpty = props.hideEmptyColumns
+  const hideNull = props.hideNullColumns
+  if (!hideEmpty && !hideNull) return columns
   const rows = gridRows.value
   if (!rows.length) return columns
   return columns.filter((column) =>
-      rows.some((row) => !isNullishCellValue(readGridCellValue(row, column))),
+      rows.some((row) => {
+        const value = readGridCellValue(row, column)
+        return hideEmpty ? !isEmptyCellValue(value) : !isNullCellValue(value)
+      }),
   )
 })
+
+const gridRootStyle = computed(() => ({
+  '--dw-grid-font-size': `${props.tableFontSize ?? TABLE_FONT_SIZE_DEFAULT}px`,
+}))
 
 function columnColStyle(columnKey: string): Record<string, string> {
   const style = layoutColumnColStyle(columnKey)
@@ -376,6 +455,7 @@ function isColumnPinnedRight(columnKey: string): boolean {
 }
 
 const columnPanelOpen = ref(false)
+const columnPanelTriggerRef = ref<HTMLElement | null>(null)
 const cellRange = useGridRangeSelection()
 
 function patchViewLayout(next: GridViewState | ((state: GridViewState) => GridViewState)) {
@@ -686,6 +766,33 @@ function sortDirection(columnKey: string): 'asc' | 'desc' | null {
 function onResizeDblClick(event: MouseEvent, column: TableColumn) {
   const samples = pagedRows.value.slice(0, 80).map((row) => getCellDisplayText(row, column.name))
   onResizeDoubleClick(event, column, samples, column.name)
+}
+
+function syncColumnPanelTrigger() {
+  columnPanelTriggerRef.value =
+      gridRootRef.value?.querySelector('[data-testid="grid-column-panel-trigger"]') ?? null
+}
+
+function toggleColumnPanel() {
+  if (!columnPanelOpen.value) {
+    syncColumnPanelTrigger()
+    columnPanelOpen.value = true
+    return
+  }
+  columnPanelOpen.value = false
+}
+
+function onColumnPanelToggleHidden(key: string, hidden: boolean) {
+  setColumnHidden(key, hidden)
+}
+
+function autoFitAllColumnWidths() {
+  const rows = pagedRows.value.slice(0, 80)
+  for (const column of displayColumns.value) {
+    const key = columnRowKey(column)
+    const samples = rows.map((row) => getCellDisplayText(row, column.name))
+    autoSizeColumn(key, samples, {headerText: column.name})
+  }
 }
 
 function isCellInRange(item: GridDisplayRow, columnName: string): boolean {
@@ -1212,6 +1319,7 @@ const {
   togglePinned,
   setColumnHidden,
   openColumnPanel: () => {
+    syncColumnPanelTrigger()
     columnPanelOpen.value = true
   },
   getCellDisplayText,
@@ -1296,6 +1404,10 @@ const tableViewBind = computed(() => ({
   wrapCells: wrapCells.value,
 }))
 
+defineExpose({
+  openExportDialog,
+})
+
 const tableViewOn: Record<string, Function> = {
   headerClick: onHeaderClick,
   headerContextMenu: onHeaderContextMenu,
@@ -1330,7 +1442,9 @@ const tableViewOn: Record<string, Function> = {
         [`is-density-${columnDensity}`]: true,
         'is-numeric-align-left': numericAlign === 'left',
         'is-type-coloring': typeColoring,
+        'is-hide-toolbar-labels': hideToolbarLabels,
       }"
+      :style="gridRootStyle"
       tabindex="0"
       data-dw-grid="1"
       data-testid="query-result-grid"
@@ -1390,6 +1504,7 @@ const tableViewOn: Record<string, Function> = {
             :has-more="Boolean(hasMore)"
             :can-raise-max-rows="Boolean(canRaiseMaxRows)"
             :cursor-loading="Boolean(cursorLoading)"
+            :column-panel-open="columnPanelOpen"
             @submit="onSubmitClick"
             @discard="onDiscardClick"
             @add-row="onAddRowClick"
@@ -1398,6 +1513,7 @@ const tableViewOn: Record<string, Function> = {
             @export="openExportDialog"
             @raise-max-rows="emit('raise-max-rows')"
             @load-more="emit('load-more')"
+            @toggle-column-panel="toggleColumnPanel"
         >
           <template #toolbar-extra>
             <slot name="toolbar-extra"/>
@@ -1523,13 +1639,17 @@ const tableViewOn: Record<string, Function> = {
         :open="columnPanelOpen"
         :columns="gridColumns"
         :hidden-columns="columnLayout?.hiddenColumns ?? []"
-        :pinned-columns="columnLayout?.pinnedColumns ?? []"
-        :pinned-right-columns="columnLayout?.pinnedRightColumns ?? []"
+        :column-order="columnLayout?.columnOrder ?? []"
+        :anchor-el="columnPanelTriggerRef"
         @close="columnPanelOpen = false"
-        @toggle-hidden="(key, hidden) => setColumnHidden(key, hidden)"
-        @toggle-pin-left="(key) => togglePinned(key, 'left')"
-        @toggle-pin-right="(key) => togglePinned(key, 'right')"
-        @show-all="writeLayout((state) => ({...state, hiddenColumns: []}))"
+        @toggle-hidden="onColumnPanelToggleHidden"
+        @reorder="(fromKey, toKey) => moveColumnInFullOrder(fromKey, toKey)"
+        @show-all="showAllColumns"
+        @invert="invertColumnVisibility"
+        @reset-order="resetColumnOrder"
+        @auto-fit-widths="autoFitAllColumnWidths"
+        @clear-widths="clearColumnWidths"
+        @apply-selected="columnPanelOpen = false"
     />
     <GridExportDialog
         v-model:open="exportDialogOpen"

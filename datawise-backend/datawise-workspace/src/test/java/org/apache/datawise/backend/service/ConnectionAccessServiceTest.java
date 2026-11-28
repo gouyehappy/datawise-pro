@@ -71,6 +71,15 @@ class ConnectionAccessServiceTest {
     }
 
     @Test
+    void catalogWriteIgnoresWriteGuardSoftLock() {
+        ConnectionEntity owned = connection("conn-guard", 2L);
+        owned.setWriteGuard(true);
+        when(connectionStore.findConnectionById("conn-guard")).thenReturn(Optional.of(owned));
+        assertEquals(ConnectionAccessLevel.DDL, service.resolveCatalogAccess(2L, "conn-guard"));
+        service.requireCatalogWriteAccess(2L, "conn-guard");
+    }
+
+    @Test
     void ownedConnectionKeepsDdlEvenWhenTeamShareIsReadonly() {
         ConnectionEntity owned = connection("conn-1", 2L);
         when(connectionStore.findConnectionById("conn-1")).thenReturn(Optional.of(owned));
@@ -115,10 +124,10 @@ class ConnectionAccessServiceTest {
     }
 
     @Test
-    void memberDefaultsToDdlWhenAccessNotConfigured() {
+    void memberDefaultsToReadonlyWhenAccessNotConfigured() {
         seedTeam("team-1", List.of("conn-1"), Map.of(), 1L);
         seedMember("team-1", 2L, "member");
-        assertEquals(ConnectionAccessLevel.DDL, service.resolveAccess(2L, "conn-1"));
+        assertEquals(ConnectionAccessLevel.READONLY, service.resolveAccess(2L, "conn-1"));
     }
 
     @Test
@@ -185,6 +194,52 @@ class ConnectionAccessServiceTest {
         ConnectionEntity mysql = connection("conn-mysql", 2L);
         when(connectionStore.findConnectionById("conn-mysql")).thenReturn(Optional.of(mysql));
         service.requireEngineFeature(2L, "conn-mysql", "queryExecution");
+    }
+
+    @Test
+    void requireSqlWriteAccessAllowsTrinoShowSchemasFromCatalog() {
+        ConnectionEntity trino = connection("conn-trino", 2L);
+        trino.setDbType("trino");
+        when(connectionStore.findConnectionById("conn-trino")).thenReturn(Optional.of(trino));
+        // Must not treat SHOW SCHEMAS FROM as DML (would require tableDataEdit=false → deny).
+        service.requireSqlWriteAccess(2L, "conn-trino", "show schemas from kudu");
+        service.requireEngineFeature(2L, "conn-trino", "queryExecution");
+    }
+
+    @Test
+    void requireSqlWriteAccessBlocksTrinoDdlWithoutAllowEngineWrites() {
+        ConnectionEntity trino = connection("conn-trino", 2L);
+        trino.setDbType("trino");
+        when(connectionStore.findConnectionById("conn-trino")).thenReturn(Optional.of(trino));
+        ConnectionAccessDeniedException ex = assertThrows(
+                ConnectionAccessDeniedException.class,
+                () -> service.requireSqlWriteAccess(2L, "conn-trino", "create schema if not exists kudu.a007")
+        );
+        assertEquals("tableStructureEdit", ex.getRequiredAccess());
+        assertEquals("capability:tableStructureEdit", ex.getOperation());
+    }
+
+    @Test
+    void requireSqlWriteAccessAllowsTrinoDdlWhenOwnerAllowsEngineWrites() {
+        ConnectionEntity trino = connection("conn-trino", 2L);
+        trino.setDbType("trino");
+        trino.setAllowEngineWrites(true);
+        when(connectionStore.findConnectionById("conn-trino")).thenReturn(Optional.of(trino));
+        service.requireSqlWriteAccess(2L, "conn-trino", "create schema if not exists kudu.a007");
+    }
+
+    @Test
+    void allowEngineWritesDoesNotElevateNonOwner() {
+        ConnectionEntity trino = connection("conn-trino", 1L);
+        trino.setDbType("trino");
+        trino.setAllowEngineWrites(true);
+        when(connectionStore.findConnectionById("conn-trino")).thenReturn(Optional.of(trino));
+        seedTeam("team-1", List.of("conn-trino"), Map.of("conn-trino", "ddl"), 1L);
+        seedMember("team-1", 2L, "member");
+        assertThrows(
+                ConnectionAccessDeniedException.class,
+                () -> service.requireSqlWriteAccess(2L, "conn-trino", "create schema if not exists kudu.a007")
+        );
     }
 
     @Test

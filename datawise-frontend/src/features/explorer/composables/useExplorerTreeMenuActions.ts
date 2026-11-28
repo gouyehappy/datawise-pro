@@ -2,6 +2,10 @@ import {type Ref} from 'vue'
 import type {ComposerTranslation} from 'vue-i18n'
 import {askAppConfirm} from '@/core/services/app-confirm.service'
 import type {TreeNode} from '@/core/types'
+import {
+    shareProjectFolderNode,
+    unshareProjectFolderNode,
+} from '@/features/project/services/project-explorer-files'
 import {runAfterContextMenuClose as waitAfterContextMenuClose} from '@/core/ui/inline-rename'
 import {findAncestorByType, findParentConnectionId} from '@/core/utils/tree'
 import {communityInvokeMessage} from '@/features/explorer/services/connection-tree-helpers'
@@ -72,6 +76,7 @@ import {
     exportTableDataCsv,
     parseSpreadsheetFile,
     pickSpreadsheetFile,
+    resolveOpenTableWorkspaceArgs,
     resolveTableContext,
     resolveTableDataIoMessageKey,
 } from '@/features/explorer/services/table-context-actions.service'
@@ -596,6 +601,28 @@ export function useExplorerTreeMenuActions(deps: ExplorerTreeMenuActionsDeps) {
             closeMenu()
             return
         }
+        if (id === 'share-project-folder' || id === 'unshare-project-folder') {
+            const sharing = id === 'share-project-folder'
+            void (async () => {
+                try {
+                    const ok = sharing
+                        ? await shareProjectFolderNode(node)
+                        : await unshareProjectFolderNode(node)
+                    if (ok) {
+                        layout.showSuccessToast(t(
+                            sharing ? 'explorer.projectFiles.shared' : 'explorer.projectFiles.unshared',
+                            {name: node.label},
+                        ))
+                    }
+                } catch {
+                    layout.showErrorToast(t(
+                        sharing ? 'explorer.projectFiles.shareFailed' : 'explorer.projectFiles.unshareFailed',
+                    ))
+                }
+            })()
+            closeMenu()
+            return
+        }
 
         const dbType = parseDbTypeMenuId(id)
         if (dbType) {
@@ -867,6 +894,31 @@ export function useExplorerTreeMenuActions(deps: ExplorerTreeMenuActionsDeps) {
                 message: t(dangerPlan.messageKey, {name: node.label}),
             }
             showTableActionDialog.value = true
+            closeMenu()
+            return
+        }
+
+        if (id === 'generate-data' && node.type === 'table') {
+            if (!usePluginStore().isEnabled('p-fake-data')) {
+                closeMenu()
+                return
+            }
+            const args = resolveOpenTableWorkspaceArgs(explorer.tree, node, 'data')
+            if (!args) {
+                layout.showErrorToast(t(resolveTableDataIoMessageKey('contextMissing')))
+                closeMenu()
+                return
+            }
+            const tabId = workspace.openTable(
+                args.tableName,
+                args.connectionId,
+                args.catalogNodeId,
+                args.database,
+                args.nodeId,
+                args.tableView,
+                args.objectType,
+            )
+            workspace.requestFakeDataDialog(tabId)
             closeMenu()
             return
         }

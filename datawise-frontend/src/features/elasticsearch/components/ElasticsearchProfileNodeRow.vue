@@ -94,7 +94,7 @@ function isOpen(): boolean {
 .es-profile__toggle {
   border: 1px solid var(--dw-border);
   background: transparent;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   padding: 0 4px;
   font-size: var(--dw-text-sm);
   cursor: pointer;

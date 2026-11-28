@@ -83,4 +83,42 @@ describe("handleOsc52ClipboardWrite", () => {
     expect(handleOsc52ClipboardWrite("no-semicolon", (text) => written.push(text))).toBe(false);
     expect(written).toEqual([]);
   });
+
+  it("honors block / ask / allow policies without ever answering reads", () => {
+    const written: string[] = [];
+    const asked: string[] = [];
+    expect(
+      handleOsc52ClipboardWrite("c;5YaF5a65", {
+        writeText: (text) => written.push(text),
+        policy: "block",
+      }),
+    ).toBe(true);
+    expect(written).toEqual([]);
+
+    expect(
+      handleOsc52ClipboardWrite("c;5YaF5a65", {
+        writeText: (text) => written.push(text),
+        policy: "ask",
+        onAsk: (text) => asked.push(text),
+      }),
+    ).toBe(true);
+    expect(written).toEqual([]);
+    expect(asked).toEqual(["内容"]);
+
+    expect(
+      handleOsc52ClipboardWrite("c;5YaF5a65", {
+        writeText: (text) => written.push(text),
+        policy: "allow",
+      }),
+    ).toBe(true);
+    expect(written).toEqual(["内容"]);
+
+    expect(
+      handleOsc52ClipboardWrite("c;?", {
+        writeText: (text) => written.push(text),
+        policy: "allow",
+      }),
+    ).toBe(true);
+    expect(written).toEqual(["内容"]);
+  });
 });

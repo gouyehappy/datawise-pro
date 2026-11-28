@@ -8,25 +8,12 @@
   const t = (key, params) => HC.i18n.t(key, params);
   const el = util.el;
 
-  const VERSION = "0.1.0";
+  const VERSION = "0.2.22";
 
   function staticLabels() {
-    document.documentElement.lang = HC.i18n.locale;
     document.title = t("brand");
-    util.$("#brand-name").textContent = t("brand");
-    util.$("#btn-toggle-sidebar").title = t("side.toggle");
-    util.$("#btn-import-curl").textContent = t("action.importCurl");
-    const dynBtn = util.$("#btn-dynamic-vars");
-    if (dynBtn) dynBtn.textContent = t("action.dynamicVars");
-    util.$("#btn-settings").textContent = t("action.settings");
-    util.$("#btn-send").textContent = t("action.send");
-    util.$("#btn-cancel").textContent = t("action.cancel");
-    util.$("#btn-save").title = t("action.save");
-    util.$("#btn-copy-curl").title = t("action.copyCurl");
-    const titleInput = util.$("#request-title");
-    if (titleInput) titleInput.placeholder = t("request.namePlaceholder");
+    HC.i18n.applyStaticLabels();
     util.$$(".hc-side-tab").forEach((button) => {
-      button.textContent = t(`side.${button.dataset.sideView}`);
       button.classList.toggle("is-active", button.dataset.sideView === store.state.sideView);
     });
     renderEnvironmentSelect();
@@ -55,17 +42,50 @@
     });
   }
 
+  // Typing only needs to update the dirty dot / label of one tab. Rebuilding
+  // the whole tabstrip on every keystroke was the main input-lag source.
+  function patchTab(tab) {
+    if (!tab) return;
+    const host = util.$("#tabstrip");
+    if (!host) return;
+    let target = null;
+    for (const node of host.children) {
+      if (node.dataset && node.dataset.tabId === tab.id) { target = node; break; }
+    }
+    if (!target) return;
+    const title = store.requestTitle(tab);
+    target.title = title;
+    const label = target.querySelector(".hc-tab-label");
+    if (label && label.textContent !== title) label.textContent = title;
+    const dot = target.querySelector(".hc-tab-dot");
+    if (tab.dirty && !tab.sending && !dot) {
+      const node = el("span", { class: "hc-tab-dot", title: t("tab.unsaved") });
+      const close = target.querySelector(".hc-tab-close");
+      if (close) target.insertBefore(node, close);
+      else target.appendChild(node);
+    } else if ((!tab.dirty || tab.sending) && dot) {
+      dot.remove();
+    }
+  }
+
   function renderTabs() {
+    const tabstrip = util.$("#tabstrip");
+    if (tabstrip) tabstrip.setAttribute("role", "tablist");
     if (store.state.sideView === "environments") {
       if (HC.viewEnv) HC.viewEnv.renderTabs();
+      syncTabAddButton();
+      updateTabstripOverflow();
       return;
     }
-    const host = util.clear(util.$("#tabstrip"));
+    const host = util.clear(tabstrip);
     store.state.tabs.forEach((tab) => {
       const active = tab.id === store.state.activeTabId;
       const node = el("div", {
         class: `hc-tab${active ? " is-active" : ""}${tab.sending ? " is-sending" : ""}${(tab.stream && tab.stream.connected) ? " is-live" : ""}`,
-        title: store.requestTitle(tab)
+        title: store.requestTitle(tab),
+        role: "tab",
+        tabindex: active ? "0" : "-1",
+        "aria-selected": active ? "true" : "false"
       }, [
         el("span", {
           class: `hc-tag m-${(tab.clientType && tab.clientType !== "http") ? tab.clientType : tab.method}`,
@@ -96,33 +116,134 @@
         if (event.button !== 1) return;
         if (await confirmCloseTab(tab)) store.closeTab(tab.id);
       });
+      node.dataset.tabId = tab.id;
       host.append(node);
     });
-    host.append(buildAddButton());
+    syncTabAddButton();
+    requestAnimationFrame(() => {
+      updateTabstripOverflow();
+      scrollActiveTabIntoView();
+    });
   }
 
   let addMenuNode = null;
+  let tabstripWired = false;
 
+  let addMenuDocCloser = null;
   function closeAddMenu() {
+    if (addMenuDocCloser) {
+      document.removeEventListener("mousedown", addMenuDocCloser);
+      addMenuDocCloser = null;
+    }
     if (addMenuNode) {
       addMenuNode.remove();
       addMenuNode = null;
     }
   }
 
-  function buildAddButton() {
-    return el("button", {
-      class: "hc-tab-add",
-      type: "button",
-      title: t("action.newRequest"),
-      text: "+",
-      on: {
-        click: (event) => {
-          event.stopPropagation();
-          createHttpRequest();
-        }
-      }
+  function syncTabAddButton() {
+    const btn = util.$("#tab-add");
+    if (!btn) return;
+    btn.hidden = false;
+    if (store.state.sideView === "environments") {
+      btn.title = t("env.new");
+      btn.onclick = async (event) => {
+        event.stopPropagation();
+        const name = await util.promptDialog({ title: t("env.new"), label: t("dialog.name") });
+        if (!name) return;
+        const created = store.createEnvironment(name);
+        if (HC.viewEnv && HC.viewEnv.openEnvironment) HC.viewEnv.openEnvironment(created.id);
+      };
+      return;
+    }
+    btn.title = t("action.newRequest");
+    btn.onclick = (event) => {
+      event.stopPropagation();
+      createHttpRequest();
+    };
+  }
+
+  function updateTabstripOverflow() {
+    const wrap = util.$("#tabstrip-wrap");
+    const scroller = util.$("#tabstrip");
+    const prev = util.$("#tabstrip-prev");
+    const next = util.$("#tabstrip-next");
+    if (!wrap || !scroller) return;
+    const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    const overflow = max > 2;
+    const left = scroller.scrollLeft > 2;
+    const right = scroller.scrollLeft < max - 2;
+    wrap.classList.toggle("is-overflow-left", left);
+    wrap.classList.toggle("is-overflow-right", right);
+    if (prev) {
+      prev.hidden = !overflow;
+      prev.disabled = !left;
+    }
+    if (next) {
+      next.hidden = !overflow;
+      next.disabled = !right;
+    }
+  }
+
+  function scrollActiveTabIntoView() {
+    const scroller = util.$("#tabstrip");
+    if (!scroller) return;
+    const active = scroller.querySelector(".hc-tab.is-active");
+    if (!active || typeof active.scrollIntoView !== "function") return;
+    try {
+      active.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+    } catch (_) {
+      active.scrollIntoView();
+    }
+    updateTabstripOverflow();
+  }
+
+  function wireTabstrip() {
+    if (tabstripWired) return;
+    const scroller = util.$("#tabstrip");
+    const prev = util.$("#tabstrip-prev");
+    const next = util.$("#tabstrip-next");
+    if (!scroller) return;
+    tabstripWired = true;
+    // Roving tabindex inside the tablist. Keep Ctrl/Cmd/Alt combos (including
+    // Ctrl+Tab and Ctrl+Alt+←/→) for the global shortcut handler.
+    scroller.addEventListener("keydown", (event) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      const tabs = Array.prototype.slice.call(scroller.querySelectorAll(".hc-tab"));
+      if (!tabs.length) return;
+      const from = event.target && event.target.closest ? event.target.closest(".hc-tab") : null;
+      const found = from ? tabs.indexOf(from) : -1;
+      const current = found >= 0 ? found : tabs.findIndex((node) => node.classList.contains("is-active"));
+      if (current < 0) return;
+      const next = event.key === "ArrowRight"
+        ? (current + 1) % tabs.length
+        : (current - 1 + tabs.length) % tabs.length;
+      event.preventDefault();
+      const tabId = tabs[next].dataset.tabId;
+      store.setActiveTab(tabId);
+      HC.viewRequest.render();
+      HC.viewResponse.render();
+      const refreshed = Array.prototype.slice.call(scroller.querySelectorAll(".hc-tab"));
+      const target = refreshed.find((node) => node.dataset.tabId === tabId);
+      if (target) target.focus();
     });
+    scroller.addEventListener("scroll", () => updateTabstripOverflow(), { passive: true });
+    scroller.addEventListener("wheel", (event) => {
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+      if (scroller.scrollWidth <= scroller.clientWidth + 2) return;
+      event.preventDefault();
+      scroller.scrollLeft += event.deltaY;
+      updateTabstripOverflow();
+    }, { passive: false });
+    const nudge = (dir) => {
+      scroller.scrollBy({ left: dir * Math.max(120, scroller.clientWidth * 0.6), behavior: "smooth" });
+      setTimeout(updateTabstripOverflow, 180);
+    };
+    if (prev) prev.addEventListener("click", () => nudge(-1));
+    if (next) next.addEventListener("click", () => nudge(1));
+    window.addEventListener("resize", () => updateTabstripOverflow());
+    syncTabAddButton();
   }
 
   function addMenuItem(opts) {
@@ -160,37 +281,73 @@
     util.toast(t("toast.comingSoon", { name: feature }));
   }
 
-  async function createFolderQuick() {
-    let collectionId = (store.activeTab() && store.activeTab().collectionId) || (store.state.collections[0] && store.state.collections[0].id) || "";
+  function createFolderQuick() {
+    let collectionId = (store.activeTab() && store.activeTab().collectionId)
+      || (store.state.collections[0] && store.state.collections[0].id)
+      || "";
     if (!collectionId) {
-      const name = await util.promptDialog({ title: t("dialog.newCollectionTitle"), label: t("dialog.name") });
-      if (!name) return;
-      const created = store.createCollection(name);
+      const created = store.createCollection(t("misc.untitledCollection"));
       collectionId = created.id;
     }
-    const folderName = await util.promptDialog({ title: t("dialog.newFolderTitle"), label: t("dialog.name") });
-    if (!folderName) return;
-    store.createFolder(collectionId, "", folderName);
     store.state.sideView = "collections";
-    HC.viewSidebar.render();
-    util.toast(t("toast.saved"), "success");
+    if (HC.viewSidebar && HC.viewSidebar.startInlineFolder) {
+      HC.viewSidebar.startInlineFolder(collectionId, "");
+    }
   }
 
-  function createHttpRequest() {
-    store.createClientTab("http");
+  function refreshEditor(opts) {
     HC.viewRequest.render();
     HC.viewResponse.render();
     renderTabs();
-    renderToolbarState();
+    if (!opts || opts.toolbar !== false) renderToolbarState();
+  }
+
+  /** Prefer creating into the last focused collection/folder (ApiPost-like quick add). */
+  function createHttpRequest() {
+    const focus = store.treeFocus ? store.treeFocus() : { collectionId: "", folderId: "" };
+    if (focus.collectionId && HC.viewSidebar && HC.viewSidebar.createRequestQuick) {
+      HC.viewSidebar.createRequestQuick(focus.collectionId, focus.folderId || "");
+      renderTabs();
+      renderToolbarState();
+      return;
+    }
+    store.createClientTab("http");
+    refreshEditor();
   }
 
   function createTypedRequest(clientType) {
+    if (clientType === "http") {
+      createHttpRequest();
+      applyLayout();
+      return;
+    }
     store.createClientTab(clientType);
     applyLayout();
-    HC.viewRequest.render();
-    HC.viewResponse.render();
-    renderTabs();
-    renderToolbarState();
+    refreshEditor();
+  }
+
+  function duplicateActiveTab() {
+    const tab = store.activeTab();
+    if (!tab || !store.duplicateTab) return;
+    store.duplicateTab(tab.id);
+    refreshEditor({ toolbar: false });
+    util.toast(t("toast.duplicated"));
+  }
+
+  /** Clone saved request as tree sibling; otherwise duplicate as untitled tab. */
+  function cloneActiveRequest() {
+    const tab = store.activeTab();
+    if (!tab) return;
+    if (tab.savedRequestId && store.cloneSavedRequest) {
+      const clone = store.cloneSavedRequest(tab.savedRequestId);
+      if (clone && HC.viewSidebar && HC.viewSidebar.startInlineRenameRequest) {
+        HC.viewSidebar.startInlineRenameRequest(clone.id);
+      }
+      refreshEditor({ toolbar: false });
+      util.toast(t("toast.cloned"));
+      return;
+    }
+    duplicateActiveTab();
   }
 
   function openOpenApiExtract() {
@@ -231,10 +388,112 @@
     });
   }
 
+  function openPostmanImport() {
+    const textarea = el("textarea", {
+      class: "hc-textarea",
+      placeholder: t("dialog.postmanHint"),
+      spellcheck: "false"
+    });
+    util.openModal({
+      title: t("action.addImportPostman"),
+      render: (body) => {
+        body.append(el("div", { class: "hc-hint", text: t("dialog.postmanHint") }));
+        body.append(textarea);
+      },
+      actions: [
+        { label: t("action.cancel2"), onClick: (api) => api.close() },
+        {
+          label: t("action.importAll"), kind: "primary",
+          onClick: (api) => {
+            const result = HC.postman && HC.postman.importCollection(textarea.value);
+            if (!result || result.error || !result.collection) {
+              util.toast(t("toast.postmanFailed"), "error");
+              return;
+            }
+            store.importCollection(result.collection);
+            store.persist();
+            store.emit("sidebar");
+            HC.viewSidebar.render();
+            util.toast(t("toast.imported", { count: result.count || 0 }), "success");
+            api.close();
+          }
+        }
+      ]
+    });
+  }
+
+  function openHarImport() {
+    const textarea = el("textarea", {
+      class: "hc-textarea", spellcheck: "false",
+      placeholder: '{ "log": { "entries": [ … ] } }'
+    });
+    const fileInput = el("input", {
+      type: "file", accept: ".har,.json,application/json,text/json",
+      style: { display: "none" }
+    });
+    const fileName = el("span", { class: "hc-hint hc-import-file-name", text: "" });
+    const fileRow = el("div", { class: "hc-import-file-row" }, [
+      el("button", {
+        class: "hc-btn hc-btn-sm", type: "button", text: t("side.importPickFile"),
+        on: { click: () => fileInput.click() }
+      }),
+      fileName
+    ]);
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      try {
+        textarea.value = await file.text();
+        fileName.textContent = file.name;
+      } catch (error) {
+        util.toast(t("toast.harFailed"), "error");
+      }
+    });
+    util.openModal({
+      title: t("action.addImportHar"),
+      render: (body) => {
+        body.append(el("div", { class: "hc-hint", text: t("dialog.harHint") }));
+        body.append(fileRow, fileInput, textarea);
+      },
+      actions: [
+        { label: t("action.cancel2"), onClick: (api) => api.close() },
+        {
+          label: t("action.importAll"), kind: "primary",
+          onClick: (api) => {
+            const result = HC.har && HC.har.importCollection(textarea.value);
+            if (!result || result.error || !result.collection) {
+              util.toast(t("toast.harFailed"), "error");
+              return;
+            }
+            store.importCollection(result.collection);
+            store.persist();
+            store.emit("sidebar");
+            HC.viewSidebar.render();
+            util.toast(t("toast.imported", { count: result.count || 0 }), "success");
+            api.close();
+          }
+        }
+      ]
+    });
+  }
+
   function openAddMenu(anchor) {
     closeAddMenu();
     closeTabMenu();
     const menu = el("div", { class: "hc-add-menu", role: "menu" });
+
+    const active = store.activeTab();
+    const quick = [
+      { label: t("action.newRequest"), icon: "+", iconClass: "is-http", onClick: () => createHttpRequest() },
+      { label: t("action.pasteCreate"), icon: "⎘", iconClass: "is-paste", onClick: () => createFromClipboard() }
+    ];
+    if (active) {
+      quick.push({ label: t("action.duplicate"), icon: "⧉", iconClass: "is-curl", onClick: () => duplicateActiveTab() });
+      if (active.savedRequestId) {
+        quick.push({ label: t("action.clone"), icon: "⎇", iconClass: "is-folder", onClick: () => cloneActiveRequest() });
+      }
+    }
+    addMenuSection(menu, t("action.addQuick"), quick, true);
 
     addMenuSection(menu, t("action.addNew"), [
       { label: "HTTP", icon: "H", iconClass: "is-http", onClick: () => createTypedRequest("http") },
@@ -251,6 +510,8 @@
     addMenuSection(menu, t("action.addImport"), [
       { label: t("action.addImportAi"), icon: "☰", iconClass: "is-ai", onClick: () => openOpenApiExtract() },
       { label: t("action.addImportCurl"), icon: "$", iconClass: "is-curl", onClick: () => openCurlImport() },
+      { label: t("action.addImportPostman"), icon: "P", iconClass: "is-postman", onClick: () => openPostmanImport() },
+      { label: t("action.addImportHar"), icon: "H", iconClass: "is-import", onClick: () => openHarImport() },
       {
         label: t("action.addImportPaste"),
         icon: "⎘",
@@ -287,14 +548,13 @@
         if (anchor && anchor.focus) anchor.focus();
       }
     });
-    setTimeout(() => {
-      const onDoc = (event) => {
-        if (menu.contains(event.target) || (anchor && anchor.contains && anchor.contains(event.target))) return;
-        closeAddMenu();
-        document.removeEventListener("mousedown", onDoc);
-      };
-      document.addEventListener("mousedown", onDoc);
-    }, 0);
+    // Bind synchronously so closeAddMenu() always owns (and removes) the
+    // listener; a deferred registration could survive an Escape/re-render.
+    addMenuDocCloser = (event) => {
+      if (menu.contains(event.target) || (anchor && anchor.contains && anchor.contains(event.target))) return;
+      closeAddMenu();
+    };
+    document.addEventListener("mousedown", addMenuDocCloser);
     requestAnimationFrame(() => {
       const first = menu.querySelector(".hc-add-item:not(.is-disabled)");
       if (first) first.focus();
@@ -306,8 +566,24 @@
     closeAddMenu,
     createHttpRequest,
     createTypedRequest,
+    createFromClipboard,
+    cloneActiveRequest,
+    duplicateActiveTab,
+    copyCurl,
+    openCurlImport,
+    openPostmanImport,
+    openHarImport,
+    openOpenApiExtract,
+    openSettings,
+    openCookieManager,
+    openGlobalsDialog,
+    openCasesDialog,
     sendStreamMessage,
-    applyLayout
+    applyLayout,
+    setPaneLayout,
+    openPaneLayoutMenu,
+    updateTabstripOverflow,
+    syncTabAddButton
   });
 
   /* ---------------------------------------------------- listbox keyboard -- */
@@ -353,80 +629,71 @@
 
   /* ---------------------------------------------------- tab context menu -- */
 
-  let tabMenuNode = null;
-
   function closeTabMenu() {
-    if (tabMenuNode) { tabMenuNode.remove(); tabMenuNode = null; }
+    if (util.closeContextMenu) util.closeContextMenu();
     closeAddMenu();
   }
 
   function openTabMenu(event, tab) {
-    event.preventDefault();
-    event.stopPropagation();
     closeTabMenu();
     const index = store.state.tabs.findIndex((item) => item.id === tab.id);
     const last = store.state.tabs.length - 1;
+    const after = async (fn) => {
+      await fn();
+      HC.viewRequest.render();
+      HC.viewResponse.render();
+    };
+    const sk = (HC.shortcuts && HC.shortcuts.keys) || {};
     const items = [
-      { label: t("action.duplicate"), onClick: () => {
-        if (store.duplicateTab) store.duplicateTab(tab.id);
-        else {
-          const snap = store.snapshotRequest(tab);
-          store.createTab(Object.assign({}, snap, { name: t("tab.copySuffix", { name: store.requestTitle(tab) }) }));
-        }
-      } },
-      { separator: true },
-      { label: t("tab.close"), onClick: async () => { if (await confirmCloseTab(tab)) store.closeTab(tab.id); } },
-      { label: t("tab.closeLeft"), disabled: index <= 0, onClick: async () => {
-        const targets = store.state.tabs.slice(0, index);
-        if (await confirmCloseMany(targets)) store.closeTabsToSide(tab.id, "left");
-      } },
-      { label: t("tab.closeRight"), disabled: index >= last, onClick: async () => {
-        const targets = store.state.tabs.slice(index + 1);
-        if (await confirmCloseMany(targets)) store.closeTabsToSide(tab.id, "right");
-      } },
-      { label: t("tab.closeOthers"), disabled: store.state.tabs.length <= 1, onClick: async () => {
+      {
+        label: t("tab.close"),
+        shortcut: sk.closeTab,
+        onClick: () => after(async () => {
+          if (await confirmCloseTab(tab)) store.closeTab(tab.id);
+        })
+      },
+      { label: t("tab.closeOthers"), disabled: store.state.tabs.length <= 1, onClick: () => after(async () => {
         const targets = store.state.tabs.filter((item) => item.id !== tab.id);
         if (await confirmCloseMany(targets)) store.closeTabs([tab.id]);
-      } },
-      { label: t("tab.closeAll"), onClick: async () => {
-        if (await confirmCloseMany(store.state.tabs)) store.closeTabs([]);
-      } }
-    ];
-    const menu = el("div", { class: "hc-context-menu", id: "hc-tab-menu" });
-    items.forEach((item) => {
-      if (item.separator) {
-        menu.append(el("div", { class: "hc-context-sep" }));
-        return;
+      }) },
+      { separator: true },
+      {
+        label: t("action.duplicate"),
+        shortcut: sk.duplicateTab,
+        onClick: () => {
+          store.setActiveTab(tab.id);
+          duplicateActiveTab();
+        }
       }
-      const button = el("button", {
-        type: "button",
-        class: "hc-context-item",
-        text: item.label,
-        disabled: item.disabled,
-        on: {
-          click: async (clickEvent) => {
-            clickEvent.stopPropagation();
-            closeTabMenu();
-            if (item.disabled) return;
-            await item.onClick();
-            HC.viewRequest.render();
-            HC.viewResponse.render();
-          }
+    ];
+    if (tab.savedRequestId) {
+      items.push({
+        label: t("action.clone"),
+        shortcut: sk.cloneRequest,
+        onClick: () => {
+          store.setActiveTab(tab.id);
+          cloneActiveRequest();
         }
       });
-      menu.append(button);
+    }
+    items.push({
+      label: t("action.more"),
+      children: [
+        { label: t("tab.closeLeft"), disabled: index <= 0, onClick: () => after(async () => {
+          const targets = store.state.tabs.slice(0, index);
+          if (await confirmCloseMany(targets)) store.closeTabsToSide(tab.id, "left");
+        }) },
+        { label: t("tab.closeRight"), disabled: index >= last, onClick: () => after(async () => {
+          const targets = store.state.tabs.slice(index + 1);
+          if (await confirmCloseMany(targets)) store.closeTabsToSide(tab.id, "right");
+        }) },
+        { label: t("tab.closeAll"), onClick: () => after(async () => {
+          if (await confirmCloseMany(store.state.tabs)) store.closeTabs([]);
+        }) }
+      ]
     });
-    document.body.append(menu);
-    const width = 168;
-    const left = Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8));
-    const top = Math.max(8, Math.min(event.clientY, window.innerHeight - (items.length * 32 + 12)));
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
-    tabMenuNode = menu;
+    util.openContextMenu(event, items, { id: "hc-tab-menu", minWidth: 200 });
   }
-
-  document.addEventListener("click", () => closeTabMenu());
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeTabMenu(); });
 
   /* --------------------------------------------------------- environment --- */
 
@@ -622,6 +889,16 @@
 
   /* -------------------------------------------------------------- toolbar -- */
 
+  function syncMemoryBadge() {
+    const badge = util.$("#memory-badge");
+    if (!badge) return;
+    badge.hidden = !store.state.memoryOnly;
+    badge.onclick = async () => {
+      await store.persist();
+      syncMemoryBadge();
+    };
+  }
+
   function renderToolbarState() {
     const tab = store.activeTab();
     const send = util.$("#btn-send");
@@ -707,22 +984,65 @@
     try {
       if (HC.viewRequest && HC.viewRequest.syncUrlFromParams) HC.viewRequest.syncUrlFromParams(tab);
       const vars = Object.assign({}, store.variableMap());
+      let sendTab = tab;
       const preCode = tab.scripts && tab.scripts.pre;
       if (preCode && String(preCode).trim()) {
-        const preCtx = { vars, dirty: false, method: tab.method, url: tab.url };
-        const preResult = HC.scripts.run(preCode, preCtx);
+        const preCtx = {
+          vars,
+          dirty: false,
+          method: tab.method,
+          url: tab.url,
+          bodyMode: (tab.body && tab.body.mode) || "raw",
+          bodyRaw: (tab.body && tab.body.raw) || "",
+          bodyContentType: (tab.body && tab.body.contentType) || "application/json",
+          headersList: (tab.headers || []).map((row) => ({
+            key: row.key || "",
+            value: row.value || "",
+            enabled: row.enabled !== false
+          })),
+          // Let pm.request.auth read/modify the current auth. The goja
+          // sandbox round-trips the whole authConfig, so the mutated copy
+          // below is always a complete object.
+          auth: Object.assign({}, tab.auth || { type: "none" })
+        };
+        const preResult = await HC.scripts.run(preCode, preCtx);
         tab.scriptResults.pre = preResult;
         if (preCtx.dirty) HC.scripts.applyVarsToEnvironment(preCtx.vars, store, preCtx);
         if (preResult.error) {
           util.toast(t("scripts.preFailed", { message: preResult.error }), "error");
           return;
         }
+        if (preCtx.reqDirty && preCtx.req) {
+          const mutated = preCtx.req;
+          // A script-supplied URL is authoritative: keep params/pathParams
+          // from re-appending or rewriting it in buildSpec (mirrors the
+          // workflow side's URLDirty handling).
+          const urlChanged = mutated.url != null && mutated.url !== tab.url;
+          sendTab = Object.assign({}, tab, {
+            method: mutated.method || tab.method,
+            url: mutated.url != null ? mutated.url : tab.url,
+            headers: Array.isArray(mutated.headers) ? mutated.headers : tab.headers,
+            auth: mutated.auth ? Object.assign({}, tab.auth || {}, mutated.auth) : tab.auth,
+            params: urlChanged ? [] : tab.params,
+            pathParams: urlChanged ? [] : tab.pathParams,
+            body: Object.assign({}, tab.body || {}, {
+              mode: mutated.bodyMode || (tab.body && tab.body.mode) || "raw",
+              raw: mutated.bodyRaw != null ? mutated.bodyRaw : ((tab.body && tab.body.raw) || ""),
+              contentType: mutated.bodyContentType
+                || (tab.body && tab.body.contentType)
+                || "application/json"
+            })
+          });
+        }
       }
 
-      const spec = store.buildSpec(tab, requestId, vars);
+      const spec = store.buildSpec(sendTab, requestId, vars);
       const result = await bridge.send(spec);
       if (!stillThisRun()) return;
       tab.response = result;
+      if (store.ingestSetCookies) {
+        store.ingestSetCookies(result.finalUrl || result.url || tab.url, result.setCookies || []);
+      }
       store.pushHistory(tab, result);
 
       const postCode = tab.scripts && tab.scripts.post;
@@ -747,7 +1067,7 @@
           headers: headerMap,
           bodyText
         };
-        const postResult = HC.scripts.run(postCode, postCtx);
+        const postResult = await HC.scripts.run(postCode, postCtx);
         tab.scriptResults.post = postResult;
         if (postCtx.dirty) HC.scripts.applyVarsToEnvironment(postCtx.vars, store, postCtx);
         if (postResult.error) util.toast(t("scripts.postFailed", { message: postResult.error }), "error");
@@ -811,7 +1131,7 @@
       const preCode = tab.scripts && tab.scripts.pre;
       if (preCode && String(preCode).trim()) {
         const preCtx = { vars, dirty: false, method: tab.method, url: tab.url };
-        const preResult = HC.scripts.run(preCode, preCtx);
+        const preResult = await HC.scripts.run(preCode, preCtx);
         tab.scriptResults.pre = preResult;
         if (preCtx.dirty) HC.scripts.applyVarsToEnvironment(preCtx.vars, store, preCtx);
         if (preResult.error) {
@@ -899,30 +1219,32 @@
       return;
     }
     const nameInput = el("input", { class: "hc-input", type: "text", value: store.requestTitle(tab) });
-    const collectionSelect = el("select", { class: "hc-select hc-select-flat" });
-    const folderSelect = el("select", { class: "hc-select hc-select-flat" });
-    const fillCollections = () => {
-      util.clear(collectionSelect);
-      store.state.collections.forEach((collection) => collectionSelect.append(el("option", { value: collection.id, text: collection.name })));
-      collectionSelect.value = tab.collectionId || (store.state.collections[0] || {}).id || "";
-    };
-    const fillFolders = () => {
-      util.clear(folderSelect);
-      folderSelect.append(el("option", { value: "", text: t("dialog.collectionRoot") }));
-      store.listFolders(collectionSelect.value).forEach((folder) => {
-        folderSelect.append(el("option", { value: folder.id, text: folder.path }));
+    const folderDd = util.createSelect({
+      className: "hc-dd-block",
+      items: [{ value: "", label: t("dialog.collectionRoot") }],
+      value: tab.folderId || ""
+    });
+    const collectionDd = util.createSelect({
+      className: "hc-dd-block",
+      items: store.state.collections.map((collection) => ({ value: collection.id, label: collection.name })),
+      value: tab.collectionId || (store.state.collections[0] || {}).id || "",
+      onChange: () => fillFolders()
+    });
+    function fillFolders() {
+      const items = [{ value: "", label: t("dialog.collectionRoot") }];
+      store.listFolders(collectionDd.value).forEach((folder) => {
+        items.push({ value: folder.id, label: folder.path });
       });
-      if (tab.folderId) folderSelect.value = tab.folderId;
-    };
-    fillCollections();
+      folderDd.setOptions(items, true);
+      if (tab.folderId) folderDd.value = tab.folderId;
+    }
     fillFolders();
-    collectionSelect.addEventListener("change", fillFolders);
     util.openModal({
       title: t("dialog.saveTitle"),
       render: (body) => {
         body.append(el("label", { class: "hc-field" }, [el("span", { class: "hc-field-label", text: t("dialog.name") }), nameInput]));
-        body.append(el("label", { class: "hc-field" }, [el("span", { class: "hc-field-label", text: t("dialog.collection") }), collectionSelect]));
-        body.append(el("label", { class: "hc-field" }, [el("span", { class: "hc-field-label", text: t("dialog.folder") }), folderSelect]));
+        body.append(el("label", { class: "hc-field" }, [el("span", { class: "hc-field-label", text: t("dialog.collection") }), collectionDd.root]));
+        body.append(el("label", { class: "hc-field" }, [el("span", { class: "hc-field-label", text: t("dialog.folder") }), folderDd.root]));
         body.append(el("div", { class: "hc-hint", text: `${tab.method} ${tab.url}` }));
       },
       actions: [
@@ -931,9 +1253,9 @@
           label: t("action.save2"), kind: "primary",
           onClick: (api) => {
             const name = nameInput.value.trim() || store.requestTitle(tab);
-            let collectionId = collectionSelect.value;
+            let collectionId = collectionDd.value;
             if (!collectionId) collectionId = store.createCollection(t("misc.untitledCollection")).id;
-            store.saveRequestTo(collectionId, tab, name, folderSelect.value);
+            store.saveRequestTo(collectionId, tab, name, folderDd.value);
             finishSave(tab);
             api.close();
           }
@@ -950,10 +1272,57 @@
     util.toast(ok ? t("toast.copied") : t("toast.copyFailed"), ok ? "success" : "error");
   }
 
-  function openCurlImport() {
+  function applyParsedRequest(parsed) {
+    if (!parsed || !parsed.request) return false;
+    store.createTab(Object.assign(parsed.request, { name: parsed.request.name }));
+    HC.viewRequest.render();
+    HC.viewResponse.render();
+    renderTabs();
+    return true;
+  }
+
+  async function createFromClipboard() {
+    let text = "";
+    try {
+      text = await navigator.clipboard.readText();
+    } catch (error) {
+      util.toast(t("toast.clipboardDenied"), "error");
+      openCurlImport();
+      return;
+    }
+    const raw = String(text || "").trim();
+    if (!raw) {
+      util.toast(t("toast.clipboardEmpty"), "error");
+      return;
+    }
+    if (/^\s*curl\b/i.test(raw) || /\s-X\s|\s--request\s|\s-H\s|\s--header\s/i.test(raw)) {
+      const parsed = HC.curl.parseCurl(raw);
+      if (!parsed) {
+        util.toast(t("toast.importCurlFailed"), "error");
+        return;
+      }
+      applyParsedRequest(parsed);
+      util.toast(t("toast.pasteCurl"), "success");
+      return;
+    }
+    if (/^https?:\/\//i.test(raw) || /^\{\{[^{}]+\}\}\S*/.test(raw)) {
+      const first = raw.split(/\s+/)[0];
+      store.createTab({ name: t("tab.untitled"), method: "GET", url: first });
+      HC.viewRequest.render();
+      HC.viewResponse.render();
+      renderTabs();
+      util.toast(t("toast.pasteUrl"), "success");
+      return;
+    }
+    util.toast(t("toast.pasteUnrecognized"), "error");
+    openCurlImport(raw);
+  }
+
+  function openCurlImport(preset) {
     const textarea = el("textarea", {
       class: "hc-textarea", spellcheck: "false",
-      placeholder: "curl -X POST 'https://api.example.com/users' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"name\":\"demo\"}'"
+      placeholder: "curl -X POST 'https://api.example.com/users' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"name\":\"demo\"}'",
+      value: preset || ""
     });
     util.openModal({
       title: t("dialog.importCurlTitle"),
@@ -968,9 +1337,7 @@
           onClick: (api) => {
             const parsed = HC.curl.parseCurl(textarea.value);
             if (!parsed) { util.toast(t("toast.importCurlFailed"), "error"); return; }
-            store.createTab(Object.assign(parsed.request, { name: parsed.request.name }));
-            HC.viewRequest.render();
-            HC.viewResponse.render();
+            applyParsedRequest(parsed);
             api.close();
           }
         }
@@ -1057,6 +1424,296 @@
     return wrap;
   }
 
+  function openCookieManager() {
+    let filter = "";
+    const search = el("input", {
+      class: "hc-input", type: "text", spellcheck: "false",
+      placeholder: t("cookie.filterPlaceholder")
+    });
+    const tableHost = el("div", { class: "hc-cookie-table" });
+    const summary = el("div", { class: "hc-hint", text: "" });
+    /* Inline confirmation: openModal() is single-instance, so a nested
+       confirmDialog() would silently close the Cookie manager underneath it. */
+    const clearBar = el("div", { class: "hc-cookie-confirm", hidden: true }, [
+      el("span", { text: t("cookie.clearConfirm") }),
+      el("button", {
+        class: "hc-btn hc-btn-sm hc-btn-danger", type: "button", text: t("action.delete"),
+        on: { click: () => { store.clearCookieJar(); clearBar.hidden = true; draw(); } }
+      }),
+      el("button", {
+        class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("action.cancel2"),
+        on: { click: () => { clearBar.hidden = true; } }
+      })
+    ]);
+
+    const headCell = (key) => el("span", { class: "hc-cookie-cell is-head", text: t(key) });
+
+    function draw() {
+      util.clear(tableHost);
+      const needle = filter.trim().toLowerCase();
+      const rows = (store.state.cookieJar || []).filter((row) => (
+        !needle || String(row.domain || "").toLowerCase().includes(needle)
+        || String(row.name || "").toLowerCase().includes(needle)
+      ));
+      tableHost.append(el("div", { class: "hc-cookie-row is-head" }, [
+        headCell("cookie.domain"), headCell("cookie.name"), headCell("cookie.value"),
+        headCell("cookie.path"), headCell("cookie.enabled"), el("span", {})
+      ]));
+
+      if (!rows.length) {
+        tableHost.append(el("div", {
+          class: "hc-cookie-empty", text: t("cookie.empty")
+        }));
+      }
+
+      rows.forEach((row) => {
+        const valueInput = el("input", {
+          class: "hc-input hc-cookie-input", type: "text", value: row.value || "",
+          title: row.expires ? `${t("cookie.expires")}: ${row.expires}` : ""
+        });
+        valueInput.addEventListener("change", () => {
+          store.upsertCookie(Object.assign({}, row, { value: valueInput.value }));
+          util.toast(t("cookie.saved"), "success");
+        });
+        const enabledInput = el("input", { type: "checkbox", checked: row.enabled !== false });
+        enabledInput.addEventListener("change", () => {
+          store.upsertCookie(Object.assign({}, row, { enabled: enabledInput.checked }));
+        });
+        tableHost.append(el("div", { class: "hc-cookie-row" }, [
+          el("span", { class: "hc-cookie-cell", text: row.domain || "", title: row.domain || "" }),
+          el("span", { class: "hc-cookie-cell", text: row.name || "", title: row.name || "" }),
+          valueInput,
+          el("span", { class: "hc-cookie-cell", text: row.path || "/", title: row.path || "/" }),
+          enabledInput,
+          el("button", {
+            class: "hc-icon-btn hc-cookie-del", type: "button", text: "×",
+            title: t("action.delete"), "aria-label": t("action.delete"),
+            on: { click: () => { store.deleteCookie(row.id); draw(); } }
+          })
+        ]));
+      });
+
+      const addDomain = el("input", { class: "hc-input", type: "text", placeholder: t("cookie.domain") });
+      const addName = el("input", { class: "hc-input", type: "text", placeholder: t("cookie.name") });
+      const addValue = el("input", { class: "hc-input", type: "text", placeholder: t("cookie.value") });
+      const addPath = el("input", { class: "hc-input", type: "text", placeholder: "/", value: "/" });
+      const addRow = el("div", { class: "hc-cookie-add-row" }, [
+        addDomain, addName, addValue, addPath,
+        el("button", {
+          class: "hc-btn hc-btn-sm", type: "button", text: t("cookie.add"),
+          on: {
+            click: () => {
+              if (!addName.value.trim()) { addName.focus(); return; }
+              store.upsertCookie({
+                domain: addDomain.value.trim(), name: addName.value.trim(),
+                value: addValue.value, path: addPath.value.trim() || "/"
+              });
+              addName.value = ""; addValue.value = "";
+              util.toast(t("cookie.added"), "success");
+              draw();
+            }
+          }
+        })
+      ]);
+      tableHost.append(addRow);
+      const total = (store.state.cookieJar || []).length;
+      summary.textContent = `${total} · ${rows.length}`;
+    }
+
+    search.addEventListener("input", () => { filter = search.value; draw(); });
+    util.openModal({
+      title: t("dialog.cookieTitle"),
+      className: "hc-cookie-modal",
+      render: (body, api) => {
+        if (api && api.modal) api.modal.classList.add("hc-cookie-modal");
+        body.append(search, tableHost, summary, clearBar);
+      },
+      actions: [
+        {
+          label: t("cookie.clearAll"),
+          onClick: () => { clearBar.hidden = false; }
+        },
+        { label: t("action.close"), kind: "primary", onClick: (api) => api.close() }
+      ]
+    });
+    draw();
+  }
+
+  /* ------------------------------------------------ global variables ----- */
+
+  function openGlobalsDialog() {
+    const draft = JSON.parse(JSON.stringify(store.state.globals || []));
+    if (!draft.length || draft.every((row) => row && row.key)) draft.push(util.emptyRow());
+    const counter = el("span", { class: "hc-env-count" });
+    const updateCount = () => {
+      const enabled = draft.filter((row) => row && row.enabled !== false && String(row.key || "").trim()).length;
+      counter.textContent = t("globals.varCount", { count: enabled });
+    };
+    util.openModal({
+      title: t("globals.title"),
+      render: (body) => {
+        body.append(el("div", { class: "hc-hint", text: t("globals.hint") }));
+        body.append(el("div", { class: "hc-env-head-row" }, [
+          el("span", { class: "hc-field-label", text: t("globals.subtitle") }),
+          el("span", { class: "hc-grow" }), counter
+        ]));
+        const kvScroll = el("div", { class: "hc-env-kv" });
+        const kvHost = el("div");
+        kvScroll.append(kvHost);
+        body.append(kvScroll);
+        util.createKVEditor(kvHost, {
+          rows: draft,
+          keyLabel: t("kv.keyName"),
+          valueLabel: t("kv.valueName"),
+          descriptionLabel: t("kv.description"),
+          keyPlaceholder: t("kv.keyPlaceholder"),
+          valuePlaceholder: t("kv.valuePlaceholder"),
+          descriptionPlaceholder: t("kv.descriptionPlaceholder"),
+          onChange: updateCount
+        });
+        updateCount();
+        body.append(el("div", { class: "hc-hint", text: t("globals.precedence") }));
+      },
+      actions: [
+        { label: t("action.cancel2"), onClick: (api) => api.close() },
+        {
+          label: t("action.save2"), kind: "primary",
+          onClick: (api) => {
+            store.state.globals = draft.filter((row) => row && (row.key || row.value));
+            store.persist();
+            store.emit("environments");
+            if (HC.viewRequest && store.activeTab()) HC.viewRequest.updateUrlHighlight(store.activeTab());
+            util.toast(t("globals.saved"), "success");
+            api.close();
+          }
+        }
+      ]
+    });
+  }
+
+  /* --------------------------------------------------------- cases ------- */
+
+  const CASE_FIELDS = [
+    "clientType", "method", "url", "headers", "params", "pathParams", "cookies",
+    "body", "auth", "scripts", "options", "graphql"
+  ];
+
+  function openCasesDialog() {
+    const tab = store.activeTab();
+    if (!tab) { util.toast(t("cases.noTab"), "error"); return; }
+    if (!Array.isArray(tab.cases)) tab.cases = [];
+    const listHost = el("div", { class: "hc-case-list" });
+    const summary = el("div", { class: "hc-hint hc-case-summary" });
+    const nameInput = el("input", {
+      class: "hc-input", type: "text", spellcheck: "false",
+      placeholder: t("cases.namePlaceholder")
+    });
+    const snapshotFor = () => {
+      const snap = store.snapshotRequest(tab, tab.name);
+      ["id", "name", "runPolicy", "examples"].forEach((key) => { delete snap[key]; });
+      return snap;
+    };
+    const applyCase = (item) => {
+      CASE_FIELDS.forEach((key) => {
+        if (item.snapshot[key] !== undefined) tab[key] = JSON.parse(JSON.stringify(item.snapshot[key]));
+      });
+      tab.activeCaseId = item.id;
+      store.markDirty(tab);
+      store.persist();
+      HC.viewRequest.render();
+      if (HC.viewRequest.updateUrlHighlight) HC.viewRequest.updateUrlHighlight(tab);
+      renderToolbarState();
+      renderTabs();
+    };
+    const draw = () => {
+      util.clear(listHost);
+      if (!tab.cases.length) {
+        listHost.append(el("div", { class: "hc-hint", text: t("cases.empty") }));
+        return;
+      }
+      tab.cases.forEach((item) => {
+        listHost.append(el("div", {
+          class: `hc-case-row${item.id === tab.activeCaseId ? " is-active" : ""}`
+        }, [
+          el("span", { class: "hc-case-name", text: item.name }),
+          el("span", {
+            class: "hc-case-meta",
+            text: `${(item.snapshot && item.snapshot.method) || "GET"} ${(item.snapshot && item.snapshot.url) || ""}`
+          }),
+          el("div", { class: "hc-case-actions" }, [
+            el("button", {
+              class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("cases.apply"),
+              on: { click: () => {
+                applyCase(item);
+                util.toast(t("cases.applied", { name: item.name }), "success");
+                draw();
+              } }
+            }),
+            el("button", {
+              class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("action.delete"),
+              on: { click: () => {
+                tab.cases = tab.cases.filter((row) => row.id !== item.id);
+                if (tab.activeCaseId === item.id) tab.activeCaseId = "";
+                store.persist();
+                draw();
+              } }
+            })
+          ])
+        ]));
+      });
+    };
+    const saveCurrent = () => {
+      const name = String(nameInput.value || "").trim()
+        || t("cases.defaultName", { index: tab.cases.length + 1 });
+      const item = { id: util.uid("case"), name, snapshot: snapshotFor() };
+      tab.cases.push(item);
+      tab.activeCaseId = item.id;
+      nameInput.value = "";
+      store.persist();
+      draw();
+      util.toast(t("cases.saved", { name }), "success");
+    };
+    const runAll = async () => {
+      if (!tab.cases.length) return;
+      const lines = [];
+      for (const item of tab.cases.slice()) {
+        applyCase(item);
+        // send() resolves after the response (and post-script) is attached.
+        await send();
+        const result = tab.response || {};
+        const label = result.error
+          ? (result.error.message || "error")
+          : `${result.status || 0} ${result.ok ? "OK" : "FAIL"}`;
+        lines.push(`${item.name}: ${label} (${result.durationMs || 0} ms)`);
+      }
+      summary.textContent = `${t("cases.runSummary", { count: lines.length })}\n${lines.join("\n")}`;
+      util.toast(t("cases.runDone", { count: lines.length }), "success");
+    };
+    draw();
+    nameInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") { event.preventDefault(); saveCurrent(); }
+    });
+    util.openModal({
+      title: t("cases.title"),
+      render: (body) => {
+        body.append(el("div", { class: "hc-hint", text: t("cases.hint") }));
+        body.append(el("div", { class: "hc-case-add-row" }, [
+          nameInput,
+          el("button", {
+            class: "hc-btn hc-btn-sm hc-btn-primary", type: "button",
+            text: t("cases.saveCurrent"), on: { click: saveCurrent }
+          })
+        ]));
+        body.append(listHost);
+        body.append(summary);
+      },
+      actions: [
+        { label: t("action.close"), onClick: (api) => api.close() },
+        { label: t("cases.runAll"), onClick: () => { runAll(); } }
+      ]
+    });
+  }
+
   function openSettings() {
     util.openModal({
       title: t("dialog.settingsTitle"),
@@ -1077,17 +1734,48 @@
             type: "button",
             text: t("action.dynamicVars"),
             on: { click: () => util.openDynamicVarsDialog() }
+          }),
+          el("button", {
+            class: "hc-btn hc-btn-sm hc-btn-ghost",
+            type: "button",
+            text: t("action.cookieManager"),
+            on: { click: () => openCookieManager() }
           })
         ]));
         body.append(util.renderDynamicVarCatalog());
         body.append(renderHistoryLimitField());
         body.append(renderStorageDirField());
+        const cookieJarRow = el("label", { class: "hc-field hc-field-inline" }, [
+          el("input", {
+            type: "checkbox",
+            checked: store.state.settings.sendCookieJar !== false
+          }),
+          el("span", { text: t("settings.sendCookieJar") })
+        ]);
+        const cookieJarCheck = cookieJarRow.querySelector("input");
+        cookieJarCheck.addEventListener("change", () => {
+          store.state.settings.sendCookieJar = !!cookieJarCheck.checked;
+          store.persist();
+        });
+        body.append(cookieJarRow);
         body.append(el("div", { class: "hc-hint", text: t("settings.dataHint") }));
+        body.append(el("div", { class: "hc-body-toolbar" }, [
+          el("button", {
+            class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("shortcuts.title"),
+            on: { click: () => { if (HC.shortcuts) HC.shortcuts.openHelp(); } }
+          })
+        ]));
         const actions = el("div", { class: "hc-body-toolbar" }, [
           el("button", {
             class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("settings.exportAll"),
             on: {
               click: async () => {
+                if (!await util.confirmDialog({
+                  title: t("settings.exportAll"),
+                  message: t("dialog.exportAllWarning"),
+                  confirmLabel: t("action.export"),
+                  kind: "danger"
+                })) return;
                 const ok = await bridge.copy(JSON.stringify(store.serializable(), null, 2));
                 util.toast(ok ? t("toast.copied") : t("toast.copyFailed"), ok ? "success" : "error");
               }
@@ -1125,8 +1813,11 @@
     const requestPane = util.$("#request-pane");
     const responsePane = util.$("#response-pane");
     const paneSplitter = util.$("#pane-splitter");
+    const workflowPane = util.$("#workflow-pane");
+    const workflowSplitter = util.$("#workflow-splitter");
     const tab = store.activeTab();
     const markdown = tab && tab.clientType === "markdown";
+    const workflowOpen = !!(HC.workflow && HC.workflow.state && HC.workflow.state.open);
     sidebar.style.width = `${store.state.settings.sidebarWidth}px`;
     sidebar.classList.toggle("is-collapsed", !!store.state.settings.sidebarCollapsed);
     util.$("#sidebar-splitter").hidden = !!store.state.settings.sidebarCollapsed;
@@ -1136,11 +1827,78 @@
       if (responsePane) responsePane.hidden = true;
       if (paneSplitter) paneSplitter.hidden = true;
     } else {
+      const percent = store.state.settings.requestPercent;
+      const requestMax = percent >= 99;
+      const responseMax = percent <= 1;
       requestPane.classList.remove("is-markdown");
-      requestPane.style.flex = `0 0 ${store.state.settings.requestPercent}%`;
-      if (responsePane) responsePane.hidden = false;
-      if (paneSplitter) paneSplitter.hidden = false;
+      requestPane.hidden = responseMax;
+      requestPane.style.flex = `0 0 ${percent}%`;
+      if (responsePane) responsePane.hidden = requestMax;
+      if (paneSplitter) paneSplitter.hidden = requestMax || responseMax;
     }
+    if (workflowPane) {
+      if (workflowOpen) {
+        const fullscreen = !!(HC.workflow && HC.workflow.state && HC.workflow.state.fullscreen);
+        workflowPane.classList.toggle("is-fullscreen", fullscreen);
+        if (fullscreen) {
+          workflowPane.style.width = "";
+          if (workflowSplitter) workflowSplitter.hidden = true;
+        } else {
+          let width = Number(store.state.settings.workflowWidth) || 560;
+          // Migrate cramped defaults from earlier builds.
+          if (width > 0 && width < 480) width = 560;
+          width = Math.min(Math.max(width, 420), Math.floor(window.innerWidth * 0.85));
+          store.state.settings.workflowWidth = width;
+          workflowPane.style.width = `${width}px`;
+          if (workflowSplitter) {
+            workflowSplitter.hidden = false;
+            workflowSplitter.style.right = `${width}px`;
+          }
+        }
+      } else {
+        workflowPane.classList.remove("is-fullscreen");
+        if (workflowSplitter) workflowSplitter.hidden = true;
+      }
+    }
+  }
+
+  // Pane layout is chosen explicitly instead of cycling through three states:
+  // the active state is always visible, and "balanced" is one click away even
+  // from an empty response (whose toolbar is not rendered at all).
+  const PANE_LAYOUTS = [
+    { id: "balanced", percent: 42, label: "pane.layoutBalanced" },
+    { id: "request", percent: 100, label: "pane.layoutRequest" },
+    { id: "response", percent: 0, label: "pane.layoutResponse" }
+  ];
+
+  function setPaneLayout(id) {
+    const layout = PANE_LAYOUTS.find((item) => item.id === id) || PANE_LAYOUTS[0];
+    store.state.settings.requestPercent = layout.percent;
+    applyLayout();
+    store.schedulePersist();
+  }
+
+  function openPaneLayoutMenu(clickEvent) {
+    if (!clickEvent || !util.openContextMenu) return;
+    const anchor = clickEvent.currentTarget;
+    const rect = anchor ? anchor.getBoundingClientRect() : null;
+    // Pass the real event's stopPropagation through: openContextMenu calls it
+    // so the document-level "click outside closes menu" listener does not
+    // immediately close the menu we just opened. Position below the button.
+    const positioned = {
+      clientX: rect ? rect.left : clickEvent.clientX,
+      clientY: rect ? rect.bottom + 4 : clickEvent.clientY,
+      preventDefault: () => clickEvent.preventDefault(),
+      stopPropagation: () => clickEvent.stopPropagation()
+    };
+    const current = Number(store.state.settings.requestPercent) || 42;
+    const items = PANE_LAYOUTS.map((layout) => ({
+      label: (Math.abs(current - layout.percent) < 1 ? "✓ " : "　 ") + t(layout.label),
+      onClick: () => setPaneLayout(layout.id)
+    }));
+    items.push({ separator: true });
+    items.push({ label: t("pane.layoutHint"), disabled: true });
+    util.openContextMenu(positioned, items, { minWidth: 220, id: "hc-pane-layout-menu" });
   }
 
   function wireSplitters() {
@@ -1160,28 +1918,71 @@
       });
     };
     wire(util.$("#sidebar-splitter"), (event) => {
-      const width = Math.min(Math.max(event.clientX, 180), window.innerWidth - 360);
+      const width = Math.min(Math.max(event.clientX, 200), window.innerWidth - 360);
       store.state.settings.sidebarWidth = width;
       applyLayout();
     });
-    wire(util.$("#pane-splitter"), (event) => {
+    const paneSplitter = util.$("#pane-splitter");
+    wire(paneSplitter, (event) => {
       const main = util.$(".hc-main").getBoundingClientRect();
       const percent = ((event.clientY - main.top) / main.height) * 100;
       store.state.settings.requestPercent = Math.min(Math.max(percent, 20), 80);
       applyLayout();
     });
+    if (paneSplitter) {
+      paneSplitter.addEventListener("dblclick", () => {
+        store.state.settings.requestPercent = 42;
+        applyLayout();
+        store.schedulePersist();
+      });
+      paneSplitter.title = t("pane.splitterHint");
+    }
+    const workflowSplitter = util.$("#workflow-splitter");
+    if (workflowSplitter) {
+      workflowSplitter.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        workflowSplitter.classList.add("is-dragging");
+        workflowSplitter.setPointerCapture(event.pointerId);
+        const move = (moveEvent) => {
+          const main = util.$(".hc-main").getBoundingClientRect();
+          const width = Math.min(Math.max(main.right - moveEvent.clientX, 420), Math.floor(window.innerWidth * 0.85));
+          store.state.settings.workflowWidth = Math.round(width);
+          applyLayout();
+        };
+        const up = () => {
+          workflowSplitter.classList.remove("is-dragging");
+          workflowSplitter.releasePointerCapture(event.pointerId);
+          workflowSplitter.removeEventListener("pointermove", move);
+          workflowSplitter.removeEventListener("pointerup", up);
+          store.persist();
+        };
+        workflowSplitter.addEventListener("pointermove", move);
+        workflowSplitter.addEventListener("pointerup", up);
+      });
+    }
   }
 
   /* ------------------------------------------------------------------ wire */
 
   function wire() {
+    wireTabstrip();
     util.$("#btn-send").addEventListener("click", send);
     util.$("#btn-cancel").addEventListener("click", cancel);
     util.$("#btn-save").addEventListener("click", saveRequest);
     util.$("#btn-copy-curl").addEventListener("click", copyCurl);
+    const cyclePane = util.$("#btn-cycle-pane");
+    if (cyclePane) cyclePane.addEventListener("click", openPaneLayoutMenu);
+    // Topbar entry is never re-rendered and never hidden, so it stays reachable
+    // even when the response is empty and the request pane is hidden.
+    const topLayout = util.$("#btn-pane-layout");
+    if (topLayout) topLayout.addEventListener("click", openPaneLayoutMenu);
     util.$("#btn-import-curl").addEventListener("click", openCurlImport);
     const dynVarsBtn = util.$("#btn-dynamic-vars");
     if (dynVarsBtn) dynVarsBtn.addEventListener("click", () => util.openDynamicVarsDialog());
+    const globalsBtn = util.$("#btn-globals");
+    if (globalsBtn) globalsBtn.addEventListener("click", openGlobalsDialog);
+    const casesBtn = util.$("#btn-cases");
+    if (casesBtn) casesBtn.addEventListener("click", openCasesDialog);
     util.$("#btn-settings").addEventListener("click", openSettings);
     util.$("#btn-toggle-sidebar").addEventListener("click", () => {
       store.state.settings.sidebarCollapsed = !store.state.settings.sidebarCollapsed;
@@ -1337,39 +2138,143 @@
     }
 
     const urlInput = util.$("#url-input");
+    const urlWrap = urlInput.closest(".hc-url-wrap") || urlInput.parentElement;
+    const urlSuggest = el("div", { class: "hc-url-suggest", hidden: true, role: "listbox" });
+    urlWrap.append(urlSuggest);
+    let urlSuggestItems = [];
+    let urlSuggestIndex = -1;
+    let urlSuggestPaused = false;
+
+    function recentUrls(query) {
+      const needle = String(query || "").trim().toLowerCase();
+      const seen = new Set();
+      const out = [];
+      (store.state.history || []).forEach((entry) => {
+        [entry.url, entry.resolvedUrl].forEach((candidate) => {
+          const url = String(candidate || "").trim();
+          if (!url || seen.has(url)) return;
+          if (needle && !url.toLowerCase().includes(needle)) return;
+          seen.add(url);
+          out.push({ url, method: entry.method || "GET" });
+        });
+      });
+      return out.slice(0, 8);
+    }
+
+    function hideUrlSuggest() {
+      urlSuggest.hidden = true;
+      urlSuggestIndex = -1;
+      urlSuggestItems = [];
+    }
+
+    function applyUrlSuggest(item) {
+      if (!item) return;
+      urlInput.value = item.url;
+      hideUrlSuggest();
+      const tab = store.activeTab();
+      if (tab) {
+        tab.url = item.url;
+        store.markDirty(tab);
+        HC.viewRequest.updateUrlHighlight(tab);
+        HC.viewRequest.syncParamsFromUrl(tab);
+        HC.viewRequest.render();
+      }
+    }
+
+    function drawUrlSuggest() {
+      urlSuggestItems = recentUrls(urlInput.value);
+      urlSuggestIndex = -1;
+      util.clear(urlSuggest);
+      if (!urlSuggestItems.length) {
+        /* Do not pop an empty box over a freshly focused, empty URL field. */
+        if (String(urlInput.value || "").trim()) {
+          urlSuggest.append(el("div", { class: "hc-url-suggest-head", text: t("url.recentEmpty") }));
+          urlSuggest.hidden = false;
+        } else {
+          hideUrlSuggest();
+        }
+        return;
+      }
+      urlSuggest.append(el("div", { class: "hc-url-suggest-head", text: t("url.recentTitle") }));
+      urlSuggestItems.forEach((item) => {
+        const row = el("button", {
+          type: "button", class: "hc-url-suggest-row", role: "option", "aria-selected": "false"
+        }, [
+          el("span", { class: "hc-url-suggest-method", text: item.method }),
+          el("span", { class: "hc-url-suggest-url", text: item.url })
+        ]);
+        row.addEventListener("mousedown", (event) => event.preventDefault());
+        row.addEventListener("click", () => applyUrlSuggest(item));
+        urlSuggest.append(row);
+      });
+      urlSuggest.hidden = false;
+    }
+
+    urlInput.addEventListener("paste", (event) => {
+      const clipboard = event.clipboardData || window.clipboardData;
+      const raw = String((clipboard && clipboard.getData("text")) || "").trim();
+      if (!raw) return;
+      const looksCurl = /^\s*curl\b/i.test(raw)
+        || (/\s(?:-X|--request|-H|--header|-d|--data|-F|--form)\b/.test(raw) && /\bcurl\b/i.test(raw));
+      if (looksCurl && HC.curl && typeof HC.curl.parseCurl === "function") {
+        const parsed = HC.curl.parseCurl(raw);
+        if (parsed) {
+          event.preventDefault();
+          applyParsedRequest(parsed);
+          hideUrlSuggest();
+          util.toast(t("toast.pasteCurl"), "success");
+          return;
+        }
+      }
+      urlSuggestPaused = true;
+    });
+    urlInput.addEventListener("focus", drawUrlSuggest);
     urlInput.addEventListener("input", () => {
       const tab = store.activeTab();
+      if (!tab) return;
       tab.url = urlInput.value;
       store.markDirty(tab);
       HC.viewRequest.updateUrlHighlight(tab);
+      if (urlSuggestPaused) { urlSuggestPaused = false; hideUrlSuggest(); return; }
+      drawUrlSuggest();
     });
     urlInput.addEventListener("change", () => {
       const tab = store.activeTab();
+      if (!tab) return;
       tab.url = urlInput.value;
       store.markDirty(tab);
       HC.viewRequest.syncParamsFromUrl(tab);
       HC.viewRequest.render();
     });
+    urlInput.addEventListener("blur", () => {
+      window.setTimeout(() => {
+        if (!urlSuggest.contains(document.activeElement)) hideUrlSuggest();
+      }, 120);
+    });
     urlInput.addEventListener("keydown", (event) => {
+      if (!urlSuggest.hidden && urlSuggestItems.length) {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          urlSuggestIndex = (urlSuggestIndex + (event.key === "ArrowDown" ? 1 : -1) + urlSuggestItems.length) % urlSuggestItems.length;
+          urlSuggest.querySelectorAll(".hc-url-suggest-row").forEach((node, index) => {
+            const active = index === urlSuggestIndex;
+            node.classList.toggle("is-selected", active);
+            node.setAttribute("aria-selected", active ? "true" : "false");
+            if (active) node.scrollIntoView({ block: "nearest" });
+          });
+          return;
+        }
+        if (event.key === "Escape") { hideUrlSuggest(); return; }
+        if (event.key === "Enter" && urlSuggestIndex >= 0) {
+          event.preventDefault();
+          applyUrlSuggest(urlSuggestItems[urlSuggestIndex]);
+          return;
+        }
+      }
       if (event.key === "Enter") { event.preventDefault(); send(); }
     });
 
     wireEnvPicker();
-
-    document.addEventListener("keydown", async (event) => {
-      const mod = event.ctrlKey || event.metaKey;
-      if (!mod || event.key.toLowerCase() !== "w") return;
-      if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
-      if (store.state.sideView === "environments") return;
-      const tab = store.activeTab();
-      if (!tab) return;
-      event.preventDefault();
-      if (await confirmCloseTab(tab)) {
-        store.closeTab(tab.id);
-        HC.viewRequest.render();
-        HC.viewResponse.render();
-      }
-    });
 
     util.$$(".hc-side-tab").forEach((button) => {
       button.addEventListener("click", () => {
@@ -1382,9 +2287,13 @@
       });
     });
 
-    store.subscribe((reason) => {
-      if (reason === "loaded" || reason === "tabs" || reason === "tab-dirty") {
+    store.subscribe((reason, payload) => {
+      if (reason === "loaded" || reason === "tabs") {
         renderTabs();
+        renderToolbarState();
+      }
+      if (reason === "tab-dirty") {
+        patchTab(payload);
         renderToolbarState();
       }
       // Closing / switching tabs only emits "tabs"; without a request/response
@@ -1393,6 +2302,10 @@
         HC.viewRequest.render();
         HC.viewResponse.render();
         if (HC.app && HC.app.applyLayout) HC.app.applyLayout();
+        // Tree selection follows the active tab; sync without full rebuild.
+        if (HC.viewSidebar && HC.viewSidebar.syncActive) {
+          HC.viewSidebar.syncActive({ fromTab: true });
+        }
       }
       if (reason === "sidebar") HC.viewSidebar.render();
       if (reason === "environments") {
@@ -1404,16 +2317,45 @@
       if (reason === "loaded") {
         if (HC.viewEnv) HC.viewEnv.syncLayout();
       }
+      if (reason === "memory-only") {
+        syncMemoryBadge();
+        util.toast(t("status.memoryOnly"), "error");
+      }
+      if (reason === "memory-ok") syncMemoryBadge();
     });
 
-    document.addEventListener("keydown", (event) => {
-      const primary = event.metaKey || event.ctrlKey;
-      if (!primary) return;
-      if (event.key === "Enter") { event.preventDefault(); send(); }
-      else if (event.key.toLowerCase() === "s") { event.preventDefault(); saveRequest(); }
-      else if (event.key.toLowerCase() === "t") { event.preventDefault(); store.createTab(); HC.viewRequest.render(); HC.viewResponse.render(); }
-      else if (event.key.toLowerCase() === "k") { event.preventDefault(); util.$("#url-input").focus(); }
-    });
+    if (HC.shortcuts && HC.shortcuts.bind) {
+      HC.shortcuts.bind({
+        send: () => send(),
+        save: () => saveRequest(),
+        saveAs: () => saveRequest({ forceDialog: true }),
+        newTab: () => createHttpRequest(),
+        closeTab: async () => {
+          const tab = store.activeTab();
+          if (!tab) return;
+          if (await confirmCloseTab(tab)) {
+            store.closeTab(tab.id);
+            HC.viewRequest.render();
+            HC.viewResponse.render();
+          }
+        },
+        focusUrl: () => {
+          const input = util.$("#url-input");
+          if (input) { input.focus(); input.select(); }
+        },
+        openEnv: () => {
+          const trigger = util.$("#env-picker-trigger");
+          if (trigger) trigger.click();
+        },
+        duplicate: () => duplicateActiveTab(),
+        clone: () => cloneActiveRequest(),
+        copyCurl: () => copyCurl(),
+        cancel: () => {
+          const tab = store.activeTab();
+          if (tab && tab.sending) cancel();
+        }
+      });
+    }
 
     window.addEventListener("beforeunload", () => { store.persist(); });
     bridge.onEnv(({ locale }) => {
@@ -1431,6 +2373,7 @@
 
   function renderAll() {
     applyLayout();
+    syncMemoryBadge();
     renderTabs();
     renderEnvironmentSelect();
     renderToolbarState();
@@ -1456,6 +2399,7 @@
     staticLabels();
     await store.init();
     renderAll();
+    if (HC.workflow && HC.workflow.init) HC.workflow.init();
     if (settled) {
       if (!bridge.backendReady) util.toast(t("err.backendHint"), "error");
       return;
@@ -1464,6 +2408,7 @@
     // once it lands, otherwise the send button stays disabled for the whole session.
     bridge.ready.then(() => {
       renderToolbarState();
+      if (HC.workflow && HC.workflow.refreshStatus) HC.workflow.refreshStatus();
       if (!bridge.backendReady) util.toast(t("err.backendHint"), "error");
     });
   }

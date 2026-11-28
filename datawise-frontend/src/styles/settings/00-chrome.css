@@ -19,12 +19,12 @@
     background-image: none;
 }
 
-/* ---- 页头 ---- */
+/* ---- 页头（Cursor：大标题 + 弱底边） ---- */
 
 .module-shell__main .panel-head {
-    margin-bottom: clamp(18px, 2.2vmin, 24px);
-    padding-bottom: clamp(14px, 1.6vmin, 18px);
-    border-bottom: 1px solid var(--dw-panel-outline, var(--dw-border-light));
+    margin-bottom: clamp(20px, 2.4vmin, 28px);
+    padding-bottom: clamp(10px, 1.2vmin, 14px);
+    border-bottom: 1px solid color-mix(in srgb, var(--dw-panel-outline, var(--dw-border-light)) 55%, transparent);
 }
 
 .module-shell__main .panel-head--row,
@@ -39,9 +39,9 @@
 
 .module-shell__main .panel-head h2 {
     margin: 0;
-    font-size: var(--dw-text-3xl);
+    font-size: var(--dw-text-display);
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
     line-height: var(--dw-leading-tight);
 }
 
@@ -49,7 +49,7 @@
     margin: var(--dw-gap) 0 0;
     max-width: 56ch;
     font-size: var(--dw-text-md);
-    color: var(--dw-text-secondary);
+    color: var(--dw-text-muted);
     line-height: var(--dw-leading-loose);
 }
 
@@ -92,27 +92,246 @@
     line-height: var(--dw-leading-relaxed);
 }
 
-/* ---- 设置区块（卡片式） ---- */
+/* ---- Cursor 式分区：小标题 + 浅抬升卡 ---- */
 
-.module-shell__main .setting-block {
-    margin-bottom: var(--mp-gap-lg);
-    padding: var(--dw-space-7) clamp(16px, 1.8vmin, 20px);
-    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
+.module-shell__main .settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dw-space-3);
+    margin: 0;
+}
+
+.module-shell__main .settings-section__head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dw-space-1);
+    padding: 0 var(--dw-space-1);
+}
+
+.module-shell__main .settings-section__title {
+    margin: 0;
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dw-text-muted);
+    line-height: var(--dw-leading-snug);
+}
+
+.module-shell__main .settings-section__hint {
+    margin: 0;
+    max-width: 64ch;
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-muted);
+    line-height: var(--dw-leading-relaxed);
+}
+
+.module-shell__main .settings-section__card {
+    display: flex;
+    flex-direction: column;
+    padding: var(--dw-space-1) var(--dw-space-5);
+    border: 1px solid color-mix(in srgb, var(--dw-text) 8%, transparent);
     border-radius: var(--dw-panel-radius);
-    background: color-mix(in srgb, var(--dw-bg-panel) 72%, var(--dw-bg));
+    background: color-mix(in srgb, var(--dw-text) 4.5%, var(--dw-bg));
     box-shadow: none;
 }
 
-.module-shell__main .setting-block:last-child {
+/* 设置行内下拉：默认 hug 内容宽（Cursor 行右侧控件） */
+.module-shell__main .settings-row .dw-select-host:has(.dw-select--settings),
+.module-shell__main .settings-row .dw-select--settings {
+    width: auto;
+    max-width: min(240px, 100%);
+}
+
+.module-shell__main .settings-row .dw-select--settings .dw-select__trigger {
+    width: auto;
+    min-width: 4.5rem;
+}
+
+.module-shell__main .settings-row-controls {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--dw-gap-sm);
+}
+
+/* 行内次要按钮：对齐 Cursor Save 旁的小按钮高度 */
+.module-shell__main .settings-row-controls .btn-secondary,
+.module-shell__main .settings-row-controls .dw-btn,
+.module-shell__main .settings-row-controls button.dw-button {
+    min-height: 24px;
+    height: 24px;
+    padding: 0 var(--dw-space-3);
+    font-size: var(--dw-text-sm);
+}
+
+.module-shell__main .settings-section__card > .settings-switch,
+.module-shell__main .settings-section__card > .settings-row,
+.module-shell__main .settings-section__card > .settings-section__block,
+.module-shell__main .int-option-switches > .settings-switch,
+.module-shell__main .backup-form__checks > .settings-switch {
+    margin: 0;
+}
+
+/* Full-width pickers / notes inside a Cursor settings card */
+.module-shell__main .settings-section__block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dw-space-2);
+    padding: var(--dw-space-3) 0;
+}
+
+/* Multi-select domains: 两列可选卡片，避免一行挤满长标签 */
+.module-shell__main .settings-section__block.settings-domain-chips,
+.module-shell__main .settings-domain-chips {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--dw-space-2);
+    align-items: stretch;
+}
+
+.module-shell__main .settings-domain-chips .dw-checkbox {
+    margin: 0;
+    width: 100%;
+    min-height: var(--dw-control-h);
+    padding: var(--dw-space-3) var(--dw-space-4);
+    border: 1px solid color-mix(in srgb, var(--dw-text) 10%, transparent);
+    border-radius: var(--dw-control-radius);
+    background: color-mix(in srgb, var(--dw-text) 3%, var(--dw-bg));
+    transition: var(--dw-transition-colors);
+}
+
+.module-shell__main .settings-domain-chips .dw-checkbox:hover {
+    border-color: color-mix(in srgb, var(--dw-text) 18%, transparent);
+    background: color-mix(in srgb, var(--dw-text) 5%, var(--dw-bg));
+}
+
+.module-shell__main .settings-domain-chips .dw-checkbox:has(.dw-checkbox__control:checked) {
+    border-color: color-mix(in srgb, var(--dw-primary) 40%, var(--dw-border-light));
+    background: color-mix(in srgb, var(--dw-primary) 8%, var(--dw-bg-panel));
+}
+
+.module-shell__main .settings-domain-chips .dw-checkbox:has(.dw-checkbox__control:checked) .dw-checkbox__label {
+    color: var(--dw-text);
+    font-weight: 600;
+}
+
+@media (max-width: 640px) {
+    .module-shell__main .settings-section__block.settings-domain-chips,
+    .module-shell__main .settings-domain-chips {
+        grid-template-columns: 1fr;
+    }
+}
+
+.module-shell__main .settings-section__block-label {
+    margin: 0;
+    font-size: var(--dw-text-md);
+    font-weight: 600;
+    color: var(--dw-text);
+    line-height: var(--dw-leading-snug);
+}
+
+.module-shell__main .settings-section__block-hint {
+    margin: 0;
+    font-size: var(--dw-text-xs);
+    color: var(--dw-text-muted);
+    line-height: var(--dw-leading-relaxed);
+}
+
+.module-shell__main .settings-section__card > .settings-switch + .settings-switch,
+.module-shell__main .settings-section__card > .settings-row + .settings-row,
+.module-shell__main .settings-section__card > .settings-switch + .settings-row,
+.module-shell__main .settings-section__card > .settings-row + .settings-switch,
+.module-shell__main .settings-section__card > .settings-section__subgroup + .settings-switch,
+.module-shell__main .settings-section__card > .settings-section__block + .settings-section__block,
+.module-shell__main .settings-section__card > .settings-section__block + .settings-row,
+.module-shell__main .settings-section__card > .settings-section__block + .settings-switch,
+.module-shell__main .settings-section__card > .settings-row + .settings-section__block,
+.module-shell__main .settings-section__card > .settings-switch + .settings-section__block,
+.module-shell__main .int-option-switches > .settings-switch + .settings-switch,
+.module-shell__main .backup-form__checks > .settings-switch + .settings-switch {
+    border-top: 1px solid color-mix(in srgb, var(--dw-text) 7%, transparent);
+}
+
+/* Compact controls on the right of a settings row */
+.module-shell__main .settings-row .input-with-unit {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dw-space-2);
+}
+
+.module-shell__main .settings-row .input-with-unit .dw-input,
+.module-shell__main .settings-row .dw-input[type='number'] {
+    width: 5.5rem;
+}
+
+.module-shell__main .settings-row .unit-chip {
+    color: var(--dw-text-muted);
+    font-size: var(--dw-text-xs);
+    font-weight: 500;
+}
+
+.module-shell__main .settings-section__card > .settings-section__subgroup {
+    margin: var(--dw-space-3) 0 var(--dw-space-1);
+    padding-top: var(--dw-space-3);
+    border-top: 1px solid color-mix(in srgb, var(--dw-text) 7%, transparent);
+    font-size: var(--dw-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--dw-text-muted);
+}
+
+.module-shell__main .settings-section__card > .settings-section__subgroup:first-child {
+    margin-top: var(--dw-space-1);
+    padding-top: 0;
+    border-top: 0;
+}
+
+/* ---- 设置区块（兼容旧 setting-block → 对齐分区卡） ---- */
+
+.module-shell__main .setting-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dw-space-3);
     margin-bottom: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 .module-shell__main .setting-block h3,
 .module-shell__main .setting-block__title {
-    margin: 0 0 var(--dw-space-2);
-    font-size: var(--dw-text-lg);
+    margin: 0;
+    padding: 0 var(--dw-space-1);
+    font-size: var(--dw-text-xs);
     font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dw-text-muted);
     line-height: var(--dw-leading-snug);
+}
+
+.module-shell__main .setting-block > .hint,
+.module-shell__main .setting-block > .setting-block__hint {
+    margin: 0;
+    padding: 0 var(--dw-space-1);
+}
+
+/* Legacy setting-block body: raise like settings-section__card */
+.module-shell__main .setting-block > .settings-meta,
+.module-shell__main .setting-block > .settings-secrets__list,
+.module-shell__main .setting-block > .update-options,
+.module-shell__main .setting-block > .update-block,
+.module-shell__main .setting-block > .session-policy,
+.module-shell__main .setting-block > .guest-notice {
+    padding: var(--dw-space-5) var(--dw-space-6);
+    border: 1px solid color-mix(in srgb, var(--dw-text) 8%, transparent);
+    border-radius: var(--dw-panel-radius);
+    background: color-mix(in srgb, var(--dw-text) 4.5%, var(--dw-bg));
 }
 
 .module-shell__main .setting-block.is-readonly {
@@ -200,6 +419,16 @@
     margin-top: clamp(6px, 0.8vmin, 8px);
     font-size: var(--dw-text-xs);
     color: var(--dw-text-secondary);
+}
+
+.module-shell__main .basic-ui-font-preview-block {
+    padding: var(--dw-space-3) var(--dw-space-4);
+    border-radius: var(--dw-control-radius-sm);
+    background: color-mix(in srgb, var(--dw-text) 4%, var(--dw-bg-panel));
+    border: 1px solid color-mix(in srgb, var(--dw-panel-outline, var(--dw-border-light)) 80%, transparent);
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-sm);
+    line-height: 1.45;
 }
 
 .module-shell__main .basic-ui-font-field {

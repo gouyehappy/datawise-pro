@@ -120,12 +120,40 @@ function decodeUtf8Base64(payload: string): string | null {
   }
 }
 
+/** Remote → local clipboard policy (Motty `terminal_clipboard`). Read stays refused. */
+export type Osc52ClipboardPolicy = "block" | "ask" | "allow";
+
+export type Osc52ClipboardHandlers = {
+  /** Write decoded text to the system clipboard (allow path). */
+  writeText: (text: string) => unknown;
+  /**
+   * Policy for remote writes. Default `allow` matches the historical always-write
+   * behavior so upgrades do not silently break vim/tmux yank.
+   */
+  policy?: Osc52ClipboardPolicy;
+  /**
+   * Called when policy is `ask` and a write payload decoded successfully.
+   * Must not block the PTY read loop — show UI and write later if the user confirms.
+   */
+  onAsk?: (text: string) => void;
+};
+
 /**
- * OSC 52 写入路径：`52;c;<base64>` → 解码后写系统剪贴板，返回 true（已处理）。
+ * OSC 52 写入路径：`52;c;<base64>` → 按策略写系统剪贴板，返回 true（已处理）。
  * 目标不含 c（primary/secondary）返回 false 交回内核（无默认处理=忽略）；
  * 读取查询（`?`）与清空语义返回 true 且不动作（不回应、不清空）。
+ * 读路径永远不回传用户剪贴板（隐私）。
  */
-export function handleOsc52ClipboardWrite(data: string, writeText: (text: string) => unknown): boolean {
+export function handleOsc52ClipboardWrite(
+  data: string,
+  writeTextOrHandlers: ((text: string) => unknown) | Osc52ClipboardHandlers,
+): boolean {
+  const handlers: Osc52ClipboardHandlers =
+    typeof writeTextOrHandlers === "function"
+      ? { writeText: writeTextOrHandlers, policy: "allow" }
+      : writeTextOrHandlers;
+  const policy = handlers.policy ?? "allow";
+
   if (!data) return false;
   const separator = data.indexOf(";");
   if (separator === -1) return false;
@@ -136,6 +164,12 @@ export function handleOsc52ClipboardWrite(data: string, writeText: (text: string
   if (!payload || payload.length > OSC52_MAX_PAYLOAD) return true;
   const text = decodeUtf8Base64(payload);
   if (text === null) return true;
-  void writeText(text);
+
+  if (policy === "block") return true;
+  if (policy === "ask") {
+    handlers.onAsk?.(text);
+    return true;
+  }
+  void handlers.writeText(text);
   return true;
 }

@@ -155,7 +155,7 @@ function remove(id: string) {
   max-height: min(340px, 50vh);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--dw-border) 70%, transparent);
-  border-radius: 12px;
+  border-radius: var(--dw-surface-radius, 12px);
   background:
       linear-gradient(
           180deg,
@@ -201,7 +201,7 @@ function remove(id: string) {
   margin-top: 8px;
   padding: 6px 12px;
   border: 1px solid color-mix(in srgb, var(--dw-primary) 30%, var(--dw-border));
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   background: color-mix(in srgb, var(--dw-primary) 12%, transparent);
   color: var(--dw-primary);
   font-size: var(--dw-text-xs);
@@ -239,7 +239,7 @@ function remove(id: string) {
   gap: 2px;
   padding: 9px 28px 9px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--dw-surface-radius, 8px);
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -289,7 +289,7 @@ function remove(id: string) {
   height: 22px;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   background: transparent;
   color: var(--dw-text-muted);
   cursor: pointer;

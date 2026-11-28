@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import type {EChartsOption, EChartsType} from 'echarts'
 
 const props = defineProps<{
@@ -18,23 +18,53 @@ async function ensureEcharts() {
   return echartsApi
 }
 
+function disposeChart() {
+  chart?.dispose()
+  chart = null
+}
+
+function dispose() {
+  renderGeneration += 1
+  disposeChart()
+  lastOptionJson = ''
+}
+
 async function render() {
-  if (!chartRef.value || !props.option) return
+  if (!props.option) {
+    dispose()
+    return
+  }
+  if (!chartRef.value) return
   const generation = ++renderGeneration
   const echarts = await ensureEcharts()
   if (generation !== renderGeneration) return
+  // v-if may have torn down the old DOM while chart still pointed at it.
   if (!chartRef.value) return
-  chart ??= echarts.init(chartRef.value)
+  if (chart) {
+    const dom = chart.getDom?.()
+    if (!dom || dom !== chartRef.value || !dom.isConnected) {
+      disposeChart()
+    }
+  }
+  if (!chart) {
+    chart = echarts.init(chartRef.value)
+  }
+  if (generation !== renderGeneration) return
   chart.setOption(props.option, true)
   chart.resize()
 }
 
 function scheduleRender() {
-  if (!props.option) return
+  if (!props.option) {
+    dispose()
+    return
+  }
   const nextJson = JSON.stringify(props.option)
-  if (nextJson === lastOptionJson) return
+  if (nextJson === lastOptionJson && chart) return
   lastOptionJson = nextJson
-  void render()
+  void nextTick(() => {
+    void render()
+  })
 }
 
 function onWindowResize() {
@@ -43,12 +73,6 @@ function onWindowResize() {
     resizeTimer = null
     chart?.resize()
   }, 120)
-}
-
-function dispose() {
-  renderGeneration += 1
-  chart?.dispose()
-  chart = null
 }
 
 onMounted(() => {

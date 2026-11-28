@@ -1,9 +1,15 @@
 package org.apache.datawise.backend.controller.communityplugin;
 
 import org.apache.datawise.backend.domain.ConnectionConfig;
+import org.apache.datawise.backend.domain.communityplugin.CommunityPluginException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommunityPluginControllerMergeTest {
@@ -60,5 +66,25 @@ class CommunityPluginControllerMergeTest {
         assertTrue(secrets.contains("\"sudo_password\":\"new-sudo\""));
         assertTrue(secrets.contains("\"private_key\":\"PEM\""));
         assertTrue(secrets.contains("\"totp_secret\":\"otp\""));
+    }
+
+    @Test
+    void requireAllowedInstallPath_acceptsUnderPluginsRoot(@TempDir Path temp) throws Exception {
+        Path pluginsRoot = Files.createDirectories(temp.resolve("config").resolve("community-plugins"));
+        Path pack = Files.writeString(pluginsRoot.resolve("demo.dwp"), "x");
+        Path allowed = CommunityPluginController.requireAllowedInstallPath(
+                pack, pluginsRoot, temp.resolve("tmp").toString());
+        assertEquals(pack.toRealPath(), allowed);
+    }
+
+    @Test
+    void requireAllowedInstallPath_rejectsOutsideRoots(@TempDir Path temp) throws Exception {
+        Path pluginsRoot = Files.createDirectories(temp.resolve("config").resolve("community-plugins"));
+        Path outside = Files.createDirectories(temp.resolve("outside")).resolve("evil.dwp");
+        Files.writeString(outside, "x");
+        assertThrows(
+                CommunityPluginException.class,
+                () -> CommunityPluginController.requireAllowedInstallPath(
+                        outside, pluginsRoot, temp.resolve("tmp-empty").toString()));
     }
 }

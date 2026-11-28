@@ -67,6 +67,9 @@ function dispatchSseBlock(block: string, handlers: AnalysisStreamHandlers): void
         data = JSON.parse(parsed.data)
     } catch {
         // Single bad event must not tear down the whole analysis stream.
+        console.warn('[analysis-sse] Skipping malformed SSE event JSON', {
+            event: parsed.event,
+        })
         return
     }
 

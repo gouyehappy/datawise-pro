@@ -92,7 +92,7 @@ function bindingLabel(binding: SqlKeybindingConfig): string {
   align-items: center;
   gap: 6px;
   padding: 5px 6px;
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   border: 1px solid var(--se-border);
   background: color-mix(in srgb, var(--se-bg-muted) 35%, var(--se-bg));
 }
@@ -125,7 +125,7 @@ function bindingLabel(binding: SqlKeybindingConfig): string {
   min-height: 22px;
   padding: 3px 5px;
   border: 1px solid var(--se-border);
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   font-size: 9px;
   color: var(--se-text);
   background: var(--se-bg-muted);

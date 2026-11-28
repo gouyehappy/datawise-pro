@@ -85,12 +85,105 @@
       },
       headers: ctx.headers || {}
     };
+    if (!ctx.req) {
+      ctx.req = {
+        method: ctx.method || "",
+        url: ctx.url || "",
+        headers: Array.isArray(ctx.headersList) ? ctx.headersList.slice() : [],
+        bodyMode: ctx.bodyMode || "raw",
+        bodyRaw: ctx.bodyRaw || "",
+        bodyContentType: ctx.bodyContentType || "application/json",
+        dirty: false
+      };
+    }
+    const reqState = ctx.req;
+    const headerApi = {
+      get(key) {
+        const name = String(key || "");
+        const row = (reqState.headers || []).find((item) => String(item.key || "").toLowerCase() === name.toLowerCase());
+        return row ? row.value : undefined;
+      },
+      set(key, value) {
+        const name = String(key || "").trim();
+        if (!name) return;
+        const enabled = true;
+        const next = value == null ? "" : String(value);
+        const list = reqState.headers || (reqState.headers = []);
+        const existing = list.find((item) => String(item.key || "").toLowerCase() === name.toLowerCase());
+        if (existing) {
+          existing.key = name;
+          existing.value = next;
+          existing.enabled = enabled;
+        } else {
+          list.push({ key: name, value: next, enabled });
+        }
+        reqState.dirty = true;
+        ctx.reqDirty = true;
+      },
+      upsert(key, value) { headerApi.set(key, value); },
+      remove(key) {
+        const name = String(key || "");
+        const before = (reqState.headers || []).length;
+        reqState.headers = (reqState.headers || []).filter(
+          (item) => String(item.key || "").toLowerCase() !== name.toLowerCase()
+        );
+        if (reqState.headers.length !== before) {
+          reqState.dirty = true;
+          ctx.reqDirty = true;
+        }
+      }
+    };
+    const bodyApi = {
+      get raw() { return reqState.bodyRaw || ""; },
+      set raw(value) {
+        reqState.bodyRaw = value == null ? "" : String(value);
+        if (!reqState.bodyMode || reqState.bodyMode === "none") reqState.bodyMode = "raw";
+        reqState.dirty = true;
+        ctx.reqDirty = true;
+      },
+      get mode() { return reqState.bodyMode || "raw"; },
+      set mode(value) {
+        reqState.bodyMode = value == null ? "raw" : String(value);
+        reqState.dirty = true;
+        ctx.reqDirty = true;
+      },
+      update(value) {
+        if (value == null) return;
+        if (typeof value === "string") {
+          reqState.bodyRaw = value;
+        } else {
+          try { reqState.bodyRaw = JSON.stringify(value); }
+          catch (error) { reqState.bodyRaw = String(value); }
+        }
+        if (!reqState.bodyMode || reqState.bodyMode === "none") reqState.bodyMode = "raw";
+        if (!reqState.bodyContentType) reqState.bodyContentType = "application/json";
+        reqState.dirty = true;
+        ctx.reqDirty = true;
+      }
+    };
+    const requestApi = {
+      get method() { return reqState.method || ""; },
+      set method(value) {
+        reqState.method = String(value || "").toUpperCase();
+        reqState.dirty = true;
+        ctx.reqDirty = true;
+      },
+      get url() { return reqState.url || ""; },
+      set url(value) {
+        reqState.url = value == null ? "" : String(value);
+        reqState.dirty = true;
+        ctx.reqDirty = true;
+        ctx.urlDirty = true;
+      },
+      headers: headerApi,
+      body: bodyApi
+    };
     const pm = {
       environment: env,
       variables: env,
       globals: env,
       response,
-      request: { url: ctx.url || "", method: ctx.method || "" },
+      request: requestApi,
       test(name, fn) {
         const title = String(name || "test");
         try {
@@ -152,40 +245,66 @@
     };
   }
 
-  function run(code, ctx) {
+  /* Scripts now run inside the Go sidecar's goja VM (script/run RPC) rather
+     than `new Function` in the iframe. That gives a real sandbox (no window,
+     document, fetch or HC.bridge), a hard execution timeout and identical
+     pm.* behaviour in single requests and workflow runs. `buildSandbox` above
+     is kept only as a reference for the older local runner. */
+  async function run(code, ctx) {
     const source = String(code || "").trim();
     const result = { ok: true, tests: [], logs: [], error: "", durationMs: 0 };
     if (!source) return result;
     const started = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-    const box = buildSandbox(ctx || { vars: {} });
+    const context = ctx || { vars: {} };
+    const hasResponse = Object.prototype.hasOwnProperty.call(context, "status");
+    const params = {
+      code: source,
+      vars: context.vars || {},
+      response: null,
+      request: null
+    };
+    if (hasResponse) {
+      params.response = {
+        status: context.status || 0,
+        statusText: context.statusText || "",
+        durationMs: context.durationMs || 0,
+        headers: context.headers || {},
+        bodyText: context.bodyText || ""
+      };
+    } else {
+      params.request = {
+        method: context.method || "GET",
+        url: context.url || "",
+        headers: context.headersList || [],
+        bodyMode: context.bodyMode || "raw",
+        bodyRaw: context.bodyRaw || "",
+        bodyContentType: context.bodyContentType || "application/json",
+        auth: context.auth || null
+      };
+    }
     try {
-      // Restricted surface: no access to window via scope chain of the Function body
-      // beyond the injected bindings. Plugin iframe already isolates host chrome.
-      const runner = new Function(
-        "pm", "apt", "response", "responseBody", "responseHeaders", "responseCode", "console", "expect",
-        `"use strict";\n${source}`
-      );
-      runner(
-        box.pm,
-        box.apt,
-        box.response,
-        box.responseBody,
-        box.responseHeaders,
-        box.responseCode,
-        box.console,
-        box.pm.expect
-      );
-      result.tests = box.tests;
-      result.logs = box.logs;
-      if (box.tests.some((item) => !item.ok)) result.ok = false;
+      const out = await HC.bridge.invoke("script/run", params);
+      result.ok = !!out.ok;
+      result.error = out.error || "";
+      result.logs = out.logs || [];
+      result.tests = out.tests || [];
+      result.durationMs = Number(out.durationMs) || 0;
+      context.dirty = !!out.dirty;
+      context.reqDirty = !!out.reqDirty;
+      if (out.vars && typeof out.vars === "object") {
+        Object.keys(context.vars).forEach((key) => {
+          if (!Object.prototype.hasOwnProperty.call(out.vars, key)) delete context.vars[key];
+        });
+        Object.assign(context.vars, out.vars);
+      }
+      if (out.request && typeof out.request === "object") context.req = out.request;
+      if (result.error) result.ok = false;
     } catch (error) {
       result.ok = false;
       result.error = (error && error.message) || String(error);
-      result.tests = box.tests;
-      result.logs = box.logs;
     }
     const ended = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-    result.durationMs = Math.round(ended - started);
+    if (!result.durationMs) result.durationMs = Math.round(ended - started);
     return result;
   }
 

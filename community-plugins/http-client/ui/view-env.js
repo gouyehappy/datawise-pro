@@ -107,17 +107,13 @@
       });
       host.append(node);
     });
-    host.append(el("button", {
-      class: "hc-icon-btn", type: "button", text: "+", title: t("env.new"),
-      on: {
-        click: async () => {
-          const name = await util.promptDialog({ title: t("env.new"), label: t("dialog.name") });
-          if (!name) return;
-          const created = store.createEnvironment(name);
-          openEnvironment(created.id);
-        }
-      }
-    }));
+    requestAnimationFrame(() => {
+      if (HC.app && HC.app.updateTabstripOverflow) HC.app.updateTabstripOverflow();
+    });
+  }
+
+  function countEnabledVars(environment) {
+    return (environment.variables || []).filter((row) => row && row.enabled !== false && String(row.key || "").trim()).length;
   }
 
   function render() {
@@ -128,32 +124,99 @@
     pruneOpen();
 
     if (!store.state.environments.length) {
-      host.append(el("div", { class: "hc-env-empty", text: t("side.emptyEnvironments") }));
-      host.append(util.renderDynamicVarCatalog());
+      host.append(el("div", { class: "hc-env-empty" }, [
+        el("div", { class: "hc-env-empty-title", text: t("side.emptyEnvironments") }),
+        el("div", { class: "hc-hint", text: t("env.emptyHint") }),
+        el("button", {
+          type: "button",
+          class: "hc-btn hc-btn-primary",
+          text: t("env.new"),
+          on: {
+            click: async () => {
+              const name = await util.promptDialog({ title: t("env.new"), label: t("dialog.name") });
+              if (!name) return;
+              const created = store.createEnvironment(name);
+              openEnvironment(created.id);
+            }
+          }
+        })
+      ]));
       return;
     }
 
     const environment = store.state.environments.find((item) => item.id === activeOpenId)
       || store.activeEnvironment();
     if (!environment || openIds.indexOf(environment.id) < 0) {
-      host.append(el("div", { class: "hc-env-empty", text: t("env.pickOne") }));
-      host.append(util.renderDynamicVarCatalog());
+      host.append(el("div", { class: "hc-env-empty" }, [
+        el("div", { class: "hc-env-empty-title", text: t("env.pickOne") }),
+        el("div", { class: "hc-hint", text: t("env.pickOneHint") })
+      ]));
       return;
     }
 
-    host.append(el("div", { class: "hc-env-head" }, [
-      el("div", { class: "hc-env-title", text: `${t("env.variables")} · ${environment.name}` }),
-      el("div", { class: "hc-hint", text: t("env.variablesHint") })
-    ]));
-
-    host.append(util.renderDynamicVarCatalog());
-
-    const kvHost = el("div", { class: "hc-env-kv" });
-    host.append(kvHost);
     if (!environment.variables || !environment.variables.length) {
       environment.variables = [util.emptyRow()];
     }
-    util.createKVEditor(kvHost, {
+    const enabled = countEnabledVars(environment);
+
+    const nameInput = el("input", {
+      class: "hc-input hc-env-name-input",
+      type: "text",
+      value: environment.name || "",
+      spellcheck: "false",
+      title: t("action.rename")
+    });
+    nameInput.addEventListener("change", () => {
+      const next = String(nameInput.value || "").trim() || t("misc.environment");
+      environment.name = next;
+      nameInput.value = next;
+      store.persist();
+      store.emit("environments");
+      renderTabs();
+    });
+
+    const head = el("div", { class: "hc-env-head" });
+    const top = el("div", { class: "hc-env-head-row" }, [
+      nameInput,
+      el("span", {
+        class: "hc-env-count",
+        text: t("env.varCount", { count: enabled })
+      }),
+      el("span", { class: "hc-grow" }),
+      el("button", {
+        type: "button",
+        class: "hc-btn hc-btn-sm hc-btn-ghost",
+        text: t("action.dynamicVars"),
+        title: t("env.builtinHint"),
+        on: { click: () => util.openDynamicVarsDialog() }
+      }),
+      el("button", {
+        type: "button",
+        class: "hc-btn hc-btn-sm hc-btn-ghost",
+        text: t("action.duplicate"),
+        title: t("env.duplicateHint"),
+        on: {
+          click: () => {
+            const copy = store.createEnvironment(t("tab.copySuffix", { name: environment.name }));
+            copy.variables = JSON.parse(JSON.stringify(environment.variables || []));
+            store.persist();
+            store.emit("environments");
+            openEnvironment(copy.id);
+            util.toast(t("env.duplicated"), "success");
+          }
+        }
+      })
+    ]);
+    head.append(top);
+    head.append(el("div", { class: "hc-hint hc-env-head-hint", text: t("env.variablesHintShort") }));
+    host.append(head);
+
+    // Scroll shell must stay outside createKVEditor — it overwrites host.className.
+    const kvScroll = el("div", { class: "hc-env-kv" });
+    const kvEditor = el("div");
+    kvScroll.append(kvEditor);
+    host.append(kvScroll);
+    util.createKVEditor(kvEditor, {
       rows: environment.variables,
       keyLabel: t("kv.keyName"),
       valueLabel: t("kv.valueName"),
@@ -163,7 +226,11 @@
       descriptionPlaceholder: t("kv.descriptionPlaceholder"),
       onChange: () => {
         store.schedulePersist();
+        const chip = util.$(".hc-env-count");
+        if (chip) chip.textContent = t("env.varCount", { count: countEnabledVars(environment) });
         if (HC.viewRequest && store.activeTab()) HC.viewRequest.updateUrlFlag(store.activeTab());
+        const sideMeta = util.$(`.hc-env-row[data-env-id="${environment.id}"] .hc-env-meta`);
+        if (sideMeta) sideMeta.textContent = String(countEnabledVars(environment));
       }
     });
   }

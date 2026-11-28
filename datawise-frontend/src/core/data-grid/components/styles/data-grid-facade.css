@@ -136,10 +136,41 @@ th.is-stats-active .th-label {
   background: transparent;
 }
 
+.data-grid :deep(.grid-label-btn.is-open),
+.data-grid :slotted(.grid-label-btn.is-open),
+.grid-toolbar-group :slotted(.grid-label-btn.is-open),
 .data-grid :deep(.grid-label-btn:hover:not(:disabled)),
 .data-grid :slotted(.grid-label-btn:hover:not(:disabled)),
 .grid-toolbar-group :slotted(.grid-label-btn:hover:not(:disabled)) {
   border-color: transparent;
+}
+
+/* DwIcon 根节点也是 span；只藏文字标签，保留图标 */
+.data-grid.is-hide-toolbar-labels :deep(.grid-label-btn > span:not(.dw-icon-root)),
+.data-grid.is-hide-toolbar-labels :slotted(.grid-label-btn > span:not(.dw-icon-root)),
+.data-grid.is-hide-toolbar-labels :deep(.dw-segment__btn--label > span:not(.dw-icon-root)),
+.data-grid.is-hide-toolbar-labels :slotted(.dw-segment__btn--label > span:not(.dw-icon-root)),
+.data-grid.is-hide-toolbar-labels :deep(.query-result-view-toggle .dw-segment__btn > span:not(.dw-icon-root)),
+.data-grid.is-hide-toolbar-labels :slotted(.query-result-view-toggle .dw-segment__btn > span:not(.dw-icon-root)) {
+  display: none;
+}
+
+.data-grid.is-hide-toolbar-labels :deep(.grid-label-btn),
+.data-grid.is-hide-toolbar-labels :slotted(.grid-label-btn) {
+  gap: 0;
+  padding-inline: var(--dw-space-2);
+  min-width: var(--dw-grid-toolbar-control-h, var(--dw-icon-btn-size));
+  justify-content: center;
+}
+
+.data-grid.is-hide-toolbar-labels :deep(.dw-segment__btn--label),
+.data-grid.is-hide-toolbar-labels :slotted(.dw-segment__btn--label),
+.data-grid.is-hide-toolbar-labels :deep(.query-result-view-toggle .dw-segment__btn),
+.data-grid.is-hide-toolbar-labels :slotted(.query-result-view-toggle .dw-segment__btn) {
+  gap: 0;
+  padding-inline: 0;
+  min-width: var(--dw-grid-toolbar-control-h, var(--dw-icon-btn-size));
+  justify-content: center;
 }
 
 .grid-toolbar-group {
@@ -858,22 +889,41 @@ th.is-stats-active .th-label {
   text-align: left;
 }
 
+/*
+ * 数据类型着色：与结构编辑器类型色同源（清晰、暗色可读）。
+ * 单元格 + 表头类型行（.th-type）上色；列名保持正文色，避免整表花成霓虹。
+ */
+.data-grid {
+  --dw-grid-type-number: #2563eb;
+  --dw-grid-type-datetime: #b45309;
+  --dw-grid-type-boolean: #7c3aed;
+  --dw-grid-type-string: #15803d;
+}
+
+:root.dark .data-grid,
+[data-theme='dark'] .data-grid {
+  --dw-grid-type-number: #93c5fd;
+  --dw-grid-type-datetime: #fcd34d;
+  --dw-grid-type-boolean: #c4b5fd;
+  --dw-grid-type-string: #86efac;
+}
+
 .data-grid.is-type-coloring :deep(.dw-data-grid-table td.is-type-number),
-.data-grid.is-type-coloring :deep(.dw-data-grid-table th.is-type-number .th-label) {
-  color: color-mix(in srgb, var(--dw-info-fg) 88%, var(--dw-text));
+.data-grid.is-type-coloring :deep(.dw-data-grid-table th.is-type-number .th-type) {
+  color: var(--dw-grid-type-number);
 }
 
 .data-grid.is-type-coloring :deep(.dw-data-grid-table td.is-type-datetime),
-.data-grid.is-type-coloring :deep(.dw-data-grid-table th.is-type-datetime .th-label) {
-  color: color-mix(in srgb, var(--dw-warning-fg, #d97706) 82%, var(--dw-text));
+.data-grid.is-type-coloring :deep(.dw-data-grid-table th.is-type-datetime .th-type) {
+  color: var(--dw-grid-type-datetime);
 }
 
 .data-grid.is-type-coloring :deep(.dw-data-grid-table td.is-type-boolean),
-.data-grid.is-type-coloring :deep(.dw-data-grid-table th.is-type-boolean .th-label) {
-  color: color-mix(in srgb, var(--dw-success) 78%, var(--dw-text));
+.data-grid.is-type-coloring :deep(.dw-data-grid-table th.is-type-boolean .th-type) {
+  color: var(--dw-grid-type-boolean);
 }
 
 .data-grid.is-type-coloring :deep(.dw-data-grid-table td.is-type-string),
-.data-grid.is-type-coloring :deep(.dw-data-grid-table th.is-type-string .th-label) {
-  color: var(--dw-text);
+.data-grid.is-type-coloring :deep(.dw-data-grid-table th.is-type-string .th-type) {
+  color: var(--dw-grid-type-string);
 }

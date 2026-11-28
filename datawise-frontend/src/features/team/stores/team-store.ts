@@ -18,6 +18,7 @@ import type {
 } from '@/core/types'
 import {teamsApi} from '@/api'
 import {resolveActiveTeamId} from '@/features/team/services/team-shared-explorer.service'
+import {isGuestOrAnonymousSession} from '@/features/auth/services/user-access-policy'
 
 /** 团队列表、详情与协作 API 统一入口 */
 export const useTeamStore = defineStore('team', () => {
@@ -46,6 +47,12 @@ export const useTeamStore = defineStore('team', () => {
     const sharedQueriesByTeamId = ref<Record<string, TeamSharedQuerySummary[]>>({})
 
     async function load() {
+        // 团队数据只属于注册用户；访客启动阶段直接落空态，不发无意义的 401/403。
+        if (isGuestOrAnonymousSession()) {
+            resetForSession()
+            ready.value = true
+            return
+        }
         teams.value = await teamsApi.fetchAll()
         activeTeamId.value = resolveActiveTeamId(teams.value, activeTeamId.value)
         ready.value = true

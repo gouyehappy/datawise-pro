@@ -70,10 +70,13 @@ public class AiAnalysisGraphRunner {
                 RunnableConfig latestConfig = AiAnalysisGraphStreamSupport.resolveLatestConfig(compiledGraph, config);
                 Optional<AiAnalysisInterruptPayload> interrupt = detectInterrupt(latestConfig);
                 if (interrupt.isPresent()) {
-                    if (!humanInTheLoop || Boolean.TRUE.equals(request.skipSqlConfirmation())) {
+                    // Never trust client skipSqlConfirmation on the public HITL stream path.
+                    // Auto-resume only when the server opted out of HITL (canvas / internal).
+                    if (!humanInTheLoop) {
                         return resumeConfirmed(interrupt.get(), pipelineStart);
                     }
-                    return AiAnalysisRunOutcome.awaitingConfirmation(interrupt.get());
+                    return AiAnalysisRunOutcome.awaitingConfirmation(
+                            issueInterruptGrant(interrupt.get(), latestConfig));
                 }
                 AiChatReply reply = extractReply(result, latestConfig);
                 logPipelineDone(pipelineStart);
@@ -89,17 +92,31 @@ public class AiAnalysisGraphRunner {
         if (!request.approved()) {
             return AiAnalysisRunOutcome.completed(AiChatReply.chat("已取消 SQL 执行。"));
         }
+        long pipelineStart = System.currentTimeMillis();
+        RunnableConfig config = resolveResumeConfig(request.threadId());
+        assertResumeOwnedByCurrentUser(config);
+        StateSnapshot snapshot = compiledGraph.getState(config);
+        String safeSql = snapshot.state().value(AiAnalysisGraphKeys.SAFE_SQL, "");
+        String sessionConnectionId = snapshot.state().value(AiAnalysisGraphKeys.CONNECTION_ID, "");
+        AgentWriteGrantService.requireConfirmedSqlMatchesSafeSql(request.confirmedSql(), safeSql);
+
         // T-AI-1: Agent write must present a one-shot exact-SQL grant before resume executes.
-        agentWriteGrantService.consume(
+        AgentWriteGrantService.ConsumedGrant grant = agentWriteGrantService.consume(
                 request.grantId(),
                 request.confirmedSql(),
                 UserContext.requireUserId());
-        long pipelineStart = System.currentTimeMillis();
+        AgentWriteGrantService.requireConnectionMatches(grant.connectionId(), sessionConnectionId);
+        if (grant.threadId() != null && !grant.threadId().isBlank()
+                && !grant.threadId().equals(request.threadId())) {
+            throw new IllegalArgumentException("grant threadId does not match analysis session");
+        }
+
         AiAnalysisInterruptPayload interrupt = new AiAnalysisInterruptPayload(
                 request.threadId(),
                 request.checkpointId(),
-                null,
-                AiAnalysisSteps.SQL_EXECUTE
+                safeSql,
+                AiAnalysisSteps.SQL_EXECUTE,
+                grant.grantId()
         );
         return AiAnalysisStepContext.runWith(onStep, () -> {
             try {
@@ -167,6 +184,39 @@ public class AiAnalysisGraphRunner {
         Long ownerUserId = owner.map(AiAnalysisGraphRunner::asUserId).orElse(null);
         if (ownerUserId == null || !currentUserId.equals(ownerUserId)) {
             throw new IllegalArgumentException("unauthorized resume: analysis session does not belong to the current user");
+        }
+    }
+
+    private AiAnalysisInterruptPayload issueInterruptGrant(
+            AiAnalysisInterruptPayload interrupt,
+            RunnableConfig config
+    ) {
+        StateSnapshot snapshot = compiledGraph.getState(config);
+        String connectionId = snapshot.state().value(AiAnalysisGraphKeys.CONNECTION_ID, "");
+        String database = snapshot.state().value(AiAnalysisGraphKeys.DATABASE, "");
+        String conversationId = snapshot.state().value(AiAnalysisGraphKeys.SESSION_ID, "");
+        if (connectionId == null || connectionId.isBlank()) {
+            return interrupt;
+        }
+        try {
+            AgentWriteGrantService.GrantView grant = agentWriteGrantService.issueForInterrupt(
+                    new AgentWriteGrantService.IssueRequest(
+                            conversationId,
+                            connectionId,
+                            database,
+                            null,
+                            interrupt.sql(),
+                            interrupt.threadId()));
+            return new AiAnalysisInterruptPayload(
+                    interrupt.threadId(),
+                    interrupt.checkpointId(),
+                    interrupt.sql(),
+                    interrupt.nextStep(),
+                    grant.grantId());
+        } catch (RuntimeException ex) {
+            ExceptionLogging.error(log, "ai.analysis.graph.interrupt-grant threadId=" + interrupt.threadId(), ex);
+            // Fall back to interrupt without grantId; client may still issue with threadId.
+            return interrupt;
         }
     }
 

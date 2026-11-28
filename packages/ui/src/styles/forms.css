@@ -159,7 +159,7 @@ select.dw-input:focus {
     width: var(--dw-icon-size-sm);
     height: var(--dw-icon-size-sm);
     margin: 0;
-    accent-color: var(--dw-primary);
+    accent-color: var(--dw-check-accent, var(--dw-primary));
     cursor: pointer;
 }
 
@@ -308,8 +308,7 @@ select.dw-input--sm {
     background-position: right 10px center;
 }
 
-/* ── DwSelect（统一下拉，视觉对齐 SearchInput） ── */
-
+/* ── DwSelect（全局统一：Cursor molten SelectStyledButton） ── */
 .dw-select-host {
     display: block;
     width: 100%;
@@ -331,32 +330,35 @@ select.dw-input--sm {
     height: var(--dw-select-trigger-h);
     min-height: var(--dw-select-trigger-h);
     max-height: var(--dw-select-trigger-h);
-    padding: 0 var(--dw-space-2) 0 var(--dw-control-pad-x);
-    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border, var(--dw-border)));
-    border-radius: var(--dw-input-radius);
-    background: var(--dw-bg-input, var(--dw-bg));
+    padding: 0 6px 0 8px;
+    /* Cursor molten SelectStyledButton — soft border, 6px radius, no heavy ring */
+    border: 1px solid color-mix(in srgb, var(--dw-text) 14%, transparent);
+    border-radius: var(--dw-surface-radius, 6px);
+    background: color-mix(in srgb, var(--dw-text) 4%, var(--dw-bg));
     color: var(--dw-text);
-    font-size: var(--dw-select-font);
+    font-size: var(--dw-text-sm);
     line-height: var(--dw-leading);
-    font-weight: 400;
+    font-weight: 500;
+    letter-spacing: -0.01em;
     text-align: left;
     cursor: pointer;
     box-shadow: none;
     overflow: hidden;
-    transition: var(--dw-transition-colors), var(--dw-transition-shadow);
+    transition: border-color 0.14s ease, background 0.14s ease;
 }
 
 .dw-select__trigger:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--dw-text) 18%, var(--dw-border));
+    border-color: color-mix(in srgb, var(--dw-text) 22%, transparent);
+    background: color-mix(in srgb, var(--dw-text) 6%, var(--dw-bg));
 }
 
 .dw-select.is-open .dw-select__trigger,
 .dw-select__trigger:focus-visible,
 .dw-select--combo:focus-within .dw-select__trigger {
     outline: none;
-    border-color: var(--dw-focus-border);
-    background: var(--dw-bg);
-    box-shadow: var(--dw-focus-ring);
+    border-color: color-mix(in srgb, var(--dw-text) 28%, transparent);
+    background: color-mix(in srgb, var(--dw-text) 6%, var(--dw-bg));
+    box-shadow: none;
 }
 
 .dw-select.is-disabled .dw-select__trigger {
@@ -367,18 +369,18 @@ select.dw-input--sm {
 .dw-select__value {
     flex: 1;
     min-width: 0;
-    padding-right: var(--dw-space-2);
+    padding-right: var(--dw-space-1);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 400;
+    font-weight: 500;
     color: var(--dw-text);
     line-height: var(--dw-leading);
 }
 
 .dw-select.is-placeholder .dw-select__value {
     color: var(--dw-text-muted);
-    font-weight: 400;
+    font-weight: 500;
 }
 
 .dw-select__actions {
@@ -390,15 +392,15 @@ select.dw-input--sm {
     gap: 0;
 }
 
-/* Integrated clear / chevron — same footprint, no divider */
+/* Integrated clear / chevron — compact Cursor footprint */
 .dw-select__icon-btn {
     appearance: none;
     display: inline-flex;
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: var(--dw-control-h-xs);
-    height: var(--dw-control-h-xs);
+    width: 14px;
+    height: 14px;
     margin: 0;
     padding: 0;
     border: none;
@@ -406,8 +408,7 @@ select.dw-input--sm {
     background: transparent;
     color: var(--dw-text-muted);
     cursor: pointer;
-    transition: background var(--dw-duration-fast) var(--dw-ease),
-        color var(--dw-duration-fast) var(--dw-ease);
+    transition: background 0.12s ease, color 0.12s ease;
 }
 
 .dw-select__icon-btn:hover:not(:disabled) {
@@ -424,15 +425,15 @@ select.dw-input--sm {
     pointer-events: none;
 }
 
-/* Legacy affix alias — keep size variants working */
+/* Legacy affix alias — same footprint as icon-btn */
 .dw-select__affix {
     appearance: none;
     display: inline-flex;
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: var(--dw-control-h-xs);
-    height: var(--dw-control-h-xs);
+    width: 14px;
+    height: 14px;
     margin: 0;
     padding: 0;
     border: none;
@@ -444,17 +445,17 @@ select.dw-input--sm {
 
 .dw-select__chevron {
     flex-shrink: 0;
-    width: var(--dw-icon-size-sm);
-    height: var(--dw-icon-size-sm);
+    width: 12px;
+    height: 12px;
     color: inherit;
-    opacity: 0.8;
-    transition: transform var(--dw-duration) var(--dw-ease), color var(--dw-duration) var(--dw-ease), opacity var(--dw-duration) var(--dw-ease);
+    opacity: 0.55;
+    transition: transform 0.14s ease, color 0.14s ease, opacity 0.14s ease;
 }
 
 .dw-select.is-open .dw-select__chevron {
     transform: rotate(180deg);
-    color: var(--dw-primary);
-    opacity: 1;
+    color: var(--dw-text-muted);
+    opacity: 0.85;
 }
 
 .dw-select__menu {
@@ -463,22 +464,23 @@ select.dw-input--sm {
     margin: 0;
     padding: var(--dw-space-1);
     list-style: none;
+    /* 宽度由内容 / 触发器（inline minWidth）决定，避免短选项也被 10rem 撑开 */
     min-width: 0;
     width: max-content;
-    max-width: min(420px, 92vw);
+    max-width: min(320px, 92vw);
     max-height: 280px;
     overflow-y: auto;
-    border: 1px solid color-mix(in srgb, var(--dw-border-light) 88%, var(--dw-border));
-    border-radius: var(--dw-menu-radius);
-    background: var(--dw-bg);
-    box-shadow: var(--dw-menu-shadow);
+    border: 1px solid color-mix(in srgb, var(--dw-text) 14%, transparent);
+    border-radius: var(--dw-surface-radius, 6px);
+    background: color-mix(in srgb, var(--dw-text) 5%, var(--dw-bg));
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--dw-text) 5%, transparent),
+        0 8px 24px color-mix(in srgb, #000 28%, transparent);
 }
 
 .dw-select__menu--portal {
-    position: fixed;
-    top: auto;
-    left: auto;
-    right: auto;
+    /* 定位由 reka 外层 wrapper 负责；relative 保留文档流尺寸供 wrapper 测量，同时 z-index 仍生效 */
+    position: relative;
     z-index: var(--dw-z-select-above-modal);
 }
 
@@ -497,13 +499,13 @@ select.dw-input--sm {
     overflow: hidden !important;
 }
 
-/* Combobox: search field look, no vertical splitter */
+/* Combobox: same Cursor chrome; text cursor for filter input */
 .dw-select--combo .dw-select__trigger {
     display: flex;
     align-items: center;
     gap: var(--dw-gap-sm);
     width: 100%;
-    padding: 0 var(--dw-space-2) 0 var(--dw-space-4);
+    padding: 0 6px 0 8px;
     cursor: text;
 }
 
@@ -559,18 +561,18 @@ select.dw-input--sm {
     gap: var(--dw-gap-sm);
     flex-shrink: 0;
     box-sizing: border-box;
-    min-height: var(--dw-control-h-sm);
-    padding: 0 var(--dw-space-3) 0 var(--dw-space-4);
-    border: 1px solid var(--dw-panel-outline, var(--dw-panel-border, var(--dw-border)));
-    border-radius: var(--dw-input-radius);
-    background: var(--dw-bg-input, var(--dw-bg));
+    min-height: 28px;
+    padding: 0 8px;
+    border: 1px solid color-mix(in srgb, var(--dw-text) 12%, transparent);
+    border-radius: var(--dw-surface-radius, 6px);
+    background: color-mix(in srgb, var(--dw-text) 4%, var(--dw-bg));
     color: var(--dw-text-muted);
 }
 
 .dw-select__search:focus-within {
-    border-color: var(--dw-focus-border);
-    box-shadow: var(--dw-focus-ring);
-    background: var(--dw-bg);
+    border-color: color-mix(in srgb, var(--dw-text) 28%, transparent);
+    box-shadow: none;
+    background: color-mix(in srgb, var(--dw-text) 6%, var(--dw-bg));
 }
 
 .dw-select__search-icon {
@@ -634,32 +636,40 @@ select.dw-input--sm {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--dw-gap-md);
+    gap: var(--dw-space-5);
     width: 100%;
-    min-height: calc(var(--dw-control-h) - 2px);
-    padding: 0 var(--dw-space-4);
+    min-height: 24px;
+    padding: 0 8px;
     border: none;
-    border-radius: var(--dw-menu-item-radius);
+    border-radius: var(--dw-surface-radius, 4px);
     background: transparent;
-    color: var(--dw-text-secondary);
-    font-size: var(--dw-select-font);
+    color: color-mix(in srgb, var(--dw-text) 82%, transparent);
+    font-size: var(--dw-text-sm);
+    font-weight: 500;
+    letter-spacing: -0.01em;
     line-height: var(--dw-leading);
     text-align: left;
     cursor: pointer;
-    transition: background var(--dw-duration-fast) var(--dw-ease), color var(--dw-duration-fast) var(--dw-ease);
+    transition: background 0.12s ease, color 0.12s ease;
 }
 
 .dw-select__item:hover:not(:disabled),
 .dw-select__item[data-highlighted]:not([data-disabled]) {
-    background: var(--dw-bg-hover);
+    background: color-mix(in srgb, var(--dw-text) 8%, transparent);
     color: var(--dw-text);
     outline: none;
 }
 
+/* Cursor: selected = checkmark; no primary wash */
 .dw-select__item.is-active {
-    background: var(--dw-primary-soft);
-    color: var(--dw-primary);
+    background: transparent;
+    color: var(--dw-text);
     font-weight: 500;
+}
+
+.dw-select__item.is-active:hover:not(:disabled),
+.dw-select__item.is-active[data-highlighted]:not([data-disabled]) {
+    background: color-mix(in srgb, var(--dw-text) 8%, transparent);
 }
 
 .dw-select__item:disabled {
@@ -668,7 +678,7 @@ select.dw-input--sm {
 }
 
 .dw-select__item-label {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
     white-space: nowrap;
 }
@@ -680,7 +690,83 @@ select.dw-input--sm {
 
 .dw-select__check {
     flex-shrink: 0;
-    color: var(--dw-primary);
+    width: 14px;
+    height: 14px;
+    color: var(--dw-text);
+    opacity: 0.95;
+}
+
+/* settings — 随内容变宽（≥ 触发器），右对齐向左延伸；勾在行右 */
+/* 观感跟随 4 套 UI 皮肤（classic/ide/atelier/ledger）的 menu token，不写死圆角/配色 */
+.dw-select__menu--settings {
+    /* min-width 由 DwSelect 在打开前按触发器实测宽度写成具体像素，避免定位时测成 0 宽 */
+    width: max-content;
+    max-width: min(420px, 92vw);
+    padding: clamp(4px, calc(var(--dw-menu-pad-y, 8px) - 2px), 8px);
+    border-color: var(--dw-menu-border, var(--dw-border-strong));
+    border-radius: var(--dw-menu-radius, 8px);
+    background: var(--dw-bg-panel);
+    box-shadow: var(
+        --dw-menu-shadow,
+        0 12px 28px color-mix(in srgb, #000 26%, transparent),
+        0 2px 6px color-mix(in srgb, #000 12%, transparent)
+    );
+}
+
+.dw-select__menu--settings .dw-select__viewport {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: min(320px, 70vh);
+}
+
+.dw-select__menu--settings .dw-select__item {
+    min-height: var(--dw-menu-item-h, 30px);
+    padding: 0 10px;
+    gap: var(--dw-space-6);
+    border-radius: var(--dw-menu-item-radius, 4px);
+    color: var(--dw-text-secondary);
+    font-size: var(--dw-text-sm);
+    font-weight: 500;
+}
+
+.dw-select__menu--settings .dw-select__item:hover:not(:disabled),
+.dw-select__menu--settings .dw-select__item[data-highlighted]:not([data-disabled]) {
+    background: var(--dw-menu-hover, color-mix(in srgb, var(--dw-text) 8%, transparent));
+    color: var(--dw-text);
+}
+
+/* 选中态仅靠勾区分：不做主色淡底 / 不变色（与截图一致） */
+.dw-select__menu--settings .dw-select__item.is-active {
+    background: transparent;
+    color: var(--dw-text);
+    font-weight: 600;
+}
+
+.dw-select__menu--settings .dw-select__item.is-active:hover:not(:disabled),
+.dw-select__menu--settings .dw-select__item.is-active[data-highlighted]:not([data-disabled]) {
+    background: var(--dw-menu-hover, color-mix(in srgb, var(--dw-text) 8%, transparent));
+}
+
+.dw-select__menu--settings .dw-select__item-label {
+    flex: 1 1 auto;
+    /* 未达 max-width 时完整显示；触顶后再省略 */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dw-select__menu--settings .dw-select__check {
+    width: 15px;
+    height: 15px;
+    color: var(--dw-check-accent, var(--dw-primary));
+    opacity: 1;
+}
+
+.dw-select__menu--sm .dw-select__item {
+    min-height: 22px;
+    padding: 0 7px;
+    font-size: var(--dw-text-xs);
 }
 
 .dw-select-menu-enter-active,
@@ -694,30 +780,90 @@ select.dw-input--sm {
     transform: translateY(-4px);
 }
 
-/* sm — 与 .dw-input--sm / 工具栏密级同高 */
-.dw-select--sm .dw-select__trigger {
+/*
+ * Size / layout variants — chrome is shared above; only height & width change.
+ * default / sm / settings / pill / compact all share Cursor trigger + menu look.
+ */
+.dw-select--sm .dw-select__trigger,
+.dw-select--settings .dw-select__trigger,
+.dw-select--compact .dw-select__trigger {
     height: var(--dw-select-trigger-h-sm);
     min-height: var(--dw-select-trigger-h-sm);
     max-height: var(--dw-select-trigger-h-sm);
-    padding: 0 var(--dw-space-2) 0 var(--dw-control-pad-x-sm);
-    font-size: var(--dw-font-size-control);
-    box-sizing: border-box;
-    border-radius: var(--dw-input-radius);
 }
 
-.dw-select--sm .dw-select__icon-btn,
-.dw-select--sm .dw-select__affix {
-    width: 1.35rem;
-    height: 1.35rem;
+/* settings — hug content width (row controls); form fields still stretch */
+.dw-select-host:has(.dw-select--settings) {
+    width: auto;
+    max-width: min(280px, 100%);
 }
 
-.dw-select--sm .dw-select__item {
-    min-height: var(--dw-control-h-sm);
-    padding: 0 var(--dw-space-4);
-    font-size: var(--dw-font-size-control);
+.dw-select--settings {
+    width: auto;
+    max-width: min(280px, 100%);
 }
 
-/* pill — 工具栏圆角 */
+/* 朴素控件：纯色底 + 中性描边；圆角/边框跟随皮肤 token（ide/ledger 直角，classic/atelier 圆角） */
+.dw-select--settings .dw-select__trigger {
+    /* 比原来 24px 略大；并跟随皮肤密度（ide/ledger 更紧凑，atelier 稍宽松） */
+    --dw-settings-trigger-h: clamp(28px, var(--dw-density-sm, 28px), 30px);
+    width: auto;
+    min-width: 5.25rem;
+    height: var(--dw-settings-trigger-h);
+    min-height: var(--dw-settings-trigger-h);
+    max-height: var(--dw-settings-trigger-h);
+    padding: 0 10px 0 12px;
+    border-color: var(--dw-menu-border, var(--dw-border-strong));
+    border-radius: var(--dw-control-radius, 6px);
+    background: var(--dw-bg-input);
+    box-shadow: none;
+    font-size: var(--dw-text-sm);
+    font-weight: 500;
+    letter-spacing: 0;
+}
+
+.dw-select--settings .dw-select__trigger:hover:not(:disabled) {
+    border-color: var(--dw-border-strong);
+    background: color-mix(in srgb, var(--dw-text) 6%, var(--dw-bg-input));
+}
+
+.dw-select--settings.is-open .dw-select__trigger,
+.dw-select--settings .dw-select__trigger:focus-visible {
+    border-color: var(--dw-border-strong);
+    background: color-mix(in srgb, var(--dw-text) 6%, var(--dw-bg-input));
+    box-shadow: none;
+}
+
+.dw-select--settings .dw-select__chevron {
+    opacity: 0.65;
+}
+
+.dw-select--settings.is-open .dw-select__chevron {
+    color: var(--dw-text);
+    opacity: 0.9;
+}
+
+.dw-field .dw-select-host:has(.dw-select--settings),
+.dw-field .dw-select-host:has(.dw-select--sm),
+.dw-field .dw-select-host:has(.dw-select--default),
+.basic-ui-font-field .dw-select-host,
+.dw-field .dw-select--settings,
+.dw-field .dw-select--sm,
+.dw-field .dw-select--default,
+.basic-ui-font-field .dw-select--settings,
+.basic-ui-font-field .dw-select {
+    width: 100%;
+    max-width: none;
+}
+
+.dw-field .dw-select--settings .dw-select__trigger,
+.dw-field .dw-select--sm .dw-select__trigger,
+.dw-field .dw-select--default .dw-select__trigger,
+.basic-ui-font-field .dw-select .dw-select__trigger {
+    width: 100%;
+}
+
+/* pill — toolbar width + soft pill radius; same border/bg chrome */
 .dw-select--pill {
     width: auto;
 }
@@ -726,25 +872,15 @@ select.dw-input--sm {
     display: inline-flex;
     width: auto;
     max-width: 180px;
-    height: var(--dw-control-h);
-    min-height: var(--dw-control-h);
-    max-height: var(--dw-control-h);
-    padding: 0 var(--dw-space-3) 0 var(--dw-space-6);
+    padding: 0 8px 0 10px;
     border-radius: var(--dw-radius-pill);
-    background: var(--dw-bg-muted);
-    font-size: var(--dw-font-size-control);
-    box-shadow: none;
 }
 
-.dw-select--pill .dw-select__menu {
+.dw-select__menu--pill {
     min-width: 100%;
 }
 
-.dw-select--pill .dw-select__item {
-    font-size: var(--dw-font-size-control);
-}
-
-/* compact — 分页等超窄 */
+/* compact — pagination / dense chips */
 .dw-select--compact {
     width: auto;
 }
@@ -753,37 +889,14 @@ select.dw-input--sm {
     display: inline-flex;
     width: auto;
     max-width: 80px;
-    height: var(--dw-control-h-sm);
-    min-height: var(--dw-control-h-sm);
-    max-height: var(--dw-control-h-sm);
-    padding: 0 var(--dw-space-2) 0 var(--dw-space-5);
-    border-radius: var(--dw-control-radius-sm);
-    background: var(--dw-bg-muted);
-    font-size: var(--dw-font-size-control);
-    box-shadow: none;
+    padding: 0 4px 0 8px;
 }
 
-.dw-select--compact .dw-select__icon-btn,
-.dw-select--compact .dw-select__affix {
-    width: 1.25rem;
-    height: 1.25rem;
-}
-
-.dw-select--compact .dw-select__chevron {
-    width: var(--dw-icon-size-xs);
-    height: var(--dw-icon-size-xs);
-}
-
-.dw-select--compact .dw-select__menu {
+.dw-select__menu--compact {
     min-width: max(100%, 88px);
 }
 
-.dw-select--compact .dw-select__item {
-    font-size: var(--dw-font-size-control);
-    min-height: var(--dw-control-h-sm);
-}
-
-/* inline — 嵌入组合控件（DataGrid 筛选等） */
+/* inline — embedded composite (DataGrid filters); menu still Cursor chrome */
 .dw-select--inline {
     width: auto;
     height: 100%;
@@ -791,15 +904,14 @@ select.dw-input--sm {
 
 .dw-select--inline .dw-select__trigger {
     height: 100%;
-    min-height: var(--dw-control-h-xs);
-    padding: 0 var(--dw-space-2) 0 var(--dw-space-4);
+    min-height: var(--dw-select-trigger-h-sm);
+    max-height: none;
+    padding: 0 6px 0 8px;
     border: none;
-    border-radius: var(--dw-control-radius-sm);
+    border-radius: var(--dw-surface-radius, 6px);
     background: transparent;
-    font-size: var(--dw-text-sm);
-    font-weight: 600;
     font-family: var(--dw-mono);
-    box-shadow: none;
+    font-weight: 600;
 }
 
 .dw-select--inline .dw-select__value {
@@ -811,31 +923,26 @@ select.dw-input--sm {
     width: auto;
     min-width: auto;
     height: auto;
-    padding: 0 var(--dw-space-2) 0 0;
+    padding: 0 2px 0 0;
     border-radius: 0;
 }
 
 .dw-select--inline .dw-select__trigger:hover:not(:disabled),
 .dw-select--inline.is-open .dw-select__trigger {
-    background: color-mix(in srgb, var(--dw-primary-soft) 40%, transparent);
+    background: color-mix(in srgb, var(--dw-text) 6%, transparent);
     border-color: transparent;
     box-shadow: none;
 }
 
-.dw-select--inline .dw-select__chevron {
-    width: var(--dw-icon-size-xs);
-    height: var(--dw-icon-size-xs);
-}
-
-.dw-select--inline .dw-select__menu {
+.dw-select--inline .dw-select__menu,
+.dw-select__menu--inline {
     left: 0;
     right: auto;
     min-width: max(160px, 100%);
 }
 
-.dw-select--inline .dw-select__item {
-    min-height: var(--dw-tab-height);
-    font-size: var(--dw-text-sm);
+.dw-select--inline .dw-select__item,
+.dw-select__menu--inline .dw-select__item {
     font-family: var(--dw-mono);
 }
 

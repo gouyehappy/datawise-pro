@@ -6,12 +6,14 @@
 import DwDataGridTable from './DwDataGridTable.vue'
 import GridRowFormView from './GridRowFormView.vue'
 
+type FormBind = InstanceType<typeof GridRowFormView>['$props']
+type TableBind = InstanceType<typeof DwDataGridTable>['$props']
+
 defineProps<{
   layoutMode: 'grid' | 'form'
-  /** Opaque bind bag from DataGrid (keeps DwDataGridTable prop surface out of the facade). */
-  formBind: object
+  formBind: FormBind
   formOn: Record<string, Function>
-  tableBind: object
+  tableBind: TableBind
   tableOn: Record<string, Function>
 }>()
 </script>
@@ -19,12 +21,12 @@ defineProps<{
 <template>
   <GridRowFormView
       v-if="layoutMode === 'form'"
-      v-bind="formBind as any"
+      v-bind="formBind"
       v-on="formOn"
   />
   <DwDataGridTable
       v-else
-      v-bind="tableBind as any"
+      v-bind="tableBind"
       v-on="tableOn"
   />
 </template>

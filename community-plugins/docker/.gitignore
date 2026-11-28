@@ -6,5 +6,7 @@ backend/datawise-plugin-docker
 backend/datawise-plugin-docker.exe
 .dwp-staging*/
 .dwp-staging-*/
+.signing/
 *.dwp
 .DS_Store
+

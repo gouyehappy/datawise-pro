@@ -28,10 +28,20 @@ import ThemeAppearanceCard from '@/features/settings/components/ThemeAppearanceC
 import ThemeSkinCard from '@/features/settings/components/ThemeSkinCard.vue'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
 import SettingsSectionCard from '@/features/settings/components/SettingsSectionCard.vue'
-import SettingsSegmentTabs from '@/features/settings/components/SettingsSegmentTabs.vue'
-import LayoutToggleChip from '@/features/settings/components/LayoutToggleChip.vue'
+import SettingsTabStrip from '@/features/settings/components/SettingsTabStrip.vue'
+import SettingsGroup from '@/features/settings/components/SettingsGroup.vue'
+import SettingsActions from '@/features/settings/components/SettingsActions.vue'
 import {useThemeStore} from '@/features/settings/stores/theme-store'
-import {DwButton, DwInput, FormField, ConfirmDialog, DwInlineAlert, DwActionFeedback} from '@/core/components'
+import {
+  DwButton,
+  DwInput,
+  FormField,
+  ConfirmDialog,
+  DwInlineAlert,
+  DwActionFeedback,
+  SettingsRow,
+  SettingsSwitch,
+} from '@/core/components'
 import SettingsSelect from '@/core/components/SettingsSelect.vue'
 import {DwIcon} from '@/core/icons'
 import IconButton from '@/core/components/IconButton.vue'
@@ -88,6 +98,23 @@ const openHttpLinksIn = computed(
     () => appConfig.preferences.openHttpLinksIn === 'system' ? 'system' : 'builtin',
 )
 
+const openHttpLinksOptions = computed(() => [
+  {
+    value: 'builtin',
+    label: t('settings.basic.openHttpLinks.builtin'),
+  },
+  {
+    value: 'system',
+    label: t('settings.basic.openHttpLinks.system'),
+  },
+])
+
+const openHttpLinksHint = computed(() =>
+  openHttpLinksIn.value === 'system'
+    ? t('settings.basic.openHttpLinks.systemHint')
+    : t('settings.basic.openHttpLinks.builtinHint'),
+)
+
 function onOpenHttpLinksChange(value: string) {
   if (denyIfReadOnly()) return
   appConfig.setOpenHttpLinksIn(value === 'system' ? 'system' : 'builtin')
@@ -131,6 +158,19 @@ const uiSkins = UI_SKIN_DEFINITIONS
 const primaryTones: PrimaryTone[] = ['violet', 'blue', 'cyan', 'green', 'orange', 'rose']
 const locales: AppLocale[] = ['zh-CN', 'en-US']
 
+const localeOptions = computed(() =>
+  locales.map((locale) => ({
+    value: locale,
+    label: t(locale === 'zh-CN' ? 'locale.zhCN' : 'locale.enUS'),
+  })),
+)
+
+function onLocaleChange(value: string) {
+  if (locales.includes(value as AppLocale)) {
+    setLocale(value as AppLocale)
+  }
+}
+
 const backgroundTonePresets = computed(() =>
   theme.resolvedMode === 'dark' ? BACKGROUND_PRESETS_DARK : BACKGROUND_PRESETS_LIGHT,
 )
@@ -146,16 +186,16 @@ const uiFontOptions = computed(() =>
   })),
 )
 
-const uiTextScaleTabs = computed(() =>
+const uiTextScaleOptions = computed(() =>
   UI_TEXT_SCALE_IDS.map((id) => ({
-    id,
+    value: id,
     label: t(`settings.basic.uiTextScales.${id}`),
   })),
 )
 
-const uiDensityTabs = computed(() =>
+const uiDensityOptions = computed(() =>
   UI_DENSITY_IDS.map((id) => ({
-    id,
+    value: id,
     label: t(`settings.basic.uiDensities.${id}`),
   })),
 )
@@ -200,9 +240,9 @@ function onUiFontSizeCommit() {
   theme.setUiFontSizePx(next)
 }
 
-function onToggleColoredToolbarIcons() {
+function onToggleColoredToolbarIcons(next: boolean) {
   if (denyIfReadOnly()) return
-  theme.setColoredToolbarIcons(!theme.coloredToolbarIcons)
+  theme.setColoredToolbarIcons(next)
 }
 
 function onUiDensityChange(value: string) {
@@ -237,9 +277,9 @@ const apiServerTestMessage = ref<string | null>(null)
 const apiServerTestOk = ref<boolean | null>(null)
 const apiServerEndpointTick = ref(0)
 
-const apiServerModeTabs = computed(() => [
-    {id: 'local', label: t('settings.basic.apiServer.modes.local')},
-    {id: 'remote', label: t('settings.basic.apiServer.modes.remote')},
+const apiServerModeOptions = computed(() => [
+    {value: 'local', label: t('settings.basic.apiServer.modes.local')},
+    {value: 'remote', label: t('settings.basic.apiServer.modes.remote')},
 ])
 
 const savedApiServerPrefs = computed(() => {
@@ -457,9 +497,9 @@ async function copyWebDeepLinkExample() {
   }
 }
 
-function onToggleSnapshotPasswords() {
+function onToggleSnapshotPasswords(next: boolean) {
   if (denyIfReadOnly()) return
-  snapshotIncludePasswords.value = !snapshotIncludePasswords.value
+  snapshotIncludePasswords.value = next
 }
 
 async function onExportConfigSnapshot() {
@@ -520,26 +560,21 @@ async function onImportConfigSnapshot() {
       :readonly-hint="hint"
   >
     <div class="settings-groups basic-settings">
-      <div class="settings-tab-strip">
-        <SettingsSegmentTabs
-            stretch
-            :model-value="basicTab"
-            :tabs="basicTabs"
-            :aria-label="t('settings.basic.title')"
-            @update:model-value="basicTab = ($event as BasicTabId)"
-        />
-      </div>
+      <SettingsTabStrip
+          :model-value="basicTab"
+          :tabs="basicTabs"
+          :aria-label="t('settings.basic.title')"
+          @update:model-value="basicTab = ($event as BasicTabId)"
+      />
 
-      <!-- 外观：纵向分组，预览控件各占一行，避免左右失衡 -->
+      <!-- 外观：Cursor 式分区 — 左文右控；大块选择器用 section block -->
       <div v-if="basicTab === 'appearance'" class="basic-settings__pane settings-groups">
-        <SettingsSectionCard
+        <SettingsGroup
             :title="t('settings.basic.themeCardTitle')"
             :hint="t('settings.basic.themeCardHint')"
-            icon="settings-basic"
-            tone="primary"
         >
-          <div class="basic-settings__group">
-            <span class="basic-settings__group-label">{{ t('settings.basic.uiSkin') }}</span>
+          <div class="settings-section__block">
+            <p class="settings-section__block-label">{{ t('settings.basic.uiSkin') }}</p>
             <div
                 class="dw-choice-grid"
                 role="radiogroup"
@@ -557,9 +592,9 @@ async function onImportConfigSnapshot() {
             </div>
           </div>
 
-          <div class="basic-settings__group">
-            <span class="basic-settings__group-label">{{ t('settings.basic.appearance') }}</span>
-            <p class="hint basic-settings__group-hint">{{ t('settings.basic.appearanceHint') }}</p>
+          <div class="settings-section__block">
+            <p class="settings-section__block-label">{{ t('settings.basic.appearance') }}</p>
+            <p class="settings-section__block-hint">{{ t('settings.basic.appearanceHint') }}</p>
             <div
                 class="dw-choice-grid"
                 role="radiogroup"
@@ -576,12 +611,10 @@ async function onImportConfigSnapshot() {
             </div>
           </div>
 
-          <div class="basic-settings__group">
-            <div class="basic-settings__group-head">
-              <span class="basic-settings__group-label">{{ t('settings.basic.background') }}</span>
-              <span class="basic-settings__group-value">{{ t(`settings.basic.backgroundTones.${theme.backgroundTone}`) }}</span>
-            </div>
-            <p class="hint basic-settings__group-hint">{{ t('settings.basic.backgroundHint') }}</p>
+          <SettingsRow
+              :label="t('settings.basic.background')"
+              :hint="`${t('settings.basic.backgroundHint')} · ${t(`settings.basic.backgroundTones.${theme.backgroundTone}`)}`"
+          >
             <div
                 class="color-row"
                 role="radiogroup"
@@ -607,13 +640,12 @@ async function onImportConfigSnapshot() {
                 <span v-if="theme.backgroundTone === tone" class="check">✓</span>
               </button>
             </div>
-          </div>
+          </SettingsRow>
 
-          <div class="basic-settings__group">
-            <div class="basic-settings__group-head">
-              <span class="basic-settings__group-label">{{ t('settings.basic.primary') }}</span>
-              <span class="basic-settings__group-value">{{ t(`settings.basic.primaries.${theme.primaryTone}`) }}</span>
-            </div>
+          <SettingsRow
+              :label="t('settings.basic.primary')"
+              :hint="t(`settings.basic.primaries.${theme.primaryTone}`)"
+          >
             <div
                 class="color-row"
                 role="radiogroup"
@@ -636,100 +668,76 @@ async function onImportConfigSnapshot() {
                 <span v-if="theme.primaryTone === tone" class="check">✓</span>
               </button>
             </div>
-          </div>
-        </SettingsSectionCard>
+          </SettingsRow>
+        </SettingsGroup>
 
-        <SettingsSectionCard
+        <SettingsGroup
             :title="t('settings.basic.localeCardTitle')"
             :hint="t('settings.basic.localeCardHint')"
-            icon="settings-basic"
-            tone="sky"
         >
-          <div class="basic-settings__group">
-            <span class="basic-settings__group-label">{{ t('settings.basic.language') }}</span>
-            <div
-                class="basic-settings__choice-grid"
-                role="radiogroup"
-                :aria-label="t('settings.basic.language')"
-            >
-              <button
-                  v-for="locale in locales"
-                  :key="locale"
-                  class="basic-settings__choice"
-                  :class="{ 'is-active': currentLocale === locale }"
-                  type="button"
-                  role="radio"
-                  :aria-checked="currentLocale === locale"
-                  :aria-pressed="currentLocale === locale"
-                  @click="setLocale(locale)"
-              >
-                <span class="basic-settings__choice-mark">{{ locale === 'zh-CN' ? '中' : 'En' }}</span>
-                <span class="basic-settings__choice-copy">
-                  <strong>{{ t(locale === 'zh-CN' ? 'locale.zhCN' : 'locale.enUS') }}</strong>
-                </span>
-              </button>
-            </div>
+          <SettingsRow :label="t('settings.basic.language')">
+            <SettingsSelect
+                id="basic-locale"
+                :model-value="currentLocale"
+                :options="localeOptions"
+                @update:model-value="onLocaleChange"
+            />
+          </SettingsRow>
+
+          <SettingsRow
+              :label="t('settings.basic.uiFont')"
+              :hint="t('settings.basic.uiFontHint')"
+              :disabled="readOnly"
+          >
+            <SettingsSelect
+                id="basic-ui-font"
+                :model-value="theme.uiFont"
+                :options="uiFontOptions"
+                :disabled="readOnly"
+                @update:model-value="onUiFontChange"
+            />
+          </SettingsRow>
+          <SettingsRow
+              v-if="theme.uiFont === 'custom'"
+              :label="t('settings.basic.uiFontCustom')"
+              :disabled="readOnly"
+          >
+            <DwInput
+                id="basic-ui-font-custom"
+                v-model="uiFontCustomDraft"
+                :placeholder="t('settings.basic.uiFontCustomPlaceholder')"
+                :disabled="readOnly"
+                @keydown.enter.prevent="onUiFontCustomCommit"
+                @blur="onUiFontCustomCommit"
+            />
+          </SettingsRow>
+          <div
+              class="settings-section__block basic-ui-font-preview-block"
+              :style="{ fontFamily: resolveUiFontPreviewFamily(theme.uiFont, theme.uiFontCustom) }"
+          >
+            {{ t('settings.basic.uiFontPreview') }}
           </div>
 
-          <div class="basic-settings__group">
-            <span class="basic-settings__group-label">{{ t('settings.basic.uiFont') }}</span>
-            <p class="hint basic-settings__group-hint">{{ t('settings.basic.uiFontHint') }}</p>
-            <FormField
-                class="basic-ui-font-field"
-                :label="t('settings.basic.uiFont')"
-                input-id="basic-ui-font"
-            >
-              <template #default="{ id }">
-                <SettingsSelect
-                    :id="id"
-                    side="top"
-                    :searchable="false"
-                    :model-value="theme.uiFont"
-                    :options="uiFontOptions"
-                    :disabled="readOnly"
-                    @update:model-value="onUiFontChange"
-                />
-              </template>
-            </FormField>
-            <FormField
-                v-if="theme.uiFont === 'custom'"
-                class="basic-ui-font-custom-field"
-                :label="t('settings.basic.uiFontCustom')"
-                input-id="basic-ui-font-custom"
-            >
-              <DwInput
-                  id="basic-ui-font-custom"
-                  v-model="uiFontCustomDraft"
-                  :placeholder="t('settings.basic.uiFontCustomPlaceholder')"
-                  :disabled="readOnly"
-                  @keydown.enter.prevent="onUiFontCustomCommit"
-                  @blur="onUiFontCustomCommit"
-              />
-            </FormField>
-            <p
-                class="basic-ui-font-preview"
-                :style="{ fontFamily: resolveUiFontPreviewFamily(theme.uiFont, theme.uiFontCustom) }"
-            >
-              {{ t('settings.basic.uiFontPreview') }}
-            </p>
-          </div>
-
-          <div class="basic-settings__group">
-            <span class="basic-settings__group-label">{{ t('settings.basic.uiTextScale') }}</span>
-            <p class="hint basic-settings__group-hint">{{ t('settings.basic.uiTextScaleHint') }}</p>
-            <SettingsSegmentTabs
-                variant="inline"
+          <SettingsRow
+              :label="t('settings.basic.uiTextScale')"
+              :hint="t('settings.basic.uiTextScaleHint')"
+              :disabled="readOnly"
+          >
+            <SettingsSelect
+                id="basic-ui-text-scale"
                 :model-value="theme.uiTextScale"
-                :tabs="uiTextScaleTabs"
-                :aria-label="t('settings.basic.uiTextScale')"
+                :options="uiTextScaleOptions"
+                :disabled="readOnly"
                 @update:model-value="onUiTextScaleChange"
             />
-            <FormField
-                v-if="theme.uiTextScale === 'custom'"
-                class="basic-ui-font-size-field"
-                :label="t('settings.basic.uiFontSizePx')"
-                input-id="basic-ui-font-size"
-            >
+          </SettingsRow>
+          <SettingsRow
+              v-if="theme.uiTextScale === 'custom'"
+              :label="t('settings.basic.uiFontSizePx')"
+              :hint="t('settings.basic.uiFontSizePxHint', {min: UI_FONT_SIZE_PX_MIN, max: UI_FONT_SIZE_PX_MAX})"
+              :disabled="readOnly"
+          >
+            <div class="input-with-unit">
               <DwInput
                   id="basic-ui-font-size"
                   v-model="uiFontSizeDraft"
@@ -741,152 +749,127 @@ async function onImportConfigSnapshot() {
                   @keydown.enter.prevent="onUiFontSizeCommit"
                   @blur="onUiFontSizeCommit"
               />
-            </FormField>
-            <p v-if="theme.uiTextScale === 'custom'" class="hint basic-settings__group-hint">
-              {{ t('settings.basic.uiFontSizePxHint', {min: UI_FONT_SIZE_PX_MIN, max: UI_FONT_SIZE_PX_MAX}) }}
-            </p>
-          </div>
+              <span class="unit-chip">px</span>
+            </div>
+          </SettingsRow>
 
-          <div class="basic-settings__group">
-            <span class="basic-settings__group-label">{{ t('settings.basic.uiDensity') }}</span>
-            <p class="hint basic-settings__group-hint">{{ t('settings.basic.uiDensityHint') }}</p>
-            <SettingsSegmentTabs
-                variant="inline"
+          <SettingsRow
+              :label="t('settings.basic.uiDensity')"
+              :hint="t('settings.basic.uiDensityHint')"
+              :disabled="readOnly"
+          >
+            <SettingsSelect
+                id="basic-ui-density"
                 :model-value="theme.uiDensity"
-                :tabs="uiDensityTabs"
-                :aria-label="t('settings.basic.uiDensity')"
+                :options="uiDensityOptions"
+                :disabled="readOnly"
                 @update:model-value="onUiDensityChange"
             />
-          </div>
+          </SettingsRow>
+        </SettingsGroup>
 
-          <div class="basic-settings__group">
-            <LayoutToggleChip
-                :label="t('settings.basic.coloredToolbarIcons')"
-                :caption="t('settings.basic.coloredToolbarIconsHint')"
-                :active="theme.coloredToolbarIcons"
-                @toggle="onToggleColoredToolbarIcons"
-            />
-          </div>
-        </SettingsSectionCard>
+        <SettingsGroup :title="t('settings.basic.coloredToolbarIcons')">
+          <SettingsSwitch
+              :label="t('settings.basic.coloredToolbarIcons')"
+              :hint="t('settings.basic.coloredToolbarIconsHint')"
+              :model-value="theme.coloredToolbarIcons"
+              :disabled="readOnly"
+              @update:model-value="onToggleColoredToolbarIcons"
+          />
+        </SettingsGroup>
       </div>
 
-      <!-- 连接：先选模式，再显示对应内容；外链用双选项卡 -->
+      <!-- 连接：偏好行 + 必要录入块 -->
       <div v-else-if="basicTab === 'connection'" class="basic-settings__pane settings-groups">
-        <SettingsSectionCard
+        <SettingsGroup
             :title="t('settings.basic.apiServer.title')"
             :hint="t('settings.basic.apiServer.hint')"
-            icon="link"
-            tone="sky"
-            :badge="savedApiServerPrefs.mode === 'remote'
-              ? t('settings.basic.apiServer.modes.remote')
-              : t('settings.basic.apiServer.modes.local')"
         >
-          <div class="basic-settings__group">
-            <span class="basic-settings__group-label">{{ t('settings.basic.apiServer.mode') }}</span>
-            <SettingsSegmentTabs
-                variant="inline"
+          <SettingsRow :label="t('settings.basic.apiServer.mode')">
+            <SettingsSelect
+                id="basic-api-server-mode"
                 :model-value="apiServerMode"
-                :tabs="apiServerModeTabs"
-                :aria-label="t('settings.basic.apiServer.mode')"
+                :options="apiServerModeOptions"
                 @update:model-value="onApiServerModeChange"
             />
+          </SettingsRow>
+
+          <SettingsRow
+              v-if="apiServerMode === 'local'"
+              :label="t('settings.basic.apiServer.localEndpoint')"
+              :hint="t('settings.basic.apiServer.localHint')"
+          >
+            <code class="basic-settings__endpoint">{{ localApiEndpointLabel }}</code>
+          </SettingsRow>
+          <div v-else class="settings-section__block">
+            <FormField
+                :label="t('settings.basic.apiServer.remoteUrl')"
+                input-id="basic-api-server-url"
+                :error="apiServerError || undefined"
+                :hint="t('settings.basic.apiServer.remoteUrlHint')"
+            >
+              <DwInput
+                  id="basic-api-server-url"
+                  v-model="apiServerRemoteUrl"
+                  class="config-dir-input"
+                  :disabled="apiServerSaving"
+                  :placeholder="t('settings.basic.apiServer.remoteUrlPlaceholder')"
+              />
+            </FormField>
           </div>
 
-          <div class="basic-settings__group">
-            <template v-if="apiServerMode === 'local'">
-              <span class="basic-settings__group-label">{{ t('settings.basic.apiServer.localEndpoint') }}</span>
-              <p class="hint basic-settings__group-hint">{{ t('settings.basic.apiServer.localHint') }}</p>
-              <code class="basic-settings__endpoint">{{ localApiEndpointLabel }}</code>
-            </template>
-            <template v-else>
-              <FormField
-                  :label="t('settings.basic.apiServer.remoteUrl')"
-                  input-id="basic-api-server-url"
-                  :error="apiServerError || undefined"
-                  :hint="t('settings.basic.apiServer.remoteUrlHint')"
-              >
-                <DwInput
-                    id="basic-api-server-url"
-                    v-model="apiServerRemoteUrl"
-                    class="config-dir-input"
-                    :disabled="apiServerSaving"
-                    :placeholder="t('settings.basic.apiServer.remoteUrlPlaceholder')"
-                />
-              </FormField>
-            </template>
-
-            <p v-if="pendingEndpointLabel" class="hint basic-api-pending">
+          <div class="settings-section__block">
+            <p v-if="pendingEndpointLabel" class="settings-section__block-hint basic-api-pending">
               {{ t('settings.basic.apiServer.willConnect') }}：
               <code>{{ pendingEndpointLabel }}</code>
             </p>
-            <p v-else class="hint basic-api-status">
+            <p v-else class="settings-section__block-hint basic-api-status">
               {{ t('settings.basic.apiServer.currentEndpoint') }}：
               <code>{{ apiServerStatusLabel }}</code>
             </p>
             <DwInlineAlert v-if="apiServerMode === 'local'" :message="apiServerError"/>
+            <SettingsActions class="config-dir-actions">
+              <DwButton
+                  variant="secondary"
+                  :disabled="apiServerSaving || apiServerTesting"
+                  :loading="apiServerTesting"
+                  @click="testApiServer"
+              >
+                {{ apiServerTesting ? t('settings.basic.apiServer.testing') : t('settings.basic.apiServer.test') }}
+              </DwButton>
+              <DwButton
+                  variant="primary"
+                  :disabled="apiServerSaving || apiServerTesting || !apiServerDirty"
+                  :loading="apiServerSaving"
+                  @click="saveApiServer"
+              >
+                {{ t('settings.basic.apiServer.save') }}
+              </DwButton>
+              <DwActionFeedback :message="apiServerTestMessage" :ok="apiServerTestOk"/>
+            </SettingsActions>
           </div>
+        </SettingsGroup>
 
-          <div class="config-dir-actions">
-            <DwButton
-                variant="secondary"
-                :disabled="apiServerSaving || apiServerTesting"
-                :loading="apiServerTesting"
-                @click="testApiServer"
-            >
-              {{ apiServerTesting ? t('settings.basic.apiServer.testing') : t('settings.basic.apiServer.test') }}
-            </DwButton>
-            <DwButton
-                variant="primary"
-                :disabled="apiServerSaving || apiServerTesting || !apiServerDirty"
-                :loading="apiServerSaving"
-                @click="saveApiServer"
-            >
-              {{ t('settings.basic.apiServer.save') }}
-            </DwButton>
-            <DwActionFeedback :message="apiServerTestMessage" :ok="apiServerTestOk"/>
-          </div>
-        </SettingsSectionCard>
-
-        <SettingsSectionCard
+        <SettingsGroup
             v-if="desktopApp"
             :title="t('settings.basic.openHttpLinks.title')"
             :hint="t('settings.basic.openHttpLinks.hint')"
-            icon="open-external"
-            tone="sky"
         >
-          <div
-              class="basic-settings__choice-grid"
-              role="radiogroup"
-              :aria-label="t('settings.basic.openHttpLinks.title')"
+          <SettingsRow
+              :label="t('settings.basic.openHttpLinks.mode')"
+              :hint="openHttpLinksHint"
+              :disabled="readOnly"
           >
-            <button
-                class="basic-settings__choice basic-settings__choice--stack"
-                :class="{ 'is-active': openHttpLinksIn === 'builtin' }"
-                type="button"
-                role="radio"
-                :aria-checked="openHttpLinksIn === 'builtin'"
-                :aria-pressed="openHttpLinksIn === 'builtin'"
-                :disabled="readOnly"
-                @click="onOpenHttpLinksChange('builtin')"
-            >
-              <strong>{{ t('settings.basic.openHttpLinks.builtin') }}</strong>
-              <span>{{ t('settings.basic.openHttpLinks.builtinHint') }}</span>
-            </button>
-            <button
-                class="basic-settings__choice basic-settings__choice--stack"
-                :class="{ 'is-active': openHttpLinksIn === 'system' }"
-                type="button"
-                role="radio"
-                :aria-checked="openHttpLinksIn === 'system'"
-                :aria-pressed="openHttpLinksIn === 'system'"
-                :disabled="readOnly"
-                @click="onOpenHttpLinksChange('system')"
-            >
-              <strong>{{ t('settings.basic.openHttpLinks.system') }}</strong>
-              <span>{{ t('settings.basic.openHttpLinks.systemHint') }}</span>
-            </button>
-          </div>
-        </SettingsSectionCard>
+            <div class="settings-row-controls">
+              <SettingsSelect
+                  :model-value="openHttpLinksIn"
+                  :options="openHttpLinksOptions"
+                  :disabled="readOnly"
+                  @update:model-value="onOpenHttpLinksChange"
+              />
+            </div>
+          </SettingsRow>
+        </SettingsGroup>
 
         <SettingsSectionCard
             :title="t('settings.basic.deepLink.title')"
@@ -1037,61 +1020,62 @@ async function onImportConfigSnapshot() {
           </div>
           <p class="hint workspace-root__subs-hint">{{ t('settings.basic.workspaceRoot.layoutHint') }}</p>
 
-          <div v-if="canChangeConfigDir" class="config-dir-actions">
+          <SettingsActions v-if="canChangeConfigDir" class="config-dir-actions">
             <DwButton variant="secondary" :disabled="configDirSaving" @click="resetConfigDir">
               {{ t('settings.basic.workspaceRoot.reset') }}
             </DwButton>
             <DwButton variant="primary" :disabled="configDirSaving" @click="saveConfigDir">
               {{ t('settings.basic.workspaceRoot.save') }}
             </DwButton>
-          </div>
+          </SettingsActions>
           <DwInlineAlert :message="configDirError"/>
         </SettingsSectionCard>
 
-        <SettingsSectionCard
+        <SettingsGroup
             :title="t('settings.basic.backupHub.title')"
             :hint="t('settings.basic.backupHub.hint')"
-            icon="export"
-            tone="sky"
         >
-          <DwButton variant="primary" size="sm" @click="openConfigPortability">
-            {{ t('settings.basic.backupHub.openPortability') }}
-          </DwButton>
-        </SettingsSectionCard>
+          <SettingsRow :label="t('settings.basic.backupHub.openPortability')">
+            <DwButton variant="primary" size="sm" @click="openConfigPortability">
+              {{ t('settings.basic.backupHub.openPortability') }}
+            </DwButton>
+          </SettingsRow>
+        </SettingsGroup>
 
-        <SettingsSectionCard
+        <SettingsGroup
             :title="t('settings.basic.configSnapshot.title')"
             :hint="t('settings.basic.configSnapshot.hint')"
-            icon="file"
-            tone="panel"
         >
-          <LayoutToggleChip
+          <SettingsSwitch
               :label="t('settings.basic.configSnapshot.includePasswords')"
-              :caption="t('settings.basic.configSnapshot.includePasswordsHint')"
-              :active="snapshotIncludePasswords"
-              @toggle="onToggleSnapshotPasswords"
+              :hint="t('settings.basic.configSnapshot.includePasswordsHint')"
+              :model-value="snapshotIncludePasswords"
+              :disabled="readOnly"
+              @update:model-value="onToggleSnapshotPasswords"
           />
-          <div class="config-snapshot__actions">
-            <DwButton
-                variant="secondary"
-                size="sm"
-                :loading="snapshotBusy"
-                :disabled="readOnly"
-                @click="onExportConfigSnapshot"
-            >
-              {{ t('settings.basic.configSnapshot.export') }}
-            </DwButton>
-            <DwButton
-                variant="secondary"
-                size="sm"
-                :loading="snapshotBusy"
-                :disabled="readOnly"
-                @click="onImportConfigSnapshot"
-            >
-              {{ t('settings.basic.configSnapshot.import') }}
-            </DwButton>
-          </div>
-        </SettingsSectionCard>
+          <SettingsRow :label="t('settings.basic.configSnapshot.export')">
+            <div class="config-snapshot__actions">
+              <DwButton
+                  variant="secondary"
+                  size="sm"
+                  :loading="snapshotBusy"
+                  :disabled="readOnly"
+                  @click="onExportConfigSnapshot"
+              >
+                {{ t('settings.basic.configSnapshot.export') }}
+              </DwButton>
+              <DwButton
+                  variant="secondary"
+                  size="sm"
+                  :loading="snapshotBusy"
+                  :disabled="readOnly"
+                  @click="onImportConfigSnapshot"
+              >
+                {{ t('settings.basic.configSnapshot.import') }}
+              </DwButton>
+            </div>
+          </SettingsRow>
+        </SettingsGroup>
       </div>
     </div>
   </SettingsPageShell>

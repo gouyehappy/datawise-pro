@@ -40,6 +40,8 @@ export interface AiAnalysisInterruptPayload {
     checkpointId: string
     sql: string
     nextStep: string
+    /** Server-issued exact-SQL grant when present (prefer over client issue). */
+    grantId?: string | null
 }
 
 export interface AiAnalysisResumeRequest {

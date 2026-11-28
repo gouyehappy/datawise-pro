@@ -7,6 +7,7 @@ import {
     toDisplayResultIndex,
     toStorageResultIndex,
     columnDensityWidthScale,
+    normalizeTableFontSize,
     type QueryResultPaneSettings,
 } from '@/features/workspace/services/query-result-pane-settings.service'
 import {
@@ -36,7 +37,12 @@ describe('query-result-pane-settings.service', () => {
                 columnDensity: 'compact',
                 numericAlign: 'left',
                 hideNullColumns: true,
+                hideEmptyColumns: true,
                 typeColoring: true,
+                freezeFirstColumn: true,
+                hideToolbarLabels: true,
+                csvWithoutBom: true,
+                tableFontSize: 14,
             }
             persistQueryResultPaneSettings(next)
             assert.deepEqual(readStoredQueryResultPaneSettings(), next)
@@ -65,6 +71,13 @@ describe('view option helpers', () => {
         assert.equal(columnDensityWidthScale('compact'), 0.82)
         assert.equal(columnDensityWidthScale('standard'), 1)
         assert.equal(columnDensityWidthScale('relaxed'), 1.18)
+    })
+
+    it('clamps table font size', () => {
+        assert.equal(normalizeTableFontSize(13), 13)
+        assert.equal(normalizeTableFontSize(7), 8)
+        assert.equal(normalizeTableFontSize(20), 16)
+        assert.equal(normalizeTableFontSize('x'), 13)
     })
 
     it('classifies column type kinds for coloring', () => {

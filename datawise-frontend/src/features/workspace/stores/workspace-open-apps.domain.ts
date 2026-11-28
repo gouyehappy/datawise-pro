@@ -3,7 +3,7 @@
  * Composes over openMatchedTab / openWithPlan from the core open domain.
  */
 import type {Ref} from 'vue'
-import type {DbType, WorkspaceTab} from '@/core/types'
+import type {DbType, TreeNode, WorkspaceTab} from '@/core/types'
 import type {PlatformFeatureId, PlatformScheduleDraft} from '@/shared/api/platform.types'
 import {
     planOpenKafkaTablePublish,
@@ -29,6 +29,10 @@ import {
 } from '@/features/explorer/utils/data-sources'
 import {isCatalogSchemaDbType} from '@/features/explorer/services/explorer-lazy-load'
 import {resolveNextScriptFileForOpen} from '@/features/explorer/services/sql-script.service'
+import {
+    findConnectionScriptsFolder,
+    TRINO_CONNECTION_SCRIPTS_INSTANCE,
+} from '@/features/workspace/services/console-workspace-instance'
 import {resolveNextViewModelNameForOpen} from '@/features/explorer/services/view-model-open.service'
 import {platformCatalogTabTitle} from '@/features/platform/services/platform-catalog.service'
 import {
@@ -63,7 +67,7 @@ export type WorkspaceOpenAppsExplorer = {
     tree: unknown
     connectionHealthById: Record<string, unknown>
     pooledConnectionIds: Iterable<string> | Set<string> | string[]
-    findNode: (id: string) => {label?: string; database?: string; dbType?: DbType} | null | undefined
+    findNode: (id: string) => TreeNode | null | undefined
     ensureChildrenLoaded: (connectionId: string) => Promise<void>
 }
 
@@ -187,17 +191,26 @@ export function createWorkspaceOpenAppsDomain(deps: WorkspaceOpenAppsDeps) {
     function ensureConsoleTabScriptFile(tab: WorkspaceTab) {
         if (tab.type !== 'console' || !tab.connectionId || getBoundConsoleSqlFile(tab)) return
         const explorer = deps.getExplorer()
+        const connection = explorer.findNode(tab.connectionId) ?? null
+        // Federated engines always name/list under connection scripts, not JDBC catalog.schema.
+        const scriptInstanceName = isCatalogSchemaDbType(connection?.dbType)
+            ? TRINO_CONNECTION_SCRIPTS_INSTANCE
+            : tab.database
+        const scriptInstanceId = isCatalogSchemaDbType(connection?.dbType) && connection
+            ? (findConnectionScriptsFolder(connection)?.id ?? tab.instanceId)
+            : tab.instanceId
         void resolveNextScriptFileForOpen({
             tabs: deps.tabs.value,
             connectionId: tab.connectionId,
-            instanceId: tab.instanceId,
-            instanceName: tab.database,
+            instanceId: scriptInstanceId,
+            instanceName: scriptInstanceName,
             tree: explorer.tree as never,
             excludeTabId: tab.id,
         }).then((fileName) => {
             const latest = deps.tabs.value.find((item) => item.id === tab.id)
             if (!latest || !latest.connectionId || getBoundConsoleSqlFile(latest)) return
             latest.sqlFile = fileName
+            if (scriptInstanceId) latest.instanceId = scriptInstanceId
             const nextTitle = syncConsoleTabTitle(
                 latest,
                 deps.resolveConnectionLabel(latest.connectionId),
@@ -523,17 +536,42 @@ export function createWorkspaceOpenAppsDomain(deps: WorkspaceOpenAppsDeps) {
     ): string {
         deps.setDatabaseModule()
         const connectionId = options?.connectionId || (options?.connection?.id as string | undefined)
-        const workbenchInstanceId = options?.workbenchInstanceId
-        const hostContext =
-            options?.pluginHostContext
-            || (connectionId || options?.connection
+        const mintedWorkbenchId =
+            (typeof options?.workbenchInstanceId === 'string' && options.workbenchInstanceId.trim())
+            || (typeof options?.pluginHostContext?.workbenchId === 'string'
+                && options.pluginHostContext.workbenchId.trim())
+            || crypto.randomUUID?.()
+            || `wb-${Date.now()}`
+        // Always persist a stable workbenchId. Partial contexts from Monitor →
+        // Open terminal used to omit it; SSH batch orphan prune then closed the
+        // new session immediately after connect.
+        const hostContext = options?.pluginHostContext
+            ? {
+                ...options.pluginHostContext,
+                ...(connectionId ? {connectionId} : {}),
+                workbenchId: mintedWorkbenchId,
+                pluginId:
+                    (typeof options.pluginHostContext.pluginId === 'string'
+                        && options.pluginHostContext.pluginId.trim())
+                    || pluginId,
+                ...(options.connection || options.pluginHostContext.connection
+                    ? {
+                        connection:
+                            options.connection
+                            || options.pluginHostContext.connection
+                            || {id: connectionId},
+                    }
+                    : {}),
+            }
+            : (connectionId || options?.connection
                 ? {
                       connectionId: connectionId || '',
-                      workbenchId: workbenchInstanceId || crypto.randomUUID?.() || `wb-${Date.now()}`,
+                      workbenchId: mintedWorkbenchId,
                       connection: options?.connection || {id: connectionId},
                       pluginId,
                   }
                 : undefined)
+        const workbenchInstanceId = mintedWorkbenchId
         const match = (tab: WorkspaceTab) =>
             !options?.forceNew
             && tab.type === 'community-workbench'

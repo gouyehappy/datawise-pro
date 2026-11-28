@@ -28,6 +28,55 @@
 
   const CONTENT_TYPES = ["application/json", "application/xml", "text/plain", "text/html", "application/x-www-form-urlencoded", ""];
 
+  /* Ready-made assertion snippets. All calls match the sidecar's pm API
+     (pm.test / pm.expect / pm.environment / pm.response), so the same snippet
+     works in single-request scripts and inside folder workflow runs. */
+  const SCRIPT_SNIPPETS = [
+    {
+      labelKey: "scripts.snippet.status200",
+      code: 'pm.test("status is 200", function () {\n  pm.expect(pm.response.code).to.eql(200);\n});\n'
+    },
+    {
+      labelKey: "scripts.snippet.status2xx",
+      code: 'pm.test("status is 2xx", function () {\n  pm.expect(pm.response.code >= 200 && pm.response.code < 300).to.be.ok();\n});\n'
+    },
+    {
+      labelKey: "scripts.snippet.duration",
+      code: 'pm.test("response time under 500ms", function () {\n  pm.expect(pm.response.responseTime < 500).to.be.ok();\n});\n'
+    },
+    {
+      labelKey: "scripts.snippet.contains",
+      code: 'pm.test("body contains text", function () {\n  pm.expect(pm.response.text().indexOf("success") >= 0).to.be.ok();\n});\n'
+    },
+    {
+      labelKey: "scripts.snippet.jsonField",
+      code: 'pm.test("code equals 0", function () {\n  pm.expect(pm.response.json().code).to.eql(0);\n});\n'
+    },
+    {
+      labelKey: "scripts.snippet.jsonType",
+      code: 'pm.test("data is an object", function () {\n  pm.expect(pm.response.json().data).a("object");\n});\n'
+    },
+    {
+      labelKey: "scripts.snippet.arrayLength",
+      code: 'pm.test("list is not empty", function () {\n  pm.expect(pm.response.json().data.length > 0).to.be.ok();\n});\n'
+    },
+    {
+      labelKey: "scripts.snippet.extractVar",
+      code: 'pm.environment.set("token", pm.response.json().data.token);\n'
+    }
+  ];
+
+  function openScriptSnippetMenu(event, textarea, onChange) {
+    const items = SCRIPT_SNIPPETS.map((snippet) => ({
+      label: t(snippet.labelKey),
+      onClick: () => {
+        const needsBreak = textarea.value && !/\n\s*$/.test(textarea.value);
+        util.insertTextAtCursor(textarea, (needsBreak ? "\n" : "") + snippet.code, onChange);
+      }
+    }));
+    util.openContextMenu(event, items, { minWidth: 260, id: "hc-script-snippet-menu" });
+  }
+
   let currentTab = null;
 
   /* --------------------------------------------------------------- URL sync */
@@ -160,10 +209,12 @@
         flag.hidden = false;
         flag.textContent = "!";
         flag.title = t("toast.missingVars", { names: uniq.join(", ") });
+        flag.dataset.missing = uniq[0] || "";
       } else {
         flag.hidden = true;
         flag.textContent = "";
         flag.title = "";
+        flag.dataset.missing = "";
       }
     }
   }
@@ -211,6 +262,15 @@
     input.addEventListener("blur", () => {
       setTimeout(hideUrlVarTip, 160);
     });
+    const flag = util.$("#url-flag");
+    if (flag && flag.dataset.bound !== "1") {
+      flag.dataset.bound = "1";
+      flag.style.cursor = "pointer";
+      flag.addEventListener("click", () => {
+        const name = flag.dataset.missing;
+        if (name && util.varTips && util.varTips.goEdit) util.varTips.goEdit(name);
+      });
+    }
     store.subscribe((reason) => {
       if (reason === "environments" || reason === "loaded" || reason === "request") refresh();
     });
@@ -281,8 +341,8 @@
     return (rows || []).filter((row) => row && row.enabled !== false && row.key).length;
   }
 
-  const PRIMARY_SECTIONS = ["headers", "params", "path", "body", "auth", "cookies", "scripts-pre", "scripts-post", "options"];
-  const MORE_SECTIONS = [];
+  const PRIMARY_SECTIONS = ["headers", "params", "path", "body", "auth", "scripts-pre", "scripts-post"];
+  const MORE_SECTIONS = ["cookies", "options"];
 
   function bodyBadgeCount(tab) {
     if (!tab.body || tab.body.mode === "none") return null;
@@ -438,13 +498,14 @@
       menu.style.left = `${Math.round(left)}px`;
       menu.style.right = "auto";
       trigger.setAttribute("aria-expanded", "true");
-      setTimeout(() => {
-        docCloser = (clickEvent) => {
-          if (wrap.contains(clickEvent.target) || menu.contains(clickEvent.target)) return;
-          closeMore();
-        };
-        document.addEventListener("click", docCloser);
-      }, 0);
+      // Register synchronously: the opening click targets the trigger inside
+      // `wrap`, so the handler ignores it. This keeps closeMore() able to
+      // always unbind the listener instead of leaking one per open.
+      docCloser = (clickEvent) => {
+        if (wrap.contains(clickEvent.target) || menu.contains(clickEvent.target)) return;
+        closeMore();
+      };
+      document.addEventListener("click", docCloser);
     };
     trigger.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -460,6 +521,7 @@
     const panel = el("div", { class: "hc-panel" });
     host.append(panel);
     if (tab.clientType === "markdown") {
+      host.classList.remove("is-editor-fill");
       renderMarkdown(panel, tab);
       return;
     }
@@ -474,6 +536,13 @@
     else if (tab.section === "scripts-post") renderScriptPane(panel, tab, "post");
     else if (tab.section === "scripts") renderScriptPane(panel, tab, "pre");
     else renderOptions(panel, tab);
+
+    // raw Body / 脚本编辑器：面板不滚，只滚编辑器，避免双滚动条
+    const fillEditor = (tab.section === "body" && tab.body && tab.body.mode === "raw")
+      || ((tab.section === "scripts-pre" || tab.section === "scripts-post" || tab.section === "scripts")
+        && panel.querySelector(".hc-editor-with-helper, .hc-code-editor"));
+    host.classList.toggle("is-editor-fill", !!fillEditor);
+    panel.classList.toggle("is-editor-fill", !!fillEditor);
   }
 
   function renderMarkdown(panel, tab) {
@@ -775,7 +844,6 @@
       modeRow.append(label);
     });
     if (tab.body.mode === "raw") {
-      const contentTypeSelect = el("select", { class: "hc-select hc-select-flat hc-body-type" });
       const typeLabels = {
         "application/json": "JSON",
         "application/xml": "XML",
@@ -784,15 +852,19 @@
         "application/x-www-form-urlencoded": "URL Encoded",
         "": t("body.noContentType")
       };
-      CONTENT_TYPES.forEach((type) => {
-        contentTypeSelect.append(el("option", { value: type, text: typeLabels[type] || type || t("body.noContentType") }));
+      const contentTypeDd = util.createSelect({
+        className: "hc-body-type",
+        value: tab.body.contentType || "application/json",
+        items: CONTENT_TYPES.map((type) => ({
+          value: type,
+          label: typeLabels[type] || type || t("body.noContentType")
+        })),
+        onChange: (value) => {
+          tab.body.contentType = value;
+          markChanged(tab);
+        }
       });
-      contentTypeSelect.value = tab.body.contentType || "application/json";
-      contentTypeSelect.addEventListener("change", () => {
-        tab.body.contentType = contentTypeSelect.value;
-        markChanged(tab);
-      });
-      modeRow.append(contentTypeSelect);
+      modeRow.append(contentTypeDd.root);
     }
     panel.append(modeRow);
 
@@ -802,23 +874,39 @@
     }
 
     if (tab.body.mode === "raw") {
-      const toolbar = el("div", { class: "hc-body-toolbar" }, [
-        el("button", {
-          class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("action.format"),
-          on: {
-            click: () => {
-              const formatted = util.tryFormatJson(textarea.value) || util.tryFormatXml(textarea.value);
-              if (formatted) { textarea.value = formatted; tab.body.raw = formatted; markChanged(tab); }
-            }
-          }
-        }),
-        el("span", { class: "hc-hint", text: t("body.rawHint") })
-      ]);
-      const textarea = el("textarea", {
-        class: "hc-textarea hc-body-raw", spellcheck: "false", placeholder: t("body.placeholder"), value: tab.body.raw || ""
+      const bodyMode = util.isJsonContentType(tab.body.contentType) ? "json" : "js";
+      const onBodyChange = (value) => { tab.body.raw = value; markChanged(tab); };
+      const editor = util.createHighlightedEditor({
+        className: "hc-body-raw",
+        mode: bodyMode,
+        value: tab.body.raw || "",
+        placeholder: t("body.placeholder"),
+        onChange: onBodyChange
       });
-      textarea.addEventListener("input", () => { tab.body.raw = textarea.value; markChanged(tab); });
-      panel.append(toolbar, textarea);
+      const wrapped = util.wrapEditorWithParamHelper(editor, { onChange: onBodyChange });
+      const syncBody = (value) => {
+        tab.body.raw = value;
+        markChanged(tab);
+        editor.setValue(value);
+      };
+      util.mountEditorFloatActions(editor, {
+        onFormat: () => {
+          const formatted = util.tryFormatJson(editor.textarea.value) || util.tryFormatXml(editor.textarea.value);
+          if (formatted) syncBody(formatted);
+        },
+        onFullscreen: () => {
+          util.openCodeEditorFullscreen({
+            title: t("section.body"),
+            value: editor.textarea.value,
+            mode: bodyMode,
+            placeholder: t("body.placeholder"),
+            showFormat: true,
+            onChange: onBodyChange,
+            onClose: (value) => { editor.setValue(value); }
+          });
+        }
+      });
+      panel.append(el("div", { class: "hc-hint", text: t("body.rawHint") }), wrapped.root);
       return;
     }
 
@@ -840,6 +928,7 @@
   }
 
   function renderAuth(panel, tab) {
+    if (!tab.auth) tab.auth = { type: "none" };
     const types = [
       { id: "none", label: "auth.none" },
       { id: "basic", label: "auth.basic" },
@@ -869,8 +958,16 @@
     });
     panel.append(modeRow);
 
+    const inherited = store.resolveInherited ? store.resolveInherited(tab) : null;
     if (tab.auth.type === "none") {
-      panel.append(el("div", { class: "hc-panel-empty", text: t("auth.hint") }));
+      if (inherited && inherited.inheritedAuth && inherited.auth && inherited.auth.type !== "none") {
+        panel.append(el("div", {
+          class: "hc-hint",
+          text: t("auth.inherited", { type: String(inherited.auth.type || "").toUpperCase() })
+        }));
+      } else {
+        panel.append(el("div", { class: "hc-panel-empty", text: t("auth.hint") }));
+      }
       return;
     }
 
@@ -896,16 +993,64 @@
       field("auth.key", "key", { placeholder: "X-API-Key" });
       field("auth.value", "value", { type: "password" });
       grid.append(el("span", { class: "hc-field-label", text: t("auth.in") }));
-      const select = el("select", { class: "hc-select" }, [
-        el("option", { value: "header", text: t("auth.inHeader") }),
-        el("option", { value: "query", text: t("auth.inQuery") })
-      ]);
-      select.value = tab.auth.in || "header";
-      select.addEventListener("change", () => { tab.auth.in = select.value; markChanged(tab); });
-      grid.append(select);
+      const inDd = util.createSelect({
+        className: "hc-dd-block",
+        value: tab.auth.in || "header",
+        items: [
+          { value: "header", label: t("auth.inHeader") },
+          { value: "query", label: t("auth.inQuery") }
+        ],
+        onChange: (value) => { tab.auth.in = value; markChanged(tab); }
+      });
+      grid.append(inDd.root);
     }
     panel.append(grid);
     panel.append(el("div", { class: "hc-hint", text: t("auth.hint") }));
+  }
+
+  function scriptSnippets(kind) {
+    if (kind === "pre") {
+      return [
+        {
+          id: "log",
+          label: t("scripts.snip.log"),
+          code: "console.log(\"pre\", pm.request.url);\n"
+        },
+        {
+          id: "setHeader",
+          label: t("scripts.snip.setHeader"),
+          code: "pm.request.headers.set(\"Authorization\", \"Bearer \" + pm.environment.get(\"token\"));\n"
+        }
+      ];
+    }
+    return [
+      {
+        id: "status200",
+        label: t("scripts.snip.status200"),
+        code: "pm.test(\"status is 200\", function () {\n  pm.expect(pm.response.code).to.eql(200);\n});\n"
+      },
+      {
+        id: "extractToken",
+        label: t("scripts.snip.extractToken"),
+        code: "var jsonData = pm.response.json();\npm.environment.set(\"token\", jsonData && jsonData.data && jsonData.data.token);\n"
+      },
+      {
+        id: "jsonOk",
+        label: t("scripts.snip.jsonOk"),
+        code: "pm.test(\"body has data\", function () {\n  var jsonData = pm.response.json();\n  pm.expect(jsonData).to.ok();\n});\n"
+      }
+    ];
+  }
+
+  function appendScriptSnippet(tab, kind, snippet, editor) {
+    if (!tab.scripts) tab.scripts = { pre: "", post: "" };
+    const current = (kind === "pre" ? tab.scripts.pre : tab.scripts.post) || "";
+    const next = current && !/\n$/.test(current) ? `${current}\n${snippet.code}` : `${current}${snippet.code}`;
+    if (kind === "pre") tab.scripts.pre = next;
+    else tab.scripts.post = next;
+    markChanged(tab);
+    if (editor && editor.setValue) editor.setValue(next);
+    else render();
   }
 
   function renderScriptPane(panel, tab, kind) {
@@ -915,6 +1060,38 @@
     const code = (isPre ? tab.scripts.pre : tab.scripts.post) || "";
     const open = isPre ? tab.scriptsUi.preOpen : tab.scriptsUi.postOpen;
     const showEditor = open || !!code.trim();
+
+    const snipBar = el("div", { class: "hc-script-snips" });
+    scriptSnippets(kind).forEach((snippet) => {
+      snipBar.append(el("button", {
+        type: "button",
+        class: "hc-script-snip",
+        text: snippet.label,
+        title: snippet.code.trim(),
+        on: {
+          click: () => {
+            if (isPre) tab.scriptsUi.preOpen = true;
+            else tab.scriptsUi.postOpen = true;
+            if (!showEditor) {
+              appendScriptSnippet(tab, kind, snippet);
+              return;
+            }
+            const live = util.$(".hc-scripts-editor textarea");
+            if (live) {
+              appendScriptSnippet(tab, kind, snippet, {
+                setValue: (value) => {
+                  live.value = value;
+                  live.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+              });
+            } else {
+              appendScriptSnippet(tab, kind, snippet);
+            }
+          }
+        }
+      }));
+    });
+    panel.append(snipBar);
 
     if (!showEditor) {
       const empty = el("div", { class: "hc-scripts-empty" });
@@ -935,29 +1112,63 @@
       return;
     }
 
-    panel.append(el("div", {
-      class: "hc-hint",
-      text: isPre ? t("scripts.preHint") : t("scripts.postHint")
-    }));
-    const editor = el("textarea", {
-      class: "hc-textarea hc-scripts-editor is-solo",
-      spellcheck: "false",
-      placeholder: t(isPre ? "scripts.prePlaceholder" : "scripts.postPlaceholder"),
-      value: code
-    });
-    editor.addEventListener("input", () => {
-      if (isPre) tab.scripts.pre = editor.value;
-      else tab.scripts.post = editor.value;
+    const onScriptChange = (value) => {
+      if (isPre) tab.scripts.pre = value;
+      else tab.scripts.post = value;
       markChanged(tab);
+    };
+    const editor = util.createHighlightedEditor({
+      className: "hc-scripts-editor is-solo",
+      mode: "js",
+      value: code,
+      placeholder: t(isPre ? "scripts.prePlaceholder" : "scripts.postPlaceholder"),
+      onChange: onScriptChange
     });
-    panel.append(editor);
+    const wrapped = util.wrapEditorWithParamHelper(editor, { onChange: onScriptChange });
+    util.mountEditorFloatActions(editor, {
+      onSnippets: (event) => openScriptSnippetMenu(event, editor.textarea, onScriptChange),
+      onFullscreen: () => {
+        util.openCodeEditorFullscreen({
+          title: isPre ? t("scripts.pre") : t("scripts.post"),
+          value: editor.textarea.value,
+          mode: "js",
+          placeholder: t(isPre ? "scripts.prePlaceholder" : "scripts.postPlaceholder"),
+          showFormat: false,
+          onChange: onScriptChange,
+          onClose: (value) => { editor.setValue(value); }
+        });
+      }
+    });
+    panel.append(
+      el("div", { class: "hc-hint", text: isPre ? t("scripts.preHint") : t("scripts.postHint") }),
+      wrapped.root
+    );
     requestAnimationFrame(() => {
-      try { editor.focus(); } catch (_) { /* ignore */ }
+      try { editor.textarea.focus(); } catch (_) { /* ignore */ }
     });
   }
 
   function renderOptions(panel, tab) {
     const grid = el("div", { class: "hc-form-grid" });
+    if (tab.options.retryCount == null) tab.options.retryCount = 0;
+
+    if (!tab.runPolicy) tab.runPolicy = "each";
+    grid.append(el("span", { class: "hc-field-label", text: t("workflow.runPolicy") }));
+    const policyDd = util.createSelect({
+      className: "hc-dd-block",
+      value: tab.runPolicy === "once" ? "once" : "each",
+      items: [
+        { value: "each", label: t("workflow.runPolicy.each") },
+        { value: "once", label: t("workflow.runPolicy.once") }
+      ],
+      onChange: (value) => {
+        tab.runPolicy = value === "once" ? "once" : "each";
+        markChanged(tab);
+      }
+    });
+    grid.append(policyDd.root);
+    grid.append(el("span", { class: "hc-field-label", text: "" }));
+    grid.append(el("div", { class: "hc-hint", text: t("workflow.runPolicy.hint") }));
 
     const numberField = (labelKey, key, options) => {
       grid.append(el("span", { class: "hc-field-label", text: t(labelKey) }));
@@ -984,19 +1195,42 @@
     };
 
     numberField("options.timeout", "timeoutMs", { min: 500, max: 115000, step: 500 });
+    numberField("options.retryCount", "retryCount", { min: 0, max: 5 });
+    if (tab.options.retryCount > 0) {
+      if (tab.options.retryBackoffMs == null) tab.options.retryBackoffMs = 300;
+      numberField("options.retryBackoff", "retryBackoffMs", { min: 0, max: 10000, step: 100 });
+      grid.append(el("span", { class: "hc-field-label", text: t("options.retryStatuses") }));
+      const statuses = el("input", {
+        class: "hc-input", type: "text",
+        value: (tab.options.retryStatuses || [429, 500, 502, 503, 504]).join(",")
+      });
+      statuses.addEventListener("change", () => {
+        tab.options.retryStatuses = String(statuses.value || "")
+          .split(",").map((part) => Number(part.trim()))
+          .filter((code) => Number.isInteger(code) && code >= 400 && code <= 599);
+        markChanged(tab);
+      });
+      grid.append(statuses);
+      checkboxField("options.retryOnNetwork", "retryOnNetwork");
+      grid.append(el("span", { class: "hc-field-label", text: "" }));
+      grid.append(el("div", { class: "hc-hint", text: t("options.retryHint") }));
+    }
     numberField("options.maxRedirects", "maxRedirects", { min: 0, max: 50 });
     checkboxField("options.followRedirects", "followRedirects");
     checkboxField("options.verifyTls", "verifyTls");
 
     grid.append(el("span", { class: "hc-field-label", text: t("options.proxy") }));
-    const proxySelect = el("select", { class: "hc-select" }, [
-      el("option", { value: "environment", text: t("options.proxy.environment") }),
-      el("option", { value: "direct", text: t("options.proxy.direct") }),
-      el("option", { value: "custom", text: t("options.proxy.custom") })
-    ]);
-    proxySelect.value = tab.options.proxyMode || "environment";
-    proxySelect.addEventListener("change", () => { tab.options.proxyMode = proxySelect.value; markChanged(tab); render(); });
-    grid.append(proxySelect);
+    const proxyDd = util.createSelect({
+      className: "hc-dd-block",
+      value: tab.options.proxyMode || "environment",
+      items: [
+        { value: "environment", label: t("options.proxy.environment") },
+        { value: "direct", label: t("options.proxy.direct") },
+        { value: "custom", label: t("options.proxy.custom") }
+      ],
+      onChange: (value) => { tab.options.proxyMode = value; markChanged(tab); render(); }
+    });
+    grid.append(proxyDd.root);
 
     if (tab.options.proxyMode === "custom") {
       grid.append(el("span", { class: "hc-field-label", text: t("options.proxyUrl") }));
@@ -1006,15 +1240,18 @@
     }
 
     grid.append(el("span", { class: "hc-field-label", text: t("options.maxBodyBytes") }));
-    const sizeSelect = el("select", { class: "hc-select hc-select-flat" }, [
-      el("option", { value: "1048576", text: "1 MiB" }),
-      el("option", { value: "8388608", text: "8 MiB" }),
-      el("option", { value: "33554432", text: "32 MiB" }),
-      el("option", { value: "67108864", text: "64 MiB" })
-    ]);
-    sizeSelect.value = String(tab.options.maxBodyBytes || 33554432);
-    sizeSelect.addEventListener("change", () => { tab.options.maxBodyBytes = Number(sizeSelect.value); markChanged(tab); });
-    grid.append(sizeSelect);
+    const sizeDd = util.createSelect({
+      className: "hc-dd-block",
+      value: String(tab.options.maxBodyBytes || 33554432),
+      items: [
+        { value: "1048576", label: "1 MiB" },
+        { value: "8388608", label: "8 MiB" },
+        { value: "33554432", label: "32 MiB" },
+        { value: "67108864", label: "64 MiB" }
+      ],
+      onChange: (value) => { tab.options.maxBodyBytes = Number(value); markChanged(tab); }
+    });
+    grid.append(sizeDd.root);
 
     panel.append(grid);
     panel.append(el("div", { class: "hc-hint", text: t("options.hint") }));

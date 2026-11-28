@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {describe, it} from 'node:test'
 import {
+    hasExplorerNodeActivateAction,
     normalizeRenameInput,
     resolveExplorerNodeOpenKind,
 } from '@/features/explorer/services/explorer-node-open.service'
@@ -122,6 +123,11 @@ describe('resolveExplorerNodeOpenKind', () => {
         assert.equal(resolveExplorerNodeOpenKind({type: 'folder', label: 'tables'}), 'expand')
         assert.equal(resolveExplorerNodeOpenKind({type: 'project-docs', label: 'docs'}), 'expand')
         assert.equal(resolveExplorerNodeOpenKind({type: 'group', label: 'g'}), 'expand')
+        assert.equal(resolveExplorerNodeOpenKind({type: 'column', label: 'id'}), null)
+        assert.equal(hasExplorerNodeActivateAction({type: 'column', label: 'id'}), false)
+        assert.equal(hasExplorerNodeActivateAction({type: 'table', label: 't'}), true)
+        assert.equal(hasExplorerNodeActivateAction({type: 'folder', label: 'tables'}), true)
+        assert.equal(hasExplorerNodeActivateAction({type: 'connection', label: 'c'}), true)
     })
 })
 
@@ -208,15 +214,10 @@ describe('explorer message key helpers', () => {
 })
 
 describe('resolveShortcutOpenCommand / resolveShortcutEditCommand', () => {
-    it('builds connection-form and table-properties workspace commands', () => {
+    it('open always activates node; edit opens connection form or table properties', () => {
         assert.deepEqual(
             resolveShortcutOpenCommand({type: 'connection', id: 'c1', label: 'Conn', dbType: 'mysql'}),
-            {
-                type: 'open-connection-form',
-                dbType: 'mysql',
-                connectionId: 'c1',
-                connectionName: 'Conn',
-            },
+            {type: 'open-node'},
         )
         assert.deepEqual(
             resolveShortcutOpenCommand({type: 'table', id: 't1', label: 'users'}),

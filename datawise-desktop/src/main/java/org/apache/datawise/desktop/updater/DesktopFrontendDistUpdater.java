@@ -137,10 +137,19 @@ public final class DesktopFrontendDistUpdater {
                 entry.addProperty("bytes", bytes);
                 files.add("frontend-dist/index.html", entry);
                 obj.add("files", files);
+                JsonObject components = obj.has("components") && obj.get("components").isJsonObject()
+                        ? obj.getAsJsonObject("components")
+                        : new JsonObject();
+                JsonObject frontend = new JsonObject();
+                frontend.addProperty("sha256", sha);
+                frontend.addProperty("bytes", bytes);
+                components.add("frontend", frontend);
+                obj.add("components", components);
                 Files.writeString(candidate, obj.toString(), StandardCharsets.UTF_8);
             } catch (Exception ignored) {
             }
         }
+        DesktopLocalVersion.patchComponentSha("frontend", sha, bytes);
     }
 
     private static String sha256(Path file) throws Exception {

@@ -19,8 +19,9 @@ datawise:
     tenant-pro-trial-days: 14
     # 云站点申领也按 14 天（本地默认 7，见 application.yml）
     site-pro-trial-days: 14
-    # 生产必须覆盖；保留默认会拒绝签发许可证
-    # signing-secret: ${DATAWISE_ENTITLEMENT_SIGNING_SECRET}
+    # Required for enforced mode — no local default; unset env fails placeholder resolution
+    # or EntitlementSigningSecretValidator if blank/dev default leaks in.
+    signing-secret: ${DATAWISE_ENTITLEMENT_SIGNING_SECRET}
   security:
     auth:
       # Cloud: no wildcard loopback CORS (set explicit SaaS frontend origins if cross-origin)

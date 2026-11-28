@@ -1,6 +1,6 @@
 {
   "name": "@datawise/frontend",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "private": true,
   "type": "module",
   "description": "DataWise CLI - database desktop client",

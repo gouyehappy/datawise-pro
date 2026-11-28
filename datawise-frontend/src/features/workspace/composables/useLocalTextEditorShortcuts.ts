@@ -37,7 +37,9 @@ export function useLocalTextEditorShortcuts(handlers: LocalTextEditorShortcutHan
     let unsavedCloseResolver: ((action: 'save' | 'discard' | 'cancel') => void) | null = null
 
     const shortcutActive = computed(
-        () => layout.isDatabaseModule && handlers.editorFocused.value,
+        () => layout.isDatabaseModule
+            && workspace.activeTabId === handlers.tabId
+            && handlers.editorFocused.value,
     )
 
     function hint(label: string, binding: string): string {

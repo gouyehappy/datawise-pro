@@ -8,6 +8,7 @@ import type {WorkspaceTabSnapshot} from '@/shared/config/app-config.types'
 import {
     buildWorkspaceTabsFromSnapshots,
     captureWorkspaceTabs,
+    resolveActiveTabIndex,
     resolveRestoredActiveTabId,
 } from '@/features/workspace/utils/workspace-session'
 import {
@@ -25,6 +26,7 @@ import {
     findClosableTabIdsAfter,
     findClosableTabIdsBefore,
     findConsoleTabIdsForSqlFile,
+    findOrphanedWorkbenchConnectionIds,
     findOtherTabIds,
     findTableTabIds,
     resolveBulkCloseActiveTabId,
@@ -44,6 +46,7 @@ export type WorkspaceTabChromeDomainDeps = {
     clearTabLocalState: (tabId: string) => void
     disposeSshTerminal: (tabId: string) => void
     disposeCommunityWorkbenchTab: (tab: WorkspaceTab) => void
+    releaseOrphanedWorkbenchConnections: (connectionIds: string[]) => void
     resetConsoleQueryBag: () => void
     ensureConsoleQueryState: (tabId: string) => void
     hydrateDiskBackedTabIfNeeded: (tabId: string) => void | Promise<void>
@@ -67,6 +70,11 @@ export function createWorkspaceTabChromeDomain(deps: WorkspaceTabChromeDomainDep
         }
     }
 
+    function releaseConnectionsAfterClose(closed: WorkspaceTab[]) {
+        const orphaned = findOrphanedWorkbenchConnectionIds(closed, deps.tabs.value)
+        if (orphaned.length) deps.releaseOrphanedWorkbenchConnections(orphaned)
+    }
+
     function closeTab(tabId: string) {
         const tab = deps.tabs.value.find((t) => t.id === tabId)
         if (!tab?.closable) return
@@ -80,6 +88,7 @@ export function createWorkspaceTabChromeDomain(deps: WorkspaceTabChromeDomainDep
         if (deps.activeTabId.value === tabId) {
             deps.activeTabId.value = nextActive
         }
+        releaseConnectionsAfterClose([tab])
     }
 
     function closeConsoleTabsForSqlFile(options: {
@@ -108,14 +117,17 @@ export function createWorkspaceTabChromeDomain(deps: WorkspaceTabChromeDomainDep
 
     function closeOthers(tabId: string) {
         const removeIds = findOtherTabIds(deps.tabs.value, tabId)
+        const closed: WorkspaceTab[] = []
         for (const id of removeIds) {
             const tab = deps.tabs.value.find((t) => t.id === id)
+            if (tab) closed.push(tab)
             disposeTabSideEffects(tab, id)
             deps.clearTabLocalState(id)
         }
         deps.tabs.value = deps.tabs.value.filter((t) => t.id === tabId)
         deps.tabGroups.value = []
         deps.activeTabId.value = tabId
+        releaseConnectionsAfterClose(closed)
     }
 
     function closeTabsToLeft(tabId: string) {
@@ -145,20 +157,15 @@ export function createWorkspaceTabChromeDomain(deps: WorkspaceTabChromeDomainDep
     }
 
     function closeAllClosable() {
-        const allIds = deps.tabs.value.map((t) => t.id)
-        for (const id of allIds) {
-            const tab = deps.tabs.value.find((t) => t.id === id)
-            if (tab?.type === 'console') {
-                deps.cancelConsoleExecutionBestEffort(id)
-            }
-            if (tab?.type === 'ssh-terminal') {
-                deps.disposeSshTerminal(id)
-            }
-            deps.clearTabLocalState(id)
+        const closed = deps.tabs.value.slice()
+        for (const tab of closed) {
+            disposeTabSideEffects(tab, tab.id)
+            deps.clearTabLocalState(tab.id)
         }
         deps.tabs.value = []
         deps.tabGroups.value = []
         deps.activeTabId.value = null
+        releaseConnectionsAfterClose(closed)
     }
 
     function getTabTitle(tabId: string) {
@@ -275,7 +282,7 @@ export function createWorkspaceTabChromeDomain(deps: WorkspaceTabChromeDomainDep
     function captureSession() {
         return {
             tabs: captureWorkspaceTabs(deps.tabs.value),
-            activeTabIndex: deps.tabs.value.findIndex((tab) => tab.id === deps.activeTabId.value),
+            activeTabIndex: resolveActiveTabIndex(deps.tabs.value, deps.activeTabId.value),
             tabGroups: deps.tabGroups.value.map((group) => ({
                 id: group.id,
                 title: group.title,

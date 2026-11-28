@@ -76,7 +76,7 @@
 
 .dw-overlay-scroll__slider {
     position: absolute;
-    border-radius: 999px;
+    border-radius: var(--dw-radius-pill, 999px);
     background: var(--dw-overlay-sb-thumb);
     transition: background var(--dw-overlay-sb-fade-ms) ease;
     cursor: default;

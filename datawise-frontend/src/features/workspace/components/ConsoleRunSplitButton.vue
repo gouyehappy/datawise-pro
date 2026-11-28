@@ -180,7 +180,7 @@ function pickMode(mode: Exclude<SqlExecuteMode, 'auto'>) {
   width: 15.5rem;
   padding: 6px;
   border: 1px solid color-mix(in srgb, var(--dw-border) 70%, transparent);
-  border-radius: 8px;
+  border-radius: var(--dw-surface-radius, 8px);
   background: color-mix(in srgb, var(--dw-bg-panel) 92%, var(--dw-text) 8%);
   box-shadow: 0 8px 28px rgb(0 0 0 / 45%);
 }
@@ -193,7 +193,7 @@ function pickMode(mode: Exclude<SqlExecuteMode, 'auto'>) {
   margin: 0;
   padding: 7px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   background: transparent;
   color: var(--dw-text);
   text-align: left;

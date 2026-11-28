@@ -92,7 +92,14 @@ const target = `${osPart}-${archPart}`
 const exeName = platform() === 'win32' ? 'datawise-plugin-http-client.exe' : 'datawise-plugin-http-client'
 const staging = join(root, '.dwp-staging')
 const distDir = join(root, 'dist')
-const version = '0.1.0'
+// Single source of truth for the package version.
+const manifestSrc = join(root, 'manifest.datawise.json')
+if (!existsSync(manifestSrc)) {
+  console.error('Missing manifest.datawise.json')
+  process.exit(1)
+}
+const manifest = patchManifestExecutable(JSON.parse(readFileSync(manifestSrc, 'utf8')))
+const version = String(manifest.version || '0.0.0')
 const outDwp = join(
   distDir,
   wantSign
@@ -223,12 +230,6 @@ if (existsSync(staging)) rmSync(staging, { recursive: true, force: true })
 mkdirSync(staging, { recursive: true })
 mkdirSync(distDir, { recursive: true })
 
-const manifestSrc = join(root, 'manifest.datawise.json')
-if (!existsSync(manifestSrc)) {
-  console.error('Missing manifest.datawise.json')
-  process.exit(1)
-}
-const manifest = patchManifestExecutable(JSON.parse(readFileSync(manifestSrc, 'utf8')))
 writeFileSync(join(staging, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n')
 
 if (!skipBackend) {
@@ -247,6 +248,19 @@ if (!skipBackend) {
   const built = join(root, 'backend', exeName)
   if (!existsSync(built)) {
     console.error('Missing backend binary for --skip-backend:', built)
+    process.exit(1)
+  }
+  // Reusing a binary built before the latest Go change produces a package
+  // whose UI expects RPCs the sidecar does not have. Fail loudly instead.
+  const builtMtime = statSync(built).mtimeMs
+  let newestSource = 0
+  for (const name of readdirSync(join(root, 'backend'))) {
+    if (!name.endsWith('.go')) continue
+    const full = join(root, 'backend', name)
+    if (statSync(full).isFile()) newestSource = Math.max(newestSource, statSync(full).mtimeMs)
+  }
+  if (newestSource > builtMtime + 1000) {
+    console.error('Backend binary is older than Go sources; rebuild without --skip-backend.')
     process.exit(1)
   }
   const binDir = join(staging, 'bin', target)

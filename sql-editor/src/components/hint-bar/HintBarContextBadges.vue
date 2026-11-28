@@ -55,7 +55,7 @@ const slotTone = computed(() => completionSlotToneClass(props.completionSlot))
   box-sizing: border-box;
   height: 20px;
   padding: 0 6px;
-  border-radius: 5px;
+  border-radius: var(--dw-surface-radius, 5px);
   font-weight: 700;
   font-size: 10px;
   letter-spacing: 0.04em;
@@ -87,7 +87,7 @@ const slotTone = computed(() => completionSlotToneClass(props.completionSlot))
   min-width: 52px;
   height: 18px;
   padding: 0 4px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   font-size: 9px;
   font-weight: 600;
   font-family: ui-monospace, monospace;

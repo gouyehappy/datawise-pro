@@ -55,6 +55,47 @@ describe('explorer-refresh-scope.service', () => {
         })
         assert.equal(resolveTablesRefreshScope(tree, connection), null)
     })
+
+    it('resolves catalog.schema scope for hive-style tables', () => {
+        const table = node({id: 't02', label: 't02', type: 'table'})
+        const tablesFolder = node({
+            id: 'folder-tables',
+            label: 'tables',
+            type: 'folder',
+            children: [table],
+        })
+        const schema = node({
+            id: 'schema-pa',
+            label: 'pa00035_b',
+            type: 'schema',
+            children: [tablesFolder],
+        })
+        const catalog = node({
+            id: 'db-hive',
+            label: 'hive',
+            type: 'database',
+            children: [schema],
+        })
+        const connection = node({
+            id: 'c-hive2',
+            label: 'hive2',
+            type: 'connection',
+            dbType: 'trino',
+            children: [catalog],
+        })
+        const tree = [connection]
+
+        assert.deepEqual(resolveTablesRefreshScope(tree, table), {
+            connectionId: 'c-hive2',
+            scopeLabel: 'hive.pa00035_b',
+            scopeNodeId: 'schema-pa',
+        })
+        assert.deepEqual(resolveTablesRefreshScope(tree, tablesFolder), {
+            connectionId: 'c-hive2',
+            scopeLabel: 'hive.pa00035_b',
+            scopeNodeId: 'schema-pa',
+        })
+    })
 })
 
 describe('explorer-menu-intents remaining actions', () => {
@@ -74,7 +115,7 @@ describe('explorer-menu-intents remaining actions', () => {
     })
 
     it('resolves shortcut / kafka / scoped menu intents', () => {
-        assert.equal(resolveShortcutOpenIntent({type: 'connection', dbType: 'mysql'}), 'connection-form')
+        assert.equal(resolveShortcutOpenIntent({type: 'connection', dbType: 'mysql'}), 'open-node')
         assert.equal(resolveShortcutOpenIntent({type: 'table'}), 'open-node')
         assert.equal(resolveShortcutEditIntent({type: 'table'}), 'table-properties')
         assert.equal(resolveShortcutEditIntent({type: 'connection', dbType: 'mysql'}), 'connection-form')

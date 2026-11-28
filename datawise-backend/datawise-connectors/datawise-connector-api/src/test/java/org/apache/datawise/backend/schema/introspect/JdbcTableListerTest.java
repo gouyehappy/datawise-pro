@@ -91,15 +91,31 @@ class JdbcTableListerTest {
     }
 
     @Test
-    void filterConnectionRoots_removesTrinoConnectionScriptsFolder() {
+    void filterConnectionRoots_keepsTrinoConnectionScriptsFolder() {
         List<TreeNode> roots = List.of(
                 folderNode("scripts"),
                 treeNode("hive"));
 
         List<TreeNode> filtered = ExplorerSchemaFilter.filterConnectionRoots(roots, "trino", dialectRegistry());
 
-        assertEquals(1, filtered.size());
-        assertEquals("hive", filtered.get(0).getLabel());
+        assertEquals(2, filtered.size());
+        assertEquals("scripts", filtered.get(0).getLabel());
+        assertEquals("hive", filtered.get(1).getLabel());
+    }
+
+    @Test
+    void ensureConnectionScriptsFolder_injectsMissingScriptsAndAiNodes() {
+        List<TreeNode> roots = List.of(treeNode("hive"));
+
+        List<TreeNode> ensured = ExplorerSchemaFilter.ensureConnectionScriptsFolder(
+                "conn-1", "trino", roots);
+
+        assertEquals(3, ensured.size());
+        assertEquals("scripts", ensured.get(0).getLabel());
+        assertEquals("folder", ensured.get(0).getType());
+        assertEquals("ai", ensured.get(1).getLabel());
+        assertEquals("folder", ensured.get(1).getType());
+        assertEquals("hive", ensured.get(2).getLabel());
     }
 
     @Test

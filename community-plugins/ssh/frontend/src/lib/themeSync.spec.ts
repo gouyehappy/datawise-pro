@@ -5,7 +5,10 @@ import { themeBridgeCss, THEME_BRIDGE_STYLE_ID } from "../../../shared/frontend/
 describe("themeBridgeCss", () => {
   it("bridges plugin vars onto host theme tokens", () => {
     const css = themeBridgeCss();
-    expect(css).toContain("--background:var(--color-background,#131416)");
+    // 回退值必须与 style.css 的 :root 暗色默认（#1a1b1e / #f0f0f3）以及
+    // shared/frontend/themeSync.ts 的 THEME_BRIDGE_VARS 三者一致；否则
+    // Host API 1.0 / mock（无 --color-* 令牌）下首绘会与样式表闪烁错位。
+    expect(css).toContain("--background:var(--color-background,#1a1b1e)");
     expect(css).toContain("--primary:var(--color-primary,#3b82f6)");
     expect(css).toContain("--popover:var(--color-popover,");
     expect(css).toContain("--terminal-font-family:var(--font-mono,");
@@ -29,7 +32,7 @@ describe("themeBridgeCss", () => {
   it("allows per-plugin fallback overrides", () => {
     const css = themeBridgeCss({ "--background": "#000000" });
     expect(css).toContain("--background:var(--color-background,#000000)");
-    expect(css).toContain("--foreground:var(--color-foreground,#d7d7db)");
+    expect(css).toContain("--foreground:var(--color-foreground,#f0f0f3)");
   });
 
   it("exposes the stable style element id", () => {

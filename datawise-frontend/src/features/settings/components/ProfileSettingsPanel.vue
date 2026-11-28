@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {DwInlineAlert, DwButton, DwInput, DwCheckbox} from '@/core/components'
+import {DwInlineAlert, DwButton, DwInput, SettingsRow, SettingsSwitch} from '@/core/components'
 import {onMounted, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {authApi} from '@/api'
@@ -9,6 +9,7 @@ import {useAppToast} from '@/features/layout/composables/useAppToast'
 import ProfileEditDialog from '@/features/settings/components/ProfileEditDialog.vue'
 import ChangePasswordDialog from '@/features/settings/components/ChangePasswordDialog.vue'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
+import SettingsGroup from '@/features/settings/components/SettingsGroup.vue'
 import {resolveCaughtApiErrorMessage} from '@/shared/api'
 
 const {t} = useI18n()
@@ -88,33 +89,43 @@ async function saveSessionPolicy() {
         <DwButton v-if="!auth.isGuest" variant="secondary" type="button" @click="changePassword">{{ t('profile.changePassword') }}</DwButton>
       </div>
 
-      <section v-if="!auth.isGuest && auth.isAdmin" class="setting-block session-policy">
-        <h3>{{ t('settings.profile.sessionPolicyTitle') }}</h3>
-        <p class="session-policy__hint hint">{{ t('settings.profile.sessionPolicyHint') }}</p>
-        <label class="session-policy__field">
-          <span>{{ t('settings.profile.sessionTtlMinutes') }}</span>
-          <DwInput
-              v-model="sessionTtlMinutes"
-              type="number"
-              :min="5"
-              :max="1440"
-              :step="5"
-          />
-        </label>
-        <DwCheckbox v-model="sessionSlidingRenewal" class="session-policy__checkbox">
-          {{ t('settings.profile.sessionSlidingRenewal') }}
-        </DwCheckbox>
-        <DwButton
-            variant="secondary"
-            type="button"
-            :loading="savingSessionPolicy"
-            :disabled="savingSessionPolicy"
-            @click="saveSessionPolicy"
-        >
-          {{ t('settings.profile.sessionPolicySave') }}
-        </DwButton>
-        <DwInlineAlert :message="sessionPolicyError"/>
-      </section>
+      <SettingsGroup
+          v-if="!auth.isGuest && auth.isAdmin"
+          :title="t('settings.profile.sessionPolicyTitle')"
+          :hint="t('settings.profile.sessionPolicyHint')"
+      >
+        <SettingsRow :label="t('settings.profile.sessionTtlMinutes')">
+          <div class="input-with-unit">
+            <DwInput
+                v-model="sessionTtlMinutes"
+                type="number"
+                :min="5"
+                :max="1440"
+                :step="5"
+            />
+            <span class="unit-chip">min</span>
+          </div>
+        </SettingsRow>
+        <SettingsSwitch
+            v-model="sessionSlidingRenewal"
+            :label="t('settings.profile.sessionSlidingRenewal')"
+        />
+        <SettingsRow :label="t('settings.profile.sessionPolicySave')">
+          <DwButton
+              variant="secondary"
+              size="sm"
+              type="button"
+              :loading="savingSessionPolicy"
+              :disabled="savingSessionPolicy"
+              @click="saveSessionPolicy"
+          >
+            {{ t('settings.profile.sessionPolicySave') }}
+          </DwButton>
+        </SettingsRow>
+        <div v-if="sessionPolicyError" class="settings-section__block">
+          <DwInlineAlert :message="sessionPolicyError"/>
+        </div>
+      </SettingsGroup>
     </div>
 
     <ProfileEditDialog

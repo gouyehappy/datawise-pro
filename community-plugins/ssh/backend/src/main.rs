@@ -3,6 +3,7 @@ mod agent_terminal;
 mod alert_triage;
 mod app_bridge;
 mod audit_log;
+mod completion_catalog;
 mod connection_import;
 mod docker;
 mod jumpserver;
@@ -18,6 +19,7 @@ mod mcp;
 mod mcp_safety;
 mod metrics;
 mod metrics_history;
+mod monitor;
 mod model;
 mod multi_exec;
 mod preferences;
@@ -34,6 +36,7 @@ mod sftp_tree;
 mod socks5;
 mod ssh;
 mod ssh_algorithms;
+mod ssh_config_sync;
 mod sudo_allowlist;
 mod sudo_fs;
 mod sudo_profiles;
@@ -93,6 +96,8 @@ struct Plugin {
     connection_import: connection_import::ImportStream,
     non_ssh_creds: non_ssh_credentials::NonSshCredentials,
     tasks: Arc<task_provider::TaskProvider>,
+    /// Multi-server monitor panel (monitor/*): per-connection fast/slow collectors.
+    monitors: monitor::MonitorRegistry,
 }
 
 impl Plugin {
@@ -117,6 +122,7 @@ impl Plugin {
             connection_import: connection_import::ImportStream::default(),
             non_ssh_creds: non_ssh_credentials::NonSshCredentials::new(),
             tasks: Arc::new(task_provider::TaskProvider::new()),
+            monitors: monitor::MonitorRegistry::new(),
         })
     }
 
@@ -404,6 +410,16 @@ impl Plugin {
                     .block_on(self.ssh.set_directory_tracking(session_id, enabled))?;
                 Ok(json!({ "success": true }))
             }
+            "ssh/terminal/outputFlow" => {
+                let session_id = required_string(&params, "sessionId")?;
+                let paused = params
+                    .get("paused")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                self.runtime
+                    .block_on(self.ssh.set_terminal_output_paused(session_id, paused))?;
+                Ok(json!({ "success": true, "paused": paused }))
+            }
             "ssh/terminal/replay" => {
                 let session_id = required_string(&params, "sessionId")?;
                 let after_sequence = params
@@ -617,6 +633,22 @@ impl Plugin {
                     as usize;
                 self.runtime
                     .block_on(self.ssh.metrics_history(session_id, limit))
+            }
+            // Multi-server monitor (monitor/*): per-connection fast/slow collectors.
+            "monitor/start" => {
+                let connection_id = required_string(&params, "connectionId")?;
+                self.runtime
+                    .block_on(self.monitors.start(&self.ssh, connection_id, &self.runtime))
+            }
+            "monitor/stop" => {
+                let connection_id = required_string(&params, "connectionId")?;
+                self.runtime.block_on(self.monitors.stop(connection_id))
+            }
+            "monitor/status" => Ok(self.runtime.block_on(self.monitors.status())),
+            "monitor/snapshot" => Ok(self.runtime.block_on(self.monitors.snapshot(&params))),
+            "monitor/details" => {
+                let connection_id = required_string(&params, "connectionId")?;
+                self.runtime.block_on(self.monitors.details(connection_id))
             }
             "ssh/processes/list" => {
                 let session_id = required_string(&params, "sessionId")?;
@@ -1796,6 +1828,11 @@ impl Plugin {
                 );
                 Ok(result)
             },
+            // X-CATALOG: curated Fig extras pack (HTTPS JSON). Sidecar fetch avoids iframe CORS.
+            "completion/catalog/fetch" => {
+                self.runtime
+                    .block_on(completion_catalog::fetch_catalog_pack(&params))
+            }
             // 应用内目录选择器的本机浏览：只列目录（永不返回文件内容）；
             // drives 供 Windows「此电脑」盘符页，其他平台为空。
             "local/fs/browse" => {
@@ -1932,6 +1969,11 @@ impl Plugin {
                 "plugin": "io.datawise.community.ssh",
                 "maxTransferSize": MAX_TRANSFER_SIZE
             })),
+            "sshConfig/read" => ssh_config_sync::read(&plugin_data_dir(), &params),
+            "sshConfig/settings" => ssh_config_sync::settings(&plugin_data_dir(), &params),
+            "sshConfig/import" => ssh_config_sync::import_preview(&plugin_data_dir(), &params),
+            "sshConfig/ackImport" => ssh_config_sync::ack_import(&plugin_data_dir(), &params),
+            "sshConfig/export" => ssh_config_sync::export(&plugin_data_dir(), &params),
             _ => Err(format!("Method not found: {method}")),
         }
     }

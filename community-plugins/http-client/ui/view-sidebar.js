@@ -7,6 +7,11 @@
   const el = util.el;
 
   let sideFilter = "";
+  /** @type {{ collectionId: string, parentId: string } | null} */
+  let inlineFolderDraft = null;
+  /** @type {string} request id currently renamed inline */
+  let inlineRenameRequestId = "";
+  let inlineFocus = false;
 
   function render() {
     renderActions();
@@ -15,6 +20,105 @@
     if (view === "collections") renderCollections(host);
     else if (view === "history") renderHistory(host);
     else renderEnvironments(host);
+    if (inlineFocus) {
+      inlineFocus = false;
+      requestAnimationFrame(() => {
+        const input = util.$(".hc-tree-inline-input");
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      });
+    }
+  }
+
+  /** Update tree highlight without rebuilding the sidebar (keeps scroll). */
+  function syncActive(opts) {
+    if (opts && opts.fromTab && store.syncTreeFocusFromTab) {
+      store.syncTreeFocusFromTab(store.activeTab());
+    }
+    const focus = store.treeFocus ? store.treeFocus() : { collectionId: "", folderId: "", requestId: "" };
+    const requestId = focus.requestId || "";
+    util.$$(".hc-tree-request-row").forEach((row) => {
+      row.classList.toggle("is-active", !!requestId && row.dataset.nodeId === requestId);
+    });
+    util.$$(".hc-tree-folder-row").forEach((row) => {
+      row.classList.toggle("is-active", !requestId && !!focus.folderId && row.dataset.nodeId === focus.folderId);
+    });
+    util.$$(".hc-tree-root-row").forEach((row) => {
+      row.classList.toggle(
+        "is-active",
+        !requestId && !focus.folderId && !!focus.collectionId && row.dataset.nodeId === focus.collectionId
+      );
+    });
+  }
+
+  function startInlineFolder(collectionId, parentId) {
+    if (!collectionId) return;
+    store.state.sideView = "collections";
+    inlineRenameRequestId = "";
+    const collection = store.state.collections.find((item) => item.id === collectionId);
+    if (collection) collection.collapsed = false;
+    if (parentId) {
+      const located = store.locate(parentId);
+      if (located && located.item.kind === "folder") located.item.collapsed = false;
+    }
+    inlineFolderDraft = { collectionId, parentId: parentId || "" };
+    inlineFocus = true;
+    store.persist();
+    store.emit("sidebar");
+    render();
+  }
+
+  function startInlineRenameRequest(requestId) {
+    if (!requestId) return;
+    inlineFolderDraft = null;
+    inlineRenameRequestId = requestId;
+    inlineFocus = true;
+    render();
+  }
+
+  function commitInlineRenameRequest(requestId, name) {
+    inlineRenameRequestId = "";
+    const trimmed = String(name || "").trim();
+    const located = store.locate(requestId);
+    if (!located || located.item.kind !== "request") {
+      render();
+      return;
+    }
+    if (trimmed) {
+      located.item.name = trimmed;
+      const tab = store.state.tabs.find((item) => item.savedRequestId === requestId);
+      if (tab) tab.name = trimmed;
+      store.persist();
+      store.emit("sidebar");
+      store.emit("tabs");
+    }
+    render();
+  }
+
+  function cancelInlineRenameRequest() {
+    if (!inlineRenameRequestId) return;
+    inlineRenameRequestId = "";
+    render();
+  }
+
+  function cancelInlineFolder() {
+    if (!inlineFolderDraft) return;
+    inlineFolderDraft = null;
+    render();
+  }
+
+  function commitInlineFolder(name) {
+    if (!inlineFolderDraft) return;
+    const draft = inlineFolderDraft;
+    const trimmed = String(name || "").trim();
+    inlineFolderDraft = null;
+    if (!trimmed) {
+      render();
+      return;
+    }
+    store.createFolder(draft.collectionId, draft.parentId, trimmed);
   }
 
   function filterText(value) {
@@ -40,14 +144,20 @@
       value: sideFilter,
       spellcheck: "false"
     });
+    let searchTimer = 0;
     search.addEventListener("input", () => {
-      sideFilter = search.value || "";
-      const body = util.$("#sidebar-body");
-      if (!body) return;
-      util.clear(body);
-      if (view === "collections") renderCollections(body);
-      else if (view === "history") renderHistory(body);
-      else renderEnvironments(body);
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        sideFilter = search.value || "";
+        const body = util.$("#sidebar-body");
+        if (!body) return;
+        const scrollTop = body.scrollTop;
+        util.clear(body);
+        if (view === "collections") renderCollections(body);
+        else if (view === "history") renderHistory(body);
+        else renderEnvironments(body);
+        body.scrollTop = scrollTop;
+      }, 150);
     });
 
     const actions = el("div", { class: "hc-side-toolbar-actions" });
@@ -408,6 +518,81 @@
     });
   }
 
+  function treeTwist(open, leaf, onToggle) {
+    const node = el("span", {
+      class: `hc-tree-twist${leaf ? " is-leaf" : ""}${!leaf && open ? " is-open" : ""}`,
+      role: leaf ? undefined : "button",
+      title: leaf ? undefined : t("action.expand"),
+      "aria-hidden": leaf ? "true" : undefined
+    });
+    if (!leaf && typeof onToggle === "function") {
+      // Keep twist out of row drag/select — otherwise pointer capture eats the click.
+      node.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
+      node.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onToggle(event);
+      });
+    }
+    return node;
+  }
+
+  function treeGlyph(kind, method) {
+    const node = el("span", {
+      class: `hc-tree-glyph is-${kind}${method ? ` m-${method}` : ""}`,
+      "aria-hidden": "true"
+    });
+    if (kind === "folder") {
+      node.innerHTML = "<svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\"><path fill=\"currentColor\" d=\"M1.75 3.5A1.75 1.75 0 0 1 3.5 1.75h2.38c.46 0 .9.18 1.22.51L8.28 3.5h4.22A1.75 1.75 0 0 1 14.25 5.25v7A1.75 1.75 0 0 1 12.5 14H3.5A1.75 1.75 0 0 1 1.75 12.25v-8.75z\"/></svg>";
+    } else if (kind === "collection") {
+      node.innerHTML = "<svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\"><path fill=\"currentColor\" d=\"M2.5 2.75A.75.75 0 0 1 3.25 2h9.5a.75.75 0 0 1 0 1.5h-9.5A.75.75 0 0 1 2.5 2.75zm0 3.5A.75.75 0 0 1 3.25 5.5h9.5a.75.75 0 0 1 0 1.5h-9.5A.75.75 0 0 1 2.5 6.25zm0 3.5A.75.75 0 0 1 3.25 9h9.5a.75.75 0 0 1 0 1.5h-9.5a.75.75 0 0 1-.75-.75zm0 3.5a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5a.75.75 0 0 1-.75-.75z\"/></svg>";
+    } else if (kind === "method") {
+      node.textContent = shortMethod(method);
+    }
+    return node;
+  }
+
+  function renderInlineFolderRow(depth) {
+    const row = el("div", {
+      class: "hc-tree-row hc-tree-inline-row",
+      style: { "--hc-depth": String(depth) }
+    }, [
+      treeTwist(true, false),
+      treeGlyph("folder"),
+      el("input", {
+        class: "hc-tree-inline-input",
+        type: "text",
+        value: t("misc.untitledFolder"),
+        spellcheck: "false",
+        autocomplete: "off",
+        "aria-label": t("action.newFolder")
+      })
+    ]);
+    const input = row.querySelector(".hc-tree-inline-input");
+    let done = false;
+    const finish = (commit) => {
+      if (done) return;
+      done = true;
+      if (commit) commitInlineFolder(input.value);
+      else cancelInlineFolder();
+    };
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        finish(true);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        finish(false);
+      }
+      event.stopPropagation();
+    });
+    input.addEventListener("blur", () => finish(!!String(input.value || "").trim()));
+    input.addEventListener("click", (event) => event.stopPropagation());
+    return row;
+  }
+
   function renderCollection(collection) {
     const count = store.countRequests(collection.items);
     const isApipost = collection.source === "apipost";
@@ -415,38 +600,61 @@
       class: `hc-side-group hc-collection${isApipost ? " is-apipost" : ""}`,
       dataset: { nodeId: collection.id, kind: "collection" }
     });
+    const focus = store.treeFocus ? store.treeFocus() : {};
+    const selected = !focus.requestId && !focus.folderId && focus.collectionId === collection.id;
     const head = el("div", {
-      class: `hc-tree-row hc-tree-root-row${isApipost ? " is-apipost" : ""}`,
+      class: `hc-tree-row hc-tree-root-row${isApipost ? " is-apipost" : ""}${selected ? " is-active" : ""}`,
       "aria-expanded": collection.collapsed ? "false" : "true",
       title: collection.name,
+      style: { "--hc-depth": "0" },
       dataset: {
         dropKind: "collection",
         collectionId: collection.id,
         nodeId: collection.id
       }
     }, [
-      el("span", {
-        class: `hc-tree-twist${collection.collapsed ? "" : " is-open"}`,
-        "aria-hidden": "true"
-      }),
+      treeTwist(!collection.collapsed, false, () => store.toggleCollapsed(collection.id)),
+      treeGlyph("collection"),
       el("span", { class: "hc-grow hc-list-title", text: isApipost ? t("side.allApis") : collection.name }),
-      el("span", { class: "hc-count", text: count ? `(${count})` : "" })
+      el("span", { class: "hc-count", text: count ? String(count) : "" })
     ]);
     head.addEventListener("contextmenu", (event) => openContextMenu(event, collectionMenu(collection)));
-    head.addEventListener("click", () => store.toggleCollapsed(collection.id));
+    head.addEventListener("click", (event) => {
+      if (event.target && event.target.closest && event.target.closest(".hc-tree-twist")) return;
+      store.setTreeFocus(collection.id, "", "");
+      if (event.detail === 2) {
+        store.toggleCollapsed(collection.id);
+        return;
+      }
+      // Single click selects; expand if currently collapsed.
+      if (collection.collapsed) store.toggleCollapsed(collection.id);
+      else syncActive();
+    });
     group.append(head);
-    group.append(renderItemList(collection, collection.items, !!collection.collapsed, 0));
+    // Children start at depth 1 so the first folder level is clearly indented under the root.
+    group.append(renderItemList(collection, collection.items, !!collection.collapsed, 1, ""));
     return group;
   }
 
-  function renderItemList(collection, items, collapsed, depth) {
+  function renderItemList(collection, items, collapsed, depth, parentId) {
     const body = el("div", {
       class: `hc-side-group-body${depth > 0 ? " hc-tree-branch" : " hc-tree-root-body"}`,
       hidden: collapsed,
       dataset: { depth: String(depth) }
     });
+    const showDraft = inlineFolderDraft
+      && inlineFolderDraft.collectionId === collection.id
+      && (inlineFolderDraft.parentId || "") === (parentId || "");
+    if (showDraft) body.append(renderInlineFolderRow(depth));
+
     if (!items || !items.length) {
-      if (depth > 0) body.append(el("div", { class: "hc-hint hc-tree-empty", text: t("side.emptyFolder") }));
+      if (depth > 0 && !showDraft) {
+        body.append(el("div", {
+          class: "hc-hint hc-tree-empty",
+          style: { "--hc-depth": String(depth) },
+          text: t("side.emptyFolder")
+        }));
+      }
       return body;
     }
     const folders = items.filter((item) => item.kind === "folder");
@@ -458,46 +666,61 @@
 
   function renderFolder(collection, folder, depth) {
     const count = store.countRequests(folder.items);
+    const focus = store.treeFocus ? store.treeFocus() : {};
+    const selected = !focus.requestId && focus.folderId === folder.id;
     const group = el("div", {
       class: "hc-side-group hc-tree-folder",
       dataset: { nodeId: folder.id, kind: "folder", depth: String(depth) }
     });
     const head = el("div", {
-      class: "hc-tree-row hc-tree-folder-row",
+      class: `hc-tree-row hc-tree-folder-row${selected ? " is-active" : ""}`,
       "aria-expanded": folder.collapsed ? "false" : "true",
       title: folder.name,
+      style: { "--hc-depth": String(depth) },
       dataset: {
         dropKind: "folder",
         collectionId: collection.id,
         nodeId: folder.id
       }
     }, [
-      el("span", {
-        class: `hc-tree-twist${folder.collapsed ? "" : " is-open"}`,
-        "aria-hidden": "true"
-      }),
-      el("span", { class: "hc-folder-icon", "aria-hidden": "true" }),
+      treeTwist(!folder.collapsed, false, () => store.toggleCollapsed(folder.id)),
+      treeGlyph("folder"),
       el("span", { class: "hc-grow hc-list-title", text: folder.name }),
-      el("span", { class: "hc-count", text: count ? `(${count})` : "" })
+      el("span", { class: "hc-count", text: count ? String(count) : "" })
     ]);
     head.addEventListener("contextmenu", (event) => openContextMenu(event, folderMenu(collection, folder)));
-    head.addEventListener("click", () => {
+    head.addEventListener("click", (event) => {
       if (dragMoved) return;
-      store.toggleCollapsed(folder.id);
+      if (event.target && event.target.closest && event.target.closest(".hc-tree-twist")) return;
+      store.setTreeFocus(collection.id, folder.id, "");
+      if (event.detail === 2) {
+        store.toggleCollapsed(folder.id);
+        return;
+      }
+      if (folder.collapsed) store.toggleCollapsed(folder.id);
+      else syncActive();
     });
     wireDragSource(head, { id: folder.id, kind: "folder", collectionId: collection.id });
     group.append(head);
-    group.append(renderItemList(collection, folder.items, !!folder.collapsed, depth + 1));
+    group.append(renderItemList(collection, folder.items, !!folder.collapsed, depth + 1, folder.id));
     return group;
   }
 
   function renderSavedRequest(collection, saved, depth) {
-    const active = store.activeTab() && store.activeTab().savedRequestId === saved.id;
+    const focus = store.treeFocus ? store.treeFocus() : {};
+    const active = focus.requestId
+      ? focus.requestId === saved.id
+      : !!(store.activeTab() && store.activeTab().savedRequestId === saved.id);
     const path = requestPath(saved.url);
-    const label = path || saved.name || shortMethod(saved.method);
+    const untitled = t("tab.untitled");
+    const named = String(saved.name || "").trim();
+    // Prefer request name so the tree is readable; path stays in tooltip.
+    const label = (named && named !== untitled) ? named : (path || named || shortMethod(saved.method));
+    const renaming = inlineRenameRequestId === saved.id;
     const item = el("div", {
-      class: `hc-tree-row hc-tree-request-row${active ? " is-active" : ""}`,
-      title: saved.name && path ? `${saved.name}\n${saved.url || path}` : (saved.url || saved.name || ""),
+      class: `hc-tree-row hc-tree-request-row${active ? " is-active" : ""}${renaming ? " is-renaming" : ""}`,
+      title: renaming ? "" : (named && path ? `${named}\n${saved.url || path}` : (saved.url || named || "")),
+      style: { "--hc-depth": String(depth) },
       dataset: {
         nodeId: saved.id,
         kind: "request",
@@ -506,16 +729,53 @@
         collectionId: collection.id
       }
     }, [
-      el("span", { class: "hc-tree-twist is-leaf", "aria-hidden": "true" }),
-      el("span", { class: `hc-method-badge m-${saved.method}`, text: shortMethod(saved.method) }),
-      el("span", { class: "hc-grow hc-list-title", text: label })
+      treeTwist(false, true),
+      treeGlyph("method", saved.method)
     ]);
+    if (renaming) {
+      const input = el("input", {
+        class: "hc-tree-inline-input",
+        type: "text",
+        value: named || untitled,
+        spellcheck: "false",
+        autocomplete: "off",
+        "aria-label": t("action.rename")
+      });
+      let done = false;
+      const finish = (commit) => {
+        if (done) return;
+        done = true;
+        if (commit) commitInlineRenameRequest(saved.id, input.value);
+        else cancelInlineRenameRequest();
+      };
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          finish(true);
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          finish(false);
+        }
+        event.stopPropagation();
+      });
+      input.addEventListener("blur", () => finish(true));
+      input.addEventListener("click", (event) => event.stopPropagation());
+      item.append(input);
+      return item;
+    }
+    item.append(el("span", { class: "hc-grow hc-list-title", text: label }));
     item.addEventListener("contextmenu", (event) => openContextMenu(event, requestMenu(collection, saved)));
     item.addEventListener("click", () => {
       if (dragMoved) return;
+      const parentId = (() => {
+        const located = store.locate(saved.id);
+        return located && located.parent ? located.parent.id : "";
+      })();
+      store.setTreeFocus(collection.id, parentId, saved.id);
       store.openSavedRequest(collection.id, saved.id);
       HC.viewRequest.render();
       HC.viewResponse.render();
+      syncActive();
     });
     wireDragSource(item, { id: saved.id, kind: "request", collectionId: collection.id });
     return item;
@@ -543,22 +803,34 @@
     return text;
   }
 
-  async function promptFolder(collectionId, parentId) {
-    const name = await util.promptDialog({ title: t("dialog.newSubcollectionTitle"), label: t("dialog.name") });
-    if (name) store.createFolder(collectionId, parentId, name);
+  function promptFolder(collectionId, parentId) {
+    startInlineFolder(collectionId, parentId || "");
   }
 
-  async function promptNewRequest(collectionId, folderId) {
-    const name = await util.promptDialog({
-      title: t("action.newRequest"),
-      label: t("dialog.name"),
-      value: t("tab.untitled")
+  function promptNewRequest(collectionId, folderId) {
+    let targetCollectionId = collectionId;
+    if (!targetCollectionId) {
+      const created = store.createCollection(t("misc.untitledCollection"));
+      targetCollectionId = created.id;
+    }
+    store.state.sideView = "collections";
+    const collection = store.state.collections.find((item) => item.id === targetCollectionId);
+    if (collection) collection.collapsed = false;
+    if (folderId) {
+      const located = store.locate(folderId);
+      if (located && located.item.kind === "folder") located.item.collapsed = false;
+    }
+    store.setTreeFocus(targetCollectionId, folderId || "");
+    const name = t("tab.untitled");
+    const tab = store.createTab({
+      name,
+      collectionId: targetCollectionId,
+      folderId: folderId || ""
     });
-    if (!name) return;
-    const tab = store.createTab({ name, collectionId, folderId: folderId || "" });
-    store.saveRequestTo(collectionId, tab, name, folderId || "");
+    const saved = store.saveRequestTo(targetCollectionId, tab, name, folderId || "");
     HC.viewRequest.render();
     HC.viewResponse.render();
+    startInlineRenameRequest(saved && saved.id ? saved.id : tab.savedRequestId);
   }
 
   function setCollapsedDeep(items, collapsed) {
@@ -575,13 +847,19 @@
   }
 
   function duplicateSavedRequest(collection, saved) {
+    const clone = store.cloneSavedRequest(saved.id);
+    if (!clone) return;
+    HC.viewRequest.render();
+    HC.viewResponse.render();
+    util.toast(t("toast.cloned"));
+    startInlineRenameRequest(clone.id);
+  }
+
+  function duplicateSavedAsTab(collection, saved) {
     store.openSavedRequest(collection.id, saved.id);
     const tab = store.activeTab();
     if (!tab) return;
-    tab.savedRequestId = "";
-    tab.collectionId = "";
-    tab.folderId = "";
-    tab.dirty = true;
+    store.duplicateTab(tab.id);
     HC.viewRequest.render();
     HC.viewResponse.render();
     util.toast(t("toast.duplicated"));
@@ -598,94 +876,230 @@
     }
   }
 
+  function shortcutKeys() {
+    return (HC.shortcuts && HC.shortcuts.keys) || {};
+  }
+
+  function ensureOwnerAuth(owner) {
+    if (!owner.auth) {
+      owner.auth = { type: "none", username: "", password: "", token: "", key: "", value: "", in: "header" };
+    }
+    if (!Array.isArray(owner.headers)) owner.headers = [];
+  }
+
+  function openSharedSettings(owner, title) {
+    ensureOwnerAuth(owner);
+    const auth = Object.assign({
+      type: "none", username: "", password: "", token: "", key: "", value: "", in: "header"
+    }, owner.auth || {});
+    const headers = JSON.parse(JSON.stringify(owner.headers || []));
+    const params = JSON.parse(JSON.stringify(owner.params || []));
+    const cookies = JSON.parse(JSON.stringify(owner.cookies || []));
+    if (!headers.length || headers.every((row) => row.key)) headers.push(util.emptyRow());
+    if (!params.length || params.every((row) => row.key)) params.push(util.emptyRow());
+    if (!cookies.length || cookies.every((row) => row.key)) cookies.push(util.emptyRow());
+
+    util.openModal({
+      title: title || t("shared.title"),
+      render: (body) => {
+        body.append(el("div", { class: "hc-hint", text: t("shared.hint") }));
+        body.append(el("div", { class: "hc-field-label", text: t("section.auth") }));
+        const authFields = el("div", { class: "hc-form-grid", style: { marginTop: "8px" } });
+        function rebuildAuthFields() {
+          util.clear(authFields);
+          const field = (labelKey, key, opts) => {
+            authFields.append(el("span", { class: "hc-field-label", text: t(labelKey) }));
+            const input = el("input", {
+              class: "hc-input",
+              type: (opts && opts.type) || "text",
+              value: auth[key] || "",
+              placeholder: (opts && opts.placeholder) || ""
+            });
+            input.addEventListener("input", () => { auth[key] = input.value; });
+            authFields.append(input);
+          };
+          if (auth.type === "basic") {
+            field("auth.username", "username");
+            field("auth.password", "password", { type: "password" });
+          } else if (auth.type === "bearer") {
+            field("auth.token", "token", { type: "password", placeholder: "eyJhbGciOi..." });
+          } else if (auth.type === "apikey") {
+            field("auth.key", "key", { placeholder: "X-API-Key" });
+            field("auth.value", "value", { type: "password" });
+          } else {
+            authFields.append(el("div", {
+              class: "hc-hint",
+              style: { gridColumn: "1 / -1" },
+              text: t("shared.authNone")
+            }));
+          }
+        }
+        const authDd = util.createSelect({
+          className: "hc-dd-block",
+          value: auth.type || "none",
+          items: [
+            { value: "none", label: t("auth.none") },
+            { value: "basic", label: t("auth.basic") },
+            { value: "bearer", label: t("auth.bearer") },
+            { value: "apikey", label: t("auth.apikey") }
+          ],
+          onChange: (value) => {
+            auth.type = value;
+            rebuildAuthFields();
+          }
+        });
+        body.append(authDd.root);
+        body.append(authFields);
+        rebuildAuthFields();
+
+        const sharedGroups = [
+          { label: "section.headers", hint: "shared.headersHint", rows: headers },
+          { label: "section.params", hint: "shared.paramsHint", rows: params },
+          { label: "section.cookies", hint: "shared.cookiesHint", rows: cookies }
+        ];
+        sharedGroups.forEach((group) => {
+          body.append(el("div", {
+            class: "hc-field-label",
+            style: { marginTop: "12px" },
+            text: t(group.label)
+          }));
+          body.append(el("div", { class: "hc-hint", text: t(group.hint) }));
+          const kvHost = el("div");
+          body.append(kvHost);
+          util.createKVEditor(kvHost, {
+            rows: group.rows,
+            onChange: () => { /* rows mutated in place */ }
+          });
+        });
+      },
+      actions: [
+        { label: t("action.cancel2"), onClick: (api) => api.close() },
+        {
+          label: t("action.save2"), kind: "primary",
+          onClick: (api) => {
+            owner.auth = Object.assign({}, auth);
+            owner.headers = headers.filter((row) => row && (row.key || row.value));
+            owner.params = params.filter((row) => row && (row.key || row.value));
+            owner.cookies = cookies.filter((row) => row && (row.key || row.value));
+            store.persist();
+            store.emit("sidebar");
+            util.toast(t("shared.saved"), "success");
+            api.close();
+          }
+        }
+      ]
+    });
+  }
+
   function collectionMenu(collection) {
+    const sk = shortcutKeys();
     return [
-      { label: t("action.newRequest"), onClick: () => promptNewRequest(collection.id, "") },
+      { label: t("action.newRequest"), shortcut: sk.newTab, onClick: () => promptNewRequest(collection.id, "") },
       { label: t("action.newFolder"), onClick: () => promptFolder(collection.id, "") },
-      { separator: true },
-      { label: t("action.expandAll"), onClick: () => {
-        collection.collapsed = false;
-        setCollapsedDeep(collection.items, false);
-        refreshTree();
-      } },
-      { label: t("action.collapseAll"), onClick: () => {
-        collection.collapsed = false;
-        setCollapsedDeep(collection.items, true);
-        refreshTree();
-      } },
+      { label: t("shared.menu"), onClick: () => openSharedSettings(collection, t("shared.titleCollection")) },
       { separator: true },
       { label: t("action.rename"), onClick: async () => {
         const name = await util.promptDialog({ title: t("dialog.renameTitle"), value: collection.name });
         if (name) store.renameCollection(collection.id, name);
       } },
-      { label: t("action.export"), onClick: () => openExportDialog(collection) },
+      {
+        label: t("action.more"),
+        children: [
+          { label: t("action.expandAll"), onClick: () => {
+            collection.collapsed = false;
+            setCollapsedDeep(collection.items, false);
+            refreshTree();
+          } },
+          { label: t("action.collapseAll"), onClick: () => {
+            collection.collapsed = false;
+            setCollapsedDeep(collection.items, true);
+            refreshTree();
+          } },
+          { separator: true },
+          { label: t("action.export"), onClick: () => openExportDialog(collection) }
+        ]
+      },
       { separator: true },
       { label: t("action.delete"), danger: true, onClick: () => confirmDeleteCollection(collection) }
     ];
   }
 
   function folderMenu(collection, folder) {
+    const sk = shortcutKeys();
     return [
-      { label: t("action.newRequest"), onClick: () => promptNewRequest(collection.id, folder.id) },
-      { label: t("action.newFolder"), onClick: () => promptFolder(collection.id, folder.id) },
+      { label: t("action.runFolder"), onClick: () => {
+        if (HC.workflow && HC.workflow.openRunDialog) HC.workflow.openRunDialog(folder.id);
+      } },
       { separator: true },
-      { label: t("action.expand"), onClick: () => {
-        folder.collapsed = false;
-        refreshTree();
-      } },
-      { label: t("action.collapse"), onClick: () => {
-        folder.collapsed = true;
-        refreshTree();
-      } },
-      { label: t("action.expandAll"), onClick: () => {
-        folder.collapsed = false;
-        setCollapsedDeep(folder.items, false);
-        refreshTree();
-      } },
-      { label: t("action.collapseAll"), onClick: () => {
-        folder.collapsed = true;
-        setCollapsedDeep(folder.items, true);
-        refreshTree();
-      } },
+      { label: t("action.newRequest"), shortcut: sk.newTab, onClick: () => promptNewRequest(collection.id, folder.id) },
+      { label: t("action.clone"), onClick: () => duplicateFolder(collection, folder) },
+      { label: t("action.newFolder"), onClick: () => promptFolder(collection.id, folder.id) },
+      { label: t("shared.menu"), onClick: () => openSharedSettings(folder, t("shared.titleFolder")) },
       { separator: true },
       { label: t("action.rename"), onClick: async () => {
         const name = await util.promptDialog({ title: t("dialog.renameTitle"), value: folder.name });
         if (name) store.renameFolder(folder.id, name);
       } },
-      { label: t("action.move"), onClick: () => openMoveDialog(folder, collection.id) },
+      {
+        label: t("action.more"),
+        children: [
+          { label: t("action.expand"), onClick: () => {
+            folder.collapsed = false;
+            refreshTree();
+          } },
+          { label: t("action.collapse"), onClick: () => {
+            folder.collapsed = true;
+            refreshTree();
+          } },
+          { label: t("action.expandAll"), onClick: () => {
+            folder.collapsed = false;
+            setCollapsedDeep(folder.items, false);
+            refreshTree();
+          } },
+          { label: t("action.collapseAll"), onClick: () => {
+            folder.collapsed = true;
+            setCollapsedDeep(folder.items, true);
+            refreshTree();
+          } },
+          { separator: true },
+          { label: t("action.move"), onClick: () => openMoveDialog(folder, collection.id) }
+        ]
+      },
       { separator: true },
       { label: t("action.delete"), danger: true, onClick: () => confirmDeleteFolder(folder) }
     ];
   }
 
   function requestMenu(collection, saved) {
+    const sk = shortcutKeys();
     return [
-      { label: t("action.open"), onClick: () => {
-        store.openSavedRequest(collection.id, saved.id);
-        HC.viewRequest.render();
-        HC.viewResponse.render();
-      } },
-      { label: t("action.duplicate"), onClick: () => duplicateSavedRequest(collection, saved) },
-      { separator: true },
-      { label: t("action.copyPath"), onClick: () => copyText(requestPath(saved.url) || saved.url || saved.name, "toast.copied") },
-      { label: t("action.copyCurl"), onClick: () => {
-        try {
-          const base = store.emptyRequest();
-          const draft = Object.assign({}, base, saved, {
-            body: Object.assign({}, base.body, saved.body || {}),
-            auth: Object.assign({}, base.auth, saved.auth || {}),
-            options: Object.assign({}, base.options, saved.options || {}),
-            headers: saved.headers || [],
-            params: saved.params || []
-          });
-          const command = HC.curl.generateCurl(draft, { resolve: (value) => store.resolve(value) });
-          copyText(command, "toast.copied");
-        } catch (error) {
-          util.toast(String(error && error.message || error));
-        }
-      } },
-      { separator: true },
-      { label: t("action.move"), onClick: () => openMoveDialog(saved, collection.id) },
+      { label: t("action.rename"), shortcut: sk.rename, onClick: () => startInlineRenameRequest(saved.id) },
+      { label: t("action.clone"), shortcut: sk.cloneRequest, onClick: () => duplicateSavedRequest(collection, saved) },
+      {
+        label: t("action.more"),
+        children: [
+          { label: t("action.duplicateAsTab"), shortcut: sk.duplicateTab, onClick: () => duplicateSavedAsTab(collection, saved) },
+          { label: t("action.copyPath"), onClick: () => copyText(requestPath(saved.url) || saved.url || saved.name, "toast.copied") },
+          { label: t("action.copyCurl"), shortcut: sk.copyCurl, onClick: () => {
+            try {
+              const base = store.emptyRequest();
+              const draft = Object.assign({}, base, saved, {
+                body: Object.assign({}, base.body, saved.body || {}),
+                auth: Object.assign({}, base.auth, saved.auth || {}),
+                options: Object.assign({}, base.options, saved.options || {}),
+                headers: saved.headers || [],
+                params: saved.params || []
+              });
+              const command = HC.curl.generateCurl(draft, { resolve: (value) => store.resolve(value) });
+              copyText(command, "toast.copied");
+            } catch (error) {
+              util.toast(String(error && error.message || error));
+            }
+          } },
+          { separator: true },
+          { label: t("action.move"), onClick: () => openMoveDialog(saved, collection.id) }
+        ]
+      },
       { separator: true },
       { label: t("action.delete"), danger: true, onClick: async () => {
         if (await util.confirmDialog({ title: t("dialog.deleteTitle"), message: t("dialog.deleteMessage", { name: saved.name }) })) {
@@ -696,50 +1110,9 @@
     ];
   }
 
-  let contextMenuNode = null;
-
-  function closeContextMenu() {
-    if (contextMenuNode) {
-      contextMenuNode.remove();
-      contextMenuNode = null;
-    }
-  }
-
   function openContextMenu(event, items) {
-    event.preventDefault();
-    event.stopPropagation();
-    closeContextMenu();
-    const menu = el("div", { class: "hc-context-menu", id: "hc-context-menu" });
-    items.forEach((item) => {
-      if (item.separator) {
-        menu.append(el("div", { class: "hc-context-sep" }));
-        return;
-      }
-      const btn = el("button", {
-        type: "button",
-        class: `hc-context-item${item.danger ? " is-danger" : ""}${item.disabled ? " is-disabled" : ""}`,
-        text: item.label,
-        disabled: item.disabled ? "true" : undefined
-      });
-      btn.addEventListener("click", (clickEvent) => {
-        clickEvent.stopPropagation();
-        if (item.disabled) return;
-        closeContextMenu();
-        item.onClick();
-      });
-      menu.append(btn);
-    });
-    document.body.append(menu);
-    const width = 176;
-    const left = Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8));
-    const top = Math.max(8, Math.min(event.clientY, window.innerHeight - (items.length * 30 + 16)));
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
-    contextMenuNode = menu;
+    util.openContextMenu(event, items);
   }
-
-  document.addEventListener("click", () => closeContextMenu());
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeContextMenu(); });
 
   async function confirmDeleteCollection(collection) {
     const counts = store.countTree(collection.items);
@@ -767,33 +1140,40 @@
   }
 
   function openMoveDialog(node, collectionId) {
-    const collectionSelect = el("select", { class: "hc-select hc-select-flat" });
-    store.state.collections.forEach((collection) => {
-      collectionSelect.append(el("option", { value: collection.id, text: collection.name }));
+    const initialCollection = collectionId || (store.state.collections[0] || {}).id || "";
+    const folderDd = util.createSelect({
+      className: "hc-dd-block",
+      items: [{ value: "", label: t("dialog.collectionRoot") }],
+      value: ""
     });
-    collectionSelect.value = collectionId || (store.state.collections[0] || {}).id || "";
-    const folderSelect = el("select", { class: "hc-select hc-select-flat" });
-    const refill = () => {
-      util.clear(folderSelect);
-      folderSelect.append(el("option", { value: "", text: t("dialog.collectionRoot") }));
-      store.listFolders(collectionSelect.value).forEach((folder) => {
+    const collectionDd = util.createSelect({
+      className: "hc-dd-block",
+      items: store.state.collections.map((collection) => ({ value: collection.id, label: collection.name })),
+      value: initialCollection,
+      onChange: () => refillFolders()
+    });
+    function refillFolders() {
+      const items = [{ value: "", label: t("dialog.collectionRoot") }];
+      store.listFolders(collectionDd.value).forEach((folder) => {
         if (node.kind === "folder" && (folder.id === node.id || store.folderContains(node.id, folder.id))) return;
-        folderSelect.append(el("option", { value: folder.id, text: folder.path }));
+        items.push({ value: folder.id, label: folder.path });
       });
-    };
-    refill();
-    collectionSelect.addEventListener("change", refill);
+      folderDd.setOptions(items, true);
+    }
+    refillFolders();
     const located = store.locate(node.id);
-    if (located && located.parent && located.collection.id === collectionSelect.value) folderSelect.value = located.parent.id;
+    if (located && located.parent && located.collection.id === collectionDd.value) {
+      folderDd.value = located.parent.id;
+    }
     util.openModal({
       title: t("dialog.moveTitle"),
       render: (body) => {
         body.append(el("div", { class: "hc-hint", text: node.name }));
         body.append(el("label", { class: "hc-field" }, [
-          el("span", { class: "hc-field-label", text: t("dialog.collection") }), collectionSelect
+          el("span", { class: "hc-field-label", text: t("dialog.collection") }), collectionDd.root
         ]));
         body.append(el("label", { class: "hc-field" }, [
-          el("span", { class: "hc-field-label", text: t("dialog.moveTarget") }), folderSelect
+          el("span", { class: "hc-field-label", text: t("dialog.moveTarget") }), folderDd.root
         ]));
       },
       actions: [
@@ -801,7 +1181,7 @@
         {
           label: t("action.move"), kind: "primary",
           onClick: (api) => {
-            const ok = store.moveItem(node.id, collectionSelect.value, folderSelect.value);
+            const ok = store.moveItem(node.id, collectionDd.value, folderDd.value);
             util.toast(ok ? t("toast.moved") : t("toast.moveFailed"), ok ? "success" : "error");
             api.close();
           }
@@ -914,9 +1294,10 @@
           try { return new Date(entry.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
           catch (error) { return ""; }
         })();
-        const item = el("button", {
+        const item = el("div", {
           class: "hc-hist-item",
-          type: "button",
+          role: "button",
+          tabindex: "0",
           title: urls.title
         }, [
           el("span", { class: `hc-method-badge m-${entry.method || "GET"}`, text: entry.method || "GET" }),
@@ -930,10 +1311,23 @@
           ]),
           el("span", { class: `hc-hist-code ${statusCls}`, text: statusText })
         ]);
-        item.addEventListener("click", () => {
+        const openEntry = () => {
           store.openHistoryEntry(entry.id);
           HC.viewRequest.render();
           HC.viewResponse.render();
+        };
+        item.addEventListener("click", openEntry);
+        item.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openEntry();
+          }
+        });
+        item.addEventListener("contextmenu", (event) => {
+          util.openContextMenu(event, [
+            { label: t("action.open"), onClick: openEntry },
+            { label: t("action.saveToCollection"), onClick: () => saveHistoryToCollection(entry) }
+          ]);
         });
         list.append(item);
       });
@@ -944,9 +1338,57 @@
     host.append(wrap);
   }
 
+  function saveHistoryToCollection(entry) {
+    const snap = entry && entry.snapshot;
+    if (!snap) return;
+    const focus = store.treeFocus ? store.treeFocus() : { collectionId: "", folderId: "" };
+    let collectionId = focus.collectionId || "";
+    if (!collectionId) {
+      const created = store.createCollection(t("misc.untitledCollection"));
+      collectionId = created.id;
+    }
+    const draft = {
+      id: util.uid("req"),
+      name: entry.name || store.requestTitle(snap),
+      clientType: snap.clientType || "http",
+      method: snap.method || "GET",
+      url: snap.url || "",
+      headers: JSON.parse(JSON.stringify(snap.headers || [])),
+      params: JSON.parse(JSON.stringify(snap.params || [])),
+      pathParams: JSON.parse(JSON.stringify(snap.pathParams || [])),
+      cookies: JSON.parse(JSON.stringify(snap.cookies || [])),
+      examples: [],
+      body: JSON.parse(JSON.stringify(snap.body || {})),
+      auth: JSON.parse(JSON.stringify(snap.auth || {})),
+      scripts: Object.assign({ pre: "", post: "" }, JSON.parse(JSON.stringify(snap.scripts || {}))),
+      runPolicy: "each",
+      options: Object.assign(store.emptyRequest().options, snap.options || {}),
+      graphql: Object.assign({ query: "", variables: "{}" }, JSON.parse(JSON.stringify(snap.graphql || {}))),
+      savedRequestId: "",
+      collectionId: "",
+      folderId: "",
+      dirty: true
+    };
+    const saved = store.saveRequestTo(collectionId, draft, draft.name, focus.folderId || "");
+    util.toast(t("toast.historySaved", { name: draft.name }), "success");
+    if (saved && saved.id) {
+      store.state.sideView = "collections";
+      store.openSavedRequest(collectionId, saved.id);
+      HC.viewRequest.render();
+      HC.viewResponse.render();
+      render();
+    }
+  }
+
   /* ---------------------------------------------------------- environments */
 
   let envDragId = "";
+
+  function countEnvVars(environment) {
+    return (environment.variables || []).filter(
+      (row) => row && row.enabled !== false && String(row.key || "").trim()
+    ).length;
+  }
 
   function renderEnvironments(host) {
     if (!store.state.environments.length) {
@@ -954,13 +1396,25 @@
       return;
     }
     const filtering = !!filterText(sideFilter).trim();
-    const list = el("div", { class: `hc-env-list${filtering ? " is-filtering" : ""}` });
-    let shown = 0;
     const envs = store.state.environments;
+    const wrap = el("div", { class: "hc-env-side" });
+    if (!filtering) {
+      wrap.append(el("div", {
+        class: "hc-env-cap",
+        text: t("env.listCount", { count: envs.length })
+      }));
+    }
+    const list = el("div", {
+      class: `hc-env-list${filtering ? " is-filtering" : ""}`,
+      role: "listbox",
+      "aria-label": t("side.environments")
+    });
+    let shown = 0;
     envs.forEach((environment, index) => {
       if (!matchesFilter(environment.name)) return;
       shown += 1;
       const active = environment.id === store.state.activeEnvironmentId;
+      const enabledVars = countEnvVars(environment);
       const item = el("div", {
         class: `hc-env-row${active ? " is-active" : ""}`,
         title: environment.name,
@@ -968,48 +1422,39 @@
         "aria-selected": active ? "true" : "false",
         dataset: { envId: environment.id }
       });
-      if (!filtering) {
-        item.draggable = true;
-        item.append(el("span", {
-          class: "hc-env-drag",
-          title: t("action.dragReorder"),
-          "aria-hidden": "true",
-          text: "⋮⋮"
-        }));
-      }
-      item.append(
-        el("span", { class: `hc-env-dot${active ? " is-on" : ""}`, "aria-hidden": "true" }),
-        el("span", { class: "hc-grow hc-list-title", text: environment.name })
-      );
-      const actions = el("span", { class: "hc-env-row-actions" });
-      const up = el("button", {
+      if (!filtering) item.draggable = true;
+
+      const main = el("div", { class: "hc-env-main" }, [
+        el("span", {
+          class: `hc-env-mark${active ? " is-on" : ""}`,
+          "aria-hidden": "true"
+        }),
+        el("span", { class: "hc-list-title", text: environment.name })
+      ]);
+      const trail = el("div", { class: "hc-env-trail" }, [
+        el("span", {
+          class: "hc-env-meta",
+          text: String(enabledVars),
+          title: t("env.varCount", { count: enabledVars })
+        })
+      ]);
+      const more = el("button", {
         type: "button",
-        class: "hc-env-move",
-        text: "↑",
-        title: t("action.moveUp"),
-        disabled: index <= 0 ? "true" : undefined
+        class: "hc-env-more",
+        title: t("action.more"),
+        "aria-label": t("action.more"),
+        text: "⋯"
       });
-      const down = el("button", {
-        type: "button",
-        class: "hc-env-move",
-        text: "↓",
-        title: t("action.moveDown"),
-        disabled: index >= envs.length - 1 ? "true" : undefined
-      });
-      up.addEventListener("click", (event) => {
+      more.addEventListener("click", (event) => {
         event.stopPropagation();
-        store.moveEnvironmentBy(environment.id, -1);
+        openContextMenu(event, environmentMenu(environment, index));
       });
-      down.addEventListener("click", (event) => {
-        event.stopPropagation();
-        store.moveEnvironmentBy(environment.id, 1);
-      });
-      actions.append(up, down);
-      item.append(actions);
+      trail.append(more);
+      item.append(main, trail);
 
       item.addEventListener("contextmenu", (event) => openContextMenu(event, environmentMenu(environment, index)));
       item.addEventListener("click", (event) => {
-        if (event.target.closest(".hc-env-row-actions") || event.target.closest(".hc-env-drag")) return;
+        if (event.target.closest(".hc-env-more")) return;
         if (HC.viewEnv && HC.viewEnv.openEnvironment) HC.viewEnv.openEnvironment(environment.id);
         else store.setActiveEnvironment(environment.id);
       });
@@ -1021,7 +1466,8 @@
       host.append(el("div", { class: "hc-empty hc-empty-sm", text: t("side.searchEmpty") }));
       return;
     }
-    host.append(list);
+    wrap.append(list);
+    host.append(wrap);
   }
 
   function clearEnvDropMarks() {
@@ -1089,6 +1535,18 @@
         const name = await util.promptDialog({ title: t("dialog.renameTitle"), value: environment.name });
         if (name) { environment.name = name; store.persist(); store.emit("environments"); }
       } },
+      {
+        label: t("action.duplicate"),
+        onClick: () => {
+          const copy = store.createEnvironment(t("tab.copySuffix", { name: environment.name }));
+          copy.variables = JSON.parse(JSON.stringify(environment.variables || []));
+          store.persist();
+          store.emit("environments");
+          if (HC.viewEnv && HC.viewEnv.openEnvironment) HC.viewEnv.openEnvironment(copy.id);
+          util.toast(t("env.duplicated"), "success");
+        }
+      },
+      { separator: true },
       { label: t("action.moveUp"), disabled: index <= 0, onClick: () => {
         store.moveEnvironmentBy(environment.id, -1);
       } },
@@ -1114,7 +1572,7 @@
     });
     const fileInput = el("input", {
       type: "file",
-      accept: ".json,application/json,text/json",
+      accept: ".json,.har,application/json,text/json",
       style: { display: "none" }
     });
     const fileRow = el("div", { class: "hc-import-file-row" }, [
@@ -1171,6 +1629,19 @@
       const document = JSON.parse(text);
       if (HC.apipost && HC.apipost.isApipostDocument(document)) {
         importApipost(document);
+        return;
+      }
+      if (HC.har && HC.har.isHarDocument(document)) {
+        const result = HC.har.importCollection(document);
+        if (!result || result.error || !result.collection) {
+          util.toast(t("toast.harFailed"), "error");
+          return;
+        }
+        store.importCollection(result.collection);
+        store.persist();
+        store.emit("sidebar");
+        render();
+        util.toast(t("toast.imported", { count: result.count || 0 }), "success");
         return;
       }
       const collections = Array.isArray(document) ? document : (document.collections || [document]);
@@ -1263,17 +1734,81 @@
     util.toast(t("toast.importedApipost", { count, envs: envCount, folders }), "success");
   }
 
-  function openExportDialog(collection) {
-    const payload = JSON.stringify({ collections: [collection] }, null, 2);
-    const textarea = el("textarea", { class: "hc-textarea", value: payload, spellcheck: "false" });
+  function openExportDialog(collection, initialFormat) {
+    const payload = { collections: [collection] };
+    const redactCheck = el("input", { type: "checkbox", checked: true });
+    const formatSelect = document.createElement("select");
+    formatSelect.className = "hc-select";
+    const formats = [
+      ["native", t("dialog.exportFormatNative"), "json"],
+      ["postman", "Postman v2.1", "json"],
+      ["markdown", t("dialog.exportFormatMarkdown"), "md"],
+      ["html", t("dialog.exportFormatHtml"), "html"]
+    ];
+    formats.forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      formatSelect.append(option);
+    });
+    if (initialFormat && formats.some((row) => row[0] === initialFormat)) {
+      formatSelect.value = initialFormat;
+    }
+    const textarea = el("textarea", { class: "hc-textarea", spellcheck: "false" });
+    const extension = () => {
+      const hit = formats.find((row) => row[0] === formatSelect.value);
+      return hit ? hit[2] : "txt";
+    };
+    const filename = () => {
+      const name = String((collection && collection.name) || "api-docs")
+        .replace(/[\\/:*?"<>|]/g, "_").trim() || "api-docs";
+      return `${name}.${extension()}`;
+    };
+    const refresh = () => {
+      const data = redactCheck.checked && store.redactForExport
+        ? store.redactForExport(payload) : payload;
+      const fmt = formatSelect.value;
+      if (fmt === "postman" && HC.postman) {
+        textarea.value = JSON.stringify(HC.postman.exportCollection(data.collections[0], { redact: false }), null, 2);
+      } else if ((fmt === "markdown" || fmt === "html") && HC.docExport) {
+        const rawLang = HC.i18n && HC.i18n.locale;
+        const currentLang = typeof rawLang === "function" ? rawLang() : (rawLang || "zh-CN");
+        textarea.value = HC.docExport.generate(data.collections[0], {
+          format: fmt,
+          lang: currentLang === "en" ? "en" : "zh-CN",
+          includeExamples: true,
+          includeAuth: true,
+          redact: false
+        });
+      } else if (fmt === "markdown" || fmt === "html") {
+        textarea.value = t("dialog.exportDocUnavailable");
+      } else {
+        textarea.value = JSON.stringify(data, null, 2);
+      }
+    };
+    refresh();
+    redactCheck.addEventListener("change", refresh);
+    formatSelect.addEventListener("change", refresh);
+    const download = (api) => {
+      const ok = util.downloadText(textarea.value, filename());
+      util.toast(ok ? t("toast.downloaded") : t("toast.downloadFailed"), ok ? "success" : "error");
+      api.close();
+    };
     util.openModal({
       title: t("dialog.exportTitle"),
       render: (body) => {
         body.append(el("div", { class: "hc-hint", text: t("dialog.exportHint") }));
+        body.append(el("div", { class: "hc-field" }, [
+          el("span", { class: "hc-field-label", text: t("dialog.exportFormat") }), formatSelect
+        ]));
+        body.append(el("label", { class: "hc-checkbox" }, [
+          redactCheck, el("span", { text: t("dialog.exportRedact") })
+        ]));
         body.append(textarea);
       },
       actions: [
         { label: t("action.cancel2"), onClick: (api) => api.close() },
+        { label: t("action.download"), onClick: download },
         {
           label: t("action.copy"), kind: "primary",
           onClick: async (api) => {
@@ -1286,10 +1821,20 @@
     });
   }
 
+  function duplicateFolder(_collection, folder) {
+    const clone = store.cloneFolder(folder.id);
+    if (!clone) return;
+    util.toast(t("toast.cloned"));
+  }
+
   window.HC.viewSidebar = {
     render,
+    syncActive,
     openImportDialog,
     openExportDialog,
+    startInlineFolder,
+    startInlineRenameRequest,
+    createRequestQuick: promptNewRequest,
     clearFilter() { sideFilter = ""; }
   };
 })();

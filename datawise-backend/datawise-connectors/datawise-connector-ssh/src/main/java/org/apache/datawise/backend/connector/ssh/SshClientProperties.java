@@ -8,7 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class SshClientProperties {
 
     private boolean strictHostKeyChecking = true;
-    private boolean acceptNewHostKeys = true;
+    /** Default false (DB-14) — require pre-seeded known_hosts unless accept-new is enabled. */
+    private boolean acceptNewHostKeys = false;
     private String knownHostsPath;
     private int idleTtlMinutes = 30;
     private int connectTimeoutMs = 45_000;

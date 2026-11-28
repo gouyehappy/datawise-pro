@@ -23,6 +23,7 @@ class JdbcPreparedBatchWriterTest {
         PreparedStatement ps = mock(PreparedStatement.class);
         when(connection.getMetaData()).thenReturn(meta);
         when(meta.supportsTransactions()).thenReturn(true);
+        when(connection.getAutoCommit()).thenReturn(true);
         when(connection.prepareStatement("insert into t (id) values (?)")).thenReturn(ps);
         when(ps.executeBatch()).thenReturn(new int[]{1, 1});
 

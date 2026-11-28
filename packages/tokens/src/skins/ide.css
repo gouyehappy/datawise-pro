@@ -35,7 +35,7 @@ html[data-ui-skin='ide'] {
     --dw-tool-stripe-width: 48px;
     --dw-tool-btn-pad: 5px;
     --dw-tool-icon-caption-gap: 3px;
-    --dw-tool-pill-radius: 8px;
+    --dw-tool-pill-radius: 0;
     --dw-icon-size-rail: 20px;
     --dw-tool-caption-size: 10px;
     --dw-tool-caption-leading: 1.1;
@@ -56,9 +56,26 @@ html[data-ui-skin='ide'] {
     --dw-control-radius-sm: 3px;
     --dw-input-radius: 4px;
     --dw-btn-radius: 4px;
+    /*
+     * 胶囊类组件（徽章 / 标签 / chip / 状态 / 开关轨道与滑块）统一引用 --dw-radius-pill。
+     * classic / atelier 继承 :root 的 999px 保持胶囊；直角皮肤(ide / ledger)在此收口为 0，
+     * 从 token 层一次性生效，避免再靠 class 白名单逐个点名而漏掉设置页等零散组件。
+     * 注意：--dw-radius-full(50%) 只用于圆点/头像/加载圈等正圆图元，勿一并归零。
+     */
+    --dw-radius-pill: 0;
+    --dw-chip-radius: 0;
+    /*
+     * 表面 / 浮层类组件（命令面板、助手浮层、聊天气泡、结果视图、设置分组、
+     * 表结构编辑器、连接市场详情等）历史上写死 8~14px 固定圆角，不跟随皮肤。
+     * 统一引用 --dw-surface-radius：classic / atelier 未声明该变量，
+     * 走各声明自带的 fallback 原值（视觉零变化）；直角皮肤(ide / ledger)收口为 0。
+     */
+    --dw-surface-radius: 0;
+    /* 勾选 / 复选强调色：直角皮肤收口为中性文字色，消除设置页蓝色 ✓ 与蓝色复选框 */
+    --dw-check-accent: var(--dw-text);
     /* IDEA New UI menus：选中条用实心 selection，贴近 IDEA List.selectionBackground */
-    --dw-menu-radius: 8px;
-    --dw-menu-item-radius: 4px;
+    --dw-menu-radius: 0;
+    --dw-menu-item-radius: 0;
     --dw-menu-gutter: 24px;
     --dw-menu-item-h: var(--dw-density-md);
     --dw-menu-pad-y: 4px;
@@ -69,7 +86,7 @@ html[data-ui-skin='ide'] {
     --dw-menu-hover: color-mix(in srgb, var(--dw-text) 8%, transparent);
     --dw-menu-active: var(--dw-selection-bg, color-mix(in srgb, var(--dw-primary) 42%, transparent));
     --dw-menu-border: color-mix(in srgb, var(--dw-border) 82%, transparent);
-    --dw-titlebar-chip-radius: 6px;
+    --dw-titlebar-chip-radius: 0;
     /* 顶栏 = 窗框底色（不另开色带）；控件固定 30px（44px 栏上下各 7px） */
     --dw-titlebar-bg: var(--dw-bg-chrome);
     --dw-titlebar-tint: color-mix(in srgb, var(--dw-titlebar-project) 14%, transparent);
@@ -1264,6 +1281,7 @@ html[data-ui-skin='ide'] .module-shell__main {
 }
 
 html[data-ui-skin='ide'] .module-shell__main .setting-block,
+html[data-ui-skin='ide'] .module-shell__main .settings-section__card,
 html[data-ui-skin='ide'] .module-shell__main .editor-card,
 html[data-ui-skin='ide'] .module-shell__main .shortcut-card,
 html[data-ui-skin='ide'] .module-shell__main .setting-card {
@@ -1278,6 +1296,12 @@ html[data-ui-skin='ide'] .module-shell__main .setting-card {
 
 html[data-ui-skin='ide'] .module-shell__main .setting-block:last-child {
     border-bottom: 0;
+}
+
+/* 下拉浮层由 reka Portal 挂到 body，不在 .module-shell__main 作用域内；
+ * 直角皮肤下贴页面、不浮起，避免与「透明 + 单分隔线」的配置区形成浮块反差。 */
+html[data-ui-skin='ide'] :is(.dw-select__menu, .dw-select__menu--settings) {
+    box-shadow: none;
 }
 
 html[data-ui-skin='ide'] .module-shell__nav-item.is-active {

@@ -76,8 +76,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         <span class="bh-group-title">{{ t('settings.behavior_group_hint_bar') }}</span>
       </header>
 
-      <label class="bh-row" :title="t('settings.show_hint_bar_hint')">
-        <span class="bh-row-label">{{ t('settings.show_hint_bar') }}</span>
+      <label class="bh-row">
+        <span class="bh-row-label" :title="t('settings.show_hint_bar_hint')">{{ t('settings.show_hint_bar') }}</span>
         <span class="bh-switch">
           <input
               type="checkbox"
@@ -90,10 +90,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
 
       <label
           class="bh-row"
-          :class="{ 'bh-group-dim': !hintBarOn }"
-          :title="t('settings.show_quick_chips_hint')"
-      >
-        <span class="bh-row-label">{{ t('settings.show_quick_chips') }}</span>
+          :class="{ 'bh-group-dim': !hintBarOn }">
+        <span class="bh-row-label" :title="t('settings.show_quick_chips_hint')">{{ t('settings.show_quick_chips') }}</span>
         <span class="bh-switch">
           <input
               type="checkbox"
@@ -112,8 +110,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         <span class="bh-group-title">{{ t('settings.behavior_group_completion') }}</span>
       </header>
 
-      <label class="bh-row" :title="t('settings.auto_table_alias_hint')">
-        <span class="bh-row-label">{{ t('settings.auto_table_alias') }}</span>
+      <label class="bh-row">
+        <span class="bh-row-label" :title="t('settings.auto_table_alias_hint')">{{ t('settings.auto_table_alias') }}</span>
         <span class="bh-switch">
           <input
               type="checkbox"
@@ -124,8 +122,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         </span>
       </label>
 
-      <label class="bh-row" :title="t('settings.show_suggest_details_hint')">
-        <span class="bh-row-label">{{ t('settings.show_suggest_details') }}</span>
+      <label class="bh-row">
+        <span class="bh-row-label" :title="t('settings.show_suggest_details_hint')">{{ t('settings.show_suggest_details') }}</span>
         <span class="bh-switch">
           <input
               type="checkbox"
@@ -136,8 +134,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         </span>
       </label>
 
-      <label class="bh-row" :title="t('settings.show_column_comment_in_suggest_hint')">
-        <span class="bh-row-label">{{ t('settings.show_column_comment_in_suggest') }}</span>
+      <label class="bh-row">
+        <span class="bh-row-label" :title="t('settings.show_column_comment_in_suggest_hint')">{{ t('settings.show_column_comment_in_suggest') }}</span>
         <span class="bh-switch">
           <input
               type="checkbox"
@@ -155,8 +153,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         <span class="bh-group-title">{{ t('settings.behavior_group_editor_chrome') }}</span>
       </header>
 
-      <label class="bh-row" :title="t('settings.show_run_gutter_hint')">
-        <span class="bh-row-label">{{ t('settings.show_run_gutter') }}</span>
+      <label class="bh-row">
+        <span class="bh-row-label" :title="t('settings.show_run_gutter_hint')">{{ t('settings.show_run_gutter') }}</span>
         <span class="bh-switch">
           <input
               type="checkbox"
@@ -167,8 +165,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         </span>
       </label>
 
-      <div class="bh-row bh-row-compact bh-row-select" :title="t('settings.column_diagnostics_mode_hint')">
-        <span class="bh-row-label">{{ t('settings.column_diagnostics_mode') }}</span>
+      <div class="bh-row bh-row-compact bh-row-select">
+        <span class="bh-row-label" :title="t('settings.column_diagnostics_mode_hint')">{{ t('settings.column_diagnostics_mode') }}</span>
         <div class="bh-seg" role="group">
           <button
               v-for="opt in columnDiagnosticsOptions"
@@ -182,8 +180,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         </div>
       </div>
 
-      <label class="bh-row" :title="t('settings.vim_mode_hint')">
-        <span class="bh-row-label">{{ t('settings.vim_mode') }}</span>
+      <label class="bh-row">
+        <span class="bh-row-label" :title="t('settings.vim_mode_hint')">{{ t('settings.vim_mode') }}</span>
         <span class="bh-switch">
           <input
               type="checkbox"
@@ -203,10 +201,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
 
       <div
           v-if="themeOptions?.length && editorTheme"
-          class="bh-row bh-row-compact bh-row-select"
-          :title="t('settings.editor_theme_hint')"
-      >
-        <span class="bh-row-label">{{ t('settings.editor_theme') }}</span>
+          class="bh-row bh-row-compact bh-row-select">
+        <span class="bh-row-label" :title="t('settings.editor_theme_hint')">{{ t('settings.editor_theme') }}</span>
         <div class="bh-seg" role="group">
           <button
               v-for="opt in themeOptions"
@@ -220,9 +216,9 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         </div>
       </div>
 
-      <div class="bh-row bh-row-stack" :title="t('settings.font_size_hint')">
+      <div class="bh-row bh-row-stack">
         <div class="bh-row-top">
-          <span class="bh-row-label">{{ t('settings.font_size') }}</span>
+          <span class="bh-row-label" :title="t('settings.font_size_hint')">{{ t('settings.font_size') }}</span>
           <span class="bh-mono bh-value">{{ effectiveFontSize }}px</span>
         </div>
         <input
@@ -240,8 +236,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         </div>
       </div>
 
-      <label class="bh-row" :title="t('settings.folding_hint')">
-        <span class="bh-row-label">{{ t('settings.folding') }}</span>
+      <label class="bh-row">
+        <span class="bh-row-label" :title="t('settings.folding_hint')">{{ t('settings.folding') }}</span>
         <span class="bh-switch">
           <input
               type="checkbox"
@@ -252,8 +248,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         </span>
       </label>
 
-      <div class="bh-row bh-row-compact bh-row-select" :title="t('settings.ui_language_hint')">
-        <span class="bh-row-label">{{ t('settings.ui_language') }}</span>
+      <div class="bh-row bh-row-compact bh-row-select">
+        <span class="bh-row-label" :title="t('settings.ui_language_hint')">{{ t('settings.ui_language') }}</span>
         <div class="bh-seg" role="group">
           <button
               v-for="opt in localeOptions"
@@ -321,9 +317,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         />
       </div>
 
-      <label class="bh-row" :class="{ 'bh-group-dim': !aiSettings.enabled }"
-             :title="t('settings.ai_completion_enabled_hint')">
-        <span class="bh-row-label">{{ t('settings.ai_completion_enabled') }}</span>
+      <label class="bh-row" :class="{ 'bh-group-dim': !aiSettings.enabled }">
+        <span class="bh-row-label" :title="t('settings.ai_completion_enabled_hint')">{{ t('settings.ai_completion_enabled') }}</span>
         <span class="bh-switch">
           <input
               type="checkbox"
@@ -342,8 +337,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         <span class="bh-group-title">{{ t('settings.formatter_section') }}</span>
       </header>
 
-      <label class="bh-row" :title="t('settings.formatter_as_you_type_hint')">
-        <span class="bh-row-label">{{ t('settings.formatter_as_you_type') }}</span>
+      <label class="bh-row">
+        <span class="bh-row-label" :title="t('settings.formatter_as_you_type_hint')">{{ t('settings.formatter_as_you_type') }}</span>
         <span class="bh-switch bh-switch-sm">
           <input
               type="checkbox"
@@ -354,8 +349,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
         </span>
       </label>
 
-      <label class="bh-row" :title="t('settings.formatter_use_library_hint')">
-        <span class="bh-row-label">{{ t('settings.formatter_use_library') }}</span>
+      <label class="bh-row">
+        <span class="bh-row-label" :title="t('settings.formatter_use_library_hint')">{{ t('settings.formatter_use_library') }}</span>
         <span class="bh-switch bh-switch-sm">
           <input
               type="checkbox"
@@ -367,8 +362,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
       </label>
 
       <div class="bh-grid" :class="{ 'bh-group-dim': !formatterSettings.useLibrary }">
-        <div class="bh-cell" :title="t('settings.formatter_keyword_case_hint')">
-          <span class="bh-cell-label">{{ t('settings.formatter_keyword_case') }}</span>
+        <div class="bh-cell">
+          <span class="bh-cell-label" :title="t('settings.formatter_keyword_case_hint')">{{ t('settings.formatter_keyword_case') }}</span>
           <div class="bh-seg" role="group">
             <button
                 v-for="opt in caseOptions"
@@ -383,8 +378,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
           </div>
         </div>
 
-        <div class="bh-cell" :title="t('settings.formatter_tab_width_hint')">
-          <span class="bh-cell-label">{{ t('settings.formatter_tab_width') }}</span>
+        <div class="bh-cell">
+          <span class="bh-cell-label" :title="t('settings.formatter_tab_width_hint')">{{ t('settings.formatter_tab_width') }}</span>
           <div class="bh-seg" role="group">
             <button
                 v-for="n in [2, 4] as const"
@@ -399,8 +394,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
           </div>
         </div>
 
-        <div class="bh-cell" :title="t('settings.formatter_lines_between_hint')">
-          <span class="bh-cell-label">{{ t('settings.formatter_lines_between') }}</span>
+        <div class="bh-cell">
+          <span class="bh-cell-label" :title="t('settings.formatter_lines_between_hint')">{{ t('settings.formatter_lines_between') }}</span>
           <div class="bh-seg" role="group">
             <button
                 v-for="n in [1, 2] as const"
@@ -415,8 +410,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
           </div>
         </div>
 
-        <div class="bh-cell" :title="t('settings.formatter_identifier_case_hint')">
-          <span class="bh-cell-label">{{ t('settings.formatter_identifier_case') }}</span>
+        <div class="bh-cell">
+          <span class="bh-cell-label" :title="t('settings.formatter_identifier_case_hint')">{{ t('settings.formatter_identifier_case') }}</span>
           <div class="bh-seg" role="group">
             <button
                 v-for="opt in caseOptions"
@@ -431,8 +426,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
           </div>
         </div>
 
-        <div class="bh-cell" :title="t('settings.formatter_function_case_hint')">
-          <span class="bh-cell-label">{{ t('settings.formatter_function_case') }}</span>
+        <div class="bh-cell">
+          <span class="bh-cell-label" :title="t('settings.formatter_function_case_hint')">{{ t('settings.formatter_function_case') }}</span>
           <div class="bh-seg" role="group">
             <button
                 v-for="opt in caseOptions"
@@ -447,8 +442,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
           </div>
         </div>
 
-        <div class="bh-cell" :title="t('settings.formatter_logical_newline_hint')">
-          <span class="bh-cell-label">{{ t('settings.formatter_logical_newline') }}</span>
+        <div class="bh-cell">
+          <span class="bh-cell-label" :title="t('settings.formatter_logical_newline_hint')">{{ t('settings.formatter_logical_newline') }}</span>
           <div class="bh-seg" role="group">
             <button
                 type="button"
@@ -483,8 +478,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
       </button>
 
       <div v-show="advancedOpen" class="bh-advanced">
-        <label class="bh-row bh-row-compact" :title="t('settings.formatter_use_tabs_hint')">
-          <span class="bh-row-label">{{ t('settings.formatter_use_tabs') }}</span>
+        <label class="bh-row bh-row-compact">
+          <span class="bh-row-label" :title="t('settings.formatter_use_tabs_hint')">{{ t('settings.formatter_use_tabs') }}</span>
           <span class="bh-switch bh-switch-sm">
             <input
                 type="checkbox"
@@ -496,8 +491,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
           </span>
         </label>
 
-        <div class="bh-row bh-row-compact bh-row-select" :title="t('settings.formatter_indent_style_hint')">
-          <span class="bh-row-label">{{ t('settings.formatter_indent_style') }}</span>
+        <div class="bh-row bh-row-compact bh-row-select">
+          <span class="bh-row-label" :title="t('settings.formatter_indent_style_hint')">{{ t('settings.formatter_indent_style') }}</span>
           <select
               class="bh-select"
               :value="formatterSettings.indentStyle"
@@ -510,8 +505,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
           </select>
         </div>
 
-        <label class="bh-row bh-row-compact" :title="t('settings.formatter_dense_operators_hint')">
-          <span class="bh-row-label">{{ t('settings.formatter_dense_operators') }}</span>
+        <label class="bh-row bh-row-compact">
+          <span class="bh-row-label" :title="t('settings.formatter_dense_operators_hint')">{{ t('settings.formatter_dense_operators') }}</span>
           <span class="bh-switch bh-switch-sm">
             <input
                 type="checkbox"
@@ -523,8 +518,8 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
           </span>
         </label>
 
-        <label class="bh-row bh-row-compact" :title="t('settings.formatter_semicolon_newline_hint')">
-          <span class="bh-row-label">{{ t('settings.formatter_semicolon_newline') }}</span>
+        <label class="bh-row bh-row-compact">
+          <span class="bh-row-label" :title="t('settings.formatter_semicolon_newline_hint')">{{ t('settings.formatter_semicolon_newline') }}</span>
           <span class="bh-switch bh-switch-sm">
             <input
                 type="checkbox"
@@ -548,7 +543,7 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
 }
 
 .bh-group {
-  border-radius: 8px;
+  border-radius: var(--dw-surface-radius, 8px);
   border: 1px solid var(--se-border);
   background: color-mix(in srgb, var(--se-bg-muted) 28%, var(--se-bg));
   overflow: hidden;
@@ -676,7 +671,7 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
 .bh-seg {
   display: inline-flex;
   padding: 2px;
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   background: color-mix(in srgb, var(--se-bg-hover) 80%, var(--se-bg));
   border: 1px solid color-mix(in srgb, var(--se-border) 80%, transparent);
 }
@@ -685,7 +680,7 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
   min-width: 0;
   padding: 2px 6px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   background: transparent;
   color: var(--se-text-muted);
   font-size: 9px;
@@ -765,7 +760,7 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
 .bh-select {
   max-width: 108px;
   padding: 3px 6px;
-  border-radius: 5px;
+  border-radius: var(--dw-surface-radius, 5px);
   border: 1px solid var(--se-border);
   background: var(--se-bg);
   color: var(--se-text);
@@ -782,7 +777,7 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
   box-sizing: border-box;
   width: 100%;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   border: 1px solid var(--se-border);
   background: var(--se-bg);
   color: var(--se-text);
@@ -825,7 +820,7 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
 .bh-switch-track {
   position: absolute;
   inset: 0;
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   background: var(--se-bg-hover);
   border: 1px solid var(--se-border);
   transition: background 0.15s, border-color 0.15s;
@@ -838,7 +833,7 @@ function patchAi(patch: Partial<SqlEditorAiSettings>) {
   left: 1px;
   width: 12px;
   height: 12px;
-  border-radius: 50%;
+  border-radius: var(--dw-radius-pill, 999px);
   background: var(--se-text-muted);
   transition: transform 0.15s, background 0.15s;
 }

@@ -397,7 +397,7 @@ body.is-workspace-tab-float-away .dw-tab.is-tab-dragging {
     top: 2px;
     bottom: 2px;
     width: 3px;
-    border-radius: 999px;
+    border-radius: var(--dw-radius-pill, 999px);
     background: var(--dw-accent);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--dw-accent) 35%, transparent),
         0 0 10px color-mix(in srgb, var(--dw-accent) 50%, transparent);
@@ -473,7 +473,7 @@ body.is-workspace-tab-float-away .dw-tab.is-tab-dragging {
     top: 4px;
     bottom: 4px;
     width: 3px;
-    border-radius: 999px;
+    border-radius: var(--dw-radius-pill, 999px);
     background: var(--dw-accent);
     box-shadow: 0 0 8px color-mix(in srgb, var(--dw-accent) 50%, transparent);
 }
@@ -517,7 +517,7 @@ body.is-workspace-tab-float-away .dw-tab.is-tab-dragging {
     flex-shrink: 0;
     min-width: 1.1em;
     padding: 0 4px;
-    border-radius: 8px;
+    border-radius: var(--dw-surface-radius, 8px);
     background: color-mix(in srgb, var(--dw-tab-active-bg) 70%, transparent);
     opacity: 0.8;
     font-variant-numeric: tabular-nums;
@@ -615,7 +615,7 @@ body.is-workspace-tab-float-away .dw-tab.is-tab-dragging {
     display: flex;
     flex-direction: column;
     pointer-events: none;
-    border-radius: 10px;
+    border-radius: var(--dw-surface-radius, 10px);
     border: 1px solid color-mix(in srgb, var(--dw-accent) 40%, var(--dw-panel-border));
     background: color-mix(in srgb, var(--dw-bg-panel) 82%, transparent);
     box-shadow:
@@ -675,7 +675,7 @@ body.is-workspace-tab-float-away .dw-tab.is-tab-dragging {
     padding: 0 10px 0 8px;
     border: 1px solid color-mix(in srgb, var(--dw-accent) 52%, var(--dw-tab-active-border));
     border-bottom-color: color-mix(in srgb, var(--dw-bg-panel) 90%, transparent);
-    border-radius: 6px 6px 0 0;
+    border-radius: var(--dw-surface-radius, 6px 6px 0 0);
     background: color-mix(in srgb, var(--dw-bg-panel) 97%, var(--dw-accent));
     color: var(--dw-tab-active-text);
     box-shadow: 0 -1px 0 color-mix(in srgb, var(--dw-accent) 22%, transparent);

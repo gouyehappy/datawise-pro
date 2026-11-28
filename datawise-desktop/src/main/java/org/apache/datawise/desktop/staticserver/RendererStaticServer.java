@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.file.Files;
@@ -16,6 +17,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executors;
 
 /**
@@ -47,6 +49,18 @@ public final class RendererStaticServer implements AutoCloseable {
             Map.entry(".wasm", "application/wasm")
     );
 
+    /** Headers safe to forward from the Chromium renderer to the local Spring backend. */
+    private static final Set<String> PROXY_REQUEST_HEADER_ALLOWLIST = Set.of(
+            "accept",
+            "accept-language",
+            "authorization",
+            "content-type",
+            "cookie",
+            "x-dw-session-id",
+            "x-dw-api-token",
+            "x-requested-with"
+    );
+
     private final Path distRoot;
     private HttpServer server;
     private int port;
@@ -69,7 +83,31 @@ public final class RendererStaticServer implements AutoCloseable {
             this.apiProxyBase = "";
             return;
         }
-        this.apiProxyBase = apiProxyBase.trim().replaceAll("/+$", "");
+        String normalized = apiProxyBase.trim().replaceAll("/+$", "");
+        requireLoopbackProxyTarget(normalized);
+        this.apiProxyBase = normalized;
+    }
+
+    static void requireLoopbackProxyTarget(String baseUrl) {
+        URI uri = URI.create(baseUrl);
+        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+        if (!"http".equals(scheme) && !"https".equals(scheme)) {
+            throw new IllegalArgumentException("API proxy base must be http(s), got: " + baseUrl);
+        }
+        String host = uri.getHost();
+        if (host == null || host.isBlank()) {
+            throw new IllegalArgumentException("API proxy base host is required: " + baseUrl);
+        }
+        try {
+            InetAddress address = InetAddress.getByName(host);
+            if (!address.isLoopbackAddress()) {
+                throw new IllegalArgumentException("API proxy base must target loopback, got: " + host);
+            }
+        } catch (IllegalArgumentException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("API proxy base host check failed: " + ex.getMessage(), ex);
+        }
     }
 
     public synchronized String start() throws IOException {
@@ -138,8 +176,8 @@ public final class RendererStaticServer implements AutoCloseable {
             Headers headers = exchange.getResponseHeaders();
             headers.set("Content-Type", contentType(resolved.getFileName().toString()));
             headers.set("Cache-Control", "no-cache");
-            headers.set("Access-Control-Allow-Origin", "*");
-            headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+            // Same-origin desktop renderer — do not advertise CORS *.
+            headers.set("Cross-Origin-Resource-Policy", "same-origin");
             exchange.sendResponseHeaders(200, body.length);
             try (OutputStream out = exchange.getResponseBody()) {
                 out.write(body);
@@ -170,7 +208,7 @@ public final class RendererStaticServer implements AutoCloseable {
         conn.setRequestMethod(exchange.getRequestMethod());
         conn.setDoInput(true);
 
-        // Forward request headers that UI ticket / session auth may need.
+        // Forward only an allowlisted set of auth / content headers (DT-09).
         Headers req = exchange.getRequestHeaders();
         for (Map.Entry<String, List<String>> entry : req.entrySet()) {
             String name = entry.getKey();
@@ -178,10 +216,7 @@ public final class RendererStaticServer implements AutoCloseable {
                 continue;
             }
             String lower = name.toLowerCase(Locale.ROOT);
-            if (lower.equals("host")
-                    || lower.equals("content-length")
-                    || lower.equals("connection")
-                    || lower.equals("transfer-encoding")) {
+            if (!PROXY_REQUEST_HEADER_ALLOWLIST.contains(lower)) {
                 continue;
             }
             for (String value : entry.getValue()) {

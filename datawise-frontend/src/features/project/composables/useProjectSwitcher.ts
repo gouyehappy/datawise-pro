@@ -138,6 +138,10 @@ export function useProjectSwitcher() {
             workspace.closeAllClosable()
             const restored = loadProjectWorkbenchSession(projectId)
             if (restored?.tabs.length) {
+                const {prepareCommunityWorkbenchSnapshotsForRestore} = await import(
+                    '@/features/community-plugin/lib/connectCommunityPluginWorkbench'
+                )
+                await prepareCommunityWorkbenchSnapshotsForRestore(restored.tabs)
                 workspace.restoreSession(restored.tabs, restored.activeTabIndex, restored.tabGroups ?? [])
             }
             // 切项目：丢掉旧树会话态，避免资源树仍显示上一项目的连接/展开子节点。

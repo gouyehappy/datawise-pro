@@ -7,6 +7,7 @@ import {
     type GridExportMaskConfig,
 } from '@/core/data-grid/services/data-masking.service'
 import {saveExportBlob, type ExportSaveResult} from '@/shared/utils/export-save'
+import {readStoredQueryResultPaneSettings} from '@/core/data-grid/services/query-result-pane-settings.service'
 
 export type GridExportFormat = 'csv' | 'json' | 'tsv' | 'sql' | 'xlsx'
 
@@ -16,6 +17,8 @@ export interface GridExportOptions {
     incomplete?: boolean
     /** Commercial trial / site watermark footer (text formats). */
     watermarkFooter?: string | null
+    /** When true, CSV is written without a UTF-8 BOM. */
+    csvWithoutBom?: boolean
 }
 
 /** Leading marker for incomplete CSV/TSV exports. */
@@ -236,7 +239,10 @@ export async function createGridExportBlob(
         incomplete: options?.incomplete,
     })
     const withMark = appendExportWatermark(content, format, options?.watermarkFooter)
-    const body = format === 'csv' ? `\uFEFF${withMark}` : withMark
+    const csvWithoutBom =
+        options?.csvWithoutBom
+        ?? readStoredQueryResultPaneSettings().csvWithoutBom
+    const body = format === 'csv' && !csvWithoutBom ? `\uFEFF${withMark}` : withMark
     return new Blob([body], {type: FORMAT_MIME[format]})
 }
 

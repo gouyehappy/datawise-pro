@@ -2,14 +2,14 @@
 import {computed, nextTick, onMounted, watch} from 'vue'
 import {storeToRefs} from 'pinia'
 import {useI18n} from 'vue-i18n'
-import {StatusPill} from '@/core/components'
+import {StatusPill, SettingsRow} from '@/core/components'
+import SettingsSelect from '@/core/components/SettingsSelect.vue'
 import {usePluginStore} from '@/features/plugin/stores/plugin-store'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {UserResource} from '@/features/auth/types/user-resource.types'
 import {useResourceWriteGuard} from '@/features/auth/composables/useResourceWriteGuard'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
-import SettingsSectionCard from '@/features/settings/components/SettingsSectionCard.vue'
-import SettingsSegmentTabs from '@/features/settings/components/SettingsSegmentTabs.vue'
+import SettingsGroup from '@/features/settings/components/SettingsGroup.vue'
 import SettingsTipsCard from '@/features/settings/components/SettingsTipsCard.vue'
 import {usePluginPresetSummary} from '@/features/plugin/composables/usePluginPresetSummary'
 import {
@@ -35,9 +35,9 @@ const referencePresetId = computed<PluginPresetId>({
     },
 })
 
-const presetTabs = computed(() =>
+const presetOptions = computed(() =>
     PLUGIN_PRESET_IDS.map((presetId) => ({
-        id: presetId,
+        value: presetId,
         label: presetLabel(presetId),
     })),
 )
@@ -92,21 +92,24 @@ watch(settingsScrollAnchor, scrollToSettingsAnchor)
     </template>
 
     <div class="settings-groups">
-      <SettingsSectionCard
+      <SettingsGroup
           :id="SETTINGS_PLUGIN_REFERENCE_PRESET_ANCHOR"
           :title="t('settings.plugins.referencePresetTitle')"
           :hint="t('settings.plugins.referencePresetHint')"
-          icon="plugins"
-          tone="primary"
       >
-        <SettingsSegmentTabs
-            variant="inline"
-            :model-value="referencePresetId"
-            :tabs="presetTabs"
-            :aria-label="t('settings.plugins.referencePresetTitle')"
-            @update:model-value="selectPreset"
-        />
-        <div class="reference-status">
+        <SettingsRow
+            :label="t('settings.plugins.referencePresetTitle')"
+            :disabled="readOnly"
+        >
+          <SettingsSelect
+              id="plugin-reference-preset"
+              :model-value="referencePresetId"
+              :options="presetOptions"
+              :disabled="readOnly"
+              @update:model-value="selectPreset"
+          />
+        </SettingsRow>
+        <div class="settings-section__block reference-status">
           <StatusPill
               v-if="referencePresetConflictCount > 0"
               variant="warn"
@@ -133,23 +136,22 @@ watch(settingsScrollAnchor, scrollToSettingsAnchor)
             {{ t('settings.plugins.viewPresetDiff') }}
           </button>
         </div>
-        <p class="field-note">{{ t('settings.plugins.referencePresetPersist') }}</p>
-      </SettingsSectionCard>
+        <p class="settings-section__block-hint">{{ t('settings.plugins.referencePresetPersist') }}</p>
+      </SettingsGroup>
 
-      <SettingsSectionCard
+      <SettingsGroup
           :title="t('settings.plugins.centerTitle')"
           :hint="t('settings.plugins.centerHint')"
-          icon="plugins"
-          tone="sky"
-          :badge="`${pluginStore.enabledCount}/${pluginStore.items.length}`"
       >
-        <p class="field-note">
-          {{ t('settings.plugins.statsNote', {
-            enabled: pluginStore.enabledCount,
-            total: pluginStore.items.length,
-          }) }}
-        </p>
-      </SettingsSectionCard>
+        <div class="settings-section__block">
+          <p class="settings-section__block-hint">
+            {{ t('settings.plugins.statsNote', {
+              enabled: pluginStore.enabledCount,
+              total: pluginStore.items.length,
+            }) }}
+          </p>
+        </div>
+      </SettingsGroup>
 
       <p class="field-note settings-footnote">
         {{ t('settings.plugins.crossrefHint', {doc: CONNECTOR_CAPABILITY_DOC}) }}
@@ -164,7 +166,7 @@ watch(settingsScrollAnchor, scrollToSettingsAnchor)
   flex-wrap: wrap;
   align-items: center;
   gap: var(--dw-gap);
-  margin-top: var(--dw-space-6);
+  margin-top: var(--dw-space-2);
 }
 
 </style>

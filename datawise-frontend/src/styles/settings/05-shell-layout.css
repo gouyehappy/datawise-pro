@@ -3,6 +3,251 @@
  * Split from settings-panel.css — do not import directly; use ../settings-panel.css
  */
 
+/* ---- Settings shell: Cursor-like nav chrome ---- */
+
+.module-shell--settings.module-shell {
+    background: var(--dw-bg);
+}
+
+.module-shell--settings > .dw-split-pane__start.module-shell__nav,
+.module-shell--settings .module-shell__nav {
+    /* 整体略右移，给左缘留白（对齐 Cursor） */
+    --settings-nav-inline: var(--dw-space-5);
+    --settings-nav-item-pad-x: var(--dw-space-4);
+    padding: var(--dw-space-5) var(--settings-nav-inline) var(--dw-space-4);
+    gap: 0;
+    border-right: 1px solid color-mix(in srgb, var(--dw-text) 8%, transparent);
+    background: var(--dw-bg);
+    box-shadow: none;
+}
+
+.module-shell--settings .module-shell__main {
+    background: var(--dw-bg);
+}
+
+/* Back：纯文字箭头，无底块，与菜单图标左缘对齐 */
+.module-shell--settings .module-shell__back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--dw-gap-sm);
+    width: auto;
+    max-width: 100%;
+    margin: 0 0 var(--dw-space-5);
+    height: auto;
+    min-height: var(--dw-control-h-sm);
+    padding: var(--dw-space-1) var(--settings-nav-item-pad-x);
+    border: 0;
+    border-radius: var(--dw-control-radius);
+    background: transparent;
+    color: color-mix(in srgb, var(--dw-text) 72%, transparent);
+    font-size: var(--dw-text-sm);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.module-shell--settings .module-shell__back:hover {
+    background: color-mix(in srgb, var(--dw-text) 6%, transparent);
+    color: var(--dw-text);
+}
+
+.module-shell--settings .module-shell__back:active {
+    background: color-mix(in srgb, var(--dw-text) 9%, transparent);
+}
+
+/* 搜索：圆角 + 细描边，略抬起于底 */
+.module-shell--settings .settings-search {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.module-shell--settings .settings-search .dw-search {
+    width: 100%;
+    height: var(--dw-control-h);
+    min-height: var(--dw-control-h);
+    max-height: var(--dw-control-h);
+    padding-left: var(--settings-nav-item-pad-x);
+    padding-right: var(--dw-space-3);
+    border: 1px solid color-mix(in srgb, var(--dw-text) 14%, transparent);
+    border-radius: var(--dw-control-radius);
+    background: color-mix(in srgb, var(--dw-text) 4%, transparent);
+    box-shadow: none;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.module-shell--settings .settings-search .dw-search:hover {
+    border-color: color-mix(in srgb, var(--dw-text) 22%, transparent);
+    background: color-mix(in srgb, var(--dw-text) 6%, transparent);
+}
+
+.module-shell--settings .settings-search .dw-search:focus-within {
+    border-color: color-mix(in srgb, var(--dw-text) 28%, transparent);
+    background: color-mix(in srgb, var(--dw-text) 6%, transparent);
+    box-shadow: none;
+}
+
+.module-shell--settings .settings-search .dw-search__icon {
+    color: color-mix(in srgb, var(--dw-text) 45%, transparent);
+    opacity: 1;
+}
+
+.module-shell--settings .settings-search .dw-search input {
+    font-size: var(--dw-text-sm);
+    color: var(--dw-text);
+}
+
+.module-shell--settings .settings-search .dw-search input::placeholder {
+    color: color-mix(in srgb, var(--dw-text) 42%, transparent);
+    opacity: 1;
+}
+
+.module-shell--settings .module-shell__nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--dw-space-4) 0 var(--dw-space-4);
+}
+
+.module-shell--settings .module-shell__nav-item {
+    display: grid;
+    grid-template-columns: var(--dw-icon-size-md) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--dw-space-4);
+    min-height: calc(var(--dw-control-h) + 4px);
+    padding: 0 var(--settings-nav-item-pad-x);
+    border: 0;
+    border-radius: var(--dw-control-radius);
+    background: transparent;
+    color: color-mix(in srgb, var(--dw-text) 62%, transparent);
+    font-size: var(--dw-text-sm);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    box-shadow: none;
+    transition:
+        background 0.14s ease,
+        color 0.14s ease;
+}
+
+.module-shell--settings .module-shell__nav-item-icon {
+    width: var(--dw-icon-size-md);
+    height: var(--dw-icon-size-md);
+    color: color-mix(in srgb, var(--dw-text) 42%, transparent);
+    transition: color 0.14s ease;
+}
+
+.module-shell--settings .module-shell__nav-item-icon .dw-icon-root,
+.module-shell--settings .module-shell__nav-item-icon .settings-nav-icon {
+    --dw-icon-size: var(--dw-icon-size-md);
+    width: var(--dw-icon-size-md);
+    height: var(--dw-icon-size-md);
+}
+
+.module-shell--settings .module-shell__nav-item:hover {
+    background: color-mix(in srgb, var(--dw-text) 7%, transparent);
+    color: color-mix(in srgb, var(--dw-text) 92%, transparent);
+}
+
+.module-shell--settings .module-shell__nav-item:hover .module-shell__nav-item-icon {
+    color: color-mix(in srgb, var(--dw-text) 72%, transparent);
+}
+
+.module-shell--settings .module-shell__nav-item:active {
+    background: color-mix(in srgb, var(--dw-text) 10%, transparent);
+}
+
+/* 选中：更清晰的圆角灰底块 */
+.module-shell--settings .module-shell__nav-item.is-active {
+    background: color-mix(in srgb, var(--dw-text) 14%, transparent);
+    color: var(--dw-text);
+    font-weight: 500;
+    box-shadow: none;
+}
+
+.module-shell--settings .module-shell__nav-item.is-active .module-shell__nav-item-icon {
+    color: var(--dw-text);
+}
+
+.module-shell--settings .module-shell__profile {
+    display: flex;
+    align-items: center;
+    gap: var(--dw-space-1);
+    flex-shrink: 0;
+    margin-top: auto;
+    padding: var(--dw-space-4) 0 0;
+    border-top: 1px solid color-mix(in srgb, var(--dw-text) 8%, transparent);
+}
+
+.module-shell--settings .module-shell__profile-main {
+    display: grid;
+    grid-template-columns: var(--dw-control-h-sm) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--dw-space-3);
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: var(--dw-space-2) var(--settings-nav-item-pad-x);
+    border: 0;
+    border-radius: var(--dw-control-radius);
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.module-shell--settings .module-shell__profile-main:hover .module-shell__profile-email,
+.module-shell--settings .module-shell__profile-main.is-active .module-shell__profile-email {
+    color: var(--dw-text);
+}
+
+.module-shell--settings .module-shell__profile-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--dw-control-h-sm);
+    height: var(--dw-control-h-sm);
+    border-radius: var(--dw-radius-pill);
+    background: color-mix(in srgb, var(--dw-primary) 55%, var(--dw-bg-muted));
+    color: var(--dw-on-accent);
+    font-size: var(--dw-text-xs);
+    font-weight: 700;
+    line-height: 1;
+}
+
+.module-shell--settings .module-shell__profile-email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--dw-text-xs);
+    font-weight: 500;
+    color: color-mix(in srgb, var(--dw-text) 62%, transparent);
+    line-height: var(--dw-leading-tight);
+    transition: color 0.15s ease;
+}
+
+.module-shell--settings .module-shell__profile-gear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--dw-control-h-sm);
+    height: var(--dw-control-h-sm);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--dw-control-radius);
+    background: transparent;
+    color: color-mix(in srgb, var(--dw-text) 45%, transparent);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.module-shell--settings .module-shell__profile-gear:hover {
+    background: color-mix(in srgb, var(--dw-text) 8%, transparent);
+    color: var(--dw-text);
+}
+
 /* ---- 设置页分段 Tab（pill） ---- */
 
 .module-shell__main .settings-tab-strip {
@@ -122,19 +367,24 @@
     opacity: 0.72;
 }
 
-.module-shell__main .settings-groups {
+/* 右栏正文：分区卡 / 旧卡 / 提示块之间统一留白（不依赖是否包 settings-groups） */
+.module-shell__main .settings-page__body {
     display: flex;
     flex-direction: column;
-    gap: var(--mp-gap-lg);
+    gap: var(--settings-section-gap, clamp(18px, 2.2vmin, 28px));
+}
+
+.module-shell__main .settings-groups,
+.module-shell__main .settings-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--settings-section-gap, clamp(18px, 2.2vmin, 28px));
 }
 
 .module-shell__main .settings-groups .setting-block,
 .module-shell__main .settings-groups .shortcut-card,
-.module-shell__main .settings-groups .setting-card {
-    margin-bottom: 0;
-}
-
-.module-shell__main .settings-groups .setting-block {
+.module-shell__main .settings-groups .setting-card,
+.module-shell__main .settings-groups .settings-section {
     margin-bottom: 0;
 }
 

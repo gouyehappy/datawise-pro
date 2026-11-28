@@ -55,13 +55,26 @@ declare global {
                 endDrag?: () => Promise<boolean>
             }
             updater?: {
-                checkForUpdates: () => Promise<{
+                checkForUpdates: (opts?: {force?: boolean}) => Promise<{
                     currentVersion: string
                     latestVersion: string
                     hasUpdate: boolean
                     downloadReady?: boolean
                     downloading?: boolean
                     error?: string
+                    updateChannel?: string
+                    updateKind?: string
+                    updateKinds?: string[]
+                    updateSummary?: string
+                    downloadBytes?: number
+                    fullPackageBytes?: number
+                    savedBytes?: number
+                    installAction?: string
+                    releaseNotes?: string
+                    cached?: boolean
+                    checkedAt?: number
+                    nextCheckAt?: number
+                    checkIntervalMs?: number
                 }>
                 downloadUpdate: () => Promise<{
                     currentVersion: string
@@ -70,8 +83,24 @@ declare global {
                     downloadReady?: boolean
                     downloading?: boolean
                     error?: string
+                    updateChannel?: string
+                    updateKind?: string
+                    updateKinds?: string[]
+                    updateSummary?: string
+                    downloadBytes?: number
+                    fullPackageBytes?: number
+                    savedBytes?: number
+                    installAction?: string
+                    releaseNotes?: string
                 }>
-                quitAndInstall: () => Promise<boolean>
+                quitAndInstall: () => Promise<boolean | {
+                    ok: boolean
+                    restartRequired?: boolean
+                    channel?: string
+                    installAction?: string
+                    applied?: string[]
+                    error?: string
+                }>
                 setPreferences: (prefs: {
                     notifyOnUpdate: boolean
                     autoDownload: boolean
@@ -83,13 +112,31 @@ declare global {
                     downloadReady?: boolean
                     downloading?: boolean
                     error?: string
+                    updateChannel?: string
+                    updateKind?: string
+                    updateKinds?: string[]
+                    updateSummary?: string
+                    downloadBytes?: number
+                    fullPackageBytes?: number
+                    savedBytes?: number
+                    installAction?: string
+                    releaseNotes?: string
                 }>
                 onStatus: (callback: (event: {
-                    phase: 'available' | 'downloading' | 'downloaded' | 'error' | 'not-available'
+                    phase: 'available' | 'downloading' | 'downloaded' | 'applied' | 'error' | 'not-available'
                     currentVersion: string
                     latestVersion: string
                     percent?: number
                     error?: string
+                    activeKind?: string
+                    updateChannel?: string
+                    updateKind?: string
+                    updateKinds?: string[]
+                    updateSummary?: string
+                    downloadBytes?: number
+                    fullPackageBytes?: number
+                    savedBytes?: number
+                    installAction?: string
                 }) => void) => () => void
             }
             config?: {
@@ -110,6 +157,7 @@ declare global {
                     }
                 }>
                 pickDirectory: () => Promise<string | null>
+                pickJreHome?: () => Promise<string | null>
                 applyAndRestart: (configDir: string | null) => Promise<boolean>
                 switchWorkspace: (resolvedPath: string | null) => Promise<boolean>
                 removeRecentWorkspace: (resolvedPath: string) => Promise<Array<{

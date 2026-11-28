@@ -44,14 +44,14 @@ const emit = defineEmits<{ toggle: [] }>()
 }
 
 .layout-toggle:hover {
-  border-color: color-mix(in srgb, var(--dw-primary) 30%, var(--dw-border));
+  border-color: color-mix(in srgb, var(--dw-text) 26%, var(--dw-border));
   background: var(--dw-bg-hover);
 }
 
 .layout-toggle.active {
-  border-color: var(--dw-primary-border);
-  background: var(--dw-primary-softer);
-  box-shadow: inset 0 0 0 1px var(--dw-primary-ring);
+  border-color: var(--dw-border-strong, var(--dw-text-secondary));
+  background: var(--dw-bg-hover);
+  box-shadow: none;
 }
 
 .layout-toggle__text {
@@ -73,33 +73,34 @@ const emit = defineEmits<{ toggle: [] }>()
   line-height: var(--dw-leading-snug);
 }
 
+/* 30×18 / travel 12；中性轨道，靠滑块位置区分状态 */
 .layout-toggle__track {
   position: relative;
   flex-shrink: 0;
-  width: 36px;
-  height: var(--dw-icon-size-xl);
+  width: 30px;
+  height: 18px;
   border-radius: var(--dw-radius-pill);
-  background: color-mix(in srgb, var(--dw-text) 14%, transparent);
-  transition: background var(--dw-duration) var(--dw-ease);
+  background: color-mix(in srgb, var(--dw-text) 16%, transparent);
+  transition: background 0.14s ease;
 }
 
 .layout-toggle.active .layout-toggle__track {
-  background: var(--dw-primary);
+  background: color-mix(in srgb, var(--dw-text) 62%, var(--dw-bg-panel));
 }
 
 .layout-toggle__thumb {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: var(--dw-icon-size-md);
-  height: var(--dw-icon-size-md);
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: var(--dw-bg);
-  box-shadow: var(--dw-shadow-md);
-  transition: transform 0.18s ease;
+  background: var(--dw-bg-panel);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--dw-text) 22%, transparent);
+  transition: transform 0.14s ease;
 }
 
 .layout-toggle.active .layout-toggle__thumb {
-  transform: translateX(16px);
+  transform: translateX(12px);
 }
 </style>

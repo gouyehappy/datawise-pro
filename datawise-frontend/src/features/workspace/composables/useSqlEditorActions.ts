@@ -234,7 +234,7 @@ export function useSqlEditorActions(options: SqlEditorActionsOptions) {
                         : runOptions?.mode === 'all'
                             ? t('console.documentRequired')
                             : t('console.selectionRequired')
-            notifyActionIssue(emptyHint, {toast: false})
+            notifyActionIssue(emptyHint, {variant: 'warning'})
             return
         }
 
@@ -602,6 +602,8 @@ export function useSqlEditorActions(options: SqlEditorActionsOptions) {
             if (!ok) {
                 notifyActionIssue(t('console.saveFailed'))
             }
+        }).catch((error) => {
+            notifyActionIssue(formatRunError(error) || t('console.saveFailed'))
         })
     }
 

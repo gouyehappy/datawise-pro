@@ -251,6 +251,8 @@ export function normalizeLayout(raw: Partial<LayoutPreferences> | undefined): La
         lastShortcutPanel,
         workbenchMode: normalizeWorkbenchMode(raw?.workbenchMode),
         openHttpLinksIn: raw?.openHttpLinksIn === 'system' ? 'system' : 'builtin',
+        showProjectDocsRoot: raw?.showProjectDocsRoot ?? base.showProjectDocsRoot,
+        showProjectScriptsRoot: raw?.showProjectScriptsRoot ?? base.showProjectScriptsRoot,
         dockPlacement: raw?.dockPlacement == null
             ? (base.dockPlacement ?? null)
             : normalizeDockPlacement(raw.dockPlacement),

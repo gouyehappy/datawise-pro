@@ -2,6 +2,11 @@
 export function looksDestructiveCommand(command: string): boolean {
   const c = command.toLowerCase();
   if (!c.trim()) return false;
+  // Expansion / substitution often hides verbs from simple token checks.
+  if (/\$\(|`|\$\{/.test(command)) return true;
+  if (/\beval\b|\bsource\b|\b\.[\t ]+\//.test(c)) return true;
+  if (/\bbase64\b/.test(c) && /\b(sh|bash|zsh|dash|ksh)\b/.test(c)) return true;
+  if (/\b(sh|bash|zsh|dash|ksh)\b[\s\S]*\s-c\b/.test(c)) return true;
   return (
     /\bsudo\b/.test(c) ||
     /\b(rm|mkfs|dd|reboot|shutdown|poweroff|halt)\b/.test(c) ||

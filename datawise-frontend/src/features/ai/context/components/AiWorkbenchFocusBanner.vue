@@ -79,7 +79,7 @@ const {t} = useI18n()
   width: 24px;
   height: 24px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   background: transparent;
   color: var(--dw-text-muted);
   cursor: pointer;

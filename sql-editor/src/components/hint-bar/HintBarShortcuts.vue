@@ -110,7 +110,7 @@ function inlineShortcutLabel(item: HintShortcutItem): string {
   box-sizing: border-box;
   height: 18px;
   padding: 0 6px 0 4px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   flex-shrink: 0;
   color: var(--dw-text-secondary, #555);
   background: var(--dw-bg-muted, rgba(0, 0, 0, 0.05));
@@ -159,7 +159,7 @@ function inlineShortcutLabel(item: HintShortcutItem): string {
   min-width: 18px;
   height: 18px;
   padding: 0 4px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   font-size: 9px;
   font-weight: 600;
   line-height: 1;

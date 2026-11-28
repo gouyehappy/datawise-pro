@@ -81,3 +81,24 @@ export function resolveBulkCloseActiveTabId(
     if (remaining.some((tab) => tab.id === currentActiveId)) return currentActiveId
     return keepTabId
 }
+
+/**
+ * Connection ids whose last community/SSH workbench tab was just closed.
+ * JDBC consoles are intentionally excluded — pool idle eviction owns those.
+ */
+export function findOrphanedWorkbenchConnectionIds(
+    closed: readonly WorkspaceTab[],
+    remaining: readonly WorkspaceTab[],
+): string[] {
+    const candidates = new Set<string>()
+    for (const tab of closed) {
+        const connectionId = tab.connectionId?.trim()
+        if (!connectionId) continue
+        if (tab.type !== 'community-workbench' && tab.type !== 'ssh-terminal') continue
+        candidates.add(connectionId)
+    }
+    if (candidates.size === 0) return []
+    return [...candidates].filter(
+        (connectionId) => !remaining.some((tab) => tab.connectionId === connectionId),
+    )
+}

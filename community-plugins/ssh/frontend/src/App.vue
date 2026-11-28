@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, createApp, defineAsyncComponent, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { ImageAddon } from "@xterm/addon-image";
@@ -8,7 +8,9 @@ import { SearchAddon, type ISearchOptions } from "@xterm/addon-search";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import {
+  Activity,
   Archive,
+  Bot,
   Disc,
   Eye,
   EyeOff,
@@ -19,14 +21,11 @@ import {
   Link2,
   CircleStop,
   ArrowDown,
-  ArrowLeft,
   ArrowLeftRight,
   ArrowUp,
   ArrowUpDown,
-  Bot,
-  Braces,
   ClipboardPaste,
-  Columns3,
+  Columns2,
   Container,
   Copy,
   Download,
@@ -46,23 +45,24 @@ import {
   History,
   Home,
   Info,
-  KeyRound,
   ListChecks,
   Loader2,
   Lock,
   Monitor,
+  MoreHorizontal,
   Cable,
   AppWindow,
   Timer,
   Network,
   PackageOpen,
-  Palette,
+  PanelRight,
   PanelRightClose,
   Pencil,
   Pin,
   PlugZap,
   RefreshCw,
   RotateCw,
+  Rows2,
   Save,
   Scissors,
   ScrollText,
@@ -81,6 +81,7 @@ import {
   TextSelect,
   Trash2,
   TriangleAlert,
+  Unplug,
   X,
   Zap,
   Check,
@@ -105,29 +106,96 @@ import {
 import { Osc7DirectoryParser } from "./lib/terminalDirectoryTracking";
 import { handleOsc52ClipboardWrite, handleTerminalColorQuery } from "./lib/terminalOsc";
 import {
+  createNotifyRateLimiter,
+  parseOsc777Notify,
+  parseOsc9Notify,
+  type TerminalOscNotification,
+} from "./lib/terminalNotify";
+import {
+  autofillShouldYield,
+  loadAutofillRules,
+  matchAutofillRules,
+  persistAutofillRules,
+  sanitizeAutofillRules,
+  type AutofillMatch,
+  type AutofillRule,
+} from "./lib/autofillRules";
+import {
+  buildPasswordHintCandidates,
+  passwordHintOfferKey,
+  passwordHintPayload,
+  shouldOfferPasswordHint,
+  type PasswordHintCandidate,
+} from "./lib/passwordHint";
+import { isInteractivePromptLine } from "./lib/interactivePromptGuard";
+import type { SudoProfileView } from "./lib/settingsModel";
+import {
+  DEFAULT_TERMINAL_SESSION_PREFS,
+  effectiveWordSeparators,
+  findDecorationColors,
+  loadTerminalSessionPrefs,
+  mergeTerminalSessionPrefs,
+  persistTerminalSessionPrefs,
+  seedTerminalFindOrigin,
+  type TerminalSessionPrefs,
+} from "./lib/terminalSessionPrefs";
+import {
+  pasteImageFileName,
+  pasteImageInsertText,
+  pickPasteImage,
+  resolvePasteImageKind,
+} from "./lib/pasteImage";
+import {
+  buildGutterRows,
+  gutterShowsNumbers,
+  gutterShowsTimes,
+  gutterWidthPx,
+  GutterStampTracker,
+  measureTerminalCellSize,
+  paintGutterElement,
+} from "./lib/terminalGutter";
+import {
   resolveTerminalKeyAction,
-  resolveTerminalRightClickAction,
+  resolveTerminalMottyMenuShortcut,
   sanitizeSearchOptions,
   sanitizeSelectCopyEnabled,
   sanitizeClickCursorEnabled,
   isApplePlatform,
   isTerminalSelectAllShortcut,
   TERMINAL_SEARCH_OPTIONS_KEY,
+  terminalMottyShortcutLabels,
   terminalSearchSeedFromSelection,
   canAcceptTerminalDrop,
   normalizeDropTargetDir,
   type TerminalSearchOptions,
 } from "./lib/terminalInteraction";
 import { extractHttpUrl } from "./lib/terminalContextMenu";
+import { clearXtermScrollback, terminalHasScrollback } from "./lib/terminalScrollback";
 import { createTerminalWriteThrottle, type TerminalWriteThrottle } from "./lib/terminalWriteThrottle";
-import { uiStorage } from "./lib/uiStorage";
+import { initUiStorage, uiStorage } from "./lib/uiStorage";
+import {
+  canOpenTerminalSplit,
+  sanitizeSplitOrientation,
+  sanitizeSyncInputEnabled,
+  TERMINAL_SPLIT_ORIENTATION_KEY,
+  TERMINAL_SYNC_INPUT_KEY,
+  type TerminalSplitOrientation,
+} from "./lib/terminalSplit";
 import { findForwardConflict, forwardStartParams, parseForwards, type PortForward } from "./lib/portForward";
 import {
   forwardsStorageKey,
   sanitizePersistedForwards,
   type PersistedForward,
 } from "./lib/portForwardPersist";
-import { createTerminalInputQueue } from "./lib/terminalInputQueue";
+import { createTerminalInputQueue, TerminalInputTimeoutError } from "./lib/terminalInputQueue";
+import { mergeTerminalFrames } from "./lib/terminalFrameBatch";
+import { collectDrainBatch } from "./lib/terminalDrainBatch";
+import { inputTimeoutIndicatesStall } from "./lib/terminalInputGuard";
+import { interactivePromptNearCursor, isInteractivePromptPending } from "./lib/interactivePromptGuard";
+import { applyNoWrapWidth, registerAltScreenWatch } from "./lib/terminalNoWrap";
+import { createOutputGate, isTerminalSecondaryBusy } from "./lib/terminalBackpressure";
+import { registerTerminalModeQueryHandlers, type TerminalSyncOutput } from "./lib/terminalModeQueries";
+import { useBatchUpload } from "./composables/useBatchUpload";
 import { describeReconnectCountdown, describeReconnectRestoredNotice, isConnectionInactiveError, isSessionGoneError, shouldReattachTerminal, terminalReconnectDelay, TERMINAL_RECONNECT_DELAYS, type ReconnectCountdown } from "./lib/terminalReconnect";
 import { classifyConnectError, connectErrorKey } from "./lib/connectError";
 import { decideConnectRetry, isDuplicatedTransportUnavailableError } from "./lib/connectRetry";
@@ -140,6 +208,14 @@ import {
 import { createConnectLog } from "./lib/connectLog";
 import { pickModalFocusTarget } from "./lib/modalFocus";
 import {
+  computeWindow,
+  FILE_ROW_HEIGHT_PX,
+  FILE_ROW_OVERSCAN,
+  scrollTopForRow,
+  SFTP_VIRTUAL_THRESHOLD,
+} from "./lib/sftpVirtualWindow";
+import {
+  createZmodemDetectionFeeder,
   createZmodemSentry,
   decideZmodemDetection,
   receiveZmodemSession,
@@ -150,7 +226,15 @@ import {
   type ZmodemUploadProgress,
 } from "./lib/terminalZmodem";
 import { planFolderDrop, parentDirsOf, type FolderDropFile } from "./lib/folderDrop";
-import { clampHistoryIndex, filterHistory, isHistoryOverlayShortcut, mergeRemoteHistory, resolveHistoryPanelKey } from "./lib/historyPanel";
+import { clampHistoryIndex, coerceHistorySortMode, filterHistory, HISTORY_ALL_HOSTS, HISTORY_UNKNOWN_HOST, historyGroupLabel, historyHosts, mergeRemoteHistory, resolveHistoryPanelKey, sortHistoryView, type HistoryFilter, type HistorySortMode } from "./lib/historyPanel";
+import { resolveHistoryHotkeyAction } from "./lib/historyHotkey";
+import { ARGUMENT_HINT_MAX_FLAGS, hintCommandFromLine, resolveArgumentHint, type ArgumentFlagHint } from "./lib/argumentHint";
+import { commandHintAllowed } from "./lib/commandHintVisibility";
+import { HELP_SPEC_INVOKE_TIMEOUT_MS, HELP_SPEC_TIMEOUT_SECS, helpSpecCommand, isHelpSpecCommand, mergeHelpFlags } from "./lib/helpSpec";
+import { HELP_SPEC_CACHE_KEY, restoreHelpSpecCache, serializeHelpSpecCache } from "./lib/helpSpecCache";
+import { createHelpSpecScheduler, type PersistedHelpSpec, type RemoteHelpSpec } from "./lib/helpSpecScheduler";
+import { lintShellLine, type ShellLineIssue } from "./lib/shellLineLint";
+import { resolveTerminalOverlayOwners, type TerminalOverlayState } from "./lib/overlayArbiter";
 import {
   applyInputToToken,
   catalogSuggestItems,
@@ -160,7 +244,11 @@ import {
   fillSuggestPayload,
   filterRedundantExactSuggest,
   figArgsHandoffItem,
+  clipGhostToCells,
+  ghostCommitRemainder,
   ghostRemainder,
+  ghostRowAvailableCells,
+  ghostTextCells,
   ghostWordRemainder,
   isSafePathPrefix,
   matchesGhostFullAccept,
@@ -169,6 +257,8 @@ import {
   normalizePathCandidate,
   overlayOffsetForCell,
   overlayPlacement,
+  readXtermCssCellSize,
+  stickySuggestIndex,
   parseCommandNames,
   parseSuggestQuery,
   pathSegment,
@@ -186,15 +276,50 @@ import {
   resolveQuickPaletteKey,
   type QuickPaletteItem,
 } from "./lib/quickCommandPalette";
+import {
+  isCommandPaletteShortcut,
+  type PaletteCommand,
+} from "./lib/commandPalette";
+import CommandPalette from "./components/CommandPalette.vue";
 import { resolveBatchTargetKey } from "./lib/batchTargetKeys";
 import { sampleTransferSpeed, type TransferSpeedSample } from "./lib/transferSpeed";
 import { sanitizeContainerRef, type DockerContainer } from "./lib/dockerContainers";
 import { buildPasteConfirmation, type PasteConfirmation } from "./lib/dangerousCommands";
+import {
+  assessCommandRisk,
+  decideRiskAction,
+  DEFAULT_RISK_POLICY,
+  type CommandRiskAssessment,
+} from "./lib/commandRisk";
+import {
+  defaultTemplateValues,
+  parseQuickCommandTemplate,
+  renderQuickCommandTemplate,
+  type ParsedQuickCommandTemplate,
+} from "./lib/quickCommandTemplate";
 import { readClipboardText, writeClipboardText, type ClipboardDeps } from "./lib/clipboardBridge";
 import { filesFromClipboard } from "./lib/clipboardFiles";
 import { friendlySftpError } from "./lib/sftpErrors";
 import { filterDiskMounts, filterNetworkInterfaces } from "./lib/metricsView";
-import ResourceStrip from "./components/ResourceStrip.vue";
+import MonitorDock from "./components/MonitorDock.vue";
+import MonitorPanel from "./components/MonitorPanel.vue";
+import { isMonitorContext, isMonitorContribution, MONITOR_CONTRIBUTION_ID } from "./lib/pluginContext";
+import RightToolRail from "./components/RightToolRail.vue";
+import {
+  loadRightToolRailPrefs,
+  persistRightToolRailPrefs,
+  type RightToolRailPrefs,
+} from "./lib/rightToolRailPrefs";
+import {
+  applyTerminalBgCss,
+  bgStrengthVisuals,
+  encodeTerminalBgImage,
+  loadTerminalBgImagePrefs,
+  persistTerminalBgImagePrefs,
+  type TerminalBgImagePrefs,
+  type TerminalBgStrength,
+} from "./lib/terminalBgImage";
+import { parseCssColorToRgb } from "./lib/terminalOsc";
 import CopilotDock from "./components/CopilotDock.vue";
 import {
   buildModelOptions,
@@ -214,6 +339,7 @@ import {
   shouldEnsureAgentPresets,
 } from "./lib/copilot/chatMode";
 import { runToolCard } from "./lib/copilot/toolRunner";
+import { redactSensitiveText } from "./lib/copilot/redact";
 import {
   appendAssistantStreamDelta,
   clampCopilotDockWidth,
@@ -255,11 +381,12 @@ import {
   commandInputAction,
   formatHistoryAge,
   historyCommands,
+  historyResultBadge,
   isNoiseHistoryLine,
   isPersistableEntry,
   normalizeHistoryCommand,
   historyForScope,
-  markHistoryExit,
+  markHistoryResult,
   pushCommandHistory,
   removeHistoryEntry,
   resolvePtySubmitCommand,
@@ -269,23 +396,26 @@ import {
   type HistoryEntry,
 } from "./lib/commandHistory";
 import { isBastionMenuContext } from "./lib/bastionContext";
-import { sanitizeInteractionPrefs, type InteractionPrefs } from "./lib/interactionPrefs";
+import {
+  ACCEPT_SUGGESTION_KEYS,
+  acceptSuggestionKeyLabel,
+  completionModeAutoOpens,
+  completionModeShowsGhost,
+  completionModeShowsList,
+  sanitizeInteractionPrefs,
+  type AcceptSuggestionKey,
+  type InteractionPrefs,
+} from "./lib/interactionPrefs";
 import {
   canAddQuickCommandInScope,
   countQuickCommandsInScope,
-  filterQuickCommands,
-  groupQuickCommands,
-  groupQuickCommandsByConnection,
   normalizeQuickCommands,
-  otherScopedQuickCommands,
   QUICK_COMMAND_GROUP_MAX_LENGTH,
   QUICK_COMMANDS_LIMIT,
-  quickCommandGroupCount,
   quickCommandText,
   shortenConnectionId,
   visibleQuickCommands,
   type QuickCommand,
-  type QuickCommandGroupView,
 } from "./lib/quickCommands";
 import { batchTargetLabel, batchTargetsNeedDisambiguation, deriveBatchCommandName, liveBatchTargets, normalizeBatchTargets, orphanBatchSessionIds, quickPickCommandById, restoreBatchSelection, selectBatchTargets, summarizeBatchResults, toggleBatchTarget, type BatchSendSummary, type BatchSendTarget } from "./lib/batchSend";
 import {
@@ -315,11 +445,8 @@ import {
   highlightFillStyle,
   matchesInLine,
   normalizeHighlightRules,
-  sanitizeHighlightRuleInput,
   shouldRebuildHighlightRow,
   toAbsoluteRowRange,
-  HIGHLIGHT_COLOR_DEFAULT,
-  HIGHLIGHT_RULES_LIMIT,
   type HighlightRuleView,
 } from "./lib/keywordHighlight";
 import { pushSample, sparklinePath, METRICS_SAMPLE_CAPACITY } from "./lib/metricsSparkline";
@@ -330,7 +457,16 @@ import { encodeGif } from "./lib/gifEncoder";
 import { canKillProcess, sortProcessRows, type ProcessSortKey } from "./lib/processActions";
 import { distroBadge, type DistroBadge } from "./lib/distroBadge";
 import { auditKindLabel, auditKindOptions, auditOutcomeLabel, sanitizeAuditEntries, type AuditEntry } from "./lib/auditLog";
-import { resolveSftpPaneOpen, sanitizeSftpPaneDefaultOpen, type SshWorkbenchPaneOrder } from "./lib/workbenchLayout";
+import {
+  clampSftpWidthPx,
+  isSftpDrawerLayout,
+  resolvePaneOrder,
+  resolveSftpPaneOpen,
+  resolveSftpWidthPx,
+  sanitizeSftpPaneDefaultOpen,
+  SFTP_WIDTH_DEFAULT_PX,
+  type SshWorkbenchPaneOrder,
+} from "./lib/workbenchLayout";
 import { pickLiveSessionForReattach, type SessionSummary } from "./lib/sessionRestore";
 import { toolbarTintStyle } from "./lib/toolbarTint";
 import { createGhostClickGuard } from "./lib/ghostClickGuard";
@@ -363,9 +499,14 @@ import ConnectingCard from "./components/ConnectingCard.vue";
 import FolderPickerDialog from "./components/FolderPickerDialog.vue";
 import SideNavPanel, { type SftpSideQuickPath } from "./components/SideNavPanel.vue";
 import { Switch } from "./components/ui/switch";
-import { ToggleGroup, ToggleGroupItem } from "./components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "./components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "./components/ui/context-menu";
+import {
+  readTerminalBufferText,
+  readTerminalRecentText,
+  terminalOutputFileName,
+  webSearchUrlForSelection,
+} from "./lib/terminalBufferText";
 import { Popover, PopoverAnchor, PopoverContent } from "./components/ui/popover";
 import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog";
 import FileOpenWithMenu from "./components/FileOpenWithMenu.vue";
@@ -384,6 +525,8 @@ import {
 } from "./lib/editorRules";
 import {
   applySchemeToTerminalTheme,
+  composeFontFamilyStack,
+  cursorThicknessCss,
   loadTerminalAppearance,
   persistTerminalAppearance,
   sanitizeAppearanceSettings,
@@ -395,6 +538,7 @@ import { ensureBuiltinSchemeCatalog } from "./lib/terminalScheme";
 // Defer settings / multi-format preview modules off the first-paint import graph
 // (single-file pack still inlines them, but factories run only when opened).
 const SettingsDialog = defineAsyncComponent(() => import("./components/SettingsDialog.vue"));
+import QuickCommandsPanel from "./components/QuickCommandsPanel.vue";
 const PreviewPane = defineAsyncComponent(() => import("./components/PreviewPane.vue"));
 import ImportWizard from "./components/ImportWizard.vue";
 import OtpPanel from "./components/OtpPanel.vue";
@@ -438,13 +582,24 @@ import { applyEditToText } from "./lib/completion/core/edit";
 import { rankItems } from "./lib/completion/core/ranking";
 import type { CompletionItem } from "./lib/completion/core/types";
 import { resolveCompletionKey } from "./lib/completion/keyboard";
-import { createStaticFigSource } from "./lib/completion/fig/staticSpecSource";
+import { createStaticFigSource, isPendingOptionArgPhase, shouldSuppressSoftHistoryUnderFig } from "./lib/completion/fig/staticSpecSource";
 import { WAVE1_FIG_MANIFEST } from "./lib/completion/fig/wave1Manifest";
+import type { FigCompletionSource, FigSpecManifest } from "./lib/completion/fig/source";
+import {
+  DEFAULT_FIG_CATALOG_URL,
+  figCatalogStatusView,
+  installCatalogPack,
+  loadFigCatalogOverlay,
+  mergeFigManifest,
+  persistFigCatalogOverlay,
+  sanitizeFigCatalogPack,
+  shouldInstallCatalogPack,
+  type FigCatalogOverlay,
+} from "./lib/completion/fig/catalogUpdate";
 import { cwdFromShellPrompt, pathCompletionSlots, resolvePathCompletionCwd, runPathCompletion } from "./lib/completion/fig/pathGenerator";
 import { hasFigCommandSpec } from "./lib/completion/fig/optionArgPhase";
-import { isPendingOptionArgPhase, shouldSuppressSoftHistoryUnderFig } from "./lib/completion/fig/staticSpecSource";
 import LocalBrowsePanel from "./components/LocalBrowsePanel.vue";
-import type { SuggestionAnchor } from "./lib/overlayPlacement";
+import { flippedOverlayBottom, overlayLeft, overlayMaxHeight, type SuggestionAnchor } from "./lib/overlayPlacement";
 
 interface SessionInfo {
   sessionId: string;
@@ -558,7 +713,9 @@ interface WorkbenchState {
   sftpPath?: string;
   followDirectory?: boolean;
   sudoMode?: boolean;
+  /** @deprecated Migrated to sftpWidthPx; kept for one-shot restore. */
   splitRatio?: number;
+  sftpWidthPx?: number;
   paneOrder?: SshWorkbenchPaneOrder;
   sftpPaneOpen?: boolean;
   visibleColumns?: SftpColumn[];
@@ -650,6 +807,12 @@ const QUICK_COMMANDS_KEY = "ssh-quick-commands";
 const SFTP_PANE_OPEN_KEY = "ssh-sftp-pane-open";
 // 会话顶栏常驻资源条（OpenOcta 式一眼态势）：默认开，"false" 关闭。
 const RESOURCE_STRIP_KEY = "ssh-resource-strip";
+/** Motty-style right icon rail; default open ("false" hides). */
+const RIGHT_RAIL_KEY = "ssh-right-rail";
+/** Global default for “follow terminal cwd” (new workbenches). */
+const FOLLOW_DIRECTORY_KEY = "ssh-follow-directory";
+/** Global default for SFTP visible columns (new workbenches). */
+const VISIBLE_COLUMNS_KEY = "ssh-visible-columns";
 // 侧栏形态偏好：tree/quick tab（默认 tree）与收起状态，localStorage 全局持久化。
 const SFTP_SIDE_TAB_KEY = "ssh-sftp-side-tab";
 const SFTP_SIDE_COLLAPSED_KEY = "ssh-sftp-side-collapsed";
@@ -669,7 +832,7 @@ const compressionThresholdMibState = ref(64);
 function sanitizeConflictPolicy(value: unknown): DownloadConflictPolicy {
   return value === "ask" || value === "overwrite" ? value : "rename";
 }
-// 终端交互：选中复制 + 右键粘贴（localStorage 全局偏好，默认开，"false" 关闭）。
+// 终端交互：选中复制（localStorage 全局偏好，默认开，"false" 关闭）。右键一律开菜单。
 const SELECT_COPY_KEY = "ssh-terminal-select-copy";
 // 点击定位光标：把原地点击换算成左右方向键；非 readline 应用可能回显 [C[C…，可关。
 const CLICK_CURSOR_KEY = "ssh-terminal-click-cursor";
@@ -687,13 +850,53 @@ const HIGHLIGHT_FLOOD_PENDING_BYTES = 48 * 1024;
 const HIGHLIGHT_BUSY_RETRY_MS = 80;
 const HIGHLIGHT_FLOOD_RETRY_MS = 120;
 // 8 色板（新增规则默认色板；自定义 hex 输入并行提供）。
-const HIGHLIGHT_PALETTE = ["#ef4444", "#f59e0b", "#facc15", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#6b7280"];
-
 type TerminalSearchMatchState = "idle" | "match" | "no-match";
 
 const terminalHost = ref<HTMLElement>();
+const terminalGutterEl = ref<HTMLElement>();
+const terminalPaneEl = ref<HTMLElement>();
+const gutterStamps = new GutterStampTracker();
+let gutterRenderDisposable: { dispose(): void } | undefined;
+const rightToolRailPrefs = ref<RightToolRailPrefs>(loadRightToolRailPrefs());
+const terminalBgImage = ref<TerminalBgImagePrefs>(loadTerminalBgImagePrefs());
 const sftpPane = ref<HTMLElement>();
 const paneContainer = ref<HTMLElement>();
+const splitOrientation = ref<TerminalSplitOrientation>(
+  sanitizeSplitOrientation(uiStorage.getItem(TERMINAL_SPLIT_ORIENTATION_KEY)),
+);
+const syncInputEnabled = ref(sanitizeSyncInputEnabled(uiStorage.getItem(TERMINAL_SYNC_INPUT_KEY)));
+const splitBusy = ref(false);
+const splitLayoutOpen = ref(false);
+const splitRatio = ref(0.5);
+/** Reactive peer session id — plain Map mutations do not trigger Vue. */
+const splitPeerSessionId = ref<string | null>(null);
+/** Focus chrome: primary pane vs split peer. */
+const focusedPane = ref<"primary" | "split">("primary");
+/** Single in-pane split peer — not a host/plugin tab. */
+const SPLIT_PEER_KEY = "split-peer";
+
+type ExtraShellRuntime = {
+  key: string;
+  sessionId: string;
+  terminal?: Terminal;
+  fitAddon?: FitAddon;
+  disposeInput?: { dispose(): void };
+  disposeWriteParsed?: { dispose(): void };
+  disposeGutterRender?: { dispose(): void };
+  webglAddon?: WebglAddon;
+  lastSequence: number;
+  pendingFrames: Map<number, { stream: number; data: Uint8Array }>;
+  throttle: TerminalWriteThrottle;
+  hostEl: HTMLElement | null;
+  gutterEl: HTMLElement | null;
+  gutterStamps: GutterStampTracker;
+};
+
+const extraShells = new Map<string, ExtraShellRuntime>();
+
+const splitSessionId = computed(() => splitPeerSessionId.value);
+/** Layout is driven by the open flag so panes appear immediately; PTY id is tracked separately. */
+const splitActive = computed(() => splitLayoutOpen.value);
 const uploadInput = ref<HTMLInputElement>();
 const lzpackUploadInput = ref<HTMLInputElement>();
 const zmodemInput = ref<HTMLInputElement>();
@@ -725,6 +928,15 @@ const noticeActions = ref<Array<{ label: string; run: () => void }>>([]);
 const noticeOpen = ref(false);
 const noticeKey = ref(0);
 const session = ref<SessionInfo>();
+/**
+ * beta.49 TDZ 防线：`connected` 被 1603 的 CompletionController.enabled 与
+ * 1779/1798 的命令提示 computed 链引用，而对 anyCommandHintVisible 的侦听会在
+ * setup 期间同步求值整条链（computed 惰性，但 watch 初始化会读 source）。声明
+ * 必须早于所有引用，否则运行时抛 `ReferenceError: Cannot access 'X' before
+ * initialization`（X 为压缩后的变量名，UI 由 errorHandler 吞掉、看似可用）。
+ * 只依赖 terminalState / session，故紧跟二者之后声明，不迁移任何判定逻辑。
+ */
+const connected = computed(() => terminalState.value === "connected" && !!session.value);
 const currentPath = ref("/");
 const entries = ref<SftpEntry[]>([]);
 const selectedPath = ref("");
@@ -741,13 +953,18 @@ const agentPromptExpired = ref(false);
 // （后端 D2 兜底：破坏性命令自动忽略记住标记）。
 const agentPromptRemember = ref(false);
 const agentRunning = ref<AgentNoticePayload>();
-const splitRatio = ref(58);
-const paneOrder = ref<SshWorkbenchPaneOrder>("terminal-left");
+const sftpWidthPx = ref(SFTP_WIDTH_DEFAULT_PX);
+const paneOrder = ref<SshWorkbenchPaneOrder>("sftp-left");
 // SFTP 面板可见性：每个工作台即时开关（写入 workbenchState）；
-// 新工作台的初始值取全局"默认打开"偏好（localStorage）。
+// 新工作台的初始值取全局"默认打开"偏好（localStorage；Motty 对齐默认开）。
 const sftpPaneOpen = ref(loadSftpPaneDefaultOpen());
 const sftpPaneDefaultOpen = ref(loadSftpPaneDefaultOpen());
+/** Side monitor dock (replaces the full-width ResourceStrip). Preference key reused. */
 const resourceStripEnabled = ref(loadResourceStripEnabled());
+const rightRailOpen = ref(loadRightRailOpen());
+const toolbarMoreOpen = ref(false);
+const workbenchWidthPx = ref(1200);
+const sftpDrawerMode = computed(() => isSftpDrawerLayout(workbenchWidthPx.value));
 // 侧栏导航形态偏好：tree（目录树，默认）/ quick（快捷路径）+ 收起状态。
 const sftpSideTab = ref<"tree" | "quick">(loadSftpSideTab());
 const sftpSideCollapsed = ref(loadSftpSideCollapsed());
@@ -755,12 +972,32 @@ const sftpSideCollapsed = ref(loadSftpSideCollapsed());
 const sftpTree = ref<DirTreeNode>(createTreeRoot("/", "/"));
 // sftp/home 探测结果：quick tab 置顶展示（获取失败时该项隐藏）。
 const sftpHomePath = ref("");
-// 选中复制 + 右键粘贴（终端交互偏好，全局生效，切换即持久化）。
+// 选中复制（终端交互偏好，全局生效，切换即持久化）。右键始终开 Motty 菜单。
 const termSelectCopy = ref(loadSelectCopyEnabled());
 const termClickCursor = ref(loadClickCursorEnabled());
-const followDirectory = ref(false);
+/** Motty-parity session prefs (OSC 52 / scrollback / find / bell / …). */
+const sessionPrefs = ref<TerminalSessionPrefs>(loadTerminalSessionPrefs());
+/** Motty autofill rules (fixed-text replies; confirm before send). */
+const autofillRules = ref<AutofillRule[]>(loadAutofillRules());
+const autofillOffer = ref<AutofillMatch | null>(null);
+/** Dedupes re-offer for the same rule+line until the cursor line changes. */
+let autofillOfferedKey = "";
+let autofillRenderDisposable: { dispose(): void } | undefined;
+/** Motty password hint picker (labels only; secrets revealed after confirm). */
+const passwordHintOffer = ref<{ line: string; candidates: PasswordHintCandidate[] } | null>(null);
+const passwordHintPending = ref<PasswordHintCandidate | null>(null);
+const passwordHintBusy = ref(false);
+let passwordHintOfferedKey = "";
+let passwordHintLoadGeneration = 0;
+const terminalOscTitle = ref("");
+const osc52AskText = ref<string | null>(null);
+let osc52AskResolver: ((accepted: boolean) => void) | undefined;
+let terminalBellFlashTimer: number | undefined;
+const followDirectoryDefault = ref(loadFollowDirectoryDefault());
+const followDirectory = ref(followDirectoryDefault.value);
 const directoryTrackingSupported = ref<boolean | undefined>();
-const visibleColumns = ref<SftpColumn[]>([...DEFAULT_VISIBLE_COLUMNS]);
+const visibleColumnsDefault = ref<SftpColumn[]>(loadVisibleColumnsDefault());
+const visibleColumns = ref<SftpColumn[]>([...visibleColumnsDefault.value]);
 /** 每列当前宽度（px）。 */
 const sftpColumnWidths = reactive<Record<SftpColumn, number>>({ ...DEFAULT_COLUMN_WIDTHS });
 /** 名称列宽度（px）；null = 未拖过，弹性填充剩余空间。 */
@@ -783,7 +1020,6 @@ const resumableTasks = ref<ResumableUploadTask[]>([]);
 const resumableLoading = ref(false);
 const resumeInput = ref<HTMLInputElement | null>(null);
 const resumeTargetTaskId = ref("");
-const columnsOpen = ref(false);
 const transferSpeeds = reactive<Record<string, number>>({});
 const sudoMode = ref(false);
 const archiveBusy = ref(false);
@@ -853,88 +1089,15 @@ const historyNow = ref(Date.now());
 // 快速命令：用户自定义片段，sidecar 持久化；可全局或绑定 connectionId。
 // 单作用域 ≤20 条；工作台展示「全局 + 当前连接」，工具栏下拉一键发送到 PTY。
 const quickCommands = ref<QuickCommand[]>(loadQuickCommands());
-const quickMenuOpen = ref(false);
 const quickSaving = ref(false);
-const quickDraft = reactive<{ id?: string; name: string; command: string; group: string; scope: "global" | "connection" }>({
-  name: "",
-  command: "",
-  group: "",
-  scope: "connection",
-});
-// Termius Snippets 式面板状态：搜索过滤 / 卡片展开 / 编辑器子视图。
-const quickSearch = ref("");
-const quickExpandedId = ref<string | null>(null);
-const quickEditorOpen = ref(false);
-const quickCollapsedGroups = ref<string[]>([]);
+const quickPanelSettings = ref<{ resetView: () => void; onSaved: () => void } | null>(null);
 const visibleQuickCommandList = computed(() => visibleQuickCommands(quickCommands.value, connectionId.value));
-const filteredQuickCommands = computed(() => filterQuickCommands(visibleQuickCommandList.value, quickSearch.value));
-const groupedQuickCommands = computed<QuickCommandGroupView[]>(() => groupQuickCommands(filteredQuickCommands.value));
-const quickHasRealGroups = computed(() => quickCommandGroupCount(visibleQuickCommandList.value) > 0);
-const otherQuickCommandGroups = computed(() =>
-  groupQuickCommandsByConnection(otherScopedQuickCommands(quickCommands.value, connectionId.value)),
-);
-const otherQuickCommandCount = computed(() =>
-  otherQuickCommandGroups.value.reduce((sum, group) => sum + group.commands.length, 0),
-);
-const quickOtherOpen = ref(false);
-const quickDraftScopeId = computed(() => (quickDraft.scope === "connection" ? connectionId.value : ""));
-const quickDraftScopeCount = computed(() => countQuickCommandsInScope(quickCommands.value, quickDraftScopeId.value || null));
-const quickDraftCanAdd = computed(() => {
-  if (quickDraft.id) {
-    const existing = quickCommands.value.find((item) => item.id === quickDraft.id);
-    const sameScope =
-      (existing?.connectionId?.trim() ?? "") === (quickDraftScopeId.value || "");
-    if (sameScope) return true;
-  }
-  return canAddQuickCommandInScope(quickCommands.value, quickDraftScopeId.value || null);
-});
 const batchSaveScope = ref<"global" | "connection">("connection");
 const batchSaveScopeId = computed(() => (batchSaveScope.value === "connection" ? connectionId.value : ""));
 const batchScopeCanAdd = computed(() => canAddQuickCommandInScope(quickCommands.value, batchSaveScopeId.value || null));
 
-function openQuickEditor(item?: QuickCommand) {
-  quickDraft.id = item?.id;
-  quickDraft.name = item?.name ?? "";
-  quickDraft.command = item?.command ?? "";
-  quickDraft.group = item?.group ?? "";
-  // 新建默认「当前连接」；编辑沿用原条目 scope。
-  if (item) {
-    quickDraft.scope = item.connectionId?.trim() ? "connection" : "global";
-  } else {
-    quickDraft.scope = connectionId.value ? "connection" : "global";
-  }
-  quickEditorOpen.value = true;
-}
-
-function closeQuickEditor() {
-  quickEditorOpen.value = false;
-  quickDraft.id = undefined;
-  quickDraft.name = "";
-  quickDraft.command = "";
-  quickDraft.group = "";
-  quickDraft.scope = connectionId.value ? "connection" : "global";
-}
-
-function toggleQuickGroupCollapse(groupId: string) {
-  const index = quickCollapsedGroups.value.indexOf(groupId);
-  if (index >= 0) quickCollapsedGroups.value.splice(index, 1);
-  else quickCollapsedGroups.value.push(groupId);
-}
-
-function quickGroupName(group: QuickCommandGroupView): string {
-  return group.id ? group.name : t("quickCommands.ungrouped");
-}
-
-function setQuickDraftBoundToConnection(bound: boolean | undefined) {
-  quickDraft.scope = bound === true && connectionId.value ? "connection" : "global";
-}
-
 function setBatchSaveBoundToConnection(bound: boolean | undefined) {
   batchSaveScope.value = bound === true && connectionId.value ? "connection" : "global";
-}
-
-function toggleQuickExpand(id: string) {
-  quickExpandedId.value = quickExpandedId.value === id ? null : id;
 }
 // 批量发送命令条（Electerm quick-command bar 风格）：常驻贴在终端底部，回车
 // 即发送。目标来自 ssh/sessions/list（跨连接全部活跃会话），命令写入各会话
@@ -1009,6 +1172,8 @@ const batchHistoryBackup = ref("");
 // 过滤回声；sidecar 缺该方法（旧版二进制）时静默降级，只影响同步。
 const batchBarSourceId = randomUUID();
 let batchBroadcastTimer: number | undefined;
+const batchUploadInput = ref<HTMLInputElement>();
+const batchHomeDir = computed(() => sftpHomePath.value || "/");
 // 连接信息面板（只读摘要 + echo 往返延迟）。
 const connectionInfoOpen = ref(false);
 const connectionLatency = ref<number | null>(null);
@@ -1143,10 +1308,35 @@ const historyPanelQuery = ref("");
 const historyPanelIndex = ref(-1);
 const historyPanelBackup = ref("");
 const historyPanelQueryInput = ref<HTMLInputElement | null>(null);
+/** Overlay filters over the OSC 633 result metadata (beta.43); per-session only. */
+const historyFilter = ref<HistoryFilter>({ failedOnly: false, host: HISTORY_ALL_HOSTS });
+function setHistoryFilter(patch: Partial<HistoryFilter>) {
+  historyFilter.value = { ...historyFilter.value, ...patch };
+  // The visible row set just changed; keep the highlight inside it.
+  historyPanelIndex.value = clampHistoryIndex(filteredHistory.value.length, historyPanelIndex.value, 0);
+}
+function clearHistoryFilter() {
+  historyFilter.value = { failedOnly: false, host: HISTORY_ALL_HOSTS };
+  historyPanelIndex.value = clampHistoryIndex(filteredHistory.value.length, historyPanelIndex.value, 0);
+}
+/** Browse-mode sort (beta.44); persisted globally, coerced defensively on load. */
+const HISTORY_SORT_KEY = "dw.ssh.historySort";
+const historySortMode = ref<HistorySortMode>(coerceHistorySortMode(uiStorage.getItem(HISTORY_SORT_KEY)));
+function setHistorySort(mode: HistorySortMode) {
+  historySortMode.value = mode;
+  historyPanelIndex.value = clampHistoryIndex(filteredHistory.value.length, historyPanelIndex.value, 0);
+  try { uiStorage.setItem(HISTORY_SORT_KEY, mode); } catch { /* storage unavailable: session only */ }
+}
+function onHistorySortChange(event: Event) {
+  setHistorySort(coerceHistorySortMode((event.target as HTMLSelectElement).value));
+}
 const quickPaletteOpen = ref(false);
 const quickPaletteQuery = ref("");
 const quickPaletteIndex = ref(0);
 const quickPaletteQueryInput = ref<HTMLInputElement | null>(null);
+// Universal command palette (Ctrl/Cmd+Shift+P): all actions in one keyboard entry.
+const commandPaletteOpen = ref(false);
+const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null);
 const commandCatalog = ref<string[]>([...COMMON_COMMANDS]);
 const commandSuggestOpen = ref(false);
 const commandSuggestItems = ref<SuggestItem[]>([]);
@@ -1154,21 +1344,128 @@ const commandSuggestIndex = ref(0);
 const commandSuggestPrefix = ref("");
 const commandSuggestLine = ref("");
 const commandSuggestPos = ref({ left: 24, top: 48 });
-const commandSuggestGhostPos = ref({ left: 24, top: 48 });
+const commandSuggestGhostPos = ref<{ left: number; top: number; cellHeight?: number; cellWidth?: number }>({ left: 24, top: 48 });
+/** Inline style for the ghost row — Motty/xterm cell box; glyphs locked via ghost-cell spans. */
+function commandSuggestGhostTextStyle(): Record<string, string | undefined> {
+  const cellH = commandSuggestGhostPos.value.cellHeight ?? terminalFontSize.value;
+  const fontFamily = (terminal?.options.fontFamily as string | undefined)
+    || "Cascadia Mono, Consolas, monospace";
+  return {
+    lineHeight: `${cellH}px`,
+    fontSize: `${terminalFontSize.value}px`,
+    fontFamily,
+  };
+}
+function commandSuggestGhostCellStyle(cells: number): Record<string, string | undefined> {
+  const cellW = commandSuggestGhostPos.value.cellWidth;
+  const cellH = commandSuggestGhostPos.value.cellHeight ?? terminalFontSize.value;
+  if (!(cellW && cellW > 0)) return { lineHeight: `${cellH}px` };
+  return {
+    width: `${cellW * cells}px`,
+    lineHeight: `${cellH}px`,
+  };
+}
 const commandSuggestPlacement = ref<"above" | "below">("below");
 const commandSuggestTabArmed = ref(false);
+/** Motty hotkey mode: user asked for the list (↓ / Ctrl+Shift+J); clears on dismiss / submit. */
+const completionManualOpen = ref(false);
+/**
+ * Echo-locked ghost (Motty-aligned without local prediction):
+ * Motty paints LabelRuns on the screen cursor every frame and hides the ghost
+ * while its local-echo predictor is drawn. We have no predictor, so text + pos
+ * both follow the echoed buffer only — same frame via syncCommandSuggestGhostPos.
+ * Sticky index + row clip keep the gray from jumping to another hit or over a
+ * right-hand prompt.
+ */
+const commandSuggestEchoLine = ref("");
+const commandSuggestGhostCellLimit = ref(0);
+/** Motty suggestionPending bridge: keep accepted remainder visible until echo catches up. */
+const ghostCommitTarget = ref<string | null>(null);
 const commandSuggestGhost = computed(() => {
+  const limit = commandSuggestGhostCellLimit.value;
+  const clip = (rest: string) => (limit > 0 ? clipGhostToCells(rest, limit) : rest);
+  if (ghostCommitTarget.value) {
+    const held = ghostCommitRemainder(commandSuggestEchoLine.value, ghostCommitTarget.value);
+    return held == null ? "" : clip(held);
+  }
   if (!commandSuggestOpen.value) return "";
   const item = commandSuggestItems.value[commandSuggestIndex.value];
   const pathPrefix = item?.source === "path" ? commandSuggestPrefix.value : undefined;
-  return ghostRemainder(commandSuggestLine.value, item, pathPrefix);
+  const liveLine = commandSuggestEchoLine.value || commandSuggestLine.value;
+  return clip(ghostRemainder(liveLine, item, pathPrefix));
 });
-/** Compact mode: list only after ↓ / Tab arm; ghost still works. */
+const commandSuggestGhostCells = computed(() => ghostTextCells(commandSuggestGhost.value));
+/**
+ * List visibility follows Motty completionMode:
+ * - list: show while open
+ * - inline / hotkey (after manual ask): show only after ↓ / Tab arm
+ */
 const commandSuggestListVisible = computed(() => {
-  if (!commandSuggestOpen.value) return false;
-  if (!interactionPrefs.value.suggestCompactMode) return true;
+  if (!commandSuggestOpen.value || ghostCommitTarget.value) return false;
+  if (interactionPrefs.value.completionMode === "list") return true;
   return commandSuggestTabArmed.value;
 });
+const commandSuggestGhostVisible = computed(() => {
+  if (ghostCommitTarget.value) return commandSuggestGhost.value.length > 0;
+  if (!commandSuggestOpen.value || !commandSuggestGhost.value) return false;
+  if (!completionModeShowsGhost(interactionPrefs.value.completionMode) && !commandSuggestTabArmed.value) {
+    return false;
+  }
+  return true;
+});
+const commandSuggestAcceptHintVisible = computed(
+  () =>
+    !ghostCommitTarget.value
+    && commandSuggestGhostVisible.value
+    && interactionPrefs.value.acceptKeyHintEnabled
+    && interactionPrefs.value.completionMode !== "hotkey",
+);
+const ACCEPT_KEY_HINT_COACHMARK_KEY = "ssh.acceptKeyHint.coachmarkSeen";
+function loadAcceptKeyHintCoachmark(): boolean {
+  try {
+    return uiStorage.getItem(ACCEPT_KEY_HINT_COACHMARK_KEY) !== "1";
+  } catch {
+    return true;
+  }
+}
+const acceptKeyHintMenuOpen = ref(false);
+const acceptKeyHintCoachmark = ref(loadAcceptKeyHintCoachmark());
+const acceptSuggestionKeyBadge = computed(() =>
+  acceptSuggestionKeyLabel(interactionPrefs.value.acceptSuggestionKey),
+);
+function dismissAcceptKeyHintCoachmark() {
+  if (!acceptKeyHintCoachmark.value) return;
+  acceptKeyHintCoachmark.value = false;
+  try {
+    uiStorage.setItem(ACCEPT_KEY_HINT_COACHMARK_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
+function toggleAcceptKeyHintMenu(event?: Event) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  dismissAcceptKeyHintCoachmark();
+  acceptKeyHintMenuOpen.value = !acceptKeyHintMenuOpen.value;
+}
+function closeAcceptKeyHintMenu() {
+  acceptKeyHintMenuOpen.value = false;
+}
+function setAcceptSuggestionKey(key: AcceptSuggestionKey) {
+  updateInteractionPrefs({ acceptSuggestionKey: key });
+  closeAcceptKeyHintMenu();
+  dismissAcceptKeyHintCoachmark();
+}
+function customizeAcceptSuggestionKey() {
+  closeAcceptKeyHintMenu();
+  dismissAcceptKeyHintCoachmark();
+  openSettingsAt("terminal", "completion-mode");
+}
+function turnOffAcceptKeyHint() {
+  updateInteractionPrefs({ acceptKeyHintEnabled: false });
+  closeAcceptKeyHintMenu();
+  dismissAcceptKeyHintCoachmark();
+}
 function suggestSourceLabel(source: SuggestItem["source"]): string {
   if (source === "history") return t("suggest.sourceHistory");
   if (source === "quick") return t("suggest.sourceQuick");
@@ -1221,13 +1518,103 @@ function readCompletionAnchor(): SuggestionAnchor | null {
   };
 }
 
+const figCatalogOverlay = ref<FigCatalogOverlay | null>(loadFigCatalogOverlay());
+const figManifest = ref<FigSpecManifest>(mergeFigManifest(WAVE1_FIG_MANIFEST, figCatalogOverlay.value));
+const figCatalogBusy = ref(false);
+const figCatalogMessage = ref("");
+let figSourceImpl: FigCompletionSource = createStaticFigSource(figManifest.value);
+const figSource: FigCompletionSource = {
+  id: "fig-static",
+  resolve(request) {
+    return figSourceImpl.resolve(request);
+  },
+};
+
+function applyFigManifest(next: FigSpecManifest) {
+  figManifest.value = next;
+  figSourceImpl = createStaticFigSource(next);
+}
+
+function setFigCatalogOverlay(overlay: FigCatalogOverlay | null) {
+  figCatalogOverlay.value = overlay;
+  persistFigCatalogOverlay(overlay);
+  applyFigManifest(mergeFigManifest(WAVE1_FIG_MANIFEST, overlay));
+}
+
+function figCatalogStatusText(): string {
+  const status = figCatalogStatusView(WAVE1_FIG_MANIFEST, figCatalogOverlay.value);
+  if (status.overlay && status.updatedAt) {
+    return t("figCatalog.statusOverlay", {
+      version: status.version,
+      count: status.commandCount,
+      at: status.updatedAt.slice(0, 10),
+    });
+  }
+  return t("figCatalog.statusBundled", { version: status.version, count: status.commandCount });
+}
+
+async function checkFigCatalogUpdate() {
+  if (figCatalogBusy.value) return;
+  figCatalogBusy.value = true;
+  figCatalogMessage.value = t("figCatalog.checking");
+  try {
+    const result = await window.datawisePlugin.invoke<{ ok?: boolean; body?: string; url?: string; error?: string }>(
+      "completion/catalog/fetch",
+      { url: DEFAULT_FIG_CATALOG_URL },
+    );
+    if (!result?.ok || typeof result.body !== "string") {
+      figCatalogMessage.value = t("figCatalog.fetchFailed", { error: result?.error || "unknown" });
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(result.body);
+    } catch {
+      figCatalogMessage.value = t("figCatalog.invalidPack");
+      return;
+    }
+    const pack = sanitizeFigCatalogPack(parsed);
+    if (!pack) {
+      figCatalogMessage.value = t("figCatalog.invalidPack");
+      return;
+    }
+    if (!shouldInstallCatalogPack(pack, figCatalogOverlay.value)) {
+      figCatalogMessage.value = t("figCatalog.upToDate", { version: pack.version });
+      return;
+    }
+    const overlay = installCatalogPack(pack, result.url || DEFAULT_FIG_CATALOG_URL);
+    setFigCatalogOverlay(overlay);
+    figCatalogMessage.value = t("figCatalog.installed", {
+      version: overlay.version,
+      count: Object.keys(overlay.specs).length,
+    });
+  } catch (cause) {
+    figCatalogMessage.value = t("figCatalog.fetchFailed", {
+      error: cause instanceof Error ? cause.message : String(cause),
+    });
+  } finally {
+    figCatalogBusy.value = false;
+  }
+}
+
+function clearFigCatalogOverlay() {
+  setFigCatalogOverlay(null);
+  figCatalogMessage.value = t("figCatalog.cleared");
+}
+
 const completionController = new CompletionController({
-  source: createStaticFigSource(WAVE1_FIG_MANIFEST),
+  source: figSource,
   sessionId: () => session.value?.sessionId ?? "",
   readLine: () => pendingTerminalInput,
   // Phase ownership (not mutual open flags): first token → line suggest; args → fig.
+  // Hotkey / inline suppress the Fig *list* until ↓ / Ctrl+Shift+J (manual).
   enabled: () => {
     if (!connected.value || historyPanelOpen.value || quickPaletteOpen.value || zmodemBusy.value || trzszBusy.value) return false;
+    if (interactivePromptGatePending()) return false;
+    const mode = interactionPrefs.value.completionMode;
+    if (!completionModeAutoOpens(mode) && !completionManualOpen.value) return false;
+    // Inline keeps gray ghost via line/path suggest; Fig list only after a manual ask.
+    if (!completionModeShowsList(mode) && !completionManualOpen.value) return false;
     return resolveCompletionOwner({
       typedLine: pendingTerminalInput,
       figEnabled: interactionPrefs.value.figCompletionEnabled,
@@ -1244,7 +1631,7 @@ const completionController = new CompletionController({
       return pathCompletionSlots(
         request,
         resolvePathCompletionCwd(terminalCwd.value || fromPrompt, currentPath.value),
-        WAVE1_FIG_MANIFEST,
+        figManifest.value,
       );
     },
     run: (slot) => runPathCompletion(slot, async (path) => {
@@ -1272,6 +1659,12 @@ const completionController = new CompletionController({
         lineEnabled: interactionPrefs.value.lineSuggestEnabled,
       });
       if (owner !== "fig") {
+        closeCompletionMenu();
+        return;
+      }
+      // Motty inline / hotkey: never auto-popup the Fig candidate list.
+      const mode = interactionPrefs.value.completionMode;
+      if (!completionModeShowsList(mode) && !completionManualOpen.value) {
         closeCompletionMenu();
         return;
       }
@@ -1363,14 +1756,13 @@ const metricsLoading = ref(false);
 const metricsError = ref("");
 const settingsOpen = ref(false);
 const settingsFocusCategory = ref<"sudo" | "agent" | "transfer" | "terminal" | "security" | "mcp" | null>(null);
+const settingsFocusAnchor = ref<string | null>(null);
 const settingsFocusAddModel = ref(false);
 const importOpen = ref(false);
 // reka Select 不接受空串 option value（空串 = 未选中占位）；空值选项用哨兵值双向映射。
 const SELECT_EMPTY_SENTINEL = "__empty__";
 const auditOpen = ref(false);
-// 终端 MCP 模式快速开关（工具栏弹出层）：连接级 agentTerminalMode 的就地入口，
-// 与设置弹窗共用 ssh/settings/set，值语义见 lib/agentTerminal.ts。
-const agentModeOpen = ref(false);
+// 连接级 agentTerminalMode（与设置页共用 ssh/settings/*，值语义见 lib/agentTerminal.ts）。
 const agentMode = ref<AgentTerminalMode>("off");
 const agentModeBusy = ref(false);
 const profilesOpen = ref(false);
@@ -1385,7 +1777,240 @@ const searchSeedOptions = ref<TerminalSearchOptions>(sanitizeSearchOptions(null)
 const searchMatchState = ref<TerminalSearchMatchState>("idle");
 const searchResultIndex = ref(0);
 const searchResultCount = ref(0);
+/** Motty find origin: reseeds xterm selection on first match of a new query. */
+let searchOriginPending = true;
+let searchLastQuery = "";
 const pasteConfirm = ref<PasteConfirmation>();
+/** 输入时静态风险分级：只提示、不拦截。dismiss 绑定具体行文本，行内容一变就重新提示。 */
+const liveCommandRisk = ref<CommandRiskAssessment>();
+const liveRiskLine = ref("");
+const riskHintDismissedFor = ref<string | null>(null);
+const riskHintVisible = computed(() => {
+  const assessment = liveCommandRisk.value;
+  if (!assessment || !connected.value) return false;
+  if (riskHintDismissedFor.value !== null && riskHintDismissedFor.value === liveRiskLine.value) return false;
+  return decideRiskAction(assessment.level, DEFAULT_RISK_POLICY) === "warn";
+});
+function dismissRiskHint() {
+  riskHintDismissedFor.value = liveRiskLine.value;
+}
+/**
+ * 参数即时提示：复用输入影子行，静态 spec、零 IPC、零按键、不改发送字节。
+ * dismiss 绑定具体行文本（与风险条同策略），行内容一变即重新提示。
+ * alternate 屏（vim/less）与交互提示待答时不打扰。
+ */
+const argHintDismissedFor = ref<string | null>(null);
+const liveArgumentHint = computed(() =>
+  resolveArgumentHint(liveRiskLine.value, locale.value === "zh-CN" ? "zh-CN" : "en"),
+);
+/** Shared gates for both the curated hint and the remote-help affordance. */
+const argHintBaseVisible = computed(() => {
+  if (!connected.value) return false;
+  if (argHintDismissedFor.value !== null && argHintDismissedFor.value === liveRiskLine.value) return false;
+  if (terminal?.buffer.active.type === "alternate") return false;
+  if (interactivePromptGatePending()) return false;
+  return true;
+});
+const argHintVisible = computed(() => argHintBaseVisible.value && !!liveArgumentHint.value);
+function dismissArgumentHint() {
+  argHintDismissedFor.value = liveRiskLine.value;
+}
+/**
+ * 输入行体检（beta.44）：确定性错误（智能引号）与「回车会进续行」的未闭合
+ * 结构。纯计算、零 IPC、零按键、不改写发送字节。与参数提示共用左下角单一
+ * 提示槽和 dismiss 状态：体检优先，参数提示 / 远端 help 退为 v-else-if。
+ */
+const liveLintIssues = computed<ShellLineIssue[]>(() =>
+  lintShellLine(liveRiskLine.value, locale.value === "zh-CN" ? "zh-CN" : "en"),
+);
+const lintHintVisible = computed(() => argHintBaseVisible.value && liveLintIssues.value.length > 0);
+
+/**
+ * 远端 --help（beta.43）：静态 spec 未命中、且用户正在敲 `-` 时，才提供
+ * 「显式点击才执行」的按钮。零自动 IPC；命令名过 helpSpec 白名单/黑名单，
+ * 固定 `<cmd> --help`、sudo:false、双超时、TTL 缓存、失败静默。
+ * beta.44：成功解析结果持久化到宿主存储，webview remount 可复用；只存
+ * 解析结构（scope / 命令名 / flag），原始 help 输出绝不落盘。
+ */
+/** 最新快照，供会话切换 clear() 后重新 seed。 */
+let helpSpecCacheSeed: PersistedHelpSpec[] = [];
+function restoreHelpSpecs() {
+  try {
+    helpScheduler.seed(restoreHelpSpecCache(uiStorage.getItem(HELP_SPEC_CACHE_KEY)));
+  } catch { /* storage unavailable: memory-only */ }
+  helpSpecCacheSeed = helpScheduler.snapshot();
+}
+function persistHelpSpecs() {
+  try {
+    const serialized = serializeHelpSpecCache(helpScheduler.snapshot());
+    if (serialized) uiStorage.setItem(HELP_SPEC_CACHE_KEY, serialized);
+  } catch { /* ignore */ }
+  helpSpecCacheSeed = helpScheduler.snapshot();
+}
+const helpScheduler = createHelpSpecScheduler({
+  run: async (command) => {
+    const execCommand = helpSpecCommand(command);
+    if (!execCommand || !session.value) return null;
+    const result = await window.datawisePlugin.invoke<ExecResult>("ssh/exec", {
+      sessionId: session.value.sessionId,
+      execId: randomUUID(),
+      command: execCommand,
+      sudo: false,
+      timeoutSecs: HELP_SPEC_TIMEOUT_SECS,
+    }, { timeoutMs: HELP_SPEC_INVOKE_TIMEOUT_MS });
+    return typeof result?.output === "string" ? result.output : null;
+  },
+});
+const remoteHelp = ref<RemoteHelpSpec | null>(null);
+const remoteHelpState = ref<"idle" | "loading" | "ready" | "empty" | "error">("idle");
+const hintLineContext = computed(() => hintCommandFromLine(liveRiskLine.value));
+const remoteHelpCandidate = computed(() => {
+  const ctx = hintLineContext.value;
+  if (!ctx || ctx.hasStaticSpec || !ctx.currentToken.startsWith("-")) return null;
+  if (!isHelpSpecCommand(ctx.command)) return null;
+  return ctx;
+});
+const remoteHelpVisible = computed(() =>
+  argHintBaseVisible.value && !liveArgumentHint.value && !!remoteHelpCandidate.value,
+);
+/**
+ * 命令提示显示门（beta.48）：设置总开关 + 与「可交互选择浮层」相斥。
+ * 只读提示让位给历史/命令联想列表、Fig 补全菜单、Ctrl+R 历史面板、快捷
+ * 命令面板、命令面板 —— 用户正在 ↑↓/Tab 选命令时不叠第二个框，关掉自动
+ * 回来。开关关闭时整组提示一律不显示。判定在纯函数 commandHintAllowed 里，
+ * 这里只把 App.vue 的状态喂进去。
+ */
+const commandHintsAllowed = computed(() => commandHintAllowed({
+  enabled: interactionPrefs.value.commandHintsEnabled,
+  suggestionListVisible: commandSuggestListVisible.value,
+  completionVisible: completionOpen.value,
+  historyPanelVisible: historyPanelOpen.value,
+  quickPaletteVisible: quickPaletteOpen.value,
+  commandPaletteVisible: commandPaletteOpen.value,
+}));
+/**
+ * 命令提示悬浮层（beta.47）：四条提示统一收进 absolute 浮层，锚定到 xterm
+ * 光标行正上方、不参与 terminal-pane 的 flex 布局。提示出现/消失不改变
+ * terminal-shells 高度，ResizeObserver 不触发 FitAddon 重算，零页面跳动。
+ * beta.48：整个 dock 受 commandHintsAllowed 门控（开关 + 选择浮层互斥）。
+ */
+const anyCommandHintVisible = computed(() =>
+  commandHintsAllowed.value
+  && (riskHintVisible.value || lintHintVisible.value || argHintVisible.value || remoteHelpVisible.value),
+);
+/**
+ * beta.47: 按 xterm 光标格实测像素给提示浮层定位（「在焦点上方」）。
+ * 复用 overlayPlacement 的纯函数：底边贴光标行顶留 6px、左缘跟光标字符
+ * 右缘、右缘越界整体左移、上方空间不足时内部滚动。坐标相对 .terminal-pane
+ * （dock 的定位包含块），所以 batch-bar / 字号 / 行数变化自动吸收，不再有
+ * 静态 40px 经验值。值不变时不写 ref，避免 onRender 每帧触发 Vue 更新。
+ */
+const commandHintDockEl = ref<HTMLElement | null>(null);
+type CommandHintAnchor = { left: number; bottom: number; maxHeight: number };
+const commandHintAnchor = ref<CommandHintAnchor | null>(null);
+const commandHintDockStyle = computed<Record<string, string>>(() => {
+  const a = commandHintAnchor.value;
+  if (!a) return { left: "14px", bottom: "40px" };
+  return {
+    left: `${a.left}px`,
+    bottom: `${a.bottom}px`,
+    maxWidth: `calc(100% - ${a.left}px - 8px)`,
+    ...(a.maxHeight > 0 ? { maxHeight: `${a.maxHeight}px` } : {}),
+  };
+});
+
+function updateCommandHintAnchor(): void {
+  if (!anyCommandHintVisible.value || !terminal || !terminalHost.value || !terminalPaneEl.value) return;
+  const host = terminalHost.value;
+  const pane = terminalPaneEl.value;
+  const screen = host.querySelector<HTMLElement>(".xterm-screen") ?? host;
+  const screenRect = screen.getBoundingClientRect();
+  const paneRect = pane.getBoundingClientRect();
+  if (!screenRect.width || !screenRect.height || terminal.cols <= 0 || terminal.rows <= 0) return;
+  const cellSize = readXtermCssCellSize(terminal);
+  const cellW = cellSize?.cellWidth ?? (screen.clientWidth || screenRect.width) / terminal.cols;
+  const cellH = cellSize?.cellHeight ?? (screen.clientHeight || screenRect.height) / terminal.rows;
+  if (!(cellW > 0) || !(cellH > 0)) return;
+  const buffer = terminal.buffer.active;
+  const cursorLeft = screenRect.left - paneRect.left + buffer.cursorX * cellW;
+  const cursorTop = screenRect.top - paneRect.top + buffer.cursorY * cellH;
+  // 底边贴光标行顶（上方 6px），左缘跟光标字符右缘；右缘越界则整体左移。
+  const bottom = flippedOverlayBottom(cursorTop, paneRect.height);
+  let left = overlayLeft(cursorLeft, cellW);
+  const dockEl = commandHintDockEl.value;
+  if (dockEl && paneRect.width > 0) {
+    left = Math.max(8, Math.min(left, paneRect.width - dockEl.offsetWidth - 8));
+  }
+  const maxHeight = overlayMaxHeight("above", cursorTop, cellH, paneRect.height);
+  const next: CommandHintAnchor = {
+    left,
+    bottom,
+    maxHeight: maxHeight > 0 ? maxHeight : 0,
+  };
+  const prev = commandHintAnchor.value;
+  if (prev && prev.left === next.left && prev.bottom === next.bottom && prev.maxHeight === next.maxHeight) return;
+  commandHintAnchor.value = next;
+}
+
+/** rAF 合帧：onCursorMove / onRender 一帧内可能多次触发，每帧只测一次 DOM。 */
+let commandHintAnchorFrame: number | null = null;
+function scheduleCommandHintAnchor(): void {
+  if (!anyCommandHintVisible.value || commandHintAnchorFrame !== null) return;
+  commandHintAnchorFrame = window.requestAnimationFrame(() => {
+    commandHintAnchorFrame = null;
+    updateCommandHintAnchor();
+  });
+}
+
+// 提示刚出现时先定位一次（v-if 挂载后的下一帧 DOM 才可测宽）。
+watch(anyCommandHintVisible, (visible) => {
+  if (visible) scheduleCommandHintAnchor();
+});
+const remoteHelpFlags = computed<ArgumentFlagHint[]>(() => {
+  const ctx = remoteHelpCandidate.value;
+  const loaded = remoteHelp.value;
+  if (!ctx || !loaded || loaded.command !== ctx.command) return [];
+  return mergeHelpFlags([], loaded.flags, ctx.currentToken, ARGUMENT_HINT_MAX_FLAGS);
+});
+const remoteHelpCommand = computed(() => remoteHelpCandidate.value?.command ?? "");
+async function loadRemoteHelp() {
+  const ctx = remoteHelpCandidate.value;
+  if (!ctx || !connected.value) return;
+  const command = ctx.command;
+  remoteHelpState.value = "loading";
+  try {
+    const spec = await helpScheduler.load(session.value?.sessionId ?? "no-session", command);
+    // Ignore a result that arrived after the user typed a different command.
+    if (hintCommandFromLine(liveRiskLine.value)?.command !== command) return;
+    remoteHelp.value = spec;
+    remoteHelpState.value = spec && spec.flags.length ? "ready" : spec ? "empty" : "error";
+    persistHelpSpecs();
+  } catch {
+    remoteHelp.value = null;
+    remoteHelpState.value = "error";
+  }
+}
+watch(() => session.value?.sessionId, () => {
+  // Preserve learned specs (including this session's) across the scope reset;
+  // seed() keeps the scope keys so a spec from another host is never served.
+  helpSpecCacheSeed = helpScheduler.snapshot();
+  helpScheduler.clear();
+  helpScheduler.seed(helpSpecCacheSeed);
+  remoteHelp.value = null;
+  remoteHelpState.value = "idle";
+});
+/** 快速命令参数插值对话框：填完 {{name}} 才允许把文本写进 PTY。 */
+const quickCommandVars = ref<{
+  item: QuickCommand;
+  execute: boolean;
+  parsed: ParsedQuickCommandTemplate;
+  values: Record<string, string>;
+} | null>(null);
+const quickCommandVarsRendered = computed(() => {
+  const state = quickCommandVars.value;
+  if (!state) return { text: "", unresolved: [] as string[] };
+  return renderQuickCommandTemplate(state.item.command, state.values);
+});
 // 终端拖入文件的落点询问：null 表示取消；"cwd" 用 SFTP 当前目录（目录跟随
 // 开启时即 shell cwd）；{ dir } 是用户输入的目标目录（文件原名落其下）。
 const dropUploadPrompt = ref<{ files: File[] }>();
@@ -1406,6 +2031,7 @@ const settingsDialog = ref<{
   flushSettings?: () => Promise<void>;
   setDownloadDirDraft?: (path: string) => void;
   setDownloadUseDefaultDraft?: (value: boolean) => void;
+  onQuickCommandSaved?: () => void;
 } | null>(null);
 const downloadPrefsAdapter = {
   loadDir: loadDownloadDir,
@@ -1503,6 +2129,8 @@ let searchAddon: SearchAddon | undefined;
 // 时重挂，终端销毁时统一释放；OSC 52 只在 createTerminal 挂一次。
 let oscColorQueryDisposables: { dispose(): void }[] = [];
 let osc52Disposable: { dispose(): void } | undefined;
+let oscNotifyDisposables: { dispose(): void }[] = [];
+const terminalNotifyLimiter = createNotifyRateLimiter(2000);
 // 主题色解析失败时颜色查询的兜底应答（深色系常规值，仅在宿主下发非法颜色时触达）。
 const OSC_COLOR_FALLBACK = { foreground: "#c9d1d9", background: "#0d1117" };
 let terminalPasteHandler: ((event: ClipboardEvent) => void) | undefined;
@@ -1511,12 +2139,15 @@ let terminalWheelHandler: ((event: WheelEvent) => void) | undefined;
 let terminalMouseDownHandler: ((event: MouseEvent) => void) | undefined;
 let terminalMouseUpHandler: ((event: MouseEvent) => void) | undefined;
 let terminalMouseDownAt: { clientX: number; clientY: number } | undefined;
-let pasteConfirmResolver: ((accepted: boolean) => void) | undefined;
+let pasteConfirmResolver: ((text: string | null) => void) | undefined;
 let dropUploadResolver: ((choice: "cancel" | "cwd" | { dir: string }) => void) | undefined;
 let zoomNoticeTimer = 0;
 let resizeObserver: ResizeObserver | undefined;
+let workbenchResizeObserver: ResizeObserver | undefined;
+const workbenchRoot = ref<HTMLElement>();
 let disposeInput: { dispose(): void } | undefined;
 let disposeWriteParsed: { dispose(): void } | undefined;
+let disposeCursorMove: { dispose(): void } | undefined;
 let disposeSelectionCopy: { dispose(): void } | undefined;
 let unsubscribeEvent: (() => void) | undefined;
 let unsubscribeBinary: (() => void) | undefined;
@@ -1549,6 +2180,12 @@ let disposed = false;
   /** Connect-card log ordinal: increments across auto-retries and manual reconnects until success / fresh Connect. */
   let connectAttemptSerial = 0;
 let lastSequence = 0;
+/** #302：最近一次终端数据到达时刻；输入超时时用于区分拥塞 vs 失联。 */
+let lastTerminalDataAt = 0;
+/** #302：rAF/timeout 排水句柄；同帧只排一次。 */
+let terminalDrainHandle: number | null = null;
+/** #302：合帧字节上限——超过则切段，避免单段过大阻塞主线程。 */
+const TERMINAL_MERGED_FLUSH_BYTES = 256 * 1024;
 let replayInFlight = false;
 // Consecutive replays that returned complete without filling the detected
 // sequence hole. A sidecar that keeps reporting complete on a gap that never
@@ -1580,7 +2217,10 @@ const pendingTerminalFrames = new Map<number, { stream: number; data: Uint8Array
 const uploadAckWaiters = new Map<string, { nextOffset: number; resolve: () => void; reject: (error: Error) => void; timer: number }>();
 // 上传收尾等待器（issue #60）：finish RPC 只负责把远端推送交给 sidecar
 // 后台任务，真正的完成/失败经终态 progress 事件回传，这里据此结算。
-const transferCompletionWaiters = new Map<string, { resolve: () => void; reject: (error: Error) => void }>();
+// issue #305：watchdog 1s 起步逐级退避，终态事件丢失时尽快轮询结算。
+const COMPLETION_WATCHDOG_STEPS_MS = [1_000, 2_000, 4_000, 8_000];
+const COMPLETION_WATCHDOG_MAX_MS = 15_000;
+const transferCompletionWaiters = new Map<string, { resolve: () => void; reject: (error: Error) => void; watchdog: number }>();
 const downloadChunkWaiters = new Map<string, { offset: number; resolve: (bytes: Uint8Array) => void; reject: (error: Error) => void; timer: number }>();
 const transferSamples = new Map<string, TransferSpeedSample>();
 // Download task ids the user cancelled from the transfer panel; lets the download
@@ -1595,20 +2235,90 @@ const commandMarkerParser = new Osc633CommandParser();
 // rAF+timeout scheduling keeps JCEF flushing when animation frames stall
 // (otherwise `tail -f` waits for a keypress). Sink uses write-completion
 // backpressure so paints cannot stack unboundedly.
+//
+// 大输出保护（P2-7，对齐 dbx-plugin-ssh）：积压 = 已交给 xterm 但 write 回调
+// 尚未触发的字节数。≥128KiB 进入 strained：合并批次按 32KiB 分帧写、挂起
+// 高亮扫描；回落到 64KiB 以下自动恢复并补扫一次。
+const outputGate = createOutputGate();
+let outputInFlightBytes = 0;
+/** Catch-up timer when secondary work skipped under flood without hitting strained. */
+let secondaryCatchUpTimer: ReturnType<typeof setTimeout> | undefined;
+const SECONDARY_CATCH_UP_MS = 100;
+function isAppSecondaryBusy(): boolean {
+  return isTerminalSecondaryBusy({
+    gateMode: outputGate.mode,
+    backlogBytes: outputBacklogBytes(),
+  });
+}
+function scheduleSecondaryCatchUp() {
+  if (secondaryCatchUpTimer != null) return;
+  secondaryCatchUpTimer = window.setTimeout(() => {
+    secondaryCatchUpTimer = undefined;
+    if (isAppSecondaryBusy()) {
+      scheduleSecondaryCatchUp();
+      return;
+    }
+    refreshTerminalGutter();
+    if (highlightEnabled.value) rescanHighlightViewport();
+  }, SECONDARY_CATCH_UP_MS);
+}
+/** Backlog = in-flight xterm parse + throttle queue (Motty unparsed rx). */
+function outputBacklogBytes(): number {
+  return outputInFlightBytes + terminalWriteThrottle.pendingBytes;
+}
+function settleOutputChunk(chunk: Uint8Array, done: () => void) {
+  outputInFlightBytes = Math.max(0, outputInFlightBytes - chunk.byteLength);
+  if (outputGate.feed(outputBacklogBytes()) && outputGate.mode === "normal") onOutputGateRelease();
+  done();
+}
+function onOutputGateRelease() {
+  showNotice(t("backpressure.released"));
+  setSshOutputFlowPaused(false);
+  if (secondaryCatchUpTimer != null) {
+    window.clearTimeout(secondaryCatchUpTimer);
+    secondaryCatchUpTimer = undefined;
+  }
+  rescanHighlightViewport();
+  refreshTerminalGutter();
+}
+/** Motty-style: tell sidecar to stop draining PTY while the UI is strained. */
+let sshOutputFlowPaused = false;
+function setSshOutputFlowPaused(paused: boolean) {
+  if (sshOutputFlowPaused === paused) return;
+  sshOutputFlowPaused = paused;
+  const sid = session.value?.sessionId;
+  if (!sid) return;
+  void window.datawisePlugin
+    .notify("ssh/terminal/outputFlow", { sessionId: sid, paused })
+    .catch(() => undefined);
+}
 const terminalWriteThrottle: TerminalWriteThrottle = createTerminalWriteThrottle({
   sink: (data, done) => {
     if (!terminal) {
       done();
       return;
     }
-    terminal.write(data, done);
+    // Pump already slices to ≤32KiB; no second strained re-chunk here.
+    outputInFlightBytes += data.byteLength;
+    if (outputGate.feed(outputBacklogBytes()) && outputGate.mode === "strained") {
+      showNotice(t("backpressure.engaged"));
+      setSshOutputFlowPaused(true);
+    }
+    terminal.write(data, () => settleOutputChunk(data, done));
   },
 });
-
+// DECSET 2026 synchronized output (WT-1)：`CSI ? 2026 h` 期间挂起合帧定时提交，
+// `CSI ? 2026 l` 整批合并一次上屏，减轻 vim/neovim 重绘撕裂。
+const terminalSyncOutput: TerminalSyncOutput = {
+  begin: () => terminalWriteThrottle.setHold(true),
+  end: () => terminalWriteThrottle.setHold(false),
+};
+let disposeModeQueryHandlers: (() => void) | undefined;
 function flushTerminalOutputNow() {
   if (disposed) return;
   flushDeferredTerminalOutput();
   terminalWriteThrottle.flush();
+  for (const runtime of extraShells.values()) runtime.throttle.flush();
 }
 
 function flushDeferredTerminalOutput() {
@@ -1632,6 +2342,8 @@ function setWorkbenchActive(active: boolean) {
   }
 }
 const terminalInputQueue = createTerminalInputQueue({
+  // Bound a stalled bridge send so one hung promise cannot chain every later keystroke.
+  sendTimeoutMs: 8_000,
   send: (sessionId, payload) => {
     const proto = protocolSession.value;
     if (proto && proto.sessionId === sessionId) {
@@ -1653,6 +2365,12 @@ const terminalInputQueue = createTerminalInputQueue({
     return window.datawisePlugin.sendBinary(`ssh/terminal/in/${sessionId}`, payload);
   },
   onError: (cause) => {
+    terminalInputQueue.reset();
+    // #302：终端输出仍在到达说明 SSH 通道活着，输入超时只是请求路径拥塞——
+    // 只复位队列，不触发重连梯子。
+    if (cause instanceof TerminalInputTimeoutError && inputTimeoutIndicatesStall(lastTerminalDataAt, Date.now())) {
+      return;
+    }
     showError(cause, "terminal");
     // 会话被外部杀掉（宿主重推连接的 disconnect、sidecar 重启）时本 tab 无
     // 事件感知，终端看似活着实则打不进字。输入撞上死会话时按传输断开的
@@ -1661,7 +2379,13 @@ const terminalInputQueue = createTerminalInputQueue({
     if (proto && (proto.kind === "local" || proto.kind === "telnet" || proto.kind === "serial")) {
       return;
     }
-    if (terminalState.value === "connected" && !reconnectPending.value && isSessionGoneError(cause)) scheduleSessionReconnect();
+    if (
+      terminalState.value === "connected"
+      && !reconnectPending.value
+      && (cause instanceof TerminalInputTimeoutError || isSessionGoneError(cause))
+    ) {
+      scheduleSessionReconnect();
+    }
   },
 });
 
@@ -1689,7 +2413,6 @@ const connection = computed<ConnectionSummary>(() => {
 });
 const canWrite = computed(() => !connection.value.readOnly && !connectionReadOnly.value);
 const selectedEntry = computed(() => entries.value.find((entry) => entry.uri === selectedPath.value));
-const connected = computed(() => terminalState.value === "connected" && !!session.value);
 /** Record button: SSH session or a live local protocol shell. */
 const canRecord = computed(() => {
   if (protocolSession.value?.kind === "local" && terminalState.value === "connected") return true;
@@ -1761,6 +2484,13 @@ const connectionIdentity = computed(() => {
   const port = connection.value.port && connection.value.port !== 22 ? `:${connection.value.port}` : "";
   return `${identity}${port}`;
 });
+/** Motty tab_title_mode: identity line follows connection / OSC title / cwd. */
+const chromeTitle = computed(() => {
+  const mode = sessionPrefs.value.tabTitleMode;
+  if (mode === "directory" && terminalCwd.value) return terminalCwd.value;
+  if (mode === "terminal" && terminalOscTitle.value.trim()) return terminalOscTitle.value.trim();
+  return connectionIdentity.value;
+});
 // 认证方式的本地化标签：已知方法名走 i18n，未知值原样展示（只读信息）。
 const connectionAuthMethodLabel = computed(() => formatAuthMethodLabel(connectionAuthMethod.value, (method) => {
   const labels: Record<KnownAuthMethod, string> = {
@@ -1774,10 +2504,15 @@ const connectionAuthMethodLabel = computed(() => formatAuthMethodLabel(connectio
 }));
 // 连接色染色按主题分级（light 压低 alpha 保 muted 文字 AA 对比度，P2-4）。
 const toolbarStyle = computed(() => toolbarTintStyle(connection.value.color, appearance.value.colorScheme));
-const terminalBasis = computed(() => ({ flexBasis: sftpPaneOpen.value ? `${splitRatio.value}%` : "100%" }));
+const terminalBasis = computed(() => ({ flex: "1 1 auto", minWidth: "0" }));
+const sftpPaneStyle = computed(() => {
+  const width = `${sftpWidthPx.value}px`;
+  return { width, flex: `0 0 ${width}`, maxWidth: width };
+});
 const orderedPaneClass = computed(() => [
   paneOrder.value === "sftp-left" ? "panes panes--reversed" : "panes",
   sftpPaneOpen.value ? "" : "panes--solo",
+  sftpPaneOpen.value && sftpDrawerMode.value ? "panes--drawer" : "",
 ].filter(Boolean).join(" "));
 const sortedEntries = computed(() => {
   const direction = sort.value.direction === "asc" ? 1 : -1;
@@ -1837,6 +2572,82 @@ const sftpGridStyle = computed(() => {
 });
 const sftpFiltersActive = computed(() => sftpSearch.value.trim() !== "" || sftpTypeFilter.value !== "all" || sftpShowHidden.value);
 const visibleEntries = computed(() => filterSftpEntries(sortedEntries.value, sftpSearch.value, sftpTypeFilter.value, sftpShowHidden.value));
+
+// —— 大目录流畅度：搜索防抖 + 文件列表窗口化 ——
+// 输入框绑 draft，150ms 静默期后才写入 sftpSearch。此前每个按键都会触发
+// O(n) 过滤 + 全量行 diff，上万条目的目录里连续输入会明显掉帧；footer 计数
+// 与 noMatch 滞后一拍，换取输入本身始终跟手。
+const SFTP_SEARCH_DEBOUNCE_MS = 150;
+const sftpSearchDraft = ref("");
+let sftpSearchDebounce: number | undefined;
+watch(sftpSearchDraft, (value) => {
+  window.clearTimeout(sftpSearchDebounce);
+  sftpSearchDebounce = window.setTimeout(() => {
+    sftpSearch.value = value;
+  }, SFTP_SEARCH_DEBOUNCE_MS);
+});
+function clearSftpSearch() {
+  window.clearTimeout(sftpSearchDebounce);
+  sftpSearchDraft.value = "";
+  sftpSearch.value = "";
+}
+
+// 渲染层只挂可见窗口的行；选中 / 范围选择 / 右键等逻辑层仍作用于全量
+// visibleEntries。小目录（<= SFTP_VIRTUAL_THRESHOLD）走零 spacer 的全量窗口，
+// sticky 表头几何与窗口化前完全一致。
+const fileRowsEl = ref<HTMLElement | null>(null);
+const fileRowsViewportHeight = ref(0);
+const fileScrollTop = ref(0);
+const virtualFileWindow = computed(() => computeWindow({
+  scrollTop: fileScrollTop.value,
+  viewportHeight: fileRowsViewportHeight.value,
+  rowHeight: FILE_ROW_HEIGHT_PX,
+  total: visibleEntries.value.length,
+  overscan: FILE_ROW_OVERSCAN,
+  threshold: SFTP_VIRTUAL_THRESHOLD,
+}));
+const windowedEntries = computed(() => visibleEntries.value.slice(virtualFileWindow.value.start, virtualFileWindow.value.end));
+function onFileRowsScroll(event: Event) {
+  fileScrollTop.value = (event.target as HTMLElement).scrollTop;
+}
+let fileRowsResizeObserver: ResizeObserver | undefined;
+watch(fileRowsEl, (el, previous) => {
+  if (previous === el) return;
+  fileRowsResizeObserver?.disconnect();
+  fileRowsResizeObserver = undefined;
+  if (!el) return;
+  fileRowsViewportHeight.value = el.clientHeight;
+  // JCEF / 老宿主可能没有 ResizeObserver：退化成挂载时测一次，窗口化仍可用。
+  if (typeof ResizeObserver !== "undefined") {
+    fileRowsResizeObserver = new ResizeObserver(() => {
+      fileRowsViewportHeight.value = el.clientHeight;
+    });
+    fileRowsResizeObserver.observe(el);
+  }
+});
+// 换目录 / 改过滤条件后列表长度会变，残留的大 scrollTop 会让窗口错位，
+// 显式复位（flush: post 确保 DOM 已收缩）。
+watch([currentPath, sftpSearch, sftpTypeFilter, sftpShowHidden], () => {
+  fileScrollTop.value = 0;
+  if (fileRowsEl.value) fileRowsEl.value.scrollTop = 0;
+}, { flush: "post" });
+// 程序化选中（搜索后定位、右键菜单操作、范围选择端点）落在窗口外时滚回可见。
+watch(selectedPath, (uri) => {
+  const container = fileRowsEl.value;
+  if (!uri || !container) return;
+  const index = visibleEntries.value.findIndex((entry) => entry.uri === uri);
+  if (index < 0) return;
+  const target = scrollTopForRow(index, {
+    scrollTop: container.scrollTop,
+    viewportHeight: fileRowsViewportHeight.value,
+    rowHeight: FILE_ROW_HEIGHT_PX,
+    headerHeight: 28,
+  });
+  if (target != null) {
+    container.scrollTop = target;
+    fileScrollTop.value = target;
+  }
+}, { flush: "post" });
 const selectedEntries = computed(() => entries.value.filter((entry) => selectedUris.value.includes(entry.uri)));
 const currentPathHistory = computed(() => pathHistories[connectionId.value] || []);
 function initialState(): WorkbenchState {
@@ -1844,17 +2655,33 @@ function initialState(): WorkbenchState {
   return value && typeof value === "object" ? (value as WorkbenchState) : {};
 }
 
+/** True once workbenchState explicitly stored sftpPaneOpen (vs falling back to global default). */
+let workbenchSftpPaneExplicit = false;
+/** True once workbenchState explicitly stored followDirectory. */
+let workbenchFollowExplicit = false;
+/** True once workbenchState stored columnsV2-visibleColumns (vs global default). */
+let workbenchColumnsExplicit = false;
+
 function restoreUiState() {
   const state = initialState();
   currentPath.value = typeof state.sftpPath === "string" ? normalizeRemotePath(state.sftpPath) : "/";
-  splitRatio.value = typeof state.splitRatio === "number" && state.splitRatio >= 35 && state.splitRatio <= 80 ? state.splitRatio : 58;
-  paneOrder.value = state.paneOrder === "sftp-left" ? "sftp-left" : "terminal-left";
+  paneOrder.value = resolvePaneOrder(state.paneOrder);
+  sftpWidthPx.value = resolveSftpWidthPx(state, paneContainer.value?.clientWidth || workbenchWidthPx.value);
+  workbenchSftpPaneExplicit = typeof state.sftpPaneOpen === "boolean";
   sftpPaneOpen.value = resolveSftpPaneOpen(state, sftpPaneDefaultOpen.value);
-  followDirectory.value = state.followDirectory === true;
+  workbenchFollowExplicit = typeof state.followDirectory === "boolean";
+  followDirectory.value = workbenchFollowExplicit
+    ? state.followDirectory === true
+    : followDirectoryDefault.value;
   sudoMode.value = state.sudoMode === true && canWrite.value;
   // 一次性迁移：六列默认上线前的旧偏好重置为全开（之后用户自定义照常持久化）。
   const legacyColumns = state.visibleColumns != null && state.columnsV2 !== true;
-  visibleColumns.value = legacyColumns ? [...DEFAULT_VISIBLE_COLUMNS] : sanitizeVisibleColumns(state.visibleColumns);
+  workbenchColumnsExplicit = !legacyColumns && state.visibleColumns != null;
+  visibleColumns.value = legacyColumns
+    ? [...DEFAULT_VISIBLE_COLUMNS]
+    : workbenchColumnsExplicit
+      ? sanitizeVisibleColumns(state.visibleColumns)
+      : sanitizeVisibleColumns(visibleColumnsDefault.value);
   // 恢复列宽，未知列或越界用默认值兜底
   const saved = state.sftpColumnWidths || {};
   const allCols: SftpColumn[] = ["size", "modified", "owner", "group", "permissions"];
@@ -1874,7 +2701,7 @@ function writeWorkbenchState() {
     sftpPath: currentPath.value,
     followDirectory: followDirectory.value,
     sudoMode: sudoMode.value,
-    splitRatio: splitRatio.value,
+    sftpWidthPx: sftpWidthPx.value,
     paneOrder: paneOrder.value,
     sftpPaneOpen: sftpPaneOpen.value,
     visibleColumns: visibleColumns.value,
@@ -1891,14 +2718,16 @@ function persistState() {
   }, 150);
 }
 
-// —— 自定义 tooltip（对齐宿主的气泡提示）——
+// —— 自定义 tooltip（Motty HoverTooltip：反色气泡、即时出现、下方优先）——
 // 全局接管 title 属性：悬停或键盘聚焦时把值挪到 data-tooltip（抑制原生慢速
-// 灰框），350ms 后显示主题化气泡；下方空间不足翻到上方。模板无需改动，所有
+// 灰框），0ms 后显示主题化气泡；下方空间不足翻到上方。模板无需改动，所有
 // 现有和未来的 title 自动生效。
 const tooltip = ref<{ text: string; x: number; y: number; above: boolean; arrowOffset: number } | null>(null);
 const tooltipBubble = ref<HTMLElement>();
 let tooltipEl: HTMLElement | null = null;
 let tooltipTimer = 0;
+const TOOLTIP_DELAY_MS = 0;
+const TOOLTIP_SIDE_GAP = 10;
 
 function hideTooltip() {
   window.clearTimeout(tooltipTimer);
@@ -1921,9 +2750,9 @@ function scheduleTooltip(target: HTMLElement) {
     tooltipTimer = 0;
     if (!target.isConnected) return;
     const rect = target.getBoundingClientRect();
-    const above = rect.bottom + 34 > window.innerHeight && rect.top > 34;
+    const above = rect.bottom + 40 > window.innerHeight && rect.top > 40;
     const center = rect.left + rect.width / 2;
-    tooltip.value = { text, x: center, y: above ? rect.top - 6 : rect.bottom + 6, above, arrowOffset: 0 };
+    tooltip.value = { text, x: center, y: above ? rect.top - TOOLTIP_SIDE_GAP : rect.bottom + TOOLTIP_SIDE_GAP, above, arrowOffset: 0 };
     // 量出气泡实际宽度后重新钳位，保证整框（而非仅中心点）落在视口内；
     // 小三角按钳位偏差反向偏移，继续对准触发元素。
     void nextTick(() => {
@@ -1936,7 +2765,7 @@ function scheduleTooltip(target: HTMLElement) {
         tooltip.value = { ...current, x: clamped, arrowOffset: center - clamped };
       }
     });
-  }, 350);
+  }, TOOLTIP_DELAY_MS);
 }
 
 function onTooltipOver(event: MouseEvent) {
@@ -2028,20 +2857,92 @@ function hostTerminalTheme() {
 
 /** 宿主基底 + 用户选定配色方案（未启用方案时原样返回宿主主题）。 */
 function terminalTheme() {
-  return applySchemeToTerminalTheme(
+  const theme = applySchemeToTerminalTheme(
     hostTerminalTheme(),
     terminalAppearance.value.settings,
     terminalAppearance.value.customSchemes,
     appearance.value.colorScheme,
   );
+  if (!terminalBgImage.value.dataUrl) return theme;
+  const { terminalBgAlpha } = bgStrengthVisuals(terminalBgImage.value.strength);
+  return { ...theme, background: colorWithAlpha(theme.background, terminalBgAlpha) };
+}
+
+/** Apply CSS alpha to a CSS color for translucent xterm ground over a backdrop. */
+function colorWithAlpha(color: string, alpha: number): string {
+  const rgb = parseCssColorToRgb(color);
+  if (!rgb) return color;
+  const a = Math.min(1, Math.max(0, alpha));
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${a})`;
+}
+
+function updateRightToolRailPrefs(next: RightToolRailPrefs) {
+  rightToolRailPrefs.value = next;
+  persistRightToolRailPrefs(next);
+}
+
+function updateTerminalBgImagePrefs(next: TerminalBgImagePrefs) {
+  terminalBgImage.value = next;
+  persistTerminalBgImagePrefs(next);
+  applyTerminalBgCss(terminalPaneEl.value, next);
+  applyTerminalAppearance();
+}
+
+async function chooseTerminalBgImage(file: File | null | undefined) {
+  if (!file) return;
+  try {
+    const encoded = await encodeTerminalBgImage(file);
+    updateTerminalBgImagePrefs({
+      ...terminalBgImage.value,
+      dataUrl: encoded.dataUrl,
+      name: encoded.name,
+    });
+  } catch (cause) {
+    const code = cause instanceof Error ? cause.message : "";
+    if (code === "too-large") showNotice(t("terminalBgImage.tooLarge"));
+    else if (code === "encoded-too-large") showNotice(t("terminalBgImage.encodedTooLarge"));
+    else if (code === "not-image") showNotice(t("terminalBgImage.notImage"));
+    else showError(cause);
+  }
+}
+
+function clearTerminalBgImage() {
+  updateTerminalBgImagePrefs({ ...terminalBgImage.value, dataUrl: null, name: "" });
+}
+
+function resolveTerminalFontFamilyStack(): string {
+  const primary = resolveTerminalFont(terminalFontOverride.value, {
+    fontFamily: hostTerminalFontFamily(appearance.value),
+    fontSize: appearance.value.terminal.fontSize,
+  }).fontFamily;
+  const fallbacks = terminalAppearance.value.settings.fontFallbacks;
+  if (!terminalFontOverride.value.fontFamily || fallbacks.length === 0) return primary;
+  return composeFontFamilyStack(primary, fallbacks);
+}
+
+function applyCursorThicknessCss(host?: HTMLElement | null) {
+  const el = host ?? terminalHost.value;
+  if (!el) return;
+  el.style.setProperty("--ssh-cursor-thickness", cursorThicknessCss(terminalAppearance.value.settings.cursorThickness));
+}
+
+function applyLiveSessionTerminalOptions(term: Terminal = terminal!) {
+  if (!term) return;
+  term.options.wordSeparator = effectiveWordSeparators(sessionPrefs.value);
+  // Visual bell only — sandboxed iframe often blocks audio.
+  term.options.bellStyle = sessionPrefs.value.bellEnabled ? "visual" : "none";
 }
 
 function applyTerminalAppearance() {
   const theme = terminalTheme();
   document.documentElement.style.setProperty("--ssh-terminal-background", theme.background);
+  document.documentElement.style.setProperty("--ssh-terminal-foreground", theme.foreground);
+  applyTerminalBgCss(terminalPaneEl.value, terminalBgImage.value);
+  applyCursorThicknessCss();
   if (!terminal) return;
   const options = terminalOptionPatch(terminalAppearance.value.settings);
   terminal.options.theme = theme;
+  terminal.options.fontFamily = resolveTerminalFontFamilyStack();
   terminal.options.fontWeight = options.fontWeight;
   terminal.options.fontWeightBold = options.fontWeightBold;
   terminal.options.lineHeight = options.lineHeight;
@@ -2051,6 +2952,7 @@ function applyTerminalAppearance() {
   terminal.options.cursorInactiveStyle = options.cursorInactiveStyle;
   terminal.options.drawBoldTextInBrightColors = options.drawBoldTextInBrightColors;
   terminal.options.minimumContrastRatio = options.minimumContrastRatio;
+  applyLiveSessionTerminalOptions(terminal);
   registerOscColorQueryHandlers();
   // Theme changes do not repaint the scrollback by themselves — force a full
   // redraw so background / ANSI swaps are visible immediately.
@@ -2061,7 +2963,143 @@ function applyTerminalAppearance() {
   });
 }
 
+function updateSessionPrefs(patch: Partial<TerminalSessionPrefs>) {
+  sessionPrefs.value = mergeTerminalSessionPrefs(sessionPrefs.value, patch);
+  persistTerminalSessionPrefs(sessionPrefs.value);
+  if (terminal) applyLiveSessionTerminalOptions(terminal);
+  if (patch.showLatency === true && connected.value) void measureLatency();
+  if (patch.showLatency === false) {
+    connectionLatency.value = null;
+    connectionLatencyFailed.value = false;
+  }
+  if (patch.gutter !== undefined) {
+    applyTerminalGutterLayout();
+    scheduleFit();
+    refreshTerminalGutter();
+  }
+  if (patch.find !== undefined) {
+    // Origin (or colors) changed: next find of the open panel should re-seed.
+    searchOriginPending = true;
+  }
+}
+
+/** One gutter paint/layout target (primary pane or split peer). */
+type GutterTarget = {
+  term: Terminal;
+  hostEl: HTMLElement | null;
+  gutterEl: HTMLElement | null;
+  stamps: GutterStampTracker;
+};
+
+function primaryGutterTarget(): GutterTarget | null {
+  if (!terminal) return null;
+  return {
+    term: terminal,
+    hostEl: terminalHost.value ?? null,
+    gutterEl: terminalGutterEl.value ?? null,
+    stamps: gutterStamps,
+  };
+}
+
+function splitGutterTarget(): GutterTarget | null {
+  const runtime = extraShells.get(SPLIT_PEER_KEY);
+  if (!runtime?.terminal) return null;
+  return {
+    term: runtime.terminal,
+    hostEl: runtime.hostEl,
+    gutterEl: runtime.gutterEl,
+    stamps: runtime.gutterStamps,
+  };
+}
+
+/** Motty gutter: reserve left width from the pane so FitAddon/PTY cols shrink once. */
+function applyGutterLayoutFor(target: GutterTarget) {
+  const wrap = target.gutterEl?.parentElement;
+  const mode = sessionPrefs.value.gutter;
+  const width = (() => {
+    if (mode === "off" || !target.hostEl) return 0;
+    const metrics = measureTerminalCellSize(target.hostEl, target.term.cols, target.term.rows);
+    // Before first fit, fall back to a monospace estimate so layout still reserves room.
+    const cellWidth = metrics?.cellWidth || 8;
+    return gutterWidthPx(mode, cellWidth);
+  })();
+  if (wrap) {
+    wrap.dataset.gutter = mode;
+    wrap.style.setProperty("--ssh-gutter-width", `${width}px`);
+  }
+  if (target.gutterEl) {
+    target.gutterEl.hidden = mode === "off";
+    target.gutterEl.setAttribute("aria-hidden", mode === "off" ? "true" : "false");
+  }
+}
+
+function applyTerminalGutterLayout() {
+  const primary = primaryGutterTarget();
+  if (primary) applyGutterLayoutFor(primary);
+  const split = splitGutterTarget();
+  if (split) applyGutterLayoutFor(split);
+}
+
+function refreshGutterFor(target: GutterTarget) {
+  if (!target.gutterEl) return;
+  const mode = sessionPrefs.value.gutter;
+  if (mode === "off") {
+    // Avoid per-frame replaceChildren during floods when already empty.
+    if (target.gutterEl.childElementCount) target.gutterEl.replaceChildren();
+    applyGutterLayoutFor(target);
+    return;
+  }
+  // Flood guard: skip DOM rebuild while output is busy (strained or 8KiB+ backlog).
+  if (isAppSecondaryBusy()) {
+    scheduleSecondaryCatchUp();
+    return;
+  }
+  if (!target.hostEl) return;
+  const metrics = measureTerminalCellSize(target.hostEl, target.term.cols, target.term.rows);
+  if (!metrics) return;
+  applyGutterLayoutFor(target);
+  const buffer = target.term.buffer.active;
+  const alternate = buffer.type === "alternate";
+  const sensitive = !!(passwordHintOffer.value || passwordHintPending.value);
+  const rows = buildGutterRows({
+    mode,
+    rows: target.term.rows,
+    viewportY: buffer.viewportY,
+    writtenAt: (y) => target.stamps.get(y),
+    alternate,
+    sensitive,
+  });
+  paintGutterElement(target.gutterEl, rows, {
+    cellHeight: metrics.cellHeight,
+    showNumbers: gutterShowsNumbers(mode) && !alternate && !sensitive,
+    showTimes: gutterShowsTimes(mode) && !alternate && !sensitive,
+  });
+  target.stamps.pruneBelow(Math.max(0, buffer.viewportY - target.term.rows));
+}
+
+function refreshTerminalGutter() {
+  const primary = primaryGutterTarget();
+  if (primary) refreshGutterFor(primary);
+  const split = splitGutterTarget();
+  if (split) refreshGutterFor(split);
+}
+
+function stampGutterFromWrite() {
+  if (!terminal || !gutterShowsTimes(sessionPrefs.value.gutter)) return;
+  const buffer = terminal.buffer.active;
+  if (buffer.type === "alternate") return;
+  gutterStamps.stampWrite(buffer.baseY + buffer.cursorY);
+}
+
+function stampSplitGutterFromWrite(runtime: ExtraShellRuntime) {
+  if (!runtime.terminal || !gutterShowsTimes(sessionPrefs.value.gutter)) return;
+  const buffer = runtime.terminal.buffer.active;
+  if (buffer.type === "alternate") return;
+  runtime.gutterStamps.stampWrite(buffer.baseY + buffer.cursorY);
+}
+
 function updateTerminalAppearanceState(next: TerminalAppearanceState) {
+  const prev = terminalAppearance.value.settings;
   terminalAppearance.value = {
     ...next,
     settings: sanitizeAppearanceSettings(next.settings),
@@ -2071,7 +3109,16 @@ function updateTerminalAppearanceState(next: TerminalAppearanceState) {
   // before painting, so first-click presets never no-op.
   void ensureBuiltinSchemeCatalog().finally(() => {
     applyTerminalAppearance();
-    showNotice(t("terminalAppearance.schemeApplied"));
+    const s = terminalAppearance.value.settings;
+    // Only toast for real scheme swaps — font weight / spacing patches are silent.
+    if (
+      s.schemeSource !== prev.schemeSource
+      || s.darkSchemeId !== prev.darkSchemeId
+      || s.lightSchemeId !== prev.lightSchemeId
+      || s.backgroundSource !== prev.backgroundSource
+    ) {
+      showNotice(t("terminalAppearance.schemeApplied"));
+    }
   });
 }
 
@@ -2093,6 +3140,7 @@ function applyAppearance(next: DatawisePluginAppearanceInput) {
   root.style.setProperty("--popover", HOST_POPOVER[resolved.colorScheme]);
   // 终端底色：启用配色方案时可能覆盖宿主面板色。
   root.style.setProperty("--ssh-terminal-background", terminalTheme().background);
+  root.style.setProperty("--ssh-terminal-foreground", terminalTheme().foreground);
   // Follow host Settings → 界面文字大小 (chrome CSS uses --dw-ui-text-scale).
   const textScale = resolved.ui?.textScale
     || getComputedStyle(root).getPropertyValue("--dw-ui-text-scale").trim()
@@ -2183,22 +3231,32 @@ function createTerminal() {
   if (!terminalHost.value || terminal) return;
   // 用户设置优先、未设置跟随宿主（issue #31）：合成一次，字号/字体族同步生效；
   // 重连/新开终端都经此路径拿到最终值。
+  const appearanceOptions = terminalOptionPatch(terminalAppearance.value.settings);
   const font = resolveTerminalFont(terminalFontOverride.value, {
     fontFamily: hostTerminalFontFamily(appearance.value),
     fontSize: appearance.value.terminal.fontSize,
   });
   terminalFontSize.value = font.fontSize;
+  terminalOscTitle.value = "";
   terminal = new Terminal({
     convertEol: false,
-    cursorBlink: true,
+    cursorBlink: appearanceOptions.cursorBlink,
     // 细竖线光标（bar）：块状光标在宽字距下显得笨重，竖线更接近常规输入框观感。
-    cursorStyle: "bar",
-    fontFamily: font.fontFamily,
+    cursorStyle: appearanceOptions.cursorStyle,
+    cursorInactiveStyle: appearanceOptions.cursorInactiveStyle,
+    fontFamily: resolveTerminalFontFamilyStack(),
     fontSize: font.fontSize,
-    lineHeight: 1.15,
+    fontWeight: appearanceOptions.fontWeight,
+    fontWeightBold: appearanceOptions.fontWeightBold,
+    lineHeight: appearanceOptions.lineHeight,
+    letterSpacing: appearanceOptions.letterSpacing,
+    drawBoldTextInBrightColors: appearanceOptions.drawBoldTextInBrightColors,
+    minimumContrastRatio: appearanceOptions.minimumContrastRatio,
     // Cap scrollback so sustained floods (`tail -f`, build logs) do not pay
-    // for an unbounded buffer during every paint. 15k lines is still deep.
-    scrollback: 15_000,
+    // for an unbounded buffer during every paint. Preference applies on create only.
+    scrollback: sessionPrefs.value.scrollback,
+    wordSeparator: effectiveWordSeparators(sessionPrefs.value),
+    bellStyle: sessionPrefs.value.bellEnabled ? "visual" : "none",
     // SearchAddon 的 highlight decorations 走 proposed API，缺这一项会在
     // findNext/registerDecoration 时直接抛 "allowProposedApi option"。
     allowProposedApi: true,
@@ -2210,6 +3268,7 @@ function createTerminal() {
   terminal.loadAddon(searchAddon);
   terminal.loadAddon(new WebLinksAddon());
   terminal.open(terminalHost.value);
+  applyCursorThicknessCss(terminalHost.value);
   // 对标 electerm 的终端体验增强（须在 open 之后挂载）：
   // - Unicode 11 宽度表：emoji/新版 CJK 符号按两列计宽，旧宽度表会错位对齐；
   // - 内联图像（sixel + iTerm2 OSC 1337）：imgcat/chafa/htop 图表可渲染，
@@ -2228,9 +3287,53 @@ function createTerminal() {
     iipSupport: true,
   }));
   registerOscColorQueryHandlers();
+  // #306：备用屏进出时重新解析无折行宽度（vim/htop 自动回退可视列宽）。
+  registerAltScreenWatch(terminal, () => {
+    // Motty: gutter width stays reserved; only the labels clear on alt-screen.
+    refreshTerminalGutter();
+    scheduleFit();
+  });
+  disposeModeQueryHandlers?.();
+  disposeModeQueryHandlers = registerTerminalModeQueryHandlers(terminal, {
+    syncOutput: terminalSyncOutput,
+    decRqmState: (mode) => (mode === 2026 ? (terminalWriteThrottle.held ? 1 : 2) : 2),
+  });
   osc52Disposable = terminal.parser.registerOscHandler(52, (data) =>
-    handleOsc52ClipboardWrite(data, (text) => writeClipboardText(text, clipboardDeps())),
+    handleOsc52ClipboardWrite(data, {
+      writeText: (text) => writeClipboardText(text, clipboardDeps()),
+      policy: sessionPrefs.value.osc52Policy,
+      onAsk: (text) => {
+        void askOsc52Clipboard(text).then((accepted) => {
+          if (accepted) void writeClipboardText(text, clipboardDeps());
+        });
+      },
+    }),
   );
+  for (const disposable of oscNotifyDisposables) disposable.dispose();
+  oscNotifyDisposables = [
+    terminal.parser.registerOscHandler(9, (data) => {
+      presentTerminalOscNotify(parseOsc9Notify(data));
+      return true;
+    }),
+    terminal.parser.registerOscHandler(777, (data) => {
+      const parsed = parseOsc777Notify(data);
+      if (!parsed) return false;
+      presentTerminalOscNotify(parsed);
+      return true;
+    }),
+  ];
+  terminal.onTitleChange((title) => {
+    terminalOscTitle.value = title;
+  });
+  terminal.onBell(() => {
+    if (!sessionPrefs.value.bellEnabled || !terminalHost.value) return;
+    terminalHost.value.classList.add("terminal-bell-flash");
+    if (terminalBellFlashTimer) window.clearTimeout(terminalBellFlashTimer);
+    terminalBellFlashTimer = window.setTimeout(() => {
+      terminalHost.value?.classList.remove("terminal-bell-flash");
+      terminalBellFlashTimer = undefined;
+    }, 160);
+  });
   terminal.attachCustomKeyEventHandler(handleTerminalKey);
   searchAddon.onDidChangeResults(({ resultCount, resultIndex }) => {
     if (!searchOpen.value) return;
@@ -2253,8 +3356,14 @@ function createTerminal() {
     }
     if (route === "blocked") return;
     trackPendingInput(data);
+    // 输入时静态风险分级：纯函数、有界、非阻断，不拦截任何按键、不改变发送内容。
+    // Enter / Ctrl+C 会清空影子行，分级回落到 low，提示自动消失。
+    liveRiskLine.value = pendingTerminalInput;
+    liveCommandRisk.value = assessCommandRisk(pendingTerminalInput);
     sendTerminalBytes(new TextEncoder().encode(data));
     commandSuggestToken = applyInputToToken(commandSuggestToken, data);
+    // Keep search line live; ghost text/pos wait for echo (syncCommandSuggestGhostPos onRender).
+    if (commandSuggestOpen.value) commandSuggestLine.value = pendingTerminalInput;
     if (data === "\u0003") {
       hideCommandSuggest();
       closeCompletionMenu();
@@ -2262,14 +3371,43 @@ function createTerminal() {
     } else if (data.includes("\r") || data.includes("\n")) {
       closeCompletionMenu();
       completionController.dismiss();
+      hideCommandSuggest();
     } else {
-      completionController.lineChanged();
+      const auto = completionModeAutoOpens(interactionPrefs.value.completionMode) || completionManualOpen.value;
+      if (auto) completionController.lineChanged();
+      if (auto) scheduleCommandSuggest();
     }
-    scheduleCommandSuggest();
   });
   disposeWriteParsed = terminal.onWriteParsed(() => {
+    // Stamps stay hot during floods (O(1)); suggest/anchor wait for catch-up.
+    stampGutterFromWrite();
+    if (isAppSecondaryBusy()) {
+      scheduleSecondaryCatchUp();
+      return;
+    }
     scheduleCommandSuggest();
     if (completionOpen.value) completionAnchor.value = readCompletionAnchor();
+  });
+  disposeCursorMove?.dispose();
+  disposeCursorMove = terminal.onCursorMove(() => {
+    if (isAppSecondaryBusy()) return;
+    syncCommandSuggestGhostPos();
+    // beta.47: 输入时光标列变化，提示浮层跟随到焦点上方（不可见时零开销）。
+    if (anyCommandHintVisible.value) scheduleCommandHintAnchor();
+  });
+  gutterRenderDisposable?.dispose();
+  gutterRenderDisposable = terminal.onRender(() => {
+    // gutter=off: skip paint path entirely (layout already applied on pref change).
+    if (sessionPrefs.value.gutter !== "off") refreshTerminalGutter();
+    if (!isAppSecondaryBusy()) syncCommandSuggestGhostPos();
+    // beta.47: 重绘 / fit 后 cell 尺寸或行数可能变，重测锚点（不可见时零开销）。
+    if (!isAppSecondaryBusy() && anyCommandHintVisible.value) scheduleCommandHintAnchor();
+  });
+  gutterStamps.clear();
+  applyTerminalGutterLayout();
+  window.requestAnimationFrame(() => {
+    applyTerminalGutterLayout();
+    refreshTerminalGutter();
   });
   // 选中复制（可在设置里关闭）：选择一变化即静默写入剪贴板，不弹提示。
   disposeSelectionCopy = terminal.onSelectionChange(() => {
@@ -2292,6 +3430,7 @@ function createTerminal() {
     webglRenderer.value = attachWebglRenderer(terminal, () => new WebglAddon());
   }
   if (highlightEnabled.value) attachHighlightRender();
+  attachAutofillRender();
   scheduleFit();
 }
 
@@ -2305,6 +3444,34 @@ function setWebglEnabled(next: boolean) {
 
 // Apple 平台用 Cmd+A 直选全选，其余平台 Ctrl+Shift+A（isTerminalSelectAllShortcut）。
 const applePlatform = isApplePlatform();
+const mottyShortcutLabels = terminalMottyShortcutLabels(applePlatform);
+
+/**
+ * 终端浮层状态快照 → 键权仲裁器的唯一入口。全部是**已判定**的布尔：
+ * 各浮层自己的开合门（interactivePromptOnScreen / suggestionGuard 等）仍在
+ * 原处判定，仲裁器只收口「谁持有键」，不迁移判定（dbx 范式）。
+ * 新增浮层 = 这里加一个布尔 + ARBITER_PRIORITIES 加一行，Esc 链 / ↓ 门零改动。
+ */
+function terminalOverlayState(): TerminalOverlayState {
+  return {
+    acceptKeyHintMenuOpen: acceptKeyHintMenuOpen.value,
+    commandPaletteOpen: commandPaletteOpen.value,
+    searchOpen: searchOpen.value,
+    quickPaletteOpen: quickPaletteOpen.value,
+    historyPanelOpen: historyPanelOpen.value,
+    completionOpen: completionOpen.value,
+    commandSuggestOpen: commandSuggestOpen.value,
+    ghostVisible: commandSuggestGhostVisible.value,
+    // 「Tab 接受建议」在补全菜单开着时不生效——让位编码在 claim 可见性里。
+    ghostTabAcceptEnabled: !completionOpen.value,
+    // 第 9 个浮层：只登记 Esc，任何真浮层开着都优先关真浮层。
+    // 体检 / 参数 / 远端 help 共用同一槽位与 dismiss，无需第 10 个浮层。
+    // beta.48：必须乘同一个显示门——开关关闭 / 被选择浮层互斥隐藏时，
+    // 不能再让 Esc 被一个看不见的提示条吞掉（应透传给远端 shell）。
+    argumentHintVisible: commandHintsAllowed.value
+      && (argHintVisible.value || remoteHelpVisible.value || lintHintVisible.value),
+  };
+}
 
 function handleTerminalKey(event: KeyboardEvent) {
   const mod = event.ctrlKey || event.metaKey;
@@ -2315,6 +3482,15 @@ function handleTerminalKey(event: KeyboardEvent) {
     event.stopPropagation();
     return false;
   };
+  // 一次按键只仲裁一次：Esc 链与裸 ↓ 门共用同一份 owners。所有前置分支
+  // （命令面板 / Find / 历史热键 / Motty 菜单 / 缩放 / 全选）都会 return，
+  // 状态在到达 Esc 前不会被改写，因此这里取快照是安全的。
+  const overlayOwners = resolveTerminalOverlayOwners(terminalOverlayState());
+  // Universal command palette: Ctrl/Cmd+Shift+P (works even when disconnected).
+  if (isCommandPaletteShortcut(event)) {
+    toggleCommandPalette();
+    return consume();
+  }
   // Find: Ctrl/Cmd+Shift+F always. Ctrl/Cmd+F opens Find when no ghost;
   // Ctrl+F with ghost accepts the fish-style remainder (Cmd+F stays Find on Apple).
   if (mod && (event.key === "f" || event.key === "F")) {
@@ -2322,19 +3498,64 @@ function handleTerminalKey(event: KeyboardEvent) {
       openTerminalSearch();
       return consume();
     }
-    if (commandSuggestGhost.value && matchesGhostFullAccept(event)) {
+    if (
+      commandSuggestGhost.value
+      && matchesGhostFullAccept(event, interactionPrefs.value.acceptSuggestionKey)
+    ) {
       acceptCommandSuggest();
       return consume();
     }
     openTerminalSearch();
     return consume();
   }
-  if (isHistoryOverlayShortcut(event) && connected.value) {
+  // 命令历史热键：Ctrl/Cmd+R（Warp Command Search 式）+ 既有 Ctrl/Cmd+Shift+H。
+  // 总开关关闭 / alternate 屏 / 交互提示待答时一律透传远端（dbx #108 + dw #150），
+  // 绝不吞掉 readline 原生 reverse-i-search 或 vim 的 redo。
+  const historyHotkey = resolveHistoryHotkeyAction({
+    modifiers: {
+      key: event.key,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      altKey: event.altKey,
+      shiftKey: event.shiftKey,
+    },
+    connected: connected.value,
+    enabled: interactionPrefs.value.historyEnabled,
+    alternateActive: terminal?.buffer.active.type === "alternate",
+    interactivePromptPending: interactivePromptGatePending(),
+  });
+  if (historyHotkey === "passthrough") return true;
+  if (historyHotkey === "open") {
     toggleHistoryPanel();
+    return consume();
+  }
+  // Motty menu chords: clear / split (labels match the context menu).
+  const mottyMenu = resolveTerminalMottyMenuShortcut({
+    ctrlKey: event.ctrlKey,
+    metaKey: event.metaKey,
+    shiftKey: event.shiftKey,
+    altKey: event.altKey,
+    key: event.key,
+    applePlatform,
+  });
+  if (mottyMenu === "clear") {
+    clearTerminal();
+    return consume();
+  }
+  if (mottyMenu === "split-right" || mottyMenu === "split-down") {
+    const canSplit = ((connected.value && !!session.value && !splitBusy.value) || splitActive.value);
+    if (!canSplit) return true;
+    void openTerminalSplitFromMenu(mottyMenu === "split-right" ? "vertical" : "horizontal");
     return consume();
   }
   if (isQuickPaletteShortcut(event) && connected.value) {
     toggleQuickPalette();
+    return consume();
+  }
+  // Motty shortcutCompletion: Ctrl/Cmd+Shift+J opens the completion list (hotkey mode).
+  if (mod && event.shiftKey && (event.key === "j" || event.key === "J") && connected.value) {
+    if (interactivePromptGatePending()) return true;
+    openCompletionsManually();
     return consume();
   }
   if (mod && event.key === "0") {
@@ -2350,26 +3571,19 @@ function handleTerminalKey(event: KeyboardEvent) {
   }
   // Esc closes the topmost terminal overlay only — never forward Esc to the PTY
   // while a panel is open (would clear the readline line / confuse TUI apps).
+  // 旧版是 7 层手写 if 链；现由键权仲裁器的 escape 优先级表分发，新增浮层
+  // 不再需要往这条链里插分支（overlayArbiter.spec.ts 快照钉死链序）。
   if (event.key === "Escape") {
-    if (searchOpen.value) {
-      closeTerminalSearch();
-      return consume();
-    }
-    if (quickPaletteOpen.value) {
-      closeQuickPalette();
-      return consume();
-    }
-    if (historyPanelOpen.value) {
-      closeHistoryPanel(true);
-      return consume();
-    }
-    if (completionOpen.value) {
-      closeCompletionMenu();
-      return consume();
-    }
-    if (commandSuggestOpen.value) {
-      hideCommandSuggest();
-      return consume();
+    switch (overlayOwners.escape) {
+      case "acceptKeyHintMenu": closeAcceptKeyHintMenu(); return consume();
+      case "commandPalette": closeCommandPalette(); return consume();
+      case "search": closeTerminalSearch(); return consume();
+      case "quickPalette": closeQuickPalette(); return consume();
+      case "historyPanel": closeHistoryPanel(true); return consume();
+      case "completion": closeCompletionMenu(); return consume();
+      case "commandSuggest": hideCommandSuggest(); return consume();
+      case "argumentHint": dismissArgumentHint(); return consume();
+      default: break;
     }
   }
   if (completionOpen.value) {
@@ -2407,8 +3621,8 @@ function handleTerminalKey(event: KeyboardEvent) {
       hideCommandSuggest();
       return true;
     }
-    // Warp-like: → / Ctrl+F / Ctrl+E full ghost; Alt/Ctrl+→ one word.
-    if (commandSuggestGhost.value && matchesGhostFullAccept(event)) {
+    // Motty/Warp: configured accept key (→ / Tab / Shift+→); Alt/Ctrl+→ one word.
+    if (commandSuggestGhost.value && matchesGhostFullAccept(event, interactionPrefs.value.acceptSuggestionKey)) {
       acceptCommandSuggest();
       return consume();
     }
@@ -2416,6 +3630,7 @@ function handleTerminalKey(event: KeyboardEvent) {
       acceptCommandSuggestWord();
       return consume();
     }
+    const acceptKey = interactionPrefs.value.acceptSuggestionKey;
     const resolved = resolveCommandSuggestKey({
       key: event.key,
       ctrlKey: event.ctrlKey,
@@ -2423,12 +3638,13 @@ function handleTerminalKey(event: KeyboardEvent) {
       altKey: event.altKey,
       shiftKey: event.shiftKey,
       menuArmed: commandSuggestTabArmed.value,
+      acceptKey,
     });
     if (resolved.action === "dismiss") {
       hideCommandSuggest();
       return consume();
     }
-    // Unarmed ↑: close the fuzzy panel and let readline browse shell history.
+    // Unarmed ↑ / Tab-when-accept-is-→: close overlay and let the shell handle the key.
     if (resolved.action === "passthrough") {
       hideCommandSuggest();
       return true;
@@ -2439,10 +3655,10 @@ function handleTerminalKey(event: KeyboardEvent) {
       return consume();
     }
     if (resolved.action === "accept") {
-      // Tab fill rule: Tab fills only prefix extension or ↑↓-armed selection; else shell Tab.
+      // Tab fills only when Tab is the configured accept key (Motty).
       const item = commandSuggestItems.value[commandSuggestIndex.value];
-      const line = commandSuggestLine.value;
-      if (item && resolveSuggestionTabKey(item.command, line, commandSuggestTabArmed.value) === "fill") {
+      const line = pendingTerminalInput || commandSuggestLine.value;
+      if (item && resolveSuggestionTabKey(item.command, line, commandSuggestTabArmed.value, acceptKey) === "fill") {
         acceptCommandSuggest();
         return consume();
       }
@@ -2463,6 +3679,21 @@ function handleTerminalKey(event: KeyboardEvent) {
   }
   if (keyAction === "copy") {
     void copyTerminalSelection();
+    return consume();
+  }
+  // Hotkey / inline: ↓ asks for the completion list when no overlay owns the
+  // arrowDown dimension. 旧版是 5 个手写 !open 门，现由仲裁器统一判定——
+  // 新增浮层只需在优先级表加一行 claim，不必再来这里补一个 !open。
+  if (
+    event.key === "ArrowDown"
+    && !event.altKey
+    && !mod
+    && connected.value
+    && overlayOwners.arrowDown === null
+    && !interactivePromptGatePending()
+    && (interactionPrefs.value.completionMode === "hotkey" || interactionPrefs.value.completionMode === "inline")
+  ) {
+    openCompletionsManually();
     return consume();
   }
   return true;
@@ -2518,13 +3749,23 @@ function resetTerminalZoom() {
   applyTerminalFontSize(base);
 }
 
+/** Font/size changes need a full atlas refresh (WebGL especially) — fit alone is not enough. */
+function refreshTerminalFontMetrics() {
+  if (!terminal) return;
+  window.requestAnimationFrame(() => {
+    if (!terminal) return;
+    terminal.refresh(0, terminal.rows - 1);
+    scheduleFit();
+  });
+}
+
 // 缩放只动字号：同步内存覆盖态并经 lib 持久化（键与解析逻辑集中在 terminalFont.ts）。
 function applyTerminalFontSize(size: number) {
   terminalFontSize.value = size;
   terminalFontOverride.value = { ...terminalFontOverride.value, fontSize: size };
   if (terminal) {
     terminal.options.fontSize = size;
-    scheduleFit();
+    refreshTerminalFontMetrics();
   }
   persistTerminalFontSize(size);
   window.clearTimeout(zoomNoticeTimer);
@@ -2539,9 +3780,10 @@ function applyTerminalFontSettings(family: string | null, size: number) {
   persistTerminalFontSize(size);
   terminalFontSize.value = size;
   if (terminal) {
-    terminal.options.fontFamily = family ?? hostTerminalFontFamily(appearance.value);
+    // Keep fallback stack in sync with Settings → 备用字体.
+    terminal.options.fontFamily = resolveTerminalFontFamilyStack();
     terminal.options.fontSize = size;
-    scheduleFit();
+    refreshTerminalFontMetrics();
   }
   showNotice(followHost ? t("terminalFont.resetDone") : t("terminalFont.applied", { size }));
 }
@@ -2552,6 +3794,8 @@ function openTerminalSearch() {
   // iTerm2 风格：打开搜索时用当前选区首行预填查询，并带入持久化的选项开关。
   searchSeedQuery.value = terminalSearchSeedFromSelection(terminal.getSelection() || "");
   searchSeedOptions.value = sanitizeSearchOptions(uiStorage.getItem(TERMINAL_SEARCH_OPTIONS_KEY));
+  searchOriginPending = true;
+  searchLastQuery = "";
   searchOpen.value = true;
 }
 
@@ -2559,6 +3803,8 @@ function closeTerminalSearch() {
   searchOpen.value = false;
   resetSearchResults();
   searchAddon?.clearDecorations();
+  searchOriginPending = true;
+  searchLastQuery = "";
   terminal?.focus();
 }
 
@@ -2574,20 +3820,245 @@ function resetSearchResults() {
 }
 
 function runTerminalSearch(query: string, options: { caseSensitive: boolean; regex: boolean; wholeWord: boolean }, direction: "next" | "prev") {
-  if (!searchAddon || !query) return;
+  if (!searchAddon || !terminal || !query) return;
+  const decorations = findDecorationColors(sessionPrefs.value.find);
   const searchOptions: ISearchOptions = {
     caseSensitive: options.caseSensitive,
     regex: options.regex,
     wholeWord: options.wholeWord,
     decorations: {
-      matchBackground: "#64748b55",
-      matchOverviewRuler: "#64748b",
-      activeMatchBackground: "#3b82f655",
-      activeMatchColorOverviewRuler: "#3b82f6",
+      matchBackground: decorations.matchBackground,
+      matchOverviewRuler: decorations.matchOverviewRuler,
+      activeMatchBackground: decorations.activeMatchBackground,
+      activeMatchColorOverviewRuler: decorations.activeMatchColorOverviewRuler,
     },
   };
-  if (direction === "prev") searchAddon.findPrevious(query, searchOptions);
+  // Motty origin: first match of a new query starts at the configured edge.
+  // Later next/prev keep the user's direction (SearchAddon walks from selection).
+  let runDirection = direction;
+  if (searchOriginPending || query !== searchLastQuery) {
+    runDirection = seedTerminalFindOrigin(terminal, sessionPrefs.value.find.origin);
+    searchOriginPending = false;
+    searchLastQuery = query;
+  }
+  if (runDirection === "prev") searchAddon.findPrevious(query, searchOptions);
   else searchAddon.findNext(query, searchOptions);
+}
+
+function askOsc52Clipboard(text: string): Promise<boolean> {
+  if (osc52AskResolver) {
+    osc52AskResolver(false);
+    osc52AskResolver = undefined;
+  }
+  return new Promise((resolve) => {
+    osc52AskResolver = resolve;
+    osc52AskText.value = text.length > 4000 ? `${text.slice(0, 4000)}…` : text;
+  });
+}
+
+function resolveOsc52Ask(accepted: boolean) {
+  osc52AskText.value = null;
+  const resolve = osc52AskResolver;
+  osc52AskResolver = undefined;
+  resolve?.(accepted);
+}
+
+function cursorLineFullText(): string {
+  const buffer = terminal?.buffer.active;
+  if (!buffer) return "";
+  try {
+    const row = buffer.baseY + Math.min(buffer.cursorY, Math.max(0, buffer.length - 1));
+    return buffer.getLine(row)?.translateToString(true) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function maybeOfferAutofill() {
+  if (autofillOffer.value || osc52AskText.value || pasteConfirm.value || passwordHintOffer.value || passwordHintPending.value) return;
+  if (!autofillRules.value.some((rule) => rule.enabled)) return;
+  if (terminalTransferBusy.value) return;
+  if (!session.value && !protocolSession.value) return;
+  if (terminalState.value !== "connected") return;
+  const line = cursorLineFullText();
+  if (!line.trim()) return;
+  if (autofillShouldYield(line, isInteractivePromptLine)) return;
+  const match = matchAutofillRules(line, autofillRules.value);
+  if (!match) return;
+  const key = `${match.rule.id}\0${line}`;
+  if (key === autofillOfferedKey) return;
+  autofillOfferedKey = key;
+  autofillOffer.value = match;
+}
+
+function dismissPasswordHint() {
+  passwordHintOffer.value = null;
+  passwordHintPending.value = null;
+  passwordHintBusy.value = false;
+  terminal?.focus();
+}
+
+function pickPasswordHintCandidate(candidate: PasswordHintCandidate) {
+  passwordHintOffer.value = null;
+  passwordHintPending.value = candidate;
+}
+
+async function confirmPasswordHintSend() {
+  const candidate = passwordHintPending.value;
+  if (!candidate || passwordHintBusy.value) return;
+  passwordHintBusy.value = true;
+  try {
+    let password = "";
+    if (candidate.kind === "connection") {
+      const meta = await window.datawisePlugin.invoke<{ sudoPassword?: string }>("ssh/settings/get", {
+        sessionId: session.value?.sessionId,
+        revealSecrets: true,
+      });
+      password = typeof meta?.sudoPassword === "string" ? meta.sudoPassword : "";
+    } else {
+      const revealed = await window.datawisePlugin.invoke<{ profile?: { sudoPassword?: string } }>("sudo/profiles/reveal", {
+        id: candidate.id,
+      });
+      password = typeof revealed?.profile?.sudoPassword === "string" ? revealed.profile.sudoPassword : "";
+    }
+    if (!password) {
+      showNotice(t("sessionPrefs.passwordHintRevealFailed"));
+      dismissPasswordHint();
+      return;
+    }
+    passwordHintPending.value = null;
+    sendTerminalBytes(new TextEncoder().encode(passwordHintPayload(password)));
+    terminal?.focus();
+  } catch {
+    showNotice(t("sessionPrefs.passwordHintRevealFailed"));
+    dismissPasswordHint();
+  } finally {
+    passwordHintBusy.value = false;
+  }
+}
+
+/** Cached non-secret candidate list so onRender does not hammer RPC. */
+let passwordHintCandidateCache: { at: number; candidates: PasswordHintCandidate[] } | null = null;
+const PASSWORD_HINT_CACHE_MS = 15_000;
+
+async function loadPasswordHintCandidates(): Promise<PasswordHintCandidate[]> {
+  const now = Date.now();
+  if (passwordHintCandidateCache && now - passwordHintCandidateCache.at < PASSWORD_HINT_CACHE_MS) {
+    return passwordHintCandidateCache.candidates;
+  }
+  if (!session.value) return [];
+  const generation = ++passwordHintLoadGeneration;
+  try {
+    const [meta, listed] = await Promise.all([
+      window.datawisePlugin.invoke<{ sudoPasswordSet?: boolean }>("ssh/settings/get", {
+        sessionId: session.value.sessionId,
+      }),
+      window.datawisePlugin.invoke<{ profiles?: SudoProfileView[] }>("sudo/profiles/list", {}),
+    ]);
+    if (generation !== passwordHintLoadGeneration) {
+      return passwordHintCandidateCache?.candidates ?? [];
+    }
+    const candidates = buildPasswordHintCandidates({
+      connectionPasswordSet: meta?.sudoPasswordSet === true,
+      connectionLabel: t("sessionPrefs.passwordHintConnection"),
+      profiles: Array.isArray(listed?.profiles) ? listed.profiles : [],
+    });
+    passwordHintCandidateCache = { at: Date.now(), candidates };
+    return candidates;
+  } catch {
+    return passwordHintCandidateCache?.candidates ?? [];
+  }
+}
+
+async function maybeOfferPasswordHint() {
+  if (!sessionPrefs.value.passwordHintEnabled) return;
+  if (passwordHintOffer.value || passwordHintPending.value || autofillOffer.value || osc52AskText.value || pasteConfirm.value) return;
+  if (terminalTransferBusy.value) return;
+  if (!session.value) return;
+  if (terminalState.value !== "connected") return;
+  const line = cursorLineFullText();
+  // Cheap gates before any RPC (bastion / non-password lines).
+  if (
+    !shouldOfferPasswordHint({
+      enabled: true,
+      line,
+      candidates: [{ kind: "connection", id: "probe", label: "probe" }],
+      busy: false,
+      connected: true,
+    })
+  ) {
+    return;
+  }
+  const candidates = await loadPasswordHintCandidates();
+  if (
+    !shouldOfferPasswordHint({
+      enabled: sessionPrefs.value.passwordHintEnabled,
+      line: cursorLineFullText(),
+      candidates,
+      busy: !!(passwordHintOffer.value || passwordHintPending.value || autofillOffer.value),
+      connected: terminalState.value === "connected",
+    })
+  ) {
+    return;
+  }
+  const key = passwordHintOfferKey(line, candidates.map((item) => item.id));
+  if (key === passwordHintOfferedKey) return;
+  passwordHintOfferedKey = key;
+  passwordHintOffer.value = { line, candidates };
+}
+
+function acceptAutofillOffer() {
+  const offer = autofillOffer.value;
+  autofillOffer.value = null;
+  if (!offer?.payload) return;
+  sendTerminalBytes(new TextEncoder().encode(offer.payload));
+  terminal?.focus();
+}
+
+function dismissAutofillOffer() {
+  autofillOffer.value = null;
+  terminal?.focus();
+}
+
+function updateAutofillRules(rules: AutofillRule[]) {
+  autofillRules.value = sanitizeAutofillRules(rules);
+  persistAutofillRules(autofillRules.value);
+  autofillOfferedKey = "";
+}
+
+function attachAutofillRender() {
+  if (!terminal || autofillRenderDisposable) return;
+  autofillRenderDisposable = terminal.onRender(() => {
+    if (!workbenchActive) return;
+    // `tail -f` floods: skip line scans until the write queue drains.
+    if (isAppSecondaryBusy()) {
+      scheduleSecondaryCatchUp();
+      return;
+    }
+    void maybeOfferPasswordHint();
+    maybeOfferAutofill();
+  });
+}
+
+function detachAutofillRender() {
+  autofillRenderDisposable?.dispose();
+  autofillRenderDisposable = undefined;
+  autofillOffer.value = null;
+  passwordHintOffer.value = null;
+  passwordHintPending.value = null;
+  passwordHintOfferedKey = "";
+}
+
+/** OSC 9 / 777 → in-app notice when enabled; rate-limited; skips when workbench is hidden. */
+function presentTerminalOscNotify(notification: TerminalOscNotification | null) {
+  if (!notification || !sessionPrefs.value.notificationsEnabled) return;
+  // Hidden / background tab: drop silently (no toast backlog on return).
+  if (document.visibilityState === "hidden" || window.datawisePlugin.active === false) return;
+  if (!terminalNotifyLimiter.allow()) return;
+  const label = notification.title
+    ? (notification.body ? `${notification.title}: ${notification.body}` : notification.title)
+    : notification.body;
+  if (label) showNotice(label);
 }
 
 function recordSubmittedCommands(submitted: string[]) {
@@ -2626,42 +4097,407 @@ function trackPendingInput(data: string) {
   recordSubmittedCommands(result.submitted);
 }
 
-function sendTerminalBytes(data: Uint8Array) {
+function allExtraSessionIds(): string[] {
+  return [...extraShells.values()].map((runtime) => runtime.sessionId).filter(Boolean);
+}
+
+function sendTerminalBytes(data: Uint8Array, sourceSessionId?: string) {
   const proto = protocolSession.value;
   if (proto && (proto.kind === "local" || proto.kind === "telnet" || proto.kind === "serial")) {
     terminalInputQueue.enqueue(proto.sessionId, normalizeTerminalInputBytes(data));
     return;
   }
-  const sessionId = session.value?.sessionId;
-  if (!sessionId) return;
-  terminalInputQueue.enqueue(sessionId, normalizeTerminalInputBytes(data));
+  const primaryId = session.value?.sessionId;
+  const extras = allExtraSessionIds();
+  const payload = normalizeTerminalInputBytes(data);
+  if (syncInputEnabled.value && extras.length) {
+    const targets = new Set<string>();
+    if (primaryId) targets.add(primaryId);
+    for (const id of extras) targets.add(id);
+    for (const id of targets) terminalInputQueue.enqueue(id, payload);
+    return;
+  }
+  const source = sourceSessionId || primaryId;
+  if (source) terminalInputQueue.enqueue(source, payload);
+}
+
+function applyNoWrapWidthForMain(): boolean {
+  if (!terminal || !fitAddon) return false;
+  // proposeDimensions = 可视列宽；无折行抬宽后 term.cols 已不是 viewport，
+  // 备用屏回退必须读 propose，不能用当前 cols（否则 vim/htop 仍拿到 1000 列）。
+  return applyNoWrapWidth(terminal, {
+    enabled: interactionPrefs.value.noWrap,
+    configuredCols: interactionPrefs.value.noWrapColumns,
+    viewportCols: fitAddon.proposeDimensions()?.cols,
+  });
 }
 
 function scheduleFit() {
   window.clearTimeout(resizeTimer);
   resizeTimer = window.setTimeout(() => {
-    if (!terminal || !fitAddon || !terminalHost.value?.clientWidth || !terminalHost.value.clientHeight) return;
     try {
-      fitAddon.fit();
-      // trzsz 进度条按终端列宽渲染（filter 内部文本进度条虽未启用，列宽保持同步）。
-      trzszFilter?.setTerminalColumns(terminal.cols);
-      const proto = protocolSession.value;
-      if (proto?.kind === "local") {
+      if (terminal && fitAddon && terminalHost.value?.clientWidth && terminalHost.value.clientHeight) {
+        fitAddon.fit();
+        applyNoWrapWidthForMain();
+        applyTerminalGutterLayout();
+        refreshTerminalGutter();
+        // trzsz 进度条按终端列宽渲染（filter 内部文本进度条虽未启用，列宽保持同步）。
+        trzszFilter?.setTerminalColumns(terminal.cols);
+        const proto = protocolSession.value;
+        if (proto?.kind === "local") {
+          void window.datawisePlugin
+            .notify("local/terminal/resize", { sessionId: proto.sessionId, cols: terminal.cols, rows: terminal.rows })
+            .catch(() => undefined);
+        } else if (proto?.kind === "telnet") {
+          void window.datawisePlugin
+            .notify("telnet/resize", { sessionId: proto.sessionId, cols: terminal.cols, rows: terminal.rows })
+            .catch(() => undefined);
+        } else if (session.value) {
+          void window.datawisePlugin.notify("ssh/terminal/resize", { sessionId: session.value.sessionId, cols: terminal.cols, rows: terminal.rows }).catch(() => undefined);
+        }
+      }
+      for (const runtime of extraShells.values()) {
+        if (!runtime.terminal || !runtime.fitAddon || !runtime.hostEl?.clientWidth || !runtime.hostEl.clientHeight) continue;
+        runtime.fitAddon.fit();
+        applyNoWrapWidth(runtime.terminal, {
+          enabled: interactionPrefs.value.noWrap,
+          configuredCols: interactionPrefs.value.noWrapColumns,
+          viewportCols: runtime.fitAddon.proposeDimensions()?.cols,
+        });
+        const splitTarget = splitGutterTarget();
+        if (splitTarget) {
+          applyGutterLayoutFor(splitTarget);
+          refreshGutterFor(splitTarget);
+        }
         void window.datawisePlugin
-          .notify("local/terminal/resize", { sessionId: proto.sessionId, cols: terminal.cols, rows: terminal.rows })
+          .notify("ssh/terminal/resize", {
+            sessionId: runtime.sessionId,
+            cols: runtime.terminal.cols,
+            rows: runtime.terminal.rows,
+          })
           .catch(() => undefined);
-      } else if (proto?.kind === "telnet") {
-        void window.datawisePlugin
-          .notify("telnet/resize", { sessionId: proto.sessionId, cols: terminal.cols, rows: terminal.rows })
-          .catch(() => undefined);
-      } else if (session.value) {
-        void window.datawisePlugin.notify("ssh/terminal/resize", { sessionId: session.value.sessionId, cols: terminal.cols, rows: terminal.rows }).catch(() => undefined);
       }
     } catch {
       // The iframe can briefly be detached while the host switches tabs.
     }
   }, 20);
 }
+
+function drainExtraShellFrames(runtime: ExtraShellRuntime) {
+  let frame = runtime.pendingFrames.get(runtime.lastSequence + 1);
+  while (frame) {
+    runtime.pendingFrames.delete(runtime.lastSequence + 1);
+    runtime.lastSequence += 1;
+    if (frame.stream !== 2) runtime.throttle.write(frame.data);
+    frame = runtime.pendingFrames.get(runtime.lastSequence + 1);
+  }
+}
+
+function disposeExtraShellRuntime(key: string) {
+  const runtime = extraShells.get(key);
+  if (!runtime) return;
+  runtime.disposeInput?.dispose();
+  runtime.disposeWriteParsed?.dispose();
+  runtime.disposeGutterRender?.dispose();
+  runtime.gutterStamps.clear();
+  try {
+    runtime.webglAddon?.dispose();
+  } catch {
+    /* ignore */
+  }
+  try {
+    runtime.terminal?.dispose();
+  } catch {
+    /* ignore */
+  }
+  runtime.throttle.dispose();
+  extraShells.delete(key);
+}
+
+async function closeAllExtraShells() {
+  const keys = [...extraShells.keys()];
+  for (const key of keys) {
+    const runtime = extraShells.get(key);
+    const sessionId = runtime?.sessionId;
+    disposeExtraShellRuntime(key);
+    if (sessionId) {
+      await window.datawisePlugin.invoke("ssh/session/close", { sessionId }).catch(() => undefined);
+    }
+  }
+  splitPeerSessionId.value = null;
+  splitLayoutOpen.value = false;
+  focusedPane.value = "primary";
+}
+
+function createExtraShellTerminal(runtime: ExtraShellRuntime, host: HTMLElement) {
+  if (runtime.terminal) return;
+  const appearanceOptions = terminalOptionPatch(terminalAppearance.value.settings);
+  const font = resolveTerminalFont(terminalFontOverride.value, {
+    fontFamily: hostTerminalFontFamily(appearance.value),
+    fontSize: appearance.value.terminal.fontSize,
+  });
+  const term = new Terminal({
+    convertEol: false,
+    cursorBlink: appearanceOptions.cursorBlink,
+    cursorStyle: appearanceOptions.cursorStyle,
+    cursorInactiveStyle: appearanceOptions.cursorInactiveStyle,
+    fontFamily: resolveTerminalFontFamilyStack(),
+    fontSize: font.fontSize,
+    fontWeight: appearanceOptions.fontWeight,
+    fontWeightBold: appearanceOptions.fontWeightBold,
+    lineHeight: appearanceOptions.lineHeight,
+    letterSpacing: appearanceOptions.letterSpacing,
+    drawBoldTextInBrightColors: appearanceOptions.drawBoldTextInBrightColors,
+    minimumContrastRatio: appearanceOptions.minimumContrastRatio,
+    scrollback: sessionPrefs.value.scrollback,
+    wordSeparator: effectiveWordSeparators(sessionPrefs.value),
+    bellStyle: sessionPrefs.value.bellEnabled ? "visual" : "none",
+    allowProposedApi: true,
+    theme: terminalTheme(),
+  });
+  applyCursorThicknessCss(host);
+  const fit = new FitAddon();
+  term.loadAddon(fit);
+  term.loadAddon(new WebLinksAddon());
+  term.open(host);
+  term.loadAddon(new Unicode11Addon());
+  term.unicode.activeVersion = "11";
+  runtime.webglAddon = loadWebglEnabled()
+    ? attachWebglRenderer(term, () => new WebglAddon()) ?? undefined
+    : undefined;
+  runtime.disposeInput = term.onData((data) => {
+    if (!runtime.sessionId) return;
+    sendTerminalBytes(new TextEncoder().encode(data), runtime.sessionId);
+  });
+  runtime.disposeWriteParsed?.dispose();
+  runtime.disposeWriteParsed = term.onWriteParsed(() => {
+    stampSplitGutterFromWrite(runtime);
+  });
+  runtime.disposeGutterRender?.dispose();
+  runtime.disposeGutterRender = term.onRender(() => {
+    if (sessionPrefs.value.gutter === "off") return;
+    const target = splitGutterTarget();
+    if (target) refreshGutterFor(target);
+  });
+  runtime.gutterStamps.clear();
+  runtime.terminal = term;
+  runtime.fitAddon = fit;
+  runtime.hostEl = host;
+  window.requestAnimationFrame(() => {
+    const target = splitGutterTarget();
+    if (!target) return;
+    applyGutterLayoutFor(target);
+    refreshGutterFor(target);
+  });
+}
+
+function bindSplitPeerHost(el: Element | null) {
+  const runtime = extraShells.get(SPLIT_PEER_KEY);
+  if (!runtime) return;
+  if (!el) {
+    runtime.hostEl = null;
+    return;
+  }
+  const host = el as HTMLElement;
+  runtime.hostEl = host;
+  if (!runtime.terminal) {
+    createExtraShellTerminal(runtime, host);
+    scheduleFit();
+  }
+}
+
+function bindSplitPeerGutter(el: Element | null) {
+  const runtime = extraShells.get(SPLIT_PEER_KEY);
+  if (!runtime) return;
+  runtime.gutterEl = el ? (el as HTMLElement) : null;
+  if (runtime.terminal && runtime.gutterEl) {
+    const target = splitGutterTarget();
+    if (target) {
+      applyGutterLayoutFor(target);
+      refreshGutterFor(target);
+    }
+  }
+}
+
+function ensureSplitPeerRuntime(): ExtraShellRuntime {
+  const existing = extraShells.get(SPLIT_PEER_KEY);
+  if (existing) return existing;
+  const runtime: ExtraShellRuntime = {
+    key: SPLIT_PEER_KEY,
+    sessionId: "",
+    lastSequence: 0,
+    pendingFrames: new Map(),
+    throttle: createTerminalWriteThrottle({
+      sink: (data, done) => {
+        const current = extraShells.get(SPLIT_PEER_KEY);
+        if (!current?.terminal) {
+          done();
+          return;
+        }
+        current.terminal.write(data, done);
+      },
+    }),
+    hostEl: null,
+    gutterEl: null,
+    gutterStamps: new GutterStampTracker(),
+  };
+  extraShells.set(SPLIT_PEER_KEY, runtime);
+  return runtime;
+}
+
+async function openSplitPeerSession(): Promise<boolean> {
+  if (!connectionId.value || !workbenchId.value || !session.value?.sessionId) return false;
+  const runtime = ensureSplitPeerRuntime();
+  if (runtime.sessionId) {
+    splitPeerSessionId.value = runtime.sessionId;
+    return true;
+  }
+  try {
+    await nextTick();
+    const cols = runtime.terminal?.cols || terminal?.cols || 120;
+    const rows = runtime.terminal?.rows || terminal?.rows || 32;
+    const info = await window.datawisePlugin.invoke<SessionInfo>("ssh/session/open", {
+      connectionId: connectionId.value,
+      workbenchId: workbenchId.value,
+      cols,
+      rows,
+      reuseAuthenticatedTransport: true,
+      reuseAuthenticatedSessionId: session.value.sessionId,
+      additionalShell: true,
+    });
+    runtime.sessionId = info.sessionId;
+    splitPeerSessionId.value = info.sessionId;
+    await window.datawisePlugin
+      .invoke<ReplayResult>("ssh/terminal/replay", { sessionId: info.sessionId, afterSequence: 0 })
+      .catch(() => undefined);
+    scheduleFit();
+    return true;
+  } catch (cause) {
+    disposeExtraShellRuntime(SPLIT_PEER_KEY);
+    splitPeerSessionId.value = null;
+    showError(cause, "terminal");
+    return false;
+  }
+}
+
+function focusSplitPane(pane: "primary" | "split") {
+  focusedPane.value = pane;
+  void nextTick(() => {
+    if (pane === "primary") terminal?.focus();
+    else extraShells.get(SPLIT_PEER_KEY)?.terminal?.focus();
+  });
+}
+
+async function toggleTerminalSplit() {
+  if (splitLayoutOpen.value) {
+    await closeTerminalSplit();
+    return;
+  }
+  if (
+    !canOpenTerminalSplit({
+      connected: connected.value,
+      primarySessionId: session.value?.sessionId,
+      splitSessionId: splitPeerSessionId.value ?? undefined,
+      protocolKind: "ssh",
+    }) &&
+    !splitPeerSessionId.value
+  ) {
+    return;
+  }
+  if (splitBusy.value) return;
+  ensureSplitPeerRuntime();
+  splitLayoutOpen.value = true;
+  focusedPane.value = "primary";
+  await nextTick();
+  if (splitPeerSessionId.value) {
+    scheduleFit();
+    return;
+  }
+  splitBusy.value = true;
+  try {
+    const ok = await openSplitPeerSession();
+    if (!ok) {
+      splitLayoutOpen.value = false;
+      splitPeerSessionId.value = null;
+      disposeExtraShellRuntime(SPLIT_PEER_KEY);
+      return;
+    }
+  } finally {
+    splitBusy.value = false;
+  }
+  void nextTick(scheduleFit);
+}
+
+async function closeTerminalSplit() {
+  const runtime = extraShells.get(SPLIT_PEER_KEY);
+  const sessionId = runtime?.sessionId || splitPeerSessionId.value;
+  disposeExtraShellRuntime(SPLIT_PEER_KEY);
+  splitPeerSessionId.value = null;
+  splitLayoutOpen.value = false;
+  focusedPane.value = "primary";
+  if (sessionId) {
+    await window.datawisePlugin.invoke("ssh/session/close", { sessionId }).catch(() => undefined);
+  }
+  void nextTick(scheduleFit);
+}
+
+function setSplitOrientation(next: TerminalSplitOrientation) {
+  splitOrientation.value = next;
+  try {
+    uiStorage.setItem(TERMINAL_SPLIT_ORIENTATION_KEY, next);
+  } catch {
+    /* ignore */
+  }
+  void nextTick(scheduleFit);
+}
+
+function setSyncInputEnabled(next: boolean) {
+  syncInputEnabled.value = next;
+  try {
+    uiStorage.setItem(TERMINAL_SYNC_INPUT_KEY, next ? "true" : "false");
+  } catch {
+    /* ignore */
+  }
+}
+
+function toggleSyncInput() {
+  setSyncInputEnabled(!syncInputEnabled.value);
+}
+
+function onSplitDividerPointerDown(event: PointerEvent) {
+  const target = event.currentTarget as HTMLElement | null;
+  const pane = target?.closest(".terminal-pane") as HTMLElement | null;
+  if (!pane) return;
+  event.preventDefault();
+  const vertical = splitOrientation.value === "vertical";
+  const start = vertical ? event.clientX : event.clientY;
+  const startRatio = splitRatio.value;
+  const rect = pane.getBoundingClientRect();
+  const size = vertical ? rect.width : rect.height;
+  const onMove = (ev: PointerEvent) => {
+    const delta = (vertical ? ev.clientX : ev.clientY) - start;
+    const next = Math.min(0.75, Math.max(0.25, startRatio + delta / Math.max(1, size)));
+    splitRatio.value = next;
+    scheduleFit();
+  };
+  const onUp = () => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+}
+
+const splitPrimaryStyle = computed(() => {
+  if (!splitActive.value) return undefined;
+  const pct = `${Math.round(splitRatio.value * 1000) / 10}%`;
+  return splitOrientation.value === "vertical" ? { flexBasis: pct, width: pct } : { flexBasis: pct, height: pct };
+});
+const splitSecondaryStyle = computed(() => {
+  if (!splitActive.value) return undefined;
+  const pct = `${Math.round((1 - splitRatio.value) * 1000) / 10}%`;
+  return splitOrientation.value === "vertical" ? { flexBasis: pct, width: pct } : { flexBasis: pct, height: pct };
+});
 
 function stopCommandMarkerTick() {
   if (commandMarkerTimer) {
@@ -2717,13 +4553,27 @@ function applyCommandMarker(updates: Osc633StreamUpdates) {
   }
   if (updates.lastExitCode !== undefined && updates.lastExitCode !== null) {
     commandMarker.exitCode = updates.lastExitCode;
-    const finished = normalizeHistoryCommand(commandMarker.command || updates.command || "");
+  }
+  if (updates.lastCommandDuration !== undefined) commandMarker.durationMs = updates.lastCommandDuration;
+  // OSC 633 D: stamp the full result only after both fields have landed. The
+  // parser may deliver exit code and duration in the same frame or in either
+  // order, so the end of the handler is the only order-independent place.
+  if (updates.lastExitCode !== undefined && updates.lastExitCode !== null) {
+    const finished = normalizeHistoryCommand(commandMarker.command || updates.command || updates.currentCommand || "");
     if (finished && interactionPrefs.value.historyEnabled) {
-      commandHistory.value = markHistoryExit(commandHistory.value, finished, updates.lastExitCode, connectionId.value);
+      commandHistory.value = markHistoryResult(
+        commandHistory.value,
+        finished,
+        {
+          exitCode: updates.lastExitCode,
+          durationMs: commandMarker.durationMs,
+          host: connection.value.name || connection.value.host || "",
+        },
+        connectionId.value,
+      );
       persistCommandHistory();
     }
   }
-  if (updates.lastCommandDuration !== undefined) commandMarker.durationMs = updates.lastCommandDuration;
   if (updates.cwd !== undefined) {
     commandMarker.cwd = updates.cwd;
     if (updates.cwd) terminalCwd.value = updates.cwd;
@@ -2782,6 +4632,18 @@ function resetZmodemSentry() {
     onRetract() {},
   });
 }
+
+/**
+ * #307：空闲路径的 ZMODEM 检测定界器。#302 合帧后 ZRQINIT 常与命令回显 /
+ * 提示符拼进同一个 consume burst，而 zmodem.js 只在「hex 首帧恰为 burst
+ * 末尾」时发出检测，尾部杂字节会让远端 `sz` 的检测永久丢失（状态条、进度、
+ * 完成提示全不出现）。会话进行中的解析是真流式、与 burst 边界无关，因此
+ * 只在空闲时经定界器喂入。consume 闭包晚绑定 zmodemSentry，sentry 重建后
+ * 自动跟随新实例。
+ */
+const zmodemDetectionFeeder = createZmodemDetectionFeeder((chunk) => {
+  zmodemSentry?.consume(chunk.slice().buffer);
+});
 
 function handleZmodemDetection(detection: ZmodemDetection) {
   const decision = decideZmodemDetection(
@@ -3254,6 +5116,16 @@ async function saveTrzszDownloadedFiles(
 function handleBinary(event: DatawisePluginBinaryEvent) {
   const sessionId = activeTerminalSessionId || session.value?.sessionId;
   const proto = protocolSession.value;
+  for (const runtime of extraShells.values()) {
+    if (!runtime.sessionId || event.channel !== `ssh/terminal/out/${runtime.sessionId}`) continue;
+    const payload = bridgeBinaryBytes(event, window.datawisePlugin.decodeBase64);
+    if (payload.length < 9) return;
+    const sequence = readU64(payload, 1);
+    if (sequence <= runtime.lastSequence) return;
+    runtime.pendingFrames.set(sequence, { stream: payload[0], data: payload.slice(9) });
+    drainExtraShellFrames(runtime);
+    return;
+  }
   const terminalOutChannel =
     sessionId &&
     (event.channel === `ssh/terminal/out/${sessionId}`
@@ -3266,7 +5138,7 @@ function handleBinary(event: DatawisePluginBinaryEvent) {
     const sequence = readU64(payload, 1);
     if (sequence <= lastSequence) return;
     pendingTerminalFrames.set(sequence, { stream: payload[0], data: payload.slice(9) });
-    drainTerminalFrames();
+    scheduleTerminalDrain();
     return;
   }
   if (vncSessionId.value && event.channel === `vnc/frame/${vncSessionId.value}`) {
@@ -3289,13 +5161,35 @@ function handleBinary(event: DatawisePluginBinaryEvent) {
   waiter.resolve(payload.slice(8));
 }
 
+/** #302：终端帧合帧调度。洪峰时每帧同步跑中间件链会吃满主线程；入队后统一到 rAF 排水。 */
+function scheduleTerminalDrain() {
+  if (terminalDrainHandle !== null) return;
+  if (typeof document !== "undefined" && !document.hidden && typeof requestAnimationFrame === "function") {
+    terminalDrainHandle = requestAnimationFrame(() => {
+      terminalDrainHandle = null;
+      drainTerminalFrames();
+    });
+  } else {
+    terminalDrainHandle = window.setTimeout(() => {
+      terminalDrainHandle = null;
+      drainTerminalFrames();
+    }, 0);
+  }
+}
+
 function drainTerminalFrames() {
-  let frame = pendingTerminalFrames.get(lastSequence + 1);
-  while (frame) {
-    pendingTerminalFrames.delete(lastSequence + 1);
-    lastSequence += 1;
-    if (frame.stream === 2) {
-      const state = new TextDecoder().decode(frame.data);
+  // 两段式消费（先收齐再处理）：本次 drain 期间处理产生的同步副作用不会与下一批帧交错。
+  // 有界收集（借鉴 motty `pumpBudget` 时间预算泵）：每个 rAF 只处理 256 KiB / 4ms，
+  // 剩余连续帧留在 pending map 交给下一帧，洪流时输入与绘制不再被一个长任务卡死。
+  const { batch, lastSequence: consumedUntil, hasMore } = collectDrainBatch(
+    pendingTerminalFrames,
+    lastSequence,
+  );
+  lastSequence = consumedUntil;
+  if (batch.length) lastTerminalDataAt = Date.now();
+  for (const segment of mergeTerminalFrames(batch, TERMINAL_MERGED_FLUSH_BYTES)) {
+    if (segment.stream === 2) {
+      const state = new TextDecoder().decode(segment.data);
       if (state === "directory-tracking-unavailable") {
         followDirectory.value = false;
         directoryTrackingSupported.value = false;
@@ -3307,16 +5201,21 @@ function drainTerminalFrames() {
     } else {
       try {
         if (!zmodemSentry) resetZmodemSentry();
-        zmodemSentry?.consume(frame.data.slice().buffer);
+        if (zmodemBusy.value) {
+          // 会话进行中：会话内解析是真流式，与 burst 边界无关，整帧直喂。
+          zmodemSentry?.consume(segment.data.slice().buffer);
+        } else {
+          // 空闲：按完整 hex 首帧定界喂入，避免 #302 合帧吞掉 `sz` 检测（#307）。
+          zmodemDetectionFeeder.feed(segment.data);
+        }
       } catch (cause) {
         if (zmodemBusy.value) finishZmodemUpload(cause);
         else {
           resetZmodemSentry();
-          dispatchTerminalOutput(frame.data);
+          dispatchTerminalOutput(segment.data);
         }
       }
     }
-    frame = pendingTerminalFrames.get(lastSequence + 1);
   }
   persistState();
   // A stalled gap must not grow the pending map without bound: once the
@@ -3337,8 +5236,14 @@ function drainTerminalFrames() {
     void window.datawisePlugin.invoke<ReplayResult>("ssh/terminal/replay", { sessionId: session.value.sessionId, afterSequence: lastSequence })
       .then((result) => {
         if (!result.complete) {
-          terminalState.value = "error";
-          terminalError.value = t("sessionUnrecoverable");
+          // Ring buffer (2 MiB) dropped the gap prefix: do not kill a live
+          // session (ZMODEM/sz floods always overrun the replay window).
+          // Resync to the buffer tail and keep the session — same strategy as
+          // dbx-plugin-ssh #302/#254.
+          pendingTerminalFrames.clear();
+          lastSequence = result.tailSequence;
+          replayNoProgress = 0;
+          showNotice(t("replayGapResynced"));
           return;
         }
         // The replay returned healthy but the hole below firstPending is still
@@ -3374,6 +5279,9 @@ function drainTerminalFrames() {
         if (sessionGone && !reconnectPending.value && !disposed) scheduleSessionReconnect();
       });
   }
+  // 预算用尽时仍有连续帧在队列里：再排一次 rAF，而不是让它们等到下一个
+  // 输入事件或下一次洪峰才被消费（序号连续性由 pending map 保证）。
+  if (hasMore) scheduleTerminalDrain();
 }
 
 // 传输断开/会话被杀的统一入口：有界退避自动重连，梯子耗尽才落到
@@ -3574,8 +5482,38 @@ function settleTransferCompletion(taskId: string, status: TransferTask["status"]
   const waiter = transferCompletionWaiters.get(taskId);
   if (!waiter || (status !== "completed" && status !== "cancelled" && status !== "failed")) return;
   transferCompletionWaiters.delete(taskId);
+  window.clearTimeout(waiter.watchdog);
   if (status === "completed") waiter.resolve();
   else waiter.reject(Object.assign(new Error(transferTasks[taskId]?.error || t(`transferStatus.${status}`)), { code: "transfer-terminal" }));
+}
+
+async function pollTransferStatus(taskId: string): Promise<boolean> {
+  try {
+    const status = await window.datawisePlugin.invoke<{ transferred?: number; status: string; phase?: string }>("sftp/transfer/status", { taskId });
+    const task = transferTasks[taskId];
+    if (!task) return true;
+    const normalized = normalizeTransferStatus(status.status, task.status);
+    if (normalized === "queued" || normalized === "running") return false;
+    task.status = normalized;
+    if (status.transferred != null) {
+      if (status.phase === "staging") task.staged = status.transferred;
+      else task.transferred = status.transferred;
+    }
+    settleTransferCompletion(taskId, normalized);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function armCompletionWatchdog(taskId: string, step = 0): number {
+  const delay = step < COMPLETION_WATCHDOG_STEPS_MS.length ? COMPLETION_WATCHDOG_STEPS_MS[step]! : COMPLETION_WATCHDOG_MAX_MS;
+  return window.setTimeout(async () => {
+    if (!transferCompletionWaiters.has(taskId)) return;
+    if (await pollTransferStatus(taskId)) return;
+    const waiter = transferCompletionWaiters.get(taskId);
+    if (waiter) waiter.watchdog = armCompletionWatchdog(taskId, step + 1);
+  }, delay);
 }
 
 /** 挂起直到该任务收到终态 progress 事件（完成/取消/失败）；注册前已终态则立即结算。 */
@@ -3586,7 +5524,7 @@ function waitForTransferCompletion(taskId: string) {
     return status === "completed" ? Promise.resolve() : Promise.reject(Object.assign(new Error(existing?.error || t(`transferStatus.${status}`)), { code: "transfer-terminal" }));
   }
   return new Promise<void>((resolve, reject) => {
-    transferCompletionWaiters.set(taskId, { resolve, reject });
+    transferCompletionWaiters.set(taskId, { resolve, reject, watchdog: armCompletionWatchdog(taskId) });
   });
 }
 
@@ -3861,9 +5799,17 @@ async function autoStartPersistedForwards() {
 }
 
 async function closeSession(updateStatus = true) {
+  if (
+    updateStatus
+    && sessionPrefs.value.closeSessionConfirm
+    && (terminalState.value === "connected" || !!session.value)
+  ) {
+    if (!window.confirm(t("sessionPrefs.closeSessionConfirmPrompt"))) return;
+  }
   const sessionId = session.value?.sessionId;
   session.value = undefined;
   activeTerminalSessionId = "";
+  await closeAllExtraShells();
   clearAgentPrompts();
   agentRunning.value = undefined;
   // Closing mid-ZMODEM aborts the transfer silently instead of leaving the
@@ -3999,14 +5945,57 @@ async function openSessionTab(reuseAuthenticatedTransport: boolean) {
   }
 }
 
-/** 新建会话：独立 transport，可能再次要求堡垒机 MFA。 */
+/** 新建宿主会话标签（与 Motty 开新窗口/标签一致，不再做插件内 shell tab）。 */
 async function openNewSessionTab() {
   await openSessionTab(false);
 }
 
-/** 复制会话：复用当前已认证 transport，免再次 MFA。 */
+/** 复制到宿主新标签（复用已认证 transport，免 MFA）。 */
 async function openCopiedSessionTab() {
   await openSessionTab(true);
+}
+
+/** Open multi-server monitor workbench in a new tab (plugin.mode + contributionId self-route). */
+const canOpenMonitorPanel = computed(() => Boolean(window.datawisePlugin?.openWorkbench));
+function openMonitorPanel() {
+  const api = window.datawisePlugin;
+  if (!api.openWorkbench) return;
+  // Pass the real connectionId so Host ensureSidecarConnection does not toast
+  // EXPLORER_CONNECTION_NOT_FOUND. Routing uses plugin.mode / contributionId;
+  // App.initialize remounts MonitorPanel if the terminal root was mounted by mistake.
+  void api.openWorkbench(
+    MONITOR_CONTRIBUTION_ID,
+    {
+      plugin: {
+        mode: "monitor",
+        ...(connectionId.value ? { focusConnectionId: connectionId.value } : {}),
+      },
+      contributionId: MONITOR_CONTRIBUTION_ID,
+      ...(connectionId.value
+        ? {
+            connectionId: connectionId.value,
+            connection: {
+              id: connectionId.value,
+              name: connection.value.name,
+              readOnly: connection.value.readOnly === true,
+            },
+          }
+        : {}),
+    },
+    { forceNew: true },
+  );
+}
+
+function remountAsMonitorPanel(context: Record<string, unknown>): boolean {
+  try {
+    const current = getCurrentInstance()?.appContext.app;
+    current?.unmount();
+    createApp(MonitorPanel, { context }).mount("#app");
+    return true;
+  } catch (cause) {
+    console.error("[ssh-ui] failed to remount MonitorPanel", cause);
+    return false;
+  }
 }
 
 async function restoreTransfers() {
@@ -4351,6 +6340,8 @@ const copilotChatMode = ref<CopilotChatMode>("agent");
 const isCopilotAskMode = computed(() => copilotChatMode.value === "ask");
 /** auto = follow workbench locale; zh-CN / en = force reply language. */
 const copilotReplyLanguage = ref<CopilotReplyLanguage>("auto");
+/** Mask secrets in terminal output / tool results before they enter the LLM prompt. */
+const copilotRedactOutput = ref(true);
 /** auto | plugin BYOK | host default — user pick from merged list. */
 const copilotModelPreference = ref<ModelPreference>("auto");
 const copilotModelOptions = ref<ModelOption[]>([]);
@@ -4592,7 +6583,9 @@ function onSettingsOpenChange(open: boolean) {
   settingsOpen.value = open;
   if (!open) {
     settingsFocusCategory.value = null;
+    settingsFocusAnchor.value = null;
     settingsFocusAddModel.value = false;
+    void refreshAgentMode();
   }
 }
 
@@ -4607,6 +6600,15 @@ async function setCopilotReplyLanguage(value: CopilotReplyLanguage) {
   copilotReplyLanguage.value = next;
   try {
     await window.datawisePlugin.invoke("local/preferences/set", { copilotReplyLanguage: next });
+  } catch {
+    // Memory-only for this session.
+  }
+}
+
+async function setCopilotRedactOutput(value: boolean) {
+  copilotRedactOutput.value = value === true;
+  try {
+    await window.datawisePlugin.invoke("local/preferences/set", { copilotRedactOutput: copilotRedactOutput.value });
   } catch {
     // Memory-only for this session.
   }
@@ -4676,11 +6678,16 @@ async function askCopilotLlm(userText: string, fallbackCards: ActionCard[] = [])
       hostAiApi,
       {
         system: copilotSystemPrompt(),
-        prompt: composeUserPrompt({
-          userText,
-          context: copilotContext.value,
-          mode: askMode ? "ask" : "agent",
-        }),
+        // Mask secrets in the whole assembled prompt (terminal selection,
+        // attachments, context JSON and tool-output follow-ups all funnel here).
+        prompt: redactSensitiveText(
+          composeUserPrompt({
+            userText,
+            context: copilotContext.value,
+            mode: askMode ? "ask" : "agent",
+          }),
+          copilotRedactOutput.value,
+        ),
         requestId,
         stream: true,
         prefer: copilotModelPreference.value,
@@ -4925,18 +6932,6 @@ watch(
 // rAF 节流（≤30fps）视口行扫描，per-row Map 维护 decoration，全局上限 400。
 // ---------------------------------------------------------------------------
 const highlightRules = ref<HighlightRuleView[]>([]);
-const highlightMenuOpen = ref(false);
-const highlightSaving = ref(false);
-const highlightDraftError = ref("");
-const highlightDraft = reactive({ id: undefined as string | undefined, pattern: "", color: HIGHLIGHT_COLOR_DEFAULT, isRegex: false, caseSensitive: false });
-// ToggleGroup（multiple）以字符串数组建模；这里桥接到 draft 的两个布尔标志位。
-const highlightFlagValues = computed<string[]>({
-  get: () => [highlightDraft.isRegex ? "regex" : "", highlightDraft.caseSensitive ? "case" : ""].filter(Boolean),
-  set: (values) => {
-    highlightDraft.isRegex = values.includes("regex");
-    highlightDraft.caseSensitive = values.includes("case");
-  },
-});
 const compiledHighlightRules = computed(() => compileRules(highlightRules.value));
 
 function loadHighlightEnabled(): boolean {
@@ -4950,8 +6945,9 @@ function loadHighlightEnabled(): boolean {
 // 总开关：关闭时摘掉 onRender 挂子并全量清理 decoration（零挂钩子语义）。
 const highlightEnabled = ref(loadHighlightEnabled());
 
-function toggleHighlightEnabled() {
-  highlightEnabled.value = !highlightEnabled.value;
+function setHighlightEnabled(value: boolean) {
+  if (highlightEnabled.value === value) return;
+  highlightEnabled.value = value;
   try {
     uiStorage.setItem(HIGHLIGHT_ENABLED_KEY, highlightEnabled.value ? "true" : "false");
   } catch {
@@ -4965,6 +6961,11 @@ function toggleHighlightEnabled() {
   }
 }
 
+function onHighlightRulesChanged(rules: HighlightRuleView[]) {
+  highlightRules.value = rules;
+  if (highlightEnabled.value) rescanHighlightViewport();
+}
+
 async function hydrateHighlightRules() {
   try {
     const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/list", {});
@@ -4973,85 +6974,6 @@ async function hydrateHighlightRules() {
     // 后端不可用（如旧版 sidecar）：静默降级空表，高亮功能整体退场。
     highlightRules.value = [];
   }
-}
-
-function resetHighlightDraft() {
-  highlightDraft.id = undefined;
-  highlightDraft.pattern = "";
-  highlightDraft.color = HIGHLIGHT_COLOR_DEFAULT;
-  highlightDraft.isRegex = false;
-  highlightDraft.caseSensitive = false;
-  highlightDraftError.value = "";
-}
-
-async function saveHighlightRule() {
-  if (highlightSaving.value) return;
-  const sanitized = sanitizeHighlightRuleInput({ pattern: highlightDraft.pattern, color: highlightDraft.color, isRegex: highlightDraft.isRegex, caseSensitive: highlightDraft.caseSensitive });
-  if (sanitized.error || !sanitized.value) {
-    highlightDraftError.value = t(sanitized.error ?? "highlightRules.invalidPattern");
-    return;
-  }
-  if (!highlightDraft.id && highlightRules.value.length >= HIGHLIGHT_RULES_LIMIT) return;
-  highlightSaving.value = true;
-  highlightDraftError.value = "";
-  try {
-    const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/save", {
-      id: highlightDraft.id ?? "",
-      pattern: sanitized.value.pattern,
-      isRegex: sanitized.value.isRegex,
-      color: sanitized.value.color,
-      caseSensitive: sanitized.value.caseSensitive,
-    });
-    highlightRules.value = normalizeHighlightRules(response.rules);
-    resetHighlightDraft();
-  } catch (cause) {
-    highlightDraftError.value = settingsErrorOf(cause);
-  } finally {
-    highlightSaving.value = false;
-  }
-}
-
-function editHighlightRule(item: HighlightRuleView) {
-  highlightDraft.id = item.id;
-  highlightDraft.pattern = item.pattern;
-  highlightDraft.color = item.color;
-  highlightDraft.isRegex = item.isRegex;
-  highlightDraft.caseSensitive = item.caseSensitive;
-  highlightDraftError.value = "";
-}
-
-async function toggleHighlightRule(item: HighlightRuleView) {
-  try {
-    const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/save", {
-      id: item.id,
-      pattern: item.pattern,
-      isRegex: item.isRegex,
-      color: item.color,
-      caseSensitive: item.caseSensitive,
-      enabled: !item.enabled,
-    });
-    highlightRules.value = normalizeHighlightRules(response.rules);
-  } catch (cause) {
-    showError(cause, "terminal");
-  }
-}
-
-async function deleteHighlightRule(id: string) {
-  try {
-    const response = await window.datawisePlugin.invoke<{ rules: unknown }>("ssh/highlightRules/delete", { id });
-    highlightRules.value = normalizeHighlightRules(response.rules);
-    if (highlightDraft.id === id) resetHighlightDraft();
-  } catch (cause) {
-    showError(cause, "terminal");
-  }
-}
-
-// 规则弹层开关（互斥族统一走 closeToolbarPopovers 收口）。
-function toggleHighlightMenu() {
-  const next = !highlightMenuOpen.value;
-  closeToolbarPopovers();
-  highlightMenuOpen.value = next;
-  if (next) resetHighlightDraft();
 }
 
 // ---- decoration 引擎 ----
@@ -5093,15 +7015,26 @@ function rescanHighlightViewport() {
   scheduleHighlightScan(0, terminal.rows - 1);
 }
 
+function highlightDeferMs(): number {
+  return outputBacklogBytes() >= HIGHLIGHT_FLOOD_PENDING_BYTES
+    ? HIGHLIGHT_FLOOD_RETRY_MS
+    : HIGHLIGHT_BUSY_RETRY_MS;
+}
+
 function scheduleHighlightScan(start: number, end: number) {
   if (!workbenchActive) return;
   if (!terminal || !highlightEnabled.value || !compiledHighlightRules.value.length) return;
+  // strained：等 onOutputGateRelease 补扫。未达 strained 的 busy 由 catch-up / retry 接。
+  if (outputGate.mode === "strained") return;
   highlightPendingRange = highlightPendingRange
     ? { start: Math.min(highlightPendingRange.start, start), end: Math.max(highlightPendingRange.end, end) }
     : { start, end };
   if (highlightScanScheduled) return;
   highlightScanScheduled = true;
-  const wait = Math.max(0, HIGHLIGHT_SCAN_MIN_INTERVAL_MS - (performance.now() - highlightLastScanAt));
+  const busy = isAppSecondaryBusy() || terminalWriteThrottle.pending;
+  const wait = busy
+    ? highlightDeferMs()
+    : Math.max(0, HIGHLIGHT_SCAN_MIN_INTERVAL_MS - (performance.now() - highlightLastScanAt));
   window.setTimeout(runHighlightScan, wait);
 }
 
@@ -5111,15 +7044,11 @@ function runHighlightScan() {
     highlightPendingRange = undefined;
     return;
   }
-  // Defer while PTY bytes are still coalescing into xterm — scanning mid-flood
-  // rebuilds decorations every frame and amplifies jank.
-  if (terminalWriteThrottle.pendingBytes > 0 || terminalWriteThrottle.pending) {
+  // Defer while PTY bytes are still coalescing — mid-flood scans amplify jank.
+  if (isAppSecondaryBusy() || terminalWriteThrottle.pending) {
     if (!highlightScanScheduled) {
       highlightScanScheduled = true;
-      const wait = terminalWriteThrottle.pendingBytes >= HIGHLIGHT_FLOOD_PENDING_BYTES
-        ? HIGHLIGHT_FLOOD_RETRY_MS
-        : HIGHLIGHT_BUSY_RETRY_MS;
-      window.setTimeout(runHighlightScan, wait);
+      window.setTimeout(runHighlightScan, highlightDeferMs());
     }
     return;
   }
@@ -5561,9 +7490,12 @@ async function setDirectoryTracking(enabled: boolean) {
       showNotice(t("directoryTrackingProtocolPassive"));
     }
     followDirectory.value = enabled;
+    workbenchFollowExplicit = true;
     directoryTrackingSupported.value = mode !== "unsupported";
     directoryParser.reset();
     persistState();
+    // Settings / toolbar toggle also updates the global default for new workbenches.
+    setFollowDirectoryDefault(enabled);
   } catch (cause) {
     showError(cause, "terminal");
   }
@@ -5575,46 +7507,131 @@ function togglePaneOrder() {
   void nextTick(scheduleFit);
 }
 
-function toggleSftpPane() {
-  sftpPaneOpen.value = !sftpPaneOpen.value;
-  persistState();
-  void nextTick(scheduleFit);
-}
+/**
+ * Layout habit setters flip this so a late `local/preferences/get` cannot
+ * clobber an in-session toggle (e.g. user enables the right rail while hydrate
+ * is still in flight with a stale `rightRailOpen: false`).
+ */
+let layoutHabitsTouched = false;
 
-// 全局偏好只影响新工作台的初始面板状态；当前工作台不被连带切换。
-function toggleSftpPaneDefaultOpen() {
-  sftpPaneDefaultOpen.value = !sftpPaneDefaultOpen.value;
+/** Cache layout habits in plugin UI storage (fast); sidecar preferences.json is SoT. */
+function cacheLayoutPrefs() {
   try {
     uiStorage.setItem(SFTP_PANE_OPEN_KEY, sftpPaneDefaultOpen.value ? "true" : "false");
+    uiStorage.setItem(RIGHT_RAIL_KEY, rightRailOpen.value ? "true" : "false");
+    uiStorage.setItem(RESOURCE_STRIP_KEY, resourceStripEnabled.value ? "true" : "false");
+    uiStorage.setItem(FOLLOW_DIRECTORY_KEY, followDirectoryDefault.value ? "true" : "false");
+    uiStorage.setItem(VISIBLE_COLUMNS_KEY, JSON.stringify(visibleColumnsDefault.value));
   } catch {
-    // localStorage 不可用时偏好仅对当前会话生效。
+    /* opaque origin / quota — memory + sidecar still hold the habit */
   }
+}
+
+function loadFollowDirectoryDefault(): boolean {
+  try {
+    return uiStorage.getItem(FOLLOW_DIRECTORY_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function setFollowDirectoryDefault(enabled: boolean) {
+  layoutHabitsTouched = true;
+  followDirectoryDefault.value = enabled;
+  cacheLayoutPrefs();
+  void syncPrefs();
+}
+
+function loadVisibleColumnsDefault(): SftpColumn[] {
+  try {
+    return sanitizeVisibleColumns(JSON.parse(uiStorage.getItem(VISIBLE_COLUMNS_KEY) || "null"));
+  } catch {
+    return [...DEFAULT_VISIBLE_COLUMNS];
+  }
+}
+
+function setVisibleColumnsDefault(columns: SftpColumn[]) {
+  layoutHabitsTouched = true;
+  visibleColumnsDefault.value = sanitizeVisibleColumns(columns);
+  cacheLayoutPrefs();
+  void syncPrefs();
+}
+
+function setSftpPaneDefaultOpen(open: boolean) {
+  layoutHabitsTouched = true;
+  sftpPaneDefaultOpen.value = open;
+  cacheLayoutPrefs();
+  void syncPrefs();
+}
+
+function toggleSftpPane() {
+  sftpPaneOpen.value = !sftpPaneOpen.value;
+  workbenchSftpPaneExplicit = true;
+  // Remember as the habit for the next new workbench (close once → stay closed).
+  setSftpPaneDefaultOpen(sftpPaneOpen.value);
+  persistState();
+  void nextTick(scheduleFit);
 }
 
 function loadSftpPaneDefaultOpen(): boolean {
   try {
     return sanitizeSftpPaneDefaultOpen(uiStorage.getItem(SFTP_PANE_OPEN_KEY));
   } catch {
-    return false;
+    return true;
   }
 }
 
 function loadResourceStripEnabled(): boolean {
+  // Motty-like: monitor dock is opt-in (Gauge). Explicit "true" keeps it open.
   try {
-    return uiStorage.getItem(RESOURCE_STRIP_KEY) !== "false";
+    return uiStorage.getItem(RESOURCE_STRIP_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function setResourceStripEnabled(enabled: boolean) {
+  layoutHabitsTouched = true;
+  resourceStripEnabled.value = enabled === true;
+  cacheLayoutPrefs();
+  void syncPrefs();
+  syncMetricsPolling();
+  void nextTick(scheduleFit);
+}
+
+function loadRightRailOpen(): boolean {
+  try {
+    return uiStorage.getItem(RIGHT_RAIL_KEY) !== "false";
   } catch {
     return true;
   }
 }
 
-function setResourceStripEnabled(enabled: boolean) {
-  resourceStripEnabled.value = enabled;
-  try {
-    uiStorage.setItem(RESOURCE_STRIP_KEY, enabled ? "true" : "false");
-  } catch {
-    /* ignore quota / private mode */
+function setRightRailOpen(open: boolean) {
+  layoutHabitsTouched = true;
+  rightRailOpen.value = open === true;
+  cacheLayoutPrefs();
+  void syncPrefs();
+  void nextTick(scheduleFit);
+}
+
+function toggleRightRail() {
+  setRightRailOpen(!rightRailOpen.value);
+}
+
+/** Apply plugin-local layout habits to the live workbench (after prefs hydrate). */
+function applyLayoutHabits() {
+  if (!workbenchSftpPaneExplicit) {
+    sftpPaneOpen.value = sftpPaneDefaultOpen.value;
+  }
+  if (!workbenchFollowExplicit) {
+    followDirectory.value = followDirectoryDefault.value;
+  }
+  if (!workbenchColumnsExplicit) {
+    visibleColumns.value = sanitizeVisibleColumns(visibleColumnsDefault.value);
   }
   syncMetricsPolling();
+  void nextTick(scheduleFit);
 }
 
 // 下载偏好（保存目录 + 每次询问 + 终端字体来源）：权威存储在 sidecar
@@ -5681,6 +7698,7 @@ function cachePrefs() {
 
 async function syncPrefs() {
   cachePrefs();
+  cacheLayoutPrefs();
   try {
     await window.datawisePlugin.invoke("local/preferences/set", {
       downloadDir: downloadDirState.value,
@@ -5693,7 +7711,14 @@ async function syncPrefs() {
       copilotDockWidth: copilotDockWidth.value,
       copilotChatMode: copilotChatMode.value,
       copilotReplyLanguage: copilotReplyLanguage.value,
+      copilotRedactOutput: copilotRedactOutput.value,
       copilotModelPreference: copilotModelPreference.value,
+      // Plugin-local layout habits (SSH preferences.json — not host settings).
+      sftpPaneDefaultOpen: sftpPaneDefaultOpen.value,
+      rightRailOpen: rightRailOpen.value,
+      resourceStripEnabled: resourceStripEnabled.value,
+      followDirectoryDefault: followDirectoryDefault.value,
+      visibleColumns: visibleColumnsDefault.value,
     });
   } catch {
     // 旧 sidecar 无此方法：本次会话内存态兜底。
@@ -5722,7 +7747,13 @@ async function hydratePrefs() {
       copilotDockWidth?: unknown;
       copilotChatMode?: unknown;
       copilotReplyLanguage?: unknown;
+      copilotRedactOutput?: unknown;
       copilotModelPreference?: unknown;
+      sftpPaneDefaultOpen?: unknown;
+      rightRailOpen?: unknown;
+      resourceStripEnabled?: unknown;
+      followDirectoryDefault?: unknown;
+      visibleColumns?: unknown;
     }>("local/preferences/get", {});
     if (typeof prefs.downloadDir === "string") downloadDirState.value = prefs.downloadDir.trim();
     if (typeof prefs.downloadUseDefaultDir === "boolean") downloadUseDefaultState.value = prefs.downloadUseDefaultDir;
@@ -5739,12 +7770,45 @@ async function hydratePrefs() {
     if (savedMode) copilotChatMode.value = savedMode;
     const savedReplyLang = normalizeCopilotReplyLanguage(prefs.copilotReplyLanguage);
     if (savedReplyLang) copilotReplyLanguage.value = savedReplyLang;
+    if (typeof prefs.copilotRedactOutput === "boolean") copilotRedactOutput.value = prefs.copilotRedactOutput;
     const savedPrefer = normalizeModelPreference(prefs.copilotModelPreference);
     if (savedPrefer) copilotModelPreference.value = savedPrefer;
+    // Layout habits: sidecar wins unless the user already toggled this session
+    // (stale get must not undo an in-flight enable of the right rail / monitor dock).
+    if (!layoutHabitsTouched) {
+      if (typeof prefs.sftpPaneDefaultOpen === "boolean") {
+        sftpPaneDefaultOpen.value = prefs.sftpPaneDefaultOpen;
+      } else {
+        sftpPaneDefaultOpen.value = loadSftpPaneDefaultOpen();
+      }
+      if (typeof prefs.rightRailOpen === "boolean") {
+        rightRailOpen.value = prefs.rightRailOpen;
+      } else {
+        rightRailOpen.value = loadRightRailOpen();
+      }
+      if (typeof prefs.resourceStripEnabled === "boolean") {
+        resourceStripEnabled.value = prefs.resourceStripEnabled;
+      } else {
+        resourceStripEnabled.value = loadResourceStripEnabled();
+      }
+      if (typeof prefs.followDirectoryDefault === "boolean") {
+        followDirectoryDefault.value = prefs.followDirectoryDefault;
+      } else {
+        followDirectoryDefault.value = loadFollowDirectoryDefault();
+      }
+      if (prefs.visibleColumns !== undefined) {
+        visibleColumnsDefault.value = sanitizeVisibleColumns(prefs.visibleColumns);
+      } else {
+        visibleColumnsDefault.value = loadVisibleColumnsDefault();
+      }
+    }
     cachePrefs();
+    cacheLayoutPrefs();
+    applyLayoutHabits();
     if (copilotEnabled.value) void refreshCopilotModelSource();
   } catch {
-    // 旧 sidecar：保留 localStorage 种子或默认。
+    // 旧 sidecar：保留 uiStorage 种子或默认。
+    applyLayoutHabits();
   }
 }
 
@@ -5912,13 +7976,15 @@ function toggleClickCursor() {
 
 function startDividerDrag(event: PointerEvent) {
   const container = paneContainer.value;
-  if (!container) return;
+  if (!container || sftpDrawerMode.value) return;
   const pointerId = event.pointerId;
   const move = (next: PointerEvent) => {
     const bounds = container.getBoundingClientRect();
-    const fromLeft = ((next.clientX - bounds.left) / bounds.width) * 100;
-    const terminalPercent = paneOrder.value === "terminal-left" ? fromLeft : 100 - fromLeft;
-    splitRatio.value = Math.max(35, Math.min(80, terminalPercent));
+    const raw =
+      paneOrder.value === "sftp-left"
+        ? next.clientX - bounds.left
+        : bounds.right - next.clientX;
+    sftpWidthPx.value = clampSftpWidthPx(raw);
     scheduleFit();
   };
   const stop = () => {
@@ -5937,7 +8003,10 @@ function startDividerDrag(event: PointerEvent) {
 function toggleColumn(column: SftpColumn) {
   const hadOwnerData = visibleColumns.value.includes("owner") || visibleColumns.value.includes("group");
   visibleColumns.value = visibleColumns.value.includes(column) ? visibleColumns.value.filter((value) => value !== column) : [...visibleColumns.value, column];
+  workbenchColumnsExplicit = true;
   persistState();
+  // Settings / header toggle also updates the global default for new workbenches.
+  setVisibleColumnsDefault(visibleColumns.value);
   // 属主/属组列从关到开：当前列表可能没有 owner/group 数据（此前请求没带
   // includeOwner），重拉一次目录；关列不需要重拉。
   if ((column === "owner" || column === "group") && !hadOwnerData && session.value && !sudoMode.value) {
@@ -6680,19 +8749,30 @@ async function applyDropPlan(plan: Awaited<ReturnType<typeof planFolderDrop>>, t
   await uploadFolderDrop(plan.files, plan.emptyDirs, targetDir);
 }
 
-async function uploadSource(name: string, size: number, readChunk: (offset: number, length: number) => Promise<Uint8Array>, resume?: { taskId: string; remotePath: string }, targetDir?: string, options?: { lzpack?: boolean }) {
-  if (!session.value) return;
+async function uploadSource(
+  name: string,
+  size: number,
+  readChunk: (offset: number, length: number) => Promise<Uint8Array>,
+  resume?: { taskId: string; remotePath: string },
+  targetDir?: string,
+  options?: { lzpack?: boolean; sessionId?: string; duplicatePreCheckedAbsent?: boolean },
+): Promise<boolean> {
+  // 批量上传可显式传入其他会话的 sessionId；缺省仍走当前工作台会话。
+  const sessionId = (options?.sessionId?.trim() || session.value?.sessionId || "").trim();
+  if (!sessionId) return false;
+  // 跨会话批量上传固定走普通 SFTP（不继承当前面板的 sudo 开关）。
+  const useSudo = !options?.sessionId && sudoMode.value;
   // resume 携带原 taskId/remotePath：后端校验 spool meta 后从已传前缀续接。
   // targetDir 仅新上传生效（终端拖入的自定义目标目录）；缺省仍是 SFTP 当前目录。
-  const lzpack = !!options?.lzpack && !sudoMode.value;
-  const uploadStart = sudoMode.value ? "sudo/upload/start" : "sftp/upload/start";
-  const uploadFinish = sudoMode.value ? "sudo/upload/finish" : "sftp/upload/finish";
+  const lzpack = !!options?.lzpack && !useSudo;
+  const uploadStart = useSudo ? "sudo/upload/start" : "sftp/upload/start";
+  const uploadFinish = useSudo ? "sudo/upload/finish" : "sftp/upload/finish";
   const info = await window.datawisePlugin.invoke<{ taskId: string; chunkSize: number; resumeOffset?: number }>(uploadStart, resume
-    ? { sessionId: session.value.sessionId, remotePath: resume.remotePath, size, resumeTaskId: resume.taskId }
-    : { sessionId: session.value.sessionId, remotePath: joinRemote(targetDir ?? currentPath.value, name), size, mode: lzpack ? "lzpack" : undefined });
+    ? { sessionId, remotePath: resume.remotePath, size, resumeTaskId: resume.taskId }
+    : { sessionId, remotePath: joinRemote(targetDir ?? currentPath.value, name), size, mode: lzpack ? "lzpack" : undefined });
   const startOffset = info.resumeOffset ?? 0;
   const uploadName = lzpack ? `${name}.dbxz` : name;
-  transferTasks[info.taskId] = { taskId: info.taskId, sessionId: session.value.sessionId, direction: "upload", fileName: uploadName, size, transferred: startOffset, status: startOffset > 0 ? "running" : "queued", joinedAt: Date.now(), compression: lzpack ? "lzpack" : undefined };
+  transferTasks[info.taskId] = { taskId: info.taskId, sessionId, direction: "upload", fileName: uploadName, size, transferred: startOffset, status: startOffset > 0 ? "running" : "queued", joinedAt: Date.now(), compression: lzpack ? "lzpack" : undefined };
   try {
     let offset = startOffset;
     while (offset < size) {
@@ -6722,25 +8802,75 @@ async function uploadSource(name: string, size: number, readChunk: (offset: numb
       throw Object.assign(cause instanceof Error ? cause : new Error(String(cause)), { code: "upload-start-failed" });
     }
     await waitForTransferCompletion(info.taskId);
+    return true;
   } catch (cause) {
     await window.datawisePlugin.invoke("sftp/transfer/cancel", { taskId: info.taskId, reason: transferCancelReason(cause) }).catch(() => undefined);
     throw cause;
   }
 }
 
+const {
+  batchMode,
+  uploadDir,
+  uploadPolicy,
+  uploadFiles,
+  uploading,
+  uploadProgress,
+  uploadSummary,
+  uploadError,
+  uploadFilesOpen,
+  uploadTotalBytes,
+  uploadReady,
+  setBatchMode,
+  pickUploadFiles,
+  onUploadFilesInput,
+  removeUploadFile,
+  clearUploadFiles,
+  runBatchUpload,
+  dismissUploadResult,
+} = useBatchUpload({
+  t,
+  showError,
+  uploadSource,
+  batchTargets,
+  batchSelected,
+  homeDir: batchHomeDir,
+  fileInput: batchUploadInput,
+});
+const batchUploadBytesLabel = computed(() => formatBytes(uploadTotalBytes.value));
+
+// issue #305：分片 ACK 事件丢失时不再死等 30s——按阶梯轮询 sftp/transfer/status。
+const UPLOAD_ACK_POLL_STEPS_MS = [3_000, 8_000, 15_000, 30_000];
+
 function waitForUploadAck(taskId: string, nextOffset: number) {
   return new Promise<void>((resolve, reject) => {
-    const timer = window.setTimeout(async () => {
+    const settle = (outcome: () => void) => {
+      const waiter = uploadAckWaiters.get(taskId);
+      if (waiter) window.clearTimeout(waiter.timer);
       uploadAckWaiters.delete(taskId);
-      try {
-        const status = await window.datawisePlugin.invoke<{ transferred: number; status: string }>("sftp/transfer/status", { taskId });
-        if (status.transferred >= nextOffset && status.status === "running") resolve();
-        else reject(Object.assign(new Error(t("errors.uploadAckTimeout")), { code: "upload-ack-timeout" }));
-      } catch (cause) {
-        reject(cause instanceof Error ? cause : new Error(String(cause)));
-      }
-    }, 30_000);
-    uploadAckWaiters.set(taskId, { nextOffset, resolve, reject, timer });
+      outcome();
+    };
+    const poll = (step: number) => {
+      const delay = UPLOAD_ACK_POLL_STEPS_MS[Math.min(step, UPLOAD_ACK_POLL_STEPS_MS.length - 1)]!;
+      const timer = window.setTimeout(async () => {
+        try {
+          const status = await window.datawisePlugin.invoke<{ transferred: number; status: string }>("sftp/transfer/status", { taskId });
+          if (status.transferred >= nextOffset && status.status !== "cancelled" && status.status !== "failed") {
+            settle(resolve);
+            return;
+          }
+          if (status.status === "cancelled" || status.status === "failed") {
+            settle(() => reject(Object.assign(new Error(transferTasks[taskId]?.error || t(`transferStatus.${status.status}`)), { code: status.status === "cancelled" ? "transfer-cancelled" : "transfer-terminal" })));
+            return;
+          }
+          poll(step + 1);
+        } catch {
+          poll(step + 1);
+        }
+      }, delay);
+      uploadAckWaiters.set(taskId, { nextOffset, resolve, reject, timer });
+    };
+    poll(0);
   });
 }
 
@@ -6762,7 +8892,7 @@ function probeLocalCapabilities() {
   return localCapabilities;
 }
 
-async function downloadEntry(entry: SftpEntry, expandLzpack = false) {
+async function downloadEntry(entry: SftpEntry, expandLzpack = false, askTarget = false) {
   fileMenu.value = undefined;
   // 目录条目走递归文件夹下载（tree/start + 同一分块管线）；文件沿用单文件管线。
   if (entry.kind === "directory") {
@@ -6786,11 +8916,11 @@ async function downloadEntry(entry: SftpEntry, expandLzpack = false) {
     showError(new Error(t("sftpLzpack.filesOnly")));
     return;
   }
-  // 「使用默认地址」关闭时先选保存目录；取消则整次下载不发生。
+  // 「使用默认地址」关闭时，或右键「下载到…」强制选目录；取消则整次下载不发生。
   // 仅本地落盘可指定目录——web/docker 浏览器下载由浏览器决定位置。
   let dirOverride = "";
   let setDefaultAfter = false;
-  if (saveToLocal && !loadDownloadUseDefaultDir()) {
+  if (saveToLocal && (askTarget || !loadDownloadUseDefaultDir())) {
     const chosen = await askDownloadTarget(entry.name);
     if (chosen === undefined) return;
     dirOverride = chosen.dir.trim();
@@ -7454,11 +9584,76 @@ function currentTerminalSelectionUrl(): string | null {
 function interceptTerminalPaste(event: ClipboardEvent) {
   event.preventDefault();
   event.stopPropagation();
+  if (sessionPrefs.value.pasteImageEnabled) {
+    const imagePick = pickPasteImage(filesFromClipboard(event.clipboardData));
+    if (imagePick.ok) {
+      void pasteImageIntoTerminal(imagePick.file);
+      return;
+    }
+    if (imagePick.reason === "too-large") {
+      showNotice(t("sessionPrefs.pasteImageTooLarge"));
+      return;
+    }
+  }
   const text = event.clipboardData?.getData("text/plain") || "";
   if (!text) return;
   void sendConfirmedPaste(text);
 }
 
+/** Motty paste-image: Local → host file path; SSH → upload then remote path. */
+async function pasteImageIntoTerminal(file: File) {
+  const kind = resolvePasteImageKind({
+    sshConnected: connected.value && !!session.value,
+    protocolKind: protocolSession.value?.kind ?? null,
+  });
+  if (kind === "unsupported") {
+    showNotice(t("sessionPrefs.pasteImageUnsupported"));
+    return;
+  }
+  if (terminalTransferBusy.value) return;
+  const name = pasteImageFileName(file);
+  try {
+    if (kind === "local") {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const saved = await window.datawisePlugin.invoke<{ localPath: string; name: string }>("local/saveFile", {
+        name,
+        dataBase64: window.datawisePlugin.encodeBase64(bytes),
+        targetDir: loadDownloadDir() || undefined,
+        conflict: undefined,
+      });
+      const path = saved.localPath;
+      showNotice(t("sessionPrefs.pasteImageSaved", { path }));
+      await sendConfirmedPaste(pasteImageInsertText(path));
+      return;
+    }
+    // SSH: upload into the current SFTP directory (follow-cwd when enabled).
+    if (!session.value || !canWrite.value) {
+      showNotice(t("sessionPrefs.pasteImageUnsupported"));
+      return;
+    }
+    const remotePath = joinRemote(currentPath.value, name);
+    const ok = await uploadSource(
+      name,
+      file.size,
+      async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
+      undefined,
+      currentPath.value,
+    );
+    if (!ok) return;
+    showNotice(t("sessionPrefs.pasteImageUploaded", { path: remotePath }));
+    await sendConfirmedPaste(pasteImageInsertText(remotePath));
+  } catch (cause) {
+    showError(cause);
+  } finally {
+    terminal?.focus();
+  }
+}
+
+/**
+ * 粘贴确认同时承担「全角 / 智能标点纠错」：返回值是**实际要发送的文本**，
+ * null 表示取消。用户在弹窗里显式选择「使用 ASCII」时才替换，绝不静默改写；
+ * 只替换文本、不附带回车，执行键仍归用户。
+ */
 async function sendConfirmedPaste(text: string) {
   if (!text) return;
   const accepted = await confirmRiskyPaste(text);
@@ -7467,25 +9662,25 @@ async function sendConfirmedPaste(text: string) {
     return;
   }
   if (!session.value || terminalTransferBusy.value) return;
-  trackPendingInput(text);
-  sendTerminalBytes(new TextEncoder().encode(text));
+  trackPendingInput(accepted);
+  sendTerminalBytes(new TextEncoder().encode(accepted));
   terminal?.focus();
 }
 
-function confirmRiskyPaste(text: string): Promise<boolean> {
+function confirmRiskyPaste(text: string): Promise<string | null> {
   const confirmation = buildPasteConfirmation(text);
-  if (!confirmation.required) return Promise.resolve(true);
+  if (!confirmation.required) return Promise.resolve(text);
   return new Promise((resolve) => {
     pasteConfirmResolver = resolve;
     pasteConfirm.value = confirmation;
   });
 }
 
-function resolvePasteConfirm(accepted: boolean) {
+function resolvePasteConfirm(text: string | null = null) {
   pasteConfirm.value = undefined;
   const resolve = pasteConfirmResolver;
   pasteConfirmResolver = undefined;
-  resolve?.(accepted);
+  resolve?.(text);
 }
 
 function selectAllTerminal() {
@@ -7496,8 +9691,115 @@ function selectAllTerminal() {
 
 function clearTerminal() {
   terminal?.clear();
+  gutterStamps.clear();
+  clearHighlightDecorations();
+  refreshTerminalGutter();
   terminalMenuOpen.value = false;
   terminal?.focus();
+}
+
+/** Motty ClearScrollback: drop history above the viewport; keep the visible screen. */
+function clearTerminalScrollback() {
+  if (!terminal || !terminalHasScrollback(terminal)) {
+    terminalMenuOpen.value = false;
+    terminal?.focus();
+    return;
+  }
+  clearXtermScrollback(terminal, sessionPrefs.value.scrollback);
+  gutterStamps.clear();
+  clearHighlightDecorations();
+  refreshTerminalGutter();
+  terminalMenuOpen.value = false;
+  terminal?.focus();
+}
+
+/** Motty save-output: dump buffer to a local .txt download. */
+function saveTerminalOutputAsText() {
+  terminalMenuOpen.value = false;
+  if (!terminal) return;
+  const text = readTerminalBufferText(terminal.buffer.active);
+  const bytes = new TextEncoder().encode(text.endsWith("\n") ? text : `${text}\n`);
+  saveBrowserDownload([bytes], terminalOutputFileName());
+  terminal?.focus();
+}
+
+/** Motty MenuSearchSelection: open the selection in the system browser search. */
+function searchTerminalSelectionOnWeb() {
+  terminalMenuOpen.value = false;
+  const url = webSearchUrlForSelection(terminal?.getSelection() || "");
+  if (!url) return;
+  try {
+    window.open(url, "_blank", "noopener,noreferrer");
+  } catch {
+    showNotice(t("terminalOpenUrlFailed"));
+  }
+  terminal?.focus();
+}
+
+function askCopilotAboutRecentOutput() {
+  terminalMenuOpen.value = false;
+  if (!terminal) return;
+  const text = readTerminalRecentText(terminal.buffer.active, 6000).trim();
+  void openCopilotDock(
+    "explain_output",
+    text ? `Explain this recent terminal output and suggest next diagnostic steps:\n${text}` : undefined,
+  );
+}
+
+/** Motty 向右分屏 → DW vertical (side-by-side); 向下 → horizontal (stacked). */
+async function openTerminalSplitFromMenu(orientation: TerminalSplitOrientation) {
+  terminalMenuOpen.value = false;
+  setSplitOrientation(orientation);
+  if (splitLayoutOpen.value) {
+    scheduleFit();
+    return;
+  }
+  await toggleTerminalSplit();
+}
+
+function canRevealTerminalFolder(): boolean {
+  return protocolSession.value?.kind === "local" && !!terminalCwd.value.trim();
+}
+
+async function revealTerminalFolder() {
+  terminalMenuOpen.value = false;
+  const path = terminalCwd.value.trim();
+  if (!path) return;
+  try {
+    await window.datawisePlugin.invoke("local/reveal", { path });
+  } catch (cause) {
+    showError(cause);
+  }
+}
+
+function openTerminalFilesPane() {
+  terminalMenuOpen.value = false;
+  if (!sftpPaneOpen.value) toggleSftpPane();
+}
+
+function openTerminalTransferPanel() {
+  terminalMenuOpen.value = false;
+  if (!transferPanelOpen.value) toggleTransferPanel();
+}
+
+function openTerminalMetricsFromMenu() {
+  terminalMenuOpen.value = false;
+  if (!metricsOpen.value) toggleMetrics();
+}
+
+function openTerminalDockerFromMenu() {
+  terminalMenuOpen.value = false;
+  if (!dockerOpen.value) toggleDocker();
+}
+
+function reconnectFromTerminalMenu() {
+  terminalMenuOpen.value = false;
+  void reconnectNow();
+}
+
+function disconnectFromTerminalMenu() {
+  terminalMenuOpen.value = false;
+  void closeSession();
 }
 
 function chooseZmodem() {
@@ -7549,11 +9851,32 @@ function persistInteractionPrefs() {
 }
 
 function updateInteractionPrefs(patch: Partial<InteractionPrefs>) {
+  const prev = interactionPrefs.value;
   interactionPrefs.value = sanitizeInteractionPrefs({ ...interactionPrefs.value, ...patch });
   persistInteractionPrefs();
   if (commandHistory.value.length > interactionPrefs.value.historyLimit) {
     commandHistory.value = commandHistory.value.slice(0, interactionPrefs.value.historyLimit);
     persistCommandHistory();
+  }
+  if (patch.completionMode !== undefined && patch.completionMode !== prev.completionMode) {
+    const mode = interactionPrefs.value.completionMode;
+    if (!completionModeAutoOpens(mode)) {
+      hideCommandSuggest();
+      closeCompletionMenu();
+      completionController.dismiss();
+    } else if (!completionModeShowsList(mode)) {
+      // Inline: keep ghost engines, drop any open Fig/list popup.
+      closeCompletionMenu();
+      completionManualOpen.value = false;
+      commandSuggestTabArmed.value = false;
+    }
+  }
+  // #306：无折行开关/列数变化即时重排主终端与分屏副屏。
+  if (
+    patch.noWrap !== undefined && patch.noWrap !== prev.noWrap
+    || patch.noWrapColumns !== undefined && patch.noWrapColumns !== prev.noWrapColumns
+  ) {
+    scheduleFit();
   }
 }
 
@@ -7687,33 +10010,52 @@ async function hydrateQuickCommands() {
   }
 }
 
-async function addQuickCommand() {
-  const command = quickDraft.command.trim();
-  if (!command || quickSaving.value) return;
-  if (!quickDraftCanAdd.value) return;
+type QuickCommandSavePayload = {
+  id?: string;
+  name: string;
+  command: string;
+  group: string;
+  scope: "global" | "connection";
+};
+
+/** Shared persistence for both quick-command forms (settings card add + manage list). */
+async function persistQuickCommand(payload: QuickCommandSavePayload): Promise<boolean> {
+  const command = payload.command.trim();
+  if (!command || quickSaving.value) return false;
   const boundConnectionId =
-    quickDraft.scope === "connection" && connectionId.value ? connectionId.value : "";
+    payload.scope === "connection" && connectionId.value ? connectionId.value : "";
+  const scopeKey = boundConnectionId || null;
+  if (!payload.id && !canAddQuickCommandInScope(quickCommands.value, scopeKey)) return false;
+  if (payload.id) {
+    const existing = quickCommands.value.find((item) => item.id === payload.id);
+    const sameScope = (existing?.connectionId?.trim() ?? "") === (boundConnectionId || "");
+    if (!sameScope && !canAddQuickCommandInScope(quickCommands.value, scopeKey)) return false;
+  }
   quickSaving.value = true;
   try {
     const response = await window.datawisePlugin.invoke<{ commands: unknown }>("ssh/quickCommands/save", {
-      id: quickDraft.id ?? "",
-      name: quickDraft.name.trim(),
+      id: payload.id ?? "",
+      name: payload.name.trim(),
       command,
       connectionId: boundConnectionId,
-      group: quickDraft.group.trim().slice(0, QUICK_COMMAND_GROUP_MAX_LENGTH),
+      group: payload.group.trim().slice(0, QUICK_COMMAND_GROUP_MAX_LENGTH),
     });
     quickCommands.value = normalizeQuickCommands(response.commands);
-    closeQuickEditor();
+    return true;
   } catch (cause) {
     showError(cause, "terminal");
+    return false;
   } finally {
     quickSaving.value = false;
   }
 }
 
-// 点击卡片的编辑按钮：编辑器子视图载入草稿（携带 id 即更新语义）。
-function editQuickCommand(item: QuickCommand) {
-  openQuickEditor(item);
+async function saveQuickCommandFromPanel(payload: QuickCommandSavePayload) {
+  if (await persistQuickCommand(payload)) quickPanelSettings.value?.onSaved();
+}
+
+async function saveQuickCommandFromSettings(payload: QuickCommandSavePayload) {
+  if (await persistQuickCommand(payload)) settingsDialog.value?.onQuickCommandSaved?.();
 }
 
 // 快速命令删除确认走应用内弹窗：工作台 iframe 无 allow-modals，window.confirm 恒 false。
@@ -7798,12 +10140,43 @@ async function makeQuickCommandGlobal(item: QuickCommand) {
 // 打断流程）；手动 Esc/外点/再点工具栏按钮关闭。
 function writeQuickCommand(item: QuickCommand, execute: boolean) {
   if (!session.value || terminalTransferBusy.value || commandRunning.value) return;
-  const text = quickCommandText(item.command);
+  const parsed = parseQuickCommandTemplate(item.command);
+  if (parsed.hasVariables) {
+    // 参数化片段：先弹出插值表单，未填完绝不把 {{…}} 原文写进 shell。
+    quickCommandVars.value = { item, execute, parsed, values: defaultTemplateValues(parsed) };
+    return;
+  }
+  writeQuickCommandText(item.command, execute);
+}
+
+function writeQuickCommandText(command: string, execute: boolean) {
+  const text = quickCommandText(command);
   if (!text) return;
   const payload = execute ? `${text}\r` : text;
   if (execute) trackPendingInput(payload);
   sendTerminalBytes(new TextEncoder().encode(payload));
   terminal?.focus();
+}
+
+function closeQuickCommandVars() {
+  quickCommandVars.value = null;
+}
+
+function setQuickCommandVar(name: string, event: Event) {
+  const state = quickCommandVars.value;
+  if (!state) return;
+  const value = (event.target as HTMLInputElement).value;
+  state.values = { ...state.values, [name]: value };
+}
+
+function confirmQuickCommandVars() {
+  const state = quickCommandVars.value;
+  if (!state) return;
+  const rendered = renderQuickCommandTemplate(state.item.command, state.values);
+  if (rendered.unresolved.length) return;
+  const { execute } = state;
+  closeQuickCommandVars();
+  writeQuickCommandText(rendered.text, execute);
 }
 function sendQuickCommand(item: QuickCommand) {
   writeQuickCommand(item, true);
@@ -7905,7 +10278,13 @@ async function refreshBatchTargets() {
     } catch {
       // 旧宿主无此 API：退化为只滤掉 disconnected，不主动 prune。
     }
-    const orphans = orphanBatchSessionIds(targets, openWorkbenchIds);
+    // Never prune the session owned by this workbench — missing workbenchId in
+    // host.listOpenWorkbenches (Monitor-opened tabs historically omitted it)
+    // would otherwise close us in a reconnect loop right after connect.
+    const selfSessionId = session.value?.sessionId?.trim() || "";
+    const orphans = orphanBatchSessionIds(targets, openWorkbenchIds).filter(
+      (sessionId) => !selfSessionId || sessionId !== selfSessionId,
+    );
     for (const sessionId of orphans) {
       void window.datawisePlugin.invoke("ssh/session/close", { sessionId }).catch(() => undefined);
     }
@@ -8199,11 +10578,19 @@ function scheduleBatchResultDismiss(hasFailure: boolean) {
 }
 
 async function sendBatchCommand() {
-  const command = batchDraft.value.trim();
-  if (!command || !batchSelected.value.length || batchSending.value) return;
+  const draft = batchDraft.value.trim();
+  if (!draft || !batchSelected.value.length || batchSending.value) return;
+  // 只读连接：批量广播是显式的写命令操作，与后端 batch_input_read_only_error
+  // 及 MCP inspection-only 门对齐。提前给可见原因，别让用户点完才看到失败行。
+  if (!canWrite.value) {
+    showNotice(t("commandRisk.readOnlyBatchBlocked"));
+    return;
+  }
   // 危险/超长命令复用粘贴红色确认弹窗（同一套 dangerousCommands 规则）。
-  const confirmed = await confirmRiskyPaste(command);
-  if (!confirmed) return;
+  // 返回值是用户确认后**实际要发送**的文本（可能已应用 ASCII 纠错）——
+  // 旧版忽略返回值仍发 draft，导致全角纠错在批量条路径上不生效。
+  const command = await confirmRiskyPaste(draft);
+  if (!command) return;
   batchSending.value = true;
   clearBatchResultDismissTimer();
   batchError.value = "";
@@ -8247,7 +10634,7 @@ function dismissBatchResult() {
   batchError.value = "";
 }
 
-// ---- 命令条内联保存为快速命令（与工具栏 Zap 弹层同一后端；可选全局/当前连接）----
+// ---- 命令条内联保存为快速命令（与设置页同一后端；可选全局/当前连接）----
 
 function openBatchBarSave() {
   const command = batchDraft.value.trim();
@@ -8308,7 +10695,6 @@ watch(connected, (value) => {
   if (value) {
     void refreshAgentMode();
   } else {
-    agentModeOpen.value = false;
     metrics.value = undefined;
     metricsError.value = "";
   }
@@ -8318,18 +10704,6 @@ watch(connected, (value) => {
 // ---------------------------------------------------------------------------
 // 连接信息面板（只读）
 // ---------------------------------------------------------------------------
-
-function toggleQuickMenu() {
-  const next = !quickMenuOpen.value;
-  closeToolbarPopovers();
-  quickMenuOpen.value = next;
-  if (next) {
-    // 每次打开回到列表态：清空搜索/展开/编辑器子视图。
-    quickSearch.value = "";
-    quickExpandedId.value = null;
-    quickEditorOpen.value = false;
-  }
-}
 
 function toggleConnectionInfo() {
   const next = !connectionInfoOpen.value;
@@ -8344,20 +10718,7 @@ function toggleConnectionInfo() {
   }
 }
 
-function toggleAgentModeMenu() {
-  const next = !agentModeOpen.value;
-  closeToolbarPopovers();
-  agentModeOpen.value = next;
-  if (next) void refreshAgentMode();
-}
-
 // ---- 模板内联互斥清单收敛为具名 toggle（round2），与五个函数 toggle 同族 ----
-
-function toggleColumnsMenu() {
-  const next = !columnsOpen.value;
-  closeToolbarPopovers();
-  columnsOpen.value = next;
-}
 
 function toggleTransferPanel() {
   const next = !transferPanelOpen.value;
@@ -8393,7 +10754,6 @@ async function applyAgentMode(mode: AgentTerminalMode) {
   try {
     await window.datawisePlugin.invoke("ssh/settings/set", { sessionId, agentTerminalMode: mode });
     agentMode.value = mode;
-    agentModeOpen.value = false;
   } catch (cause) {
     showError(cause, "terminal");
   } finally {
@@ -8460,7 +10820,7 @@ async function refreshMetrics() {
   }
 }
 
-/** 资源条或指标浮层任一需要时共用 5s 轮询；两者都关则停表。 */
+/** 侧坞或指标浮层任一需要时共用 5s 轮询；两者都关则停表。 */
 function syncMetricsPolling() {
   window.clearInterval(metricsTimer);
   metricsTimer = 0;
@@ -8472,6 +10832,20 @@ function syncMetricsPolling() {
       void refreshMetrics();
     }
   }, 5000);
+}
+
+function toggleMonitorDock() {
+  setResourceStripEnabled(!resourceStripEnabled.value);
+}
+
+function closeMonitorDock() {
+  setResourceStripEnabled(false);
+}
+
+function closeSftpDrawerIfOverlay() {
+  if (sftpDrawerMode.value && sftpPaneOpen.value) {
+    toggleSftpPane();
+  }
 }
 
 // 悬浮指标卡：打开即刷新并启动 5s 轮询；不阻塞终端/SFTP 操作，随时开关。
@@ -8545,12 +10919,26 @@ function closeAssets() {
   assetsOpen.value = false;
 }
 
-const filteredHistory = computed(() =>
-  filterHistory(
-    historyForScope(commandHistory.value, interactionPrefs.value.historyScope, connectionId.value),
-    historyPanelQuery.value,
-  ),
+const historyScopedEntries = computed(() =>
+  historyForScope(commandHistory.value, interactionPrefs.value.historyScope, connectionId.value),
 );
+const filteredHistory = computed(() => {
+  const filtered = filterHistory(historyScopedEntries.value, historyPanelQuery.value, historyFilter.value);
+  // A live query stays ranked by fzf relevance; the explicit browse sort only
+  // applies to the unfiltered view, otherwise scoring would be silently undone.
+  return historyPanelQuery.value.trim() ? filtered : sortHistoryView(filtered, historySortMode.value);
+});
+/** Distinct host labels in the current scope, for the overlay's host dropdown. */
+const historyHostOptions = computed(() => historyHosts(historyScopedEntries.value));
+const historyFilterActive = computed(() =>
+  historyFilter.value.failedOnly === true || !!historyFilter.value.host,
+);
+function onHistoryHostChange(event: Event) {
+  setHistoryFilter({ host: (event.target as HTMLSelectElement).value });
+}
+function toggleHistoryFailedOnly() {
+  setHistoryFilter({ failedOnly: !historyFilter.value.failedOnly });
+}
 const filteredQuickPalette = computed(() =>
   filterQuickPaletteItems(visibleQuickCommandList.value, quickPaletteQuery.value),
 );
@@ -8565,6 +10953,20 @@ const historyAgeLabels = computed(() => ({
   hours: t("historyPanel.ageHours"),
   days: t("historyPanel.ageDays"),
 }));
+/** Shell-integration result badge for a history row; null for legacy entries. */
+const historyResultLabels = computed(() => ({
+  exit: t("historyPanel.resultExit"),
+  ok: t("historyPanel.resultOk"),
+}));
+function historyBadge(entry: HistoryEntry) {
+  return historyResultBadge(entry, historyResultLabels.value);
+}
+/** Group header for the host-grouped browse view; null keeps the flat list. */
+function historyGroupHead(index: number): { text: string } | null {
+  const raw = historyGroupLabel(filteredHistory.value, index, historySortMode.value);
+  if (raw === null) return null;
+  return { text: raw === HISTORY_UNKNOWN_HOST ? t("historyPanel.unknownHost") : raw };
+}
 
 function syncHistoryDraftFromIndex() {
   const entry = historyPanelIndex.value >= 0 ? filteredHistory.value[historyPanelIndex.value] : undefined;
@@ -8617,11 +11019,31 @@ function pinHistoryPanelSelection() {
   syncHistoryDraftFromIndex();
 }
 
+function interactivePromptOnScreen(): boolean {
+  try {
+    const buffer = terminal?.buffer.active;
+    if (!buffer || buffer.type !== "normal") return false;
+    const row = buffer.baseY + Math.min(buffer.cursorY, buffer.length - 1);
+    return interactivePromptNearCursor(row, (line) => buffer.getLine(line)?.translateToString(true) ?? "");
+  } catch {
+    return false;
+  }
+}
+
+/** Yield overlays while remote asks for input (OTP/password/select) or a host-key dialog is open. */
+function interactivePromptGatePending(): boolean {
+  return isInteractivePromptPending({
+    promptLineOnScreen: interactivePromptOnScreen(),
+    challengeDialogPending: !!hostKeyPrompt.value,
+  });
+}
+
 function toggleHistoryPanel() {
   if (historyPanelOpen.value) {
     closeHistoryPanel(true);
     return;
   }
+  if (interactivePromptGatePending()) return;
   if (!interactionPrefs.value.historyEnabled) {
     showNotice(t("historyPanel.disabledNotice"));
     return;
@@ -8703,6 +11125,79 @@ function onQuickPaletteKey(event: KeyboardEvent) {
   );
 }
 
+// ---- Universal command palette (Ctrl/Cmd+Shift+P) ----
+const commandPaletteCommands = computed<PaletteCommand[]>(() => {
+  const pt = (key: string) => t(key);
+  const gSession = pt("commandPalette.group.session");
+  const gTerminal = pt("commandPalette.group.terminal");
+  const gPanels = pt("commandPalette.group.panels");
+  const gSettings = pt("commandPalette.group.settings");
+  const rows: PaletteCommand[] = [];
+  const add = (
+    id: string, labelKey: string, group: string, aliases: string, shortcut: string, run: () => void,
+  ) => rows.push({ id, label: pt(labelKey), group, aliases, shortcut, run });
+
+  // Session
+  // 旧版这里误标 "Ctrl+R"，但 reconnectNow 从未绑定该键（命令面板里的一行死
+  // 文案）。Ctrl+R 现已作为命令历史热键接入（见 handleTerminalKey），故留空。
+  add("session.reconnect", "commandPalette.cmd.reconnect", gSession, "reconnect reload 重连 重新连接", "", () => { void reconnectNow(); });
+  add("session.newTab", "commandPalette.cmd.newTab", gSession, "new tab session 新建 标签 会话", "", () => { void openNewSessionTab(); });
+  add("session.disconnect", "commandPalette.cmd.disconnect", gSession, "disconnect close 断开 关闭会话", "", () => { void closeSession(); });
+  // Terminal
+  add("terminal.find", "commandPalette.cmd.find", gTerminal, "find search grep 查找 搜索", "Ctrl+F", () => openTerminalSearch());
+  add("terminal.clear", "commandPalette.cmd.clear", gTerminal, "clear cls 清屏", applePlatform ? "⌘K" : "Ctrl+K", () => clearTerminal());
+  add("terminal.copy", "commandPalette.cmd.copy", gTerminal, "copy selection 复制 选中", "", () => { void copyTerminalSelection(); });
+  add("terminal.paste", "commandPalette.cmd.paste", gTerminal, "paste 粘贴", "", () => { void pasteTerminal(); });
+  add("terminal.split", "commandPalette.cmd.split", gTerminal, "split pane 分屏 双栏", "", () => { void toggleTerminalSplit(); });
+  add("terminal.history", "commandPalette.cmd.history", gTerminal, "history command 历史 命令", applePlatform ? "⌘⇧H" : "Ctrl+Shift+H", () => toggleHistoryPanel());
+  add("terminal.quick", "commandPalette.cmd.quick", gTerminal, "quick command snippet 快捷命令", "Ctrl+;", () => toggleQuickPalette());
+  add("terminal.zoomReset", "commandPalette.cmd.zoomReset", gTerminal, "reset font size zoom 重置字号", "Ctrl+0", () => resetTerminalZoom());
+  // Panels
+  add("panel.sftp", "commandPalette.cmd.sftp", gPanels, "sftp files panel 文件 面板", "", () => toggleSftpPane());
+  add("panel.rail", "commandPalette.cmd.rail", gPanels, "right rail toolbar 右侧 工具栏", "", () => toggleRightRail());
+  add("panel.local", "commandPalette.cmd.local", gPanels, "local files pane 本地 文件", "", () => { localPaneOpen.value = !localPaneOpen.value; });
+  add("panel.assistant", "commandPalette.cmd.assistant", gPanels, "copilot ai assistant 助手", "", () => { void openCopilotDock(); });
+  // Settings jumps
+  add("settings.general", "commandPalette.cmd.settings", gSettings, "settings preferences 设置 偏好", "", () => openSettings());
+  add("settings.terminal", "settingsNav.terminal", gSettings, "terminal settings 终端 设置", "", () => openSettingsAt("terminal"));
+  add("settings.connection", "settingsNav.connection", gSettings, "connection settings 连接 设置", "", () => openSettingsAt("sudo"));
+  add("settings.files", "settingsNav.files", gSettings, "sftp settings 文件 设置", "", () => openSettingsAt("transfer"));
+  add("settings.assistant", "settingsNav.assistant", gSettings, "copilot ai settings 助手 设置", "", () => openSettingsAt("agent"));
+  add("settings.security", "settingsNav.security", gSettings, "security settings 安全 设置", "", () => openSettingsAt("security"));
+  add("settings.mcp", "settingsNav.mcp", gSettings, "mcp settings 设置", "", () => openSettingsAt("mcp"));
+  add("settings.scheme", "commandPalette.cmd.scheme", gSettings, "color scheme theme 配色 主题", "", () => openSettingsAt("terminal", "scheme"));
+  add("settings.font", "terminalFont.title", gSettings, "font size family 字体 字号", "", () => openSettingsAt("terminal", "font"));
+  add("settings.quickCommands", "quickCommands", gSettings, "quick commands snippets 快捷命令", "", () => openSettingsAt("terminal", "resource-quick"));
+  add("settings.startup", "startupCommands.title", gSettings, "startup commands 启动命令", "", () => openSettingsAt("terminal", "resource-startup"));
+  add("settings.models", "copilot.settingsModels", gSettings, "llm models provider 助手 模型", "", () => openSettingsAt("agent", "resource-models"));
+  add("settings.highlight", "highlightRules.title", gSettings, "keyword highlight rules 关键字 高亮", "", () => openSettingsAt("terminal", "resource-highlight"));
+  add("settings.sshSync", "sshSync.title", gSettings, "ssh config sync 同步 配置", "", () => openSettingsAt("sudo", "ssh-config-sync"));
+  return rows;
+});
+
+function toggleCommandPalette() {
+  if (commandPaletteOpen.value) {
+    closeCommandPalette();
+    return;
+  }
+  closeQuickPalette();
+  closeHistoryPanel(false);
+  closeCompletionMenu();
+  hideCommandSuggest();
+  closeToolbarPopovers();
+  commandPaletteOpen.value = true;
+  void nextTick(() => commandPaletteRef.value?.focusInput());
+}
+
+function closeCommandPalette() {
+  commandPaletteOpen.value = false;
+}
+
+function runPaletteCommand(cmd: PaletteCommand) {
+  closeCommandPalette();
+  cmd.run();
+}
+
 function onHistoryPanelKey(event: KeyboardEvent) {
   const resolved = resolveHistoryPanelKey(event);
   if (resolved.action === "ignore") return;
@@ -8768,17 +11263,93 @@ function hideCommandSuggest() {
   commandSuggestItems.value = [];
   commandSuggestPrefix.value = "";
   commandSuggestLine.value = "";
+  commandSuggestEchoLine.value = "";
+  commandSuggestGhostCellLimit.value = 0;
+  ghostCommitTarget.value = null;
   commandSuggestTabArmed.value = false;
+  completionManualOpen.value = false;
+  closeAcceptKeyHintMenu();
+}
+
+/** Close the suggest list/badge but keep echo tracking for an accept-hold overlay. */
+function dismissSuggestUiForCommit() {
+  commandSuggestOpen.value = false;
+  commandSuggestItems.value = [];
+  commandSuggestTabArmed.value = false;
+  completionManualOpen.value = false;
+  closeAcceptKeyHintMenu();
+}
+
+/**
+ * Lock ghost to the echoed cursor each xterm paint / cursor move.
+ * Text, cell budget, and position update together (Motty paints one frame).
+ */
+function syncCommandSuggestGhostPos() {
+  if ((!commandSuggestOpen.value && !ghostCommitTarget.value) || !terminal || !terminalHost.value) return;
+  const pane = terminalPaneEl.value;
+  if (!pane) return;
+  const buffer = terminal.buffer.active;
+  const echoed = extractShellInput(cursorLineTextBeforeCursor(buffer));
+  if (echoed !== commandSuggestEchoLine.value) commandSuggestEchoLine.value = echoed;
+  if (ghostCommitTarget.value) {
+    const held = ghostCommitRemainder(echoed, ghostCommitTarget.value);
+    if (held == null) ghostCommitTarget.value = null;
+  }
+  if (!commandSuggestOpen.value && !ghostCommitTarget.value) return;
+  commandSuggestGhostCellLimit.value = ghostRowAvailableCells(buffer, terminal.cols);
+  const ghost = overlayOffsetForCell(
+    terminalHost.value,
+    { cols: terminal.cols, rows: terminal.rows },
+    buffer.cursorX,
+    buffer.cursorY,
+    pane,
+    "inline",
+    readXtermCssCellSize(terminal),
+  );
+  if (!ghost) return;
+  const prev = commandSuggestGhostPos.value;
+  if (
+    prev.left === ghost.left
+    && prev.top === ghost.top
+    && prev.cellHeight === ghost.cellHeight
+    && prev.cellWidth === ghost.cellWidth
+  ) {
+    return;
+  }
+  commandSuggestGhostPos.value = ghost;
 }
 
 function scheduleCommandSuggest() {
+  // Flood: skip; next keystroke / writeParsed after drain will reschedule.
+  if (isAppSecondaryBusy()) return;
   window.clearTimeout(commandSuggestTimer);
   // Align with CompletionController debounce (90ms) to avoid soft-history flash before Fig.
   commandSuggestTimer = window.setTimeout(() => refreshCommandSuggest(), 90);
 }
 
+/** Motty “仅快捷键”: open list + Fig on demand (↓ / Ctrl+Shift+J). */
+function openCompletionsManually() {
+  if (!connected.value || historyPanelOpen.value || quickPaletteOpen.value) return;
+  completionManualOpen.value = true;
+  commandSuggestTabArmed.value = true;
+  completionController.request("manual");
+  refreshCommandSuggest();
+}
+
 function refreshCommandSuggest() {
+  // Accept-hold owns the overlay until echo catches up (Motty suggestionPending).
+  if (ghostCommitTarget.value) return;
   if (historyPanelOpen.value || quickPaletteOpen.value || !terminal || !terminalHost.value || !connected.value) {
+    hideCommandSuggest();
+    return;
+  }
+  const mode = interactionPrefs.value.completionMode;
+  if (!completionModeAutoOpens(mode) && !completionManualOpen.value) {
+    hideCommandSuggest();
+    return;
+  }
+  // Password / MFA / select prompts: do not overlay suggestions on answers.
+  if (interactivePromptGatePending()) {
     hideCommandSuggest();
     return;
   }
@@ -8857,8 +11428,9 @@ function refreshCommandSuggest() {
   );
 
   if (query.kind === "path") {
-    // Args-phase path tokens are owned by Fig path generator; avoid dual RPC.
-    if (owner === "fig") {
+    // Args-phase path tokens are owned by Fig path generator in list mode (avoid dual RPC).
+    // Inline / hotkey-without-list: keep path suggest so gray ghost still works.
+    if (owner === "fig" && completionModeShowsList(mode)) {
       hideCommandSuggest();
       return;
     }
@@ -8874,8 +11446,8 @@ function refreshCommandSuggest() {
   // Args phase (Fig owner): suppress soft history when Fig will list flags/subs/values.
   if (owner === "fig") {
     if (
-      isPendingOptionArgPhase(typedLine, WAVE1_FIG_MANIFEST)
-      || shouldSuppressSoftHistoryUnderFig(typedLine, WAVE1_FIG_MANIFEST)
+      isPendingOptionArgPhase(typedLine, figManifest.value)
+      || shouldSuppressSoftHistoryUnderFig(typedLine, figManifest.value)
     ) {
       hideCommandSuggest();
       return;
@@ -8898,22 +11470,33 @@ function showCommandSuggest(items: SuggestItem[], buffer: { cursorX: number; cur
     && typed
     && !/\s/.test(typed)
     && interactionPrefs.value.figCompletionEnabled
-    && hasFigCommandSpec(typed, WAVE1_FIG_MANIFEST)
+    && hasFigCommandSpec(typed, figManifest.value)
   ) {
     useful = [figArgsHandoffItem(typed)];
   }
+  const prevCommand = commandSuggestOpen.value
+    ? commandSuggestItems.value[commandSuggestIndex.value]?.command
+    : undefined;
   commandSuggestItems.value = useful;
   if (!useful.length) {
     hideCommandSuggest();
     return;
   }
-  const pane = terminalHost.value?.parentElement;
+  // Ghost/list overlays are absolute inside `.terminal-pane` — offsets must use that box
+  // (not `.terminal-with-gutter`), or left/top drift vs the cursor cell.
+  const pane = terminalPaneEl.value;
   if (!pane || !terminal || !terminalHost.value) {
     hideCommandSuggest();
     return;
   }
+  const pathPrefix = commandSuggestPrefix.value;
+  commandSuggestIndex.value = stickySuggestIndex(useful, prevCommand, commandSuggestLine.value, pathPrefix);
   const placement = overlayPlacement(buffer.cursorY, terminal.rows);
   commandSuggestPlacement.value = placement;
+  const cellSize = readXtermCssCellSize(terminal);
+  const active = terminal.buffer.active;
+  commandSuggestEchoLine.value = extractShellInput(cursorLineTextBeforeCursor(active));
+  commandSuggestGhostCellLimit.value = ghostRowAvailableCells(active, terminal.cols);
   const offset = overlayOffsetForCell(
     terminalHost.value,
     { cols: terminal.cols, rows: terminal.rows },
@@ -8921,6 +11504,7 @@ function showCommandSuggest(items: SuggestItem[], buffer: { cursorX: number; cur
     buffer.cursorY,
     pane,
     placement,
+    cellSize,
   );
   const ghost = overlayOffsetForCell(
     terminalHost.value,
@@ -8929,10 +11513,10 @@ function showCommandSuggest(items: SuggestItem[], buffer: { cursorX: number; cur
     buffer.cursorY,
     pane,
     "inline",
+    cellSize,
   );
   if (offset) commandSuggestPos.value = offset;
   if (ghost) commandSuggestGhostPos.value = ghost;
-  if (commandSuggestIndex.value >= useful.length) commandSuggestIndex.value = 0;
   commandSuggestOpen.value = true;
 }
 
@@ -8956,20 +11540,28 @@ async function loadPathSuggest(prefix: string, buffer: { cursorX: number; cursor
 
 function acceptCommandSuggest() {
   const item = commandSuggestItems.value[commandSuggestIndex.value];
-  const typed = commandSuggestLine.value;
+  const typed = pendingTerminalInput || commandSuggestLine.value;
   const pathPrefix = item?.source === "path" ? commandSuggestPrefix.value : undefined;
-  hideCommandSuggest();
-  if (!item) return;
+  if (!item) {
+    hideCommandSuggest();
+    return;
+  }
   const payload = fillSuggestPayload(typed, item, pathPrefix);
+  let targetLine = item.command;
+  if (item.source === "path") {
+    const erased = typed.slice(0, Math.max(0, typed.length - (pathPrefix?.length ?? 0)));
+    targetLine = `${erased}${item.command}`;
+  }
+  // Motty keeps predicted text until echo; we hold the remainder at full opacity.
+  if (payload && commandSuggestGhost.value) {
+    ghostCommitTarget.value = targetLine;
+    dismissSuggestUiForCommit();
+  } else {
+    hideCommandSuggest();
+  }
   if (payload) {
     sendTerminalBytes(new TextEncoder().encode(payload));
-    // Keep pendingTerminalInput in sync with what we injected (replaceTerminalLineWith).
-    if (item.source === "path") {
-      const erased = typed.slice(0, Math.max(0, typed.length - (pathPrefix?.length ?? 0)));
-      pendingTerminalInput = `${erased}${item.command}`;
-    } else {
-      pendingTerminalInput = item.command;
-    }
+    pendingTerminalInput = targetLine;
   }
   commandSuggestToken = item.source === "path" ? pathSegment(item.command) : item.command.split(/\s+/)[0] ?? "";
 }
@@ -9050,6 +11642,7 @@ function beginProtocolTerminal(kind: "local" | "telnet" | "serial", sessionId: s
 
 async function openLocalShell() {
   protocolMenuOpen.value = false;
+  toolbarMoreOpen.value = false;
   try {
     const cols = Math.max(40, terminal?.cols ?? 80);
     const rows = Math.max(10, terminal?.rows ?? 24);
@@ -9835,13 +12428,18 @@ function openSettings() {
   void probeLocalCapabilities();
 }
 
+/** Command-palette entry: open settings at a specific category/anchor. */
+function openSettingsAt(category: "terminal" | "sudo" | "transfer" | "agent" | "security" | "mcp", anchor?: string) {
+  settingsFocusCategory.value = category;
+  settingsFocusAnchor.value = anchor ?? null;
+  settingsFocusAddModel.value = false;
+  settingsOpen.value = true;
+  void probeLocalCapabilities();
+}
+
 function openImportWizard() {
   closeToolbarPopovers();
   importOpen.value = true;
-}
-
-function openProfilesManager() {
-  profilesOpen.value = true;
 }
 
 async function confirmChmod() {
@@ -9888,25 +12486,9 @@ function onZmodemInput(event: Event) {
   zmodemDetectionTimer = window.setTimeout(() => finishZmodemUpload(new Error(t("zmodemNotAvailable"))), ZMODEM_DETECTION_TIMEOUT_MS);
 }
 
-function showTerminalMenu(event: MouseEvent) {
-  // Xshell 取向：有选区 / Shift / 关闭选中粘贴 → 完整菜单；
-  // 选中复制开启且空白处右键 → 快捷粘贴（SecureCRT 习惯，可关）。
-  // 粘贴分支必须 preventDefault：reka 触发器据此跳过开菜单（同时也压住系统菜单）；
-  // 菜单分支不能 preventDefault，否则 reka ContextMenuTrigger 不会打开。
-  const hasSelection = !!terminal?.hasSelection();
-  if (
-    resolveTerminalRightClickAction({
-      selectCopy: termSelectCopy.value,
-      shiftKey: event.shiftKey,
-      hasSelection,
-    }) === "paste"
-  ) {
-    event.preventDefault();
-    terminalMenuOpen.value = false;
-    fileMenu.value = undefined;
-    void pasteTerminal();
-    return;
-  }
+function showTerminalMenu(_event: MouseEvent) {
+  // Motty：右键一律打开菜单（粘贴走菜单项 / Ctrl+V）。
+  // 不能 preventDefault，否则 reka ContextMenuTrigger 不会打开。
   terminalMenuOpen.value = true;
   fileMenu.value = undefined;
 }
@@ -9954,17 +12536,16 @@ function showTransferHistoryMenu(event: MouseEvent, entry: TransferHistoryEntry)
 function closeToolbarPopovers() {
   fileMenu.value = undefined;
   terminalMenuOpen.value = false;
+  uploadFilesOpen.value = false;
   transferHistoryMenu.value = undefined;
   transferPanelOpen.value = false;
-  columnsOpen.value = false;
   pathHistoryOpen.value = false;
-  quickMenuOpen.value = false;
   connectionInfoOpen.value = false;
-  agentModeOpen.value = false;
-  highlightMenuOpen.value = false;
   bookmarkSaveOpen.value = false;
   batchTargetsOpen.value = false;
   batchQuickPickOpen.value = false;
+  toolbarMoreOpen.value = false;
+  protocolMenuOpen.value = false;
 }
 
 function closeMenus() {
@@ -10012,6 +12593,12 @@ function onDocumentMouseDownCapture(event: MouseEvent) {
   ghostClickGuard.noteMouseDown();
   // 批量目标/高亮规则两个 popover 的点空白收起已移交 reka DismissableLayer
   // （pointerdown-outside → update:open(false)），capture 手动清扫移除。
+  if (acceptKeyHintMenuOpen.value) {
+    const target = event.target;
+    if (!(target instanceof Element) || !target.closest(".command-suggest-accept-hint-wrap")) {
+      closeAcceptKeyHintMenu();
+    }
+  }
 }
 function onDocumentClickCapture(event: MouseEvent) {
   if (!ghostClickGuard.shouldSuppress()) return;
@@ -10034,6 +12621,11 @@ const modalOpenStates = computed(() => [
   customEditorOpen.value,
   watchModifiedQueue.value.length > 0,
   pasteConfirm.value,
+  quickCommandVars.value !== null,
+  osc52AskText.value,
+  autofillOffer.value,
+  passwordHintOffer.value,
+  passwordHintPending.value,
   dropUploadPrompt.value,
   downloadPrompt.value !== null,
   downloadConflictPrompt.value !== null,
@@ -10057,6 +12649,7 @@ const modalOpenStates = computed(() => [
   hostKeyPrompt.value,
   agentPromptHead.value,
   dockerConfirm.value !== null,
+  importOpen.value,
 ]);
 const modalOpenCount = computed(() => modalOpenStates.value.filter(Boolean).length);
 
@@ -10110,6 +12703,18 @@ function onDocumentKeydown(event: KeyboardEvent) {
   // 生效）；此处不再拦截 Tab。注意 FocusScope 的 keydown 挂在内容元素上，冒泡先于
   // 本 document 处理器，若恢复自制陷阱会与 reka 双步进，勿回退。
   if (event.key === "Tab") return;
+  // Ctrl/Cmd+Shift+P opens the command palette from anywhere (terminal handler
+  // consumes it first when focused, so this is the non-terminal fallback).
+  if (isCommandPaletteShortcut(event)) {
+    event.preventDefault();
+    toggleCommandPalette();
+    return;
+  }
+  if (commandPaletteOpen.value && event.key === "Escape") {
+    event.preventDefault();
+    closeCommandPalette();
+    return;
+  }
   if (event.key !== "Escape") return;
   // reka Select/ContextMenu/Popover 弹层打开时 Esc 由 reka 消费（关弹层），不落入下方
   // 弹窗关闭链。本处理器注册早于 DismissableLayer，先跑时弹层 DOM 仍在。
@@ -10141,7 +12746,23 @@ function onDocumentKeydown(event: KeyboardEvent) {
     return;
   }
   if (pasteConfirm.value) {
-    resolvePasteConfirm(false);
+    resolvePasteConfirm();
+    return;
+  }
+  if (quickCommandVars.value) {
+    closeQuickCommandVars();
+    return;
+  }
+  if (osc52AskText.value) {
+    resolveOsc52Ask(false);
+    return;
+  }
+  if (autofillOffer.value) {
+    dismissAutofillOffer();
+    return;
+  }
+  if (passwordHintPending.value || passwordHintOffer.value) {
+    dismissPasswordHint();
     return;
   }
   if (dropUploadPrompt.value) {
@@ -10410,9 +13031,51 @@ async function waitForHostContext(
   return last;
 }
 
+function monitorRouteContext(context: Record<string, unknown>): Record<string, unknown> | null {
+  const contributionId =
+    (typeof context.contributionId === "string" && context.contributionId)
+    || "";
+  if (!isMonitorContext(context) && !isMonitorContribution(contributionId)) return null;
+  return {
+    ...context,
+    contributionId: contributionId || MONITOR_CONTRIBUTION_ID,
+    plugin: {
+      mode: "monitor",
+      ...(typeof context.plugin === "object" && context.plugin && !Array.isArray(context.plugin)
+        ? (context.plugin as Record<string, unknown>)
+        : {}),
+    },
+  };
+}
+
 async function initialize() {
   const api = await waitForHostApi();
+  // Prefer host.ready before any SSH openSession — monitor tabs carry plugin.mode here.
+  try {
+    const ready = await Promise.race([
+      api.ready,
+      new Promise<Record<string, unknown>>((resolve) => window.setTimeout(() => resolve({}), 3000)),
+    ]);
+    const early = {
+      ...(api.context && typeof api.context === "object" ? api.context : {}),
+      ...(ready && typeof ready === "object" ? ready : {}),
+    } as Record<string, unknown>;
+    const routed = monitorRouteContext(early);
+    if (routed) {
+      remountAsMonitorPanel(routed);
+      return;
+    }
+  } catch {
+    // fall through to normal terminal boot
+  }
   await waitForHostContext(api);
+  {
+    const routed = monitorRouteContext(hostContext.value);
+    if (routed) {
+      remountAsMonitorPanel(routed);
+      return;
+    }
+  }
   transportReuseState = createSessionTransportReuseState(hostContext.value);
   locale.value = api.locale || "zh-CN";
   restoreUiState();
@@ -10513,7 +13176,7 @@ async function findReattachSession(): Promise<string> {
   }
 }
 
-watch([splitRatio, paneOrder, sftpPaneOpen, followDirectory, sudoMode, visibleColumns], persistState, { deep: true });
+watch([sftpWidthPx, paneOrder, sftpPaneOpen, followDirectory, sudoMode, visibleColumns], persistState, { deep: true });
 
 onMounted(() => {
   document.addEventListener("click", onDocumentClickCloseMenus);
@@ -10532,10 +13195,27 @@ onMounted(() => {
   document.addEventListener("visibilitychange", flushTerminalOutputNow);
   window.addEventListener("focus", flushTerminalOutputNow);
   window.addEventListener("pageshow", flushTerminalOutputNow);
+  // Best-effort: sandboxed iframe / host tab close may ignore this; covers browser reload.
+  window.addEventListener("beforeunload", onWorkbenchBeforeUnload);
   hostFontObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+  if (workbenchRoot.value) {
+    workbenchResizeObserver = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (typeof width === "number" && width > 0) {
+        workbenchWidthPx.value = width;
+        scheduleFit();
+      }
+    });
+    workbenchResizeObserver.observe(workbenchRoot.value);
+    workbenchWidthPx.value = workbenchRoot.value.clientWidth || workbenchWidthPx.value;
+  }
   void hydrateQuickCommands();
   void hydrateHighlightRules();
-  void hydratePrefs();
+  // Warm UI-storage cache, then load plugin preferences.json (layout habits SoT).
+  void initUiStorage().then(() => {
+    hydratePrefs();
+    restoreHelpSpecs();
+  });
   // After first paint: expand Tabby scheme catalog so saved scheme ids resolve.
   void ensureBuiltinSchemeCatalog().then(() => applyTerminalAppearance());
   void initialize().catch((cause) => {
@@ -10544,11 +13224,19 @@ onMounted(() => {
   });
 });
 
+function onWorkbenchBeforeUnload(event: BeforeUnloadEvent) {
+  if (!sessionPrefs.value.closeWorkbenchConfirm) return;
+  if (!(connected.value || !!protocolSession.value)) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+
 onBeforeUnmount(() => {
   disposed = true;
   document.removeEventListener("visibilitychange", flushTerminalOutputNow);
   window.removeEventListener("focus", flushTerminalOutputNow);
   window.removeEventListener("pageshow", flushTerminalOutputNow);
+  window.removeEventListener("beforeunload", onWorkbenchBeforeUnload);
   document.removeEventListener("mouseover", onTooltipOver);
   document.removeEventListener("mouseout", onTooltipOut);
   document.removeEventListener("focusin", onTooltipFocusIn);
@@ -10581,7 +13269,8 @@ onBeforeUnmount(() => {
   window.clearInterval(metricsTimer);
   stopCommandMarkerTick();
   stopAgentPromptTimer();
-  resolvePasteConfirm(false);
+  resolvePasteConfirm();
+  resolveOsc52Ask(false);
   if (terminalHost.value) {
     if (terminalPasteHandler) terminalHost.value.removeEventListener("paste", terminalPasteHandler, true);
     if (terminalWheelHandler) terminalHost.value.removeEventListener("wheel", terminalWheelHandler, true);
@@ -10605,16 +13294,34 @@ onBeforeUnmount(() => {
   unsubscribeFileDrop?.();
   deferredTerminalChunks.length = 0;
   deferredTerminalBytes = 0;
+  window.clearTimeout(sftpSearchDebounce);
+  fileRowsResizeObserver?.disconnect();
+  fileRowsResizeObserver = undefined;
   resizeObserver?.disconnect();
+  workbenchResizeObserver?.disconnect();
   for (const disposable of oscColorQueryDisposables) disposable.dispose();
   oscColorQueryDisposables = [];
   osc52Disposable?.dispose();
   osc52Disposable = undefined;
+  for (const disposable of oscNotifyDisposables) disposable.dispose();
+  oscNotifyDisposables = [];
   disposeInput?.dispose();
   disposeWriteParsed?.dispose();
+  disposeCursorMove?.dispose();
+  disposeCursorMove = undefined;
   disposeSelectionCopy?.dispose();
+  gutterRenderDisposable?.dispose();
+  gutterRenderDisposable = undefined;
+  gutterStamps.clear();
+  if (secondaryCatchUpTimer != null) {
+    window.clearTimeout(secondaryCatchUpTimer);
+    secondaryCatchUpTimer = undefined;
+  }
+  setSshOutputFlowPaused(false);
+  void closeAllExtraShells();
   terminalWriteThrottle.dispose();
   detachHighlightRender();
+  detachAutofillRender();
   terminal?.dispose();
   for (const waiter of uploadAckWaiters.values()) {
     window.clearTimeout(waiter.timer);
@@ -10630,15 +13337,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="workbench">
-    <header class="toolbar" :style="toolbarStyle">
-      <!-- 连接信息入口：Info 图标按钮紧跟标识区（状态徽章右侧），弹层左对齐锚定 -->
+  <main ref="workbenchRoot" class="workbench">
+    <!-- Motty: connection color only on the identity mark — toolbar itself stays neutral. -->
+    <header class="toolbar">
       <div class="identity-side">
         <div class="identity">
           <span v-if="connection.color" class="connection-color" :style="{ backgroundColor: connection.color }" />
-          <strong>{{ connectionIdentity }}</strong>
+          <strong :title="connectionIdentity">{{ chromeTitle }}</strong>
           <span v-if="connection.readOnly || connectionReadOnly" class="read-only-badge">{{ t("readOnly") }}</span>
           <span class="session-pill" :class="`session-${sessionStatus}`"><span class="session-dot" aria-hidden="true" />{{ t(`sessionStatus.${sessionStatus}`) }}<span v-if="sessionStatus === 'reconnecting' && reconnectCountdown" class="session-pill-countdown mono">{{ t("sessionStatus.reconnectCountdown", { seconds: reconnectCountdown.seconds, attempt: reconnectCountdown.attempt }) }}</span></span>
+          <span
+            v-if="sessionPrefs.showLatency && connected"
+            class="latency-badge mono"
+            :title="t('sessionPrefs.showLatency')"
+          >{{ connectionLatencyBusy ? "…" : formatLatency(connectionLatency) }}</span>
         </div>
         <Popover :open="connectionInfoOpen" @update:open="(open) => { if (!open) connectionInfoOpen = false; }">
           <PopoverAnchor as-child>
@@ -10663,275 +13375,95 @@ onBeforeUnmount(() => {
         </Popover>
       </div>
       <div class="toolbar-actions">
-        <button class="icon-button icon-neutral" :title="paneOrder === 'terminal-left' ? t('moveSftpLeft') : t('moveTerminalLeft')" @click="togglePaneOrder"><ArrowLeftRight /></button>
-        <button class="icon-button icon-cyan" :class="{ 'is-active': sftpPaneOpen }" :title="sftpPaneOpen ? t('sftpPane.close') : t('sftpPane.open')" :aria-pressed="sftpPaneOpen" @click="toggleSftpPane"><FolderOpen v-if="!sftpPaneOpen" /><PanelRightClose v-else /></button>
-        <button class="icon-button" :title="t('terminalFontDecrease')" @click="adjustTerminalZoom(-1)"><span class="font-step-label" aria-hidden="true">A−</span></button>
-        <button class="icon-button" :title="t('terminalFontIncrease')" @click="adjustTerminalZoom(1)"><span class="font-step-label" aria-hidden="true">A+</span></button>
-        <button class="icon-button icon-emerald" :title="t('newSessionTab')" :disabled="!connectionId" @click="openNewSessionTab"><SquarePlus /></button>
-        <button class="icon-button icon-emerald" :title="t('copySessionTab')" :disabled="!connectionId || !connected" @click="openCopiedSessionTab"><Copy /></button>
-        <button class="icon-button icon-emerald" :title="t('reconnect')" :disabled="terminalState === 'connecting' && !reconnectPending" @click="reconnectNow"><PlugZap /></button>
-        <!-- 一键 sudo -v：向当前 PTY 写入命令刷新 sudo 凭据缓存；quick sudo 自动应答
-             是否启用由连接设置决定（设置弹窗），工作台不再提供开关。 -->
-        <button class="icon-button icon-emerald" :title="t('sudoRefresh.title')" :disabled="!connected" @click="sendSudoRefresh"><ShieldCheck /></button>
-        <button class="icon-button icon-emerald" :title="t('profilesTitle')" @click="openProfilesManager"><KeyRound /></button>
-        <button class="icon-button icon-cyan" :title="t('alertTriage.title')" @click="openAlertTriage"><Siren /></button>
-        <button class="icon-button icon-cyan" :title="t('forwards.title')" :disabled="!session" @click="forwardsOpen = true"><Network /></button>
-        <button v-if="isJumpServerMode" class="icon-button icon-cyan" :class="{ 'is-active': assetsOpen }" :title="t('jumpserver.title')" :aria-label="t('jumpserver.title')" :aria-pressed="assetsOpen" :disabled="!connected" @click="toggleAssets"><Server /></button>
-        <button class="icon-button icon-cyan" :class="{ 'is-active': dockerOpen }" :title="t('docker.title')" :aria-label="t('docker.title')" :aria-pressed="dockerOpen" :disabled="!connected" @click="toggleDocker"><Container /></button>
-        <button class="icon-button icon-cyan" :class="{ 'is-active': historyPanelOpen }" :title="t('historyPanel.titleShortcut')" :aria-pressed="historyPanelOpen" :disabled="!connected" @click="toggleHistoryPanel"><History /></button>
-        <button class="icon-button icon-cyan" :class="{ 'is-active': otpOpen }" :title="t('otp.title')" :aria-pressed="otpOpen" @click="toggleOtpPanel"><Lock /></button>
+        <!-- Motty-like quiet chrome: muted icons; active state carries emphasis -->
+        <button class="icon-button icon-neutral" :class="{ 'is-active': sftpPaneOpen }" :title="sftpPaneOpen ? t('sftpPane.close') : t('sftpPane.open')" :aria-pressed="sftpPaneOpen" @click="toggleSftpPane"><FolderOpen v-if="!sftpPaneOpen" /><PanelRightClose v-else /></button>
+        <button class="icon-button icon-neutral" :title="t('terminalFontDecrease')" @click="adjustTerminalZoom(-1)"><span class="font-step-label" aria-hidden="true">A−</span></button>
+        <button class="icon-button icon-neutral" :title="t('terminalFontIncrease')" @click="adjustTerminalZoom(1)"><span class="font-step-label" aria-hidden="true">A+</span></button>
+        <button class="icon-button icon-neutral" :title="t('newSessionTab')" :disabled="!connectionId" @click="openNewSessionTab"><SquarePlus /></button>
         <button
-          v-if="serialSessionActive"
-          class="icon-button icon-cyan"
-          :title="t('serial.upload.title')"
-          :disabled="serialUploadBusy"
-          @click="openSerialUploadDialog"
-        ><FileUp /></button>
-        <Popover :open="protocolMenuOpen" @update:open="(open) => { protocolMenuOpen = open; }">
+          class="icon-button icon-neutral"
+          :class="{ 'is-active': splitActive }"
+          :title="splitActive ? t('terminalSplit.close') : t('terminalSplit.open')"
+          :aria-pressed="splitActive"
+          :disabled="(!connected || !session || splitBusy) && !splitActive"
+          @click="toggleTerminalSplit"
+        ><Columns2 /></button>
+        <button
+          v-if="splitActive"
+          class="icon-button icon-neutral"
+          :title="splitOrientation === 'vertical' ? t('terminalSplit.stack') : t('terminalSplit.sideBySide')"
+          @click="setSplitOrientation(splitOrientation === 'vertical' ? 'horizontal' : 'vertical')"
+        ><Rows2 v-if="splitOrientation === 'vertical'" /><Columns2 v-else /></button>
+        <button
+          v-if="splitActive"
+          class="icon-button icon-neutral"
+          :class="{ 'is-active': syncInputEnabled }"
+          :title="syncInputEnabled ? t('terminalSplit.syncOn') : t('terminalSplit.syncOff')"
+          :aria-pressed="syncInputEnabled"
+          @click="toggleSyncInput"
+        ><Link2 /></button>
+        <button class="icon-button icon-neutral" :title="t('reconnect')" :disabled="terminalState === 'connecting' && !reconnectPending" @click="reconnectNow"><PlugZap /></button>
+        <button class="icon-button icon-neutral" :class="{ 'is-active': rightRailOpen }" :title="t('rightRail.toggle')" :aria-pressed="rightRailOpen" @click="toggleRightRail"><PanelRight /></button>
+        <button class="icon-button icon-neutral" :class="{ 'is-active': settingsOpen }" :title="t('settings')" :aria-pressed="settingsOpen" @click="openSettings"><Settings /></button>
+        <Popover :open="toolbarMoreOpen" @update:open="(open) => { toolbarMoreOpen = open; }">
           <PopoverAnchor as-child>
-            <button class="icon-button icon-cyan" :title="t('protocol.menu')" :aria-pressed="protocolMenuOpen" @click.stop="protocolMenuOpen = !protocolMenuOpen"><Monitor /></button>
+            <button class="icon-button icon-neutral" :class="{ 'is-active': toolbarMoreOpen }" :title="t('toolbar.more')" :aria-pressed="toolbarMoreOpen" @click.stop="toolbarMoreOpen = !toolbarMoreOpen"><MoreHorizontal /></button>
           </PopoverAnchor>
-          <PopoverContent class="popover" align="end" :side-offset="5">
-            <h3>{{ t("protocol.menu") }}</h3>
-            <button class="link-button" @click="openLocalShell"><SquareTerminal /> {{ t("protocol.localShell") }}</button>
-            <button class="link-button" @click="protocolMenuOpen = false; telnetDialogOpen = true"><Cable /> Telnet</button>
-            <button class="link-button" @click="protocolMenuOpen = false; serialDialogOpen = true"><Cable /> Serial</button>
-            <button
-              class="link-button"
-              :disabled="!serialSessionActive || serialUploadBusy"
-              @click="protocolMenuOpen = false; openSerialUploadDialog()"
-            ><FileUp /> {{ t("serial.upload.title") }}</button>
-            <button class="link-button" @click="protocolMenuOpen = false; vncDialogOpen = true"><AppWindow /> VNC</button>
-            <button class="link-button" @click="protocolMenuOpen = false; rdpDialogOpen = true"><Monitor /> RDP</button>
-            <button class="link-button" @click="protocolMenuOpen = false; taskDialogOpen = true"><Timer /> {{ t("task.title") }}</button>
+          <PopoverContent class="popover toolbar-more-popover" align="end" :side-offset="5">
+            <h3>{{ t("toolbar.more") }}</h3>
+            <div class="toolbar-more-grid">
+              <button class="link-button" :disabled="!connectionId || !connected" @click="openCopiedSessionTab(); toolbarMoreOpen = false"><Copy /> {{ t("copySessionTab") }}</button>
+              <button class="link-button" :title="paneOrder === 'terminal-left' ? t('moveSftpLeft') : t('moveTerminalLeft')" @click="togglePaneOrder(); toolbarMoreOpen = false"><ArrowLeftRight /> {{ paneOrder === 'terminal-left' ? t('moveSftpLeft') : t('moveTerminalLeft') }}</button>
+              <button class="link-button" :disabled="!connected" @click="sendSudoRefresh(); toolbarMoreOpen = false"><ShieldCheck /> {{ t("sudoRefresh.title") }}</button>
+              <button class="link-button" @click="openAlertTriage(); toolbarMoreOpen = false"><Siren /> {{ t("alertTriage.title") }}</button>
+              <button class="link-button" :disabled="!session" @click="forwardsOpen = true; toolbarMoreOpen = false"><Network /> {{ t("forwards.title") }}</button>
+              <button v-if="isJumpServerMode" class="link-button" :disabled="!connected" @click="toggleAssets(); toolbarMoreOpen = false"><Server /> {{ t("jumpserver.title") }}</button>
+              <button class="link-button" :disabled="!connected" @click="toggleDocker(); toolbarMoreOpen = false"><Container /> {{ t("docker.title") }}</button>
+              <button class="link-button" :disabled="!connected" @click="toggleHistoryPanel(); toolbarMoreOpen = false"><History /> {{ t("historyPanel.titleShortcut") }}</button>
+              <button class="link-button" @click="toggleOtpPanel(); toolbarMoreOpen = false"><Lock /> {{ t("otp.title") }}</button>
+              <button v-if="serialSessionActive" class="link-button" :disabled="serialUploadBusy" @click="openSerialUploadDialog(); toolbarMoreOpen = false"><FileUp /> {{ t("serial.upload.title") }}</button>
+              <button class="link-button" :disabled="!connected" @click="openCommandDialog(); toolbarMoreOpen = false"><SquareTerminal /> {{ t("commandTitle") }}</button>
+              <button class="link-button" :disabled="!connected" @click="toggleBatchBar(); toolbarMoreOpen = false"><ListChecks /> {{ t("batchSendTitle") }}</button>
+              <button class="link-button" :class="{ 'is-active': recordingActive }" :disabled="!canRecord" @click="toggleRecording(); toolbarMoreOpen = false"><Disc /> {{ recordingActive ? t("recordingStop") : t("recordingTitle") }}</button>
+              <button class="link-button" @click="toggleRecordings(); toolbarMoreOpen = false"><Film /> {{ t("recordingsTitle") }}</button>
+              <button class="link-button" @click="openImportWizard(); toolbarMoreOpen = false"><FolderInput /> {{ t("importWizard.title") }}</button>
+              <button class="link-button" @click="openAuditLog(); toolbarMoreOpen = false"><FileText /> {{ t("auditLog.title") }}</button>
+              <button class="link-button" @click="metricsOpen = true; void backfillMetricsHistory(); syncMetricsPolling(); toolbarMoreOpen = false" :disabled="!connected"><Gauge /> {{ t("metrics") }}</button>
+              <button v-if="canOpenMonitorPanel" class="link-button" :disabled="!connectionId" @click="openMonitorPanel(); toolbarMoreOpen = false"><Activity /> {{ t("monitor.openMulti") }}</button>
+            </div>
+            <hr class="columns-popover-separator" />
+            <!-- Inline submenu (not nested Reka Popover) so the first click stays open. -->
+            <button type="button" class="link-button" :aria-expanded="protocolMenuOpen" @click.stop="protocolMenuOpen = !protocolMenuOpen"><Monitor /> {{ t("protocol.menu") }}</button>
+            <div v-if="protocolMenuOpen" class="toolbar-more-submenu">
+              <button type="button" class="link-button" @click="openLocalShell"><SquareTerminal /> {{ t("protocol.localShell") }}</button>
+              <button type="button" class="link-button" @click="protocolMenuOpen = false; toolbarMoreOpen = false; telnetDialogOpen = true"><Cable /> Telnet</button>
+              <button type="button" class="link-button" @click="protocolMenuOpen = false; toolbarMoreOpen = false; serialDialogOpen = true"><Cable /> Serial</button>
+              <button
+                type="button"
+                class="link-button"
+                :disabled="!serialSessionActive || serialUploadBusy"
+                @click="protocolMenuOpen = false; toolbarMoreOpen = false; openSerialUploadDialog()"
+              ><FileUp /> {{ t("serial.upload.title") }}</button>
+              <button type="button" class="link-button" @click="protocolMenuOpen = false; toolbarMoreOpen = false; vncDialogOpen = true"><AppWindow /> VNC</button>
+              <button type="button" class="link-button" @click="protocolMenuOpen = false; toolbarMoreOpen = false; rdpDialogOpen = true"><Monitor /> RDP</button>
+              <button type="button" class="link-button" @click="protocolMenuOpen = false; toolbarMoreOpen = false; taskDialogOpen = true"><Timer /> {{ t("task.title") }}</button>
+            </div>
           </PopoverContent>
         </Popover>
-        <label class="follow-directory-control" :title="t('followTerminal')">
-          <Switch
-            size="sm"
-            :model-value="followDirectory"
-            :disabled="!(connected || (protocolSession && (protocolSession.kind === 'local' || protocolSession.kind === 'telnet' || protocolSession.kind === 'serial') && terminalState === 'connected'))"
-            @update:model-value="setDirectoryTracking"
-          />
-          <span>{{ t("followTerminal") }}</span>
-        </label>
         <span class="toolbar-separator" aria-hidden="true" />
-        <button class="icon-button icon-neutral" :title="t('commandTitle')" :disabled="!connected" @click="openCommandDialog"><SquareTerminal /></button>
-        <button class="icon-button icon-neutral" :class="{ 'is-active': batchBarOpen }" :title="t('batchSendTitle')" :aria-pressed="batchBarOpen" :disabled="!connected" @click="toggleBatchBar"><ListChecks /></button>
-        <div>
-          <Popover :open="quickMenuOpen" @update:open="(open) => { if (!open) quickMenuOpen = false; }">
-            <PopoverAnchor as-child>
-              <button class="icon-button icon-amber" :title="t('quickCommands')" :disabled="!connected" @click.stop="toggleQuickMenu"><Zap /></button>
-            </PopoverAnchor>
-            <PopoverContent class="popover quick-commands-popover" align="end" :side-offset="5">
-            <!-- Termius Snippets 式结构：列表态（搜索 + 卡片 + 整宽新建按钮）与
-                 编辑器子视图（返回 + 名称 + 多行命令 + 保存）两个视图切换。 -->
-            <template v-if="!quickEditorOpen">
-              <h3>{{ t("quickCommands") }}</h3>
-              <div v-if="visibleQuickCommandList.length" class="quick-search">
-                <Search />
-                <input v-model="quickSearch" :placeholder="t('quickCommandsSearch')" spellcheck="false" />
-              </div>
-              <div v-if="!visibleQuickCommandList.length" class="empty compact">{{ t("quickCommandsEmpty") }}</div>
-              <div v-else-if="!filteredQuickCommands.length" class="empty compact">{{ t("quickCommandsNoMatch") }}</div>
-              <template v-else>
-                <p v-if="quickHasRealGroups" class="quick-command-group-summary">{{ t("quickCommands.groupSummary", { groups: quickCommandGroupCount(visibleQuickCommandList), count: visibleQuickCommandList.length }) }}</p>
-                <section v-for="group in groupedQuickCommands" :key="group.id || '__ungrouped__'" class="quick-group">
-                  <button v-if="quickHasRealGroups" type="button" class="quick-group-head" :aria-expanded="!quickCollapsedGroups.includes(group.id)" @click="toggleQuickGroupCollapse(group.id)">
-                    <ChevronDown v-if="!quickCollapsedGroups.includes(group.id)" class="quick-group-chevron" />
-                    <ChevronRight v-else class="quick-group-chevron" />
-                    <span class="quick-group-name">{{ quickGroupName(group) }}</span>
-                    <span class="quick-group-count">{{ group.commands.length }}</span>
-                  </button>
-                  <template v-if="!quickHasRealGroups || !quickCollapsedGroups.includes(group.id)">
-                    <div v-for="item in group.commands" :key="item.id" class="quick-command-row quick-card" :class="{ expanded: quickExpandedId === item.id }">
-                      <button class="quick-card-main" :title="item.command" @click="toggleQuickExpand(item.id)">
-                        <Braces class="quick-card-icon" />
-                        <span class="quick-card-text">
-                          <span class="quick-card-title">
-                            <strong>{{ item.name }}</strong>
-                            <span
-                              class="quick-command-scope-badge"
-                              :data-scope="item.connectionId ? 'connection' : 'global'"
-                            >{{ item.connectionId ? t("quickCommands.badge.connection") : t("quickCommands.badge.global") }}</span>
-                          </span>
-                          <span class="mono">{{ item.command }}</span>
-                        </span>
-                      </button>
-                      <div class="quick-card-actions">
-                        <button class="quick-action" :disabled="!connected" @click="sendQuickCommand(item)">{{ t("quickCommandRun") }}</button>
-                        <button class="quick-action" :disabled="!connected" @click="pasteQuickCommand(item)">{{ t("quickCommandPaste") }}</button>
-                        <button class="icon-button compact" :title="t('quickCommandsEdit')" @click="editQuickCommand(item)"><Pencil /></button>
-                        <button class="icon-button compact" :title="t('delete')" @click="deleteQuickCommand(item.id)"><Trash2 /></button>
-                      </div>
-                      <div v-if="quickExpandedId === item.id" class="quick-card-full mono">{{ item.command }}</div>
-                    </div>
-                  </template>
-                </section>
-              </template>
-              <div v-if="otherQuickCommandCount" class="quick-other-section">
-                <button type="button" class="quick-other-toggle" @click="quickOtherOpen = !quickOtherOpen">
-                  <span>{{ t("quickCommands.otherConnections", { count: otherQuickCommandCount }) }}</span>
-                </button>
-                <div v-if="quickOtherOpen" class="quick-other-list">
-                  <div v-for="group in otherQuickCommandGroups" :key="group.connectionId" class="quick-other-group">
-                    <div class="quick-other-group-head">
-                      <span class="mono" :title="group.connectionId">{{ shortenConnectionId(group.connectionId) }}</span>
-                      <span class="quick-command-limit">{{ group.commands.length }}</span>
-                      <button type="button" class="link-button" @click="deleteQuickCommandsForConnection(group.connectionId)">{{ t("quickCommands.deleteConnection") }}</button>
-                    </div>
-                    <div v-for="item in group.commands" :key="item.id" class="quick-other-row">
-                      <span class="quick-other-name" :title="item.command">{{ item.name }}</span>
-                      <button type="button" class="link-button" @click="makeQuickCommandGlobal(item)">{{ t("quickCommands.makeGlobal") }}</button>
-                      <button type="button" class="icon-button compact" :title="t('delete')" @click="deleteQuickCommand(item.id)"><Trash2 /></button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <footer class="quick-command-footer">
-                <button
-                  class="quick-new-btn"
-                  :disabled="!canAddQuickCommandInScope(quickCommands, connectionId || null) && !canAddQuickCommandInScope(quickCommands, null)"
-                  @click="openQuickEditor()"
-                ><Plus />{{ t("quickCommandsNew") }}</button>
-                <span class="quick-command-limit">{{ t("quickCommands.limitScope", { count: countQuickCommandsInScope(quickCommands, connectionId || null), limit: QUICK_COMMANDS_LIMIT }) }}</span>
-              </footer>
-            </template>
-            <template v-else>
-              <header class="quick-editor-head">
-                <button class="icon-button compact" :title="t('cancel')" @click="closeQuickEditor"><ArrowLeft /></button>
-                <h3>{{ quickDraft.id ? t("quickCommandsEdit") : t("quickCommandsNew") }}</h3>
-              </header>
-              <footer class="quick-command-editor">
-                <input v-model="quickDraft.name" :placeholder="t('quickCommandsName')" :maxlength="60" autofocus />
-                <input v-model="quickDraft.group" :placeholder="t('quickCommands.groupPlaceholder')" :maxlength="QUICK_COMMAND_GROUP_MAX_LENGTH" />
-                <label
-                  class="quick-scope-bind"
-                  :class="{ disabled: !connectionId }"
-                  :title="connectionId ? t('quickCommands.scope.connection') : t('quickCommands.scope.global')"
-                >
-                  <Switch
-                    size="sm"
-                    :model-value="quickDraft.scope === 'connection'"
-                    :disabled="!connectionId"
-                    @update:model-value="setQuickDraftBoundToConnection"
-                  />
-                  <span>{{ t("quickCommands.bindCurrent") }}</span>
-                </label>
-                <textarea v-model="quickDraft.command" class="mono" rows="4" :placeholder="t('quickCommandsCommand')" :maxlength="500" @keydown.ctrl.enter="addQuickCommand" />
-                <div class="quick-command-editor-actions">
-                  <button class="primary-button" :disabled="quickSaving || !quickDraft.command.trim() || !quickDraftCanAdd" @click="addQuickCommand">{{ quickDraft.id ? t("save") : t("quickCommandsAdd") }}</button>
-                  <button @click="closeQuickEditor">{{ t("cancel") }}</button>
-                  <span class="quick-command-limit">{{ t("quickCommands.limitScope", { count: quickDraftScopeCount, limit: QUICK_COMMANDS_LIMIT }) }}</span>
-                </div>
-              </footer>
-            </template>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div>
-          <Popover :open="agentModeOpen" @update:open="(open) => { if (!open) agentModeOpen = false; }">
-            <PopoverAnchor as-child>
-              <button class="icon-button" :class="agentMode === 'off' ? 'icon-neutral' : 'icon-emerald is-active'" :title="t('agentTerminalQuickHint')" :aria-pressed="agentMode !== 'off'" :disabled="!connected" @click.stop="toggleAgentModeMenu"><Bot /></button>
-            </PopoverAnchor>
-            <PopoverContent class="popover agent-mode-popover" align="end" :side-offset="5">
-            <h3>{{ t("agentTerminalSection") }}</h3>
-            <label v-for="mode in AGENT_MODES" :key="mode" class="agent-mode-option">
-              <input type="radio" name="agent-mode" :checked="agentMode === mode" :disabled="agentModeBusy" @change="applyAgentMode(mode)" />
-              <span>{{ t(`agentTerminal${mode === "off" ? "Off" : mode === "auto" ? "Auto" : "Strict"}`) }}</span>
-            </label>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div>
-          <Popover :open="highlightMenuOpen" @update:open="(open) => { if (!open) highlightMenuOpen = false; }">
-            <PopoverAnchor as-child>
-              <button class="icon-button icon-violet" :class="{ 'is-active': highlightMenuOpen }" :title="t('highlightRules.title')" :aria-pressed="highlightMenuOpen" @click.stop="toggleHighlightMenu"><Palette /></button>
-            </PopoverAnchor>
-            <PopoverContent class="popover highlight-rules-popover" align="end" :side-offset="5">
-            <h3>{{ t("highlightRules.title") }}</h3>
-            <div v-if="!highlightRules.length" class="empty compact">{{ t("highlightRules.empty") }}</div>
-            <div v-else class="highlight-rule-list">
-              <div v-for="item in highlightRules" :key="item.id" class="highlight-rule-row">
-              <span class="highlight-color-dot" :style="{ backgroundColor: item.color }" />
-              <div class="highlight-rule-main">
-                <span class="highlight-rule-pattern mono" :class="{ disabled: !item.enabled }" :title="item.pattern">{{ item.pattern }}</span>
-                <span class="highlight-rule-badges">
-                  <span v-if="item.isRegex">regex</span>
-                  <span v-if="item.caseSensitive">Aa</span>
-                </span>
-              </div>
-              <span class="highlight-rule-actions">
-                <label class="highlight-switch-control" :title="t('highlightRules.enabled')">
-                  <input type="checkbox" :checked="item.enabled" @change="toggleHighlightRule(item)" />
-                </label>
-                <button class="icon-button" :title="t('quickCommandsEdit')" @click="editHighlightRule(item)"><Pencil /></button>
-                <button class="icon-button" :title="t('delete')" @click="deleteHighlightRule(item.id)"><Trash2 /></button>
-              </span>
-            </div>
-            </div>
-            <footer class="highlight-editor">
-              <div class="highlight-editor-inputs">
-                <input v-model="highlightDraft.pattern" :placeholder="t('highlightRules.patternPlaceholder')" :maxlength="200" spellcheck="false" @keydown.enter="saveHighlightRule" />
-                <ToggleGroup v-model="highlightFlagValues" type="multiple" class="highlight-editor-flags">
-                  <ToggleGroupItem value="regex" class="highlight-editor-flag-item" :title="t('highlightRules.regex')">.*</ToggleGroupItem>
-                  <ToggleGroupItem value="case" class="highlight-editor-flag-item" :title="t('highlightRules.caseSensitive')">Aa</ToggleGroupItem>
-                </ToggleGroup>
-              </div>
-              <div class="highlight-palette">
-                <button v-for="swatch in HIGHLIGHT_PALETTE" :key="swatch" type="button" class="highlight-palette-swatch" :class="{ selected: highlightDraft.color.toLowerCase() === swatch }" :style="{ backgroundColor: swatch }" :aria-label="swatch" @click="highlightDraft.color = swatch" />
-                <input v-model="highlightDraft.color" class="highlight-hex-input mono" :title="t('highlightRules.color')" :maxlength="7" spellcheck="false" />
-              </div>
-              <div class="highlight-editor-actions">
-                <span class="highlight-rule-limit">{{ t("highlightRules.limit", { count: highlightRules.length, limit: HIGHLIGHT_RULES_LIMIT }) }}</span>
-                <button v-if="highlightDraft.id" @click="resetHighlightDraft">{{ t("cancel") }}</button>
-                <button class="primary-button" :disabled="highlightSaving || !highlightDraft.pattern.trim() || (!highlightDraft.id && highlightRules.length >= HIGHLIGHT_RULES_LIMIT)" @click="saveHighlightRule">{{ highlightDraft.id ? t("save") : t("highlightRules.add") }}</button>
-              </div>
-              <p v-if="highlightDraftError" class="task-error">{{ highlightDraftError }}</p>
-            </footer>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <button class="icon-button icon-cyan" :class="{ 'is-active': copilotDockOpen }" :title="t('copilot.openDock')" :aria-pressed="copilotDockOpen" :disabled="!connected" @click="setCopilotDockOpen(!copilotDockOpen)"><Sparkles /></button>
-        <button class="icon-button icon-emerald" :class="{ 'is-active': metricsOpen }" :title="t('metrics')" :aria-pressed="metricsOpen" :disabled="!connected" @click="toggleMetrics"><Gauge /></button>
-        <button class="icon-button" :class="{ 'is-recording': recordingActive }" :title="recordingActive ? t('recordingStop') : t('recordingTitle')" :disabled="!canRecord" @click="toggleRecording"><Disc /></button>
-        <button class="icon-button" :class="{ 'is-active': recordingsOpen }" :title="t('recordingsTitle')" :aria-pressed="recordingsOpen" @click="toggleRecordings"><Film /></button>
-        <button class="icon-button icon-violet" :title="t('settings')" :disabled="!connected" @click="openSettings"><Settings /></button>
-        <button class="icon-button" :title="t('importWizard.title')" :aria-pressed="importOpen" @click="openImportWizard"><FolderInput /></button>
-        <button class="icon-button icon-amber" :title="t('auditLog.title')" @click="openAuditLog"><FileText /></button>
-        <div>
-          <Popover :open="columnsOpen" @update:open="(open) => { if (!open) columnsOpen = false; }">
-            <PopoverAnchor as-child>
-              <button class="icon-button icon-violet" :title="t('customizeColumns')" @click.stop="toggleColumnsMenu"><Columns3 /></button>
-            </PopoverAnchor>
-            <PopoverContent class="popover columns-popover" align="end" :side-offset="5">
-            <label v-for="column in (['size', 'modified', 'owner', 'group', 'permissions'] as SftpColumn[])" :key="column"><input type="checkbox" :checked="visibleColumns.includes(column)" @change="toggleColumn(column)" />{{ t(column) }}</label>
-            <hr class="columns-popover-separator" />
-            <label><input type="checkbox" :checked="sftpPaneDefaultOpen" @change="toggleSftpPaneDefaultOpen" />{{ t("sftpPane.defaultOpen") }}</label>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div>
-          <!-- 历史卡右键菜单（ContextMenu）打开时忽略弹层的外点关闭请求：
-               菜单项 pointerdown 相对弹层是"外部"，不加守卫会在 select 前把宿主弹层
-               连同菜单一起卸载，动作丢失。 -->
-          <Popover :open="transferPanelOpen" @update:open="(open) => { if (!open && !transferHistoryMenu) transferPanelOpen = false; }">
-            <PopoverAnchor as-child>
-              <button class="icon-button icon-blue" :title="t('transfers')" @click.stop="toggleTransferPanel"><ArrowUpDown /><span v-if="activeTransfers" class="activity-dot" /></button>
-            </PopoverAnchor>
-            <PopoverContent class="popover transfer-popover" align="end" :side-offset="5">
+        <Popover :open="transferPanelOpen" @update:open="(open) => { if (!open && !transferHistoryMenu) transferPanelOpen = false; }">
+          <PopoverAnchor as-child>
+            <button class="icon-button icon-neutral" :title="t('transfers')" @click.stop="toggleTransferPanel"><ArrowUpDown /><span v-if="activeTransfers" class="activity-dot" /></button>
+          </PopoverAnchor>
+          <PopoverContent class="popover transfer-popover" align="end" :side-offset="5">
             <h3>{{ t("transfers") }}</h3>
             <div v-if="!transferList.length" class="empty compact">{{ t("noTransfers") }}</div>
             <article v-for="task in transferList" :key="task.taskId" class="transfer-card">
               <div class="transfer-title"><FileUp v-if="task.direction === 'upload'" /><Download v-else /><span>{{ task.fileName || task.taskId }}</span><span v-if="task.compression === 'gzip'" class="transfer-gz">gz</span><span v-else-if="task.compression === 'lzpack'" class="transfer-gz">dbxz</span><strong v-if="task.phase !== 'staging'">{{ transferPercent(task) }}%</strong></div>
               <progress :value="transferBarValue(task)" max="100" />
               <div class="transfer-meta"><span>{{ t(`transferStatus.${task.status}`) }}</span><span :title="transferBytesTitle(task)">{{ formatBytes(transferShownBytes(task)) }} / {{ formatBytes(task.size) }}</span><span v-if="transferSpeeds[task.taskId]">{{ formatBytes(transferSpeeds[task.taskId]) }}/s</span></div>
-              <!-- 目录下载：在传文件相对路径，让长传输有可感知的推进。 -->
               <p v-if="task.currentFile" class="transfer-path mono" :title="task.currentFile">{{ task.currentFile }}</p>
               <p v-if="task.localPath" class="transfer-path mono" :title="task.localPath">{{ task.localPath }}</p>
-              <!-- 目录下载部分失败的汇总由完成 toast 承担：failedCount 与终态
-                   同拍赋值，终态卡随即转入历史区，活跃卡上的失败行永远渲染
-                   不到（UI 回归确认），故不再放置死分支。 -->
               <div v-if="transferPausable(task.status) || task.status === 'queued' || task.status === 'running' || task.localPath" class="transfer-actions">
                 <button v-if="transferPausable(task.status)" class="icon-button" :title="t(pausedTaskIds.has(task.taskId) ? 'transferResume' : 'transferPause')" :aria-label="t(pausedTaskIds.has(task.taskId) ? 'transferResume' : 'transferPause')" @click="toggleTransferPause(task)"><Play v-if="pausedTaskIds.has(task.taskId)" /><Pause v-else /></button>
                 <button v-if="task.status === 'queued' || task.status === 'running'" class="icon-button" :title="t('cancel')" :aria-label="t('cancel')" @click="cancelTransfer(task)"><X /></button>
@@ -10940,7 +13472,6 @@ onBeforeUnmount(() => {
               </div>
               <p v-if="task.error" class="task-error">{{ task.error }}</p>
             </article>
-            <!-- 保留上传断点续传入口；文件选择器本身始终隐藏，仅由 Resume 按钮唤起。 -->
             <template v-if="resumableTasks.length">
               <h3 class="transfer-history-title">{{ t("resumableTitle") }}</h3>
               <article v-for="task in resumableTasks" :key="task.taskId" class="transfer-card">
@@ -10950,7 +13481,6 @@ onBeforeUnmount(() => {
               </article>
             </template>
             <input ref="resumeInput" type="file" class="hidden" @change="onResumeFilePicked" />
-            <!-- 传输历史与活跃任务并列展示：历史是落盘快照，不应被当前传输状态遮住。 -->
             <div class="transfer-history-head">
               <h3 class="transfer-history-title">{{ t("transfersHistory.title") }}</h3>
               <span class="transfer-history-actions">
@@ -10978,21 +13508,10 @@ onBeforeUnmount(() => {
                 <ContextMenuItem @select="entry.localPath && openTransferTarget(entry.localPath)"><FileText />{{ t("openDownloadedFile") }}</ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
-            </PopoverContent>
-          </Popover>
-        </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </header>
-
-    <ResourceStrip
-      v-if="connected && resourceStripEnabled"
-      :metrics="metrics"
-      :loading="metricsLoading"
-      :error="metricsError"
-      :t="t"
-      @open-metrics="openMetricsFromStrip"
-      @open-copilot="openCopilotFromStrip"
-    />
 
     <div v-if="tooltip" ref="tooltipBubble" class="app-tooltip" :class="{ 'app-tooltip-above': tooltip.above }" :style="{ left: `${tooltip.x}px`, top: `${tooltip.y}px`, '--arrow-offset': `${tooltip.arrowOffset}px` }" role="tooltip">{{ tooltip.text }}</div>
     <ToastProvider :label="t('notification')">
@@ -11012,12 +13531,269 @@ onBeforeUnmount(() => {
     </ToastProvider>
 
     <div class="workbench-body">
-    <section ref="paneContainer" :class="orderedPaneClass">
+    <SettingsDialog
+      v-if="settingsOpen || profilesOpen"
+      ref="settingsDialog"
+      class="settings-workspace-host"
+      :open="settingsOpen"
+      @update:open="onSettingsOpenChange"
+      v-model:profilesOpen="profilesOpen"
+      :focus-category="settingsFocusCategory"
+      :focus-anchor="settingsFocusAnchor"
+      :focus-add-model="settingsFocusAddModel"
+      :quick-command-count="visibleQuickCommandList.length"
+      :quick-commands="quickCommands"
+      :quick-saving="quickSaving"
+      :session-id="session?.sessionId"
+      :connection-id="connectionId"
+      :connection="connection"
+      :terminal-font-size="terminalFontSize"
+      :host-font-size="appearance.terminal.fontSize"
+      :host-color-scheme="appearance.colorScheme"
+      :local-download-dir="localDownloadDir"
+      :local-can-save="localCanSave"
+      :webgl-enabled="webglEnabled"
+      :term-select-copy="termSelectCopy"
+      :term-click-cursor="termClickCursor"
+      :resource-strip-enabled="resourceStripEnabled"
+      :sftp-pane-default-open="sftpPaneDefaultOpen"
+      :right-rail-open="rightRailOpen"
+      :right-tool-rail-prefs="rightToolRailPrefs"
+      :terminal-bg-image="terminalBgImage"
+      :fig-catalog-status="figCatalogStatusText()"
+      :fig-catalog-busy="figCatalogBusy"
+      :fig-catalog-message="figCatalogMessage"
+      :fig-catalog-has-overlay="!!figCatalogOverlay"
+      :split-orientation="splitOrientation"
+      :sync-input-enabled="syncInputEnabled"
+      :follow-directory="followDirectory"
+      :follow-directory-disabled="!(connected || (protocolSession && (protocolSession.kind === 'local' || protocolSession.kind === 'telnet' || protocolSession.kind === 'serial') && terminalState === 'connected'))"
+      :visible-columns="visibleColumns"
+      :highlight-enabled="highlightEnabled"
+      :highlight-rules="highlightRules"
+      :copilot-dock-default-open="copilotDockOpen"
+      :copilot-chat-mode="copilotChatMode"
+      :copilot-reply-language="copilotReplyLanguage"
+      :copilot-redact-output="copilotRedactOutput"
+      :interaction-prefs="interactionPrefs"
+      :session-prefs="sessionPrefs"
+      :autofill-rules="autofillRules"
+      :download-prefs="downloadPrefsAdapter"
+      :editor-prefs="editorPrefsAdapter"
+      :terminal-appearance="terminalAppearance"
+      :t="t"
+      @notice="showNotice"
+      @error="showError"
+      @browse-download-dir="folderPickerTarget = 'settings'"
+      @update:webgl="setWebglEnabled"
+      @toggle-select-copy="toggleSelectCopy"
+      @toggle-click-cursor="toggleClickCursor"
+      @update:resource-strip="setResourceStripEnabled"
+      @update:sftp-pane-default-open="setSftpPaneDefaultOpen"
+      @update:right-rail-open="setRightRailOpen"
+      @update:right-tool-rail-prefs="updateRightToolRailPrefs"
+      @update:terminal-bg-image="updateTerminalBgImagePrefs"
+      @choose-terminal-bg-image="chooseTerminalBgImage"
+      @clear-terminal-bg-image="clearTerminalBgImage"
+      @check-fig-catalog="checkFigCatalogUpdate"
+      @clear-fig-catalog="clearFigCatalogOverlay"
+      @update:split-orientation="setSplitOrientation"
+      @update:sync-input-enabled="setSyncInputEnabled"
+      @update:follow-directory="setDirectoryTracking"
+      @toggle-column="toggleColumn"
+      @update:highlight-enabled="setHighlightEnabled"
+      @highlight-rules-changed="onHighlightRulesChanged"
+      @update:copilot-dock-default-open="setCopilotDockOpen"
+      @update:copilot-chat-mode="setCopilotChatMode"
+      @update:copilot-reply-language="setCopilotReplyLanguage"
+      @update:copilot-redact-output="setCopilotRedactOutput"
+      @copilot-llm-saved="refreshCopilotModelSource"
+      @update:interaction-prefs="updateInteractionPrefs"
+      @update:session-prefs="updateSessionPrefs"
+      @update:autofill-rules="updateAutofillRules"
+      @quick-command-save="saveQuickCommandFromSettings"
+      @apply-font="(payload) => applyTerminalFontSettings(payload.family, payload.size)"
+      @update:terminal-appearance="updateTerminalAppearanceState"
+    >
+      <template #quick-commands>
+        <QuickCommandsPanel
+          ref="quickPanelSettings"
+          :commands="quickCommands"
+          :connection-id="connectionId"
+          :connected="connected"
+          :saving="quickSaving"
+          :allow-run="true"
+          :show-add-button="false"
+          :t="t"
+          @save="saveQuickCommandFromPanel"
+          @delete="deleteQuickCommand"
+          @delete-connection="deleteQuickCommandsForConnection"
+          @make-global="makeQuickCommandGlobal"
+          @send="sendQuickCommand"
+          @paste="pasteQuickCommand"
+        />
+      </template>
+    </SettingsDialog>
+    <section v-show="!settingsOpen" ref="paneContainer" :class="orderedPaneClass">
+      <button
+        v-if="sftpPaneOpen && sftpDrawerMode"
+        type="button"
+        class="sftp-drawer-backdrop"
+        :aria-label="t('sftpPane.close')"
+        @click="closeSftpDrawerIfOverlay"
+      />
       <ContextMenu :open="terminalMenuOpen" @update:open="(open) => { if (!open) terminalMenuOpen = false; }">
         <ContextMenuTrigger as-child>
-      <section class="terminal-pane" :class="{ 'drag-active': terminalDragActive, 'batch-bar-open': connected && batchBarOpen }" :style="terminalBasis" @contextmenu="showTerminalMenu" @dragenter.prevent="onTerminalDragEnter" @dragover.prevent @dragleave.self="terminalDragActive = false" @drop.prevent="onTerminalDrop($event)">
-        <div ref="terminalHost" class="terminal-host" />
+      <section
+        ref="terminalPaneEl"
+        class="terminal-pane"
+        :class="{
+          'drag-active': terminalDragActive,
+          'batch-bar-open': connected && batchBarOpen,
+          'command-hint-open': anyCommandHintVisible,
+          'terminal-pane--split': splitActive,
+          'terminal-pane--split-vertical': splitActive && splitOrientation === 'vertical',
+          'terminal-pane--split-horizontal': splitActive && splitOrientation === 'horizontal',
+        }"
+        :style="terminalBasis"
+        @contextmenu="showTerminalMenu"
+        @dragenter.prevent="onTerminalDragEnter"
+        @dragover.prevent
+        @dragleave.self="terminalDragActive = false"
+        @drop.prevent="onTerminalDrop($event)"
+      >
+        <div
+          class="terminal-shells"
+          :class="{
+            'terminal-shells--split': splitActive,
+            'terminal-shells--vertical': splitActive && splitOrientation === 'vertical',
+            'terminal-shells--horizontal': splitActive && splitOrientation === 'horizontal',
+          }"
+        >
+          <div
+            class="terminal-split-primary"
+            :class="{ 'is-focused': splitActive && focusedPane === 'primary' }"
+            :style="splitPrimaryStyle"
+            @pointerdown="focusSplitPane('primary')"
+          >
+            <div class="terminal-with-gutter" data-gutter="off">
+              <div
+                ref="terminalGutterEl"
+                class="terminal-gutter"
+                hidden
+                aria-hidden="true"
+              />
+              <div
+                ref="terminalHost"
+                class="terminal-host"
+                :class="{ 'terminal-h-scroll': interactionPrefs.noWrap }"
+              />
+            </div>
+          </div>
+          <div
+            v-if="splitLayoutOpen"
+            class="terminal-split-divider"
+            :class="splitOrientation === 'vertical' ? 'is-vertical' : 'is-horizontal'"
+            @pointerdown="onSplitDividerPointerDown"
+          />
+          <div
+            v-if="splitLayoutOpen"
+            class="terminal-split-secondary terminal-split-peer"
+            :class="{ 'is-sync': syncInputEnabled, 'is-focused': focusedPane === 'split' }"
+            :style="splitSecondaryStyle"
+            @pointerdown="focusSplitPane('split')"
+          >
+            <div class="terminal-with-gutter" data-gutter="off">
+              <div
+                class="terminal-gutter"
+                hidden
+                aria-hidden="true"
+                :ref="(el) => bindSplitPeerGutter(el as Element | null)"
+              />
+              <div
+                class="terminal-host"
+                :class="{ 'terminal-h-scroll': interactionPrefs.noWrap }"
+                :ref="(el) => bindSplitPeerHost(el as Element | null)"
+              />
+            </div>
+            <button
+              type="button"
+              class="terminal-split-close icon-button compact icon-neutral"
+              :title="t('terminalSplit.close')"
+              @click.stop="closeTerminalSplit"
+            ><X /></button>
+          </div>
+        </div>
         <div v-if="terminalDragActive || (dragActive && !sftpPaneOpen)" class="drop-overlay"><FileUp /><strong>{{ t("terminalDrop.hint") }}</strong></div>
+        <!-- beta.47: 提示条锚定到 xterm 光标行正上方，实测像素定位、不占布局高度。 -->
+        <div v-if="anyCommandHintVisible" ref="commandHintDockEl" class="command-hint-dock" :style="commandHintDockStyle">
+        <div v-if="riskHintVisible && liveCommandRisk" class="command-risk-hint" :data-level="liveCommandRisk.level">
+          <TriangleAlert />
+          <strong>{{ liveCommandRisk.level === "critical" ? t("commandRisk.critical") : t("commandRisk.high") }}</strong>
+          <span class="command-risk-reason">{{ liveCommandRisk.reasons[0] }}</span>
+          <span v-if="liveCommandRisk.safer" class="command-risk-safer">{{ t("commandRisk.safer", { text: liveCommandRisk.safer }) }}</span>
+          <button type="button" class="icon-button compact" :title="t('commandRisk.dismiss')" @click="dismissRiskHint"><X /></button>
+        </div>
+        <!-- 输入行体检：确定性错误优先，与参数提示共用左下槽位和 Esc dismiss。 -->
+        <div v-if="lintHintVisible" class="command-lint-hint" :aria-label="t('shellLint.title')">
+          <span class="command-lint-title">{{ t("shellLint.title") }}</span>
+          <span
+            v-for="issue in liveLintIssues"
+            :key="issue.kind"
+            class="command-lint-issue"
+            :data-severity="issue.severity"
+          >{{ issue.message }}<span class="command-lint-col mono"> :{{ issue.column }}</span></span>
+          <button type="button" class="icon-button compact" :title="t('argumentHint.dismiss')" @click="dismissArgumentHint"><X /></button>
+        </div>
+        <!-- 参数即时提示：只读，不注册任何按键；Esc 由键权仲裁器分发到这里。 -->
+        <div v-else-if="argHintVisible && liveArgumentHint" class="command-arg-hint" :aria-label="t('argumentHint.title')">
+          <span class="command-arg-hint-title">{{ t("argumentHint.title") }}</span>
+          <strong class="command-arg-hint-cmd mono">{{ liveArgumentHint.command }}</strong>
+          <span class="command-arg-hint-usage">{{ liveArgumentHint.usage }}</span>
+          <span v-if="liveArgumentHint.flags.length" class="command-arg-hint-flags">
+            <span class="command-arg-hint-label">{{ t("argumentHint.flags") }}</span>
+            <span
+              v-for="flag in liveArgumentHint.flags"
+              :key="flag.flag"
+              class="command-arg-hint-flag mono"
+              :title="flag.description"
+            >{{ flag.flag }}</span>
+          </span>
+          <button type="button" class="icon-button compact" :title="t('argumentHint.dismiss')" @click="dismissArgumentHint"><X /></button>
+        </div>
+        <!-- 远端 --help：静态 spec 未命中时，显式点击才执行；只读、有界、失败静默。 -->
+        <div v-else-if="remoteHelpVisible" class="command-arg-hint command-arg-hint-remote" :aria-label="t('argumentHint.remoteTitle')">
+          <span class="command-arg-hint-title">{{ t("argumentHint.remoteTitle") }}</span>
+          <strong class="command-arg-hint-cmd mono">{{ remoteHelpCommand }}</strong>
+          <button
+            v-if="remoteHelpState === 'loading'"
+            type="button"
+            class="command-arg-hint-load"
+            disabled
+          ><Loader2 class="spinning" />{{ t("argumentHint.loadingRemote") }}</button>
+          <template v-else-if="remoteHelpFlags.length">
+            <span class="command-arg-hint-flags">
+              <span class="command-arg-hint-label">{{ t("argumentHint.flags") }}</span>
+              <span
+                v-for="flag in remoteHelpFlags"
+                :key="flag.flag"
+                class="command-arg-hint-flag mono"
+                :title="flag.description"
+              >{{ flag.flag }}</span>
+            </span>
+            <span class="command-arg-hint-source">{{ t("argumentHint.remoteSource", { cmd: remoteHelpCommand }) }}</span>
+            <button type="button" class="command-arg-hint-load" @click.stop="loadRemoteHelp">{{ t("argumentHint.retry") }}</button>
+          </template>
+          <template v-else>
+            <span v-if="remoteHelpState === 'error'" class="command-arg-hint-state">{{ t("argumentHint.remoteFailed") }}</span>
+            <span v-else-if="remoteHelpState === 'empty'" class="command-arg-hint-state">{{ t("argumentHint.remoteEmpty") }}</span>
+            <button type="button" class="command-arg-hint-load" @click.stop="loadRemoteHelp">
+              {{ remoteHelpState === "error" || remoteHelpState === "empty" ? t("argumentHint.retry") : t("argumentHint.loadRemote") }}
+            </button>
+          </template>
+          <button type="button" class="icon-button compact" :title="t('argumentHint.dismiss')" @click="dismissArgumentHint"><X /></button>
+        </div>
+        </div>
         <TerminalSearchPanel
           v-if="searchOpen"
           :locale="locale"
@@ -11048,39 +13824,90 @@ onBeforeUnmount(() => {
               :placeholder="t('historyPanel.search')"
               spellcheck="false"
             />
-            <span class="history-overlay-badge">{{ t("historyPanel.title") }} · {{ filteredHistory.length }}</span>
+            <span class="history-overlay-badge">{{ t("historyPanel.title") }} · {{ filteredHistory.length }}<template v-if="historyFilterActive || historyPanelQuery"> / {{ historyScopedEntries.length }}</template></span>
             <button :title="t('close')" class="icon-button" @click="closeHistoryPanel(true)"><X /></button>
           </div>
-          <div v-if="!filteredHistory.length" class="empty compact">{{ t("historyPanel.empty") }}</div>
-          <div v-else class="history-overlay-list">
-            <div
-              v-for="(item, index) in filteredHistory"
-              :key="item.command"
-              class="history-item"
-              :class="{ 'is-active': index === historyPanelIndex, 'is-failed': item.failed }"
-              :title="item.command"
-              @mouseenter="historyPanelIndex = index; commandDraft = item.command"
-              @click="historyPanelIndex = index; confirmHistoryPanelSelection(false)"
-              @dblclick.prevent="historyPanelIndex = index; confirmHistoryPanelSelection(true)"
-            >
-              <Pin v-if="item.pinned" class="history-item-pin" />
-              <span class="history-item-cmd mono">{{ truncateHistoryCommand(item.command) }}</span>
-              <span class="history-item-meta">{{ formatHistoryAge(item.at, historyNow, historyAgeLabels) }}</span>
-              <button
-                type="button"
-                class="icon-button history-item-action"
-                :title="item.pinned ? t('historyPanel.unpin') : t('historyPanel.pin')"
-                @click.stop="historyPanelIndex = index; pinHistoryPanelSelection()"
-              ><Pin /></button>
-              <button
-                type="button"
-                class="icon-button history-item-action"
-                :title="t('historyPanel.remove')"
-                @click.stop="historyPanelIndex = index; removeHistoryPanelSelection()"
-              ><Trash2 /></button>
-            </div>
+          <div class="history-filter-bar">
+            <label class="history-filter-host">
+              <span>{{ t("historyPanel.host") }}</span>
+              <select
+                class="history-filter-select mono"
+                :value="historyFilter.host || HISTORY_ALL_HOSTS"
+                @change="onHistoryHostChange"
+              >
+                <option :value="HISTORY_ALL_HOSTS">{{ t("historyPanel.allHosts") }}</option>
+                <option v-for="host in historyHostOptions" :key="host" :value="host">{{ host }}</option>
+              </select>
+            </label>
+            <label class="history-filter-sort">
+              <span>{{ t("historyPanel.sort") }}</span>
+              <select class="history-filter-select mono" :value="historySortMode" @change="onHistorySortChange">
+                <option value="recent">{{ t("historyPanel.sortRecent") }}</option>
+                <option value="durationDesc">{{ t("historyPanel.sortDurationDesc") }}</option>
+                <option value="durationAsc">{{ t("historyPanel.sortDurationAsc") }}</option>
+                <option value="host">{{ t("historyPanel.sortHost") }}</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              class="history-filter-toggle"
+              :class="{ 'is-on': historyFilter.failedOnly }"
+              :aria-pressed="historyFilter.failedOnly"
+              @click="toggleHistoryFailedOnly"
+            >{{ t("historyPanel.failedOnly") }}</button>
+            <button
+              v-if="historyFilterActive"
+              type="button"
+              class="history-filter-clear"
+              @click="clearHistoryFilter"
+            >{{ t("historyPanel.clearFilter") }}</button>
           </div>
-          <p class="history-overlay-hint">{{ t("historyPanel.hint") }}</p>
+          <div v-if="!filteredHistory.length" class="empty compact">
+            {{ historyFilterActive || historyPanelQuery ? t("historyPanel.filterEmpty") : t("historyPanel.empty") }}
+          </div>
+          <div v-else class="history-overlay-list">
+            <template v-for="(item, index) in filteredHistory" :key="item.command">
+              <div v-if="historyGroupHead(index)" class="history-group-head">{{ historyGroupHead(index)?.text }}</div>
+              <div
+                class="history-item"
+                :class="{ 'is-active': index === historyPanelIndex, 'is-failed': item.failed }"
+                :title="item.command"
+                @mouseenter="historyPanelIndex = index; commandDraft = item.command"
+                @click="historyPanelIndex = index; confirmHistoryPanelSelection(false)"
+                @dblclick.prevent="historyPanelIndex = index; confirmHistoryPanelSelection(true)"
+              >
+                <Pin v-if="item.pinned" class="history-item-pin" />
+                <span class="history-item-cmd mono">{{ truncateHistoryCommand(item.command) }}</span>
+                <span
+                  v-if="historyBadge(item)"
+                  class="history-item-result mono"
+                  :data-tone="historyBadge(item)?.tone"
+                  :title="historyBadge(item)?.text"
+                >{{ historyBadge(item)?.text }}</span>
+                <span class="history-item-meta">{{ formatHistoryAge(item.at, historyNow, historyAgeLabels) }}</span>
+                <button
+                  type="button"
+                  class="icon-button history-item-action"
+                  :title="item.pinned ? t('historyPanel.unpin') : t('historyPanel.pin')"
+                  @click.stop="historyPanelIndex = index; pinHistoryPanelSelection()"
+                ><Pin /></button>
+                <button
+                  type="button"
+                  class="icon-button history-item-action"
+                  :title="t('historyPanel.remove')"
+                  @click.stop="historyPanelIndex = index; removeHistoryPanelSelection()"
+                ><Trash2 /></button>
+              </div>
+            </template>
+          </div>
+          <p class="history-overlay-hint history-overlay-hint--bar" aria-hidden="true">
+            <span class="history-hint-item"><kbd>↑</kbd><kbd>↓</kbd></span>
+            <span class="history-hint-item"><kbd>↵</kbd><kbd>Tab</kbd>{{ t("historyPanel.confirm") }}</span>
+            <span class="history-hint-item"><kbd>Ctrl+↵</kbd>{{ t("historyPanel.hintRun") }}</span>
+            <span class="history-hint-item"><kbd>Ctrl+P</kbd>{{ t("historyPanel.pin") }}</span>
+            <span class="history-hint-item"><kbd>Del</kbd></span>
+            <span class="history-hint-item"><kbd>Esc</kbd></span>
+          </p>
         </section>
         <section
           v-if="quickPaletteOpen"
@@ -11119,8 +13946,21 @@ onBeforeUnmount(() => {
               <span class="history-item-meta mono">{{ truncateHistoryCommand(item.command, 48) }}</span>
             </div>
           </div>
-          <p class="history-overlay-hint">{{ t("quickPalette.hint") }}</p>
+          <p class="history-overlay-hint history-overlay-hint--bar" aria-hidden="true">
+            <span class="history-hint-item"><kbd>↑</kbd><kbd>↓</kbd></span>
+            <span class="history-hint-item"><kbd>↵</kbd><kbd>Tab</kbd>{{ t("historyPanel.confirm") }}</span>
+            <span class="history-hint-item"><kbd>Ctrl+↵</kbd>{{ t("historyPanel.hintRun") }}</span>
+            <span class="history-hint-item"><kbd>Esc</kbd></span>
+          </p>
         </section>
+        <CommandPalette
+          v-if="commandPaletteOpen"
+          ref="commandPaletteRef"
+          :commands="commandPaletteCommands"
+          :t="t"
+          @close="closeCommandPalette"
+          @run="runPaletteCommand"
+        />
         <div
           v-if="historyPanelOpen && historyGhostText"
           class="command-suggest-ghost history-ghost mono"
@@ -11163,10 +14003,80 @@ onBeforeUnmount(() => {
           <p v-if="commandSuggestHintChips.length" class="command-suggest-hint">{{ commandSuggestHintChips.join(" · ") }}</p>
         </div>
         <div
-          v-if="commandSuggestOpen && commandSuggestGhost"
+          v-if="commandSuggestGhostVisible"
           class="command-suggest-ghost mono"
-          :style="{ left: `${commandSuggestGhostPos.left}px`, top: `${commandSuggestGhostPos.top}px`, fontSize: `${terminalFontSize}px` }"
-        >{{ commandSuggestGhost }}</div>
+          :class="{ 'is-commit': !!ghostCommitTarget }"
+          :style="{
+            left: `${commandSuggestGhostPos.left}px`,
+            top: `${commandSuggestGhostPos.top}px`,
+            height: `${commandSuggestGhostPos.cellHeight ?? terminalFontSize}px`,
+            lineHeight: `${commandSuggestGhostPos.cellHeight ?? terminalFontSize}px`,
+          }"
+        >
+          <span class="command-suggest-ghost-text" :style="commandSuggestGhostTextStyle()">
+            <span
+              v-for="(cell, ghostIdx) in commandSuggestGhostCells"
+              :key="ghostIdx"
+              class="command-suggest-ghost-cell"
+              :style="commandSuggestGhostCellStyle(cell.cells)"
+            >{{ cell.ch }}</span>
+          </span>
+          <span
+            v-if="commandSuggestAcceptHintVisible"
+            class="command-suggest-accept-hint-wrap"
+          >
+            <button
+              type="button"
+              class="command-suggest-accept-hint"
+              :aria-label="t('interactionPrefs.acceptKeyHintMenuTitle')"
+              :aria-expanded="acceptKeyHintMenuOpen"
+              aria-haspopup="menu"
+              @mousedown.prevent="toggleAcceptKeyHintMenu"
+            >
+              <span>{{ acceptSuggestionKeyBadge }}</span>
+              <span class="command-suggest-accept-hint-caret" aria-hidden="true">▾</span>
+            </button>
+            <span
+              v-if="acceptKeyHintCoachmark && !acceptKeyHintMenuOpen"
+              class="command-suggest-accept-coachmark"
+              role="status"
+            >{{ t("interactionPrefs.acceptKeyHintCoachmark") }}</span>
+            <div
+              v-if="acceptKeyHintMenuOpen"
+              class="command-suggest-accept-menu"
+              role="menu"
+              @mousedown.prevent
+            >
+              <button
+                v-for="key in ACCEPT_SUGGESTION_KEYS"
+                :key="key"
+                type="button"
+                class="command-suggest-accept-menu-item"
+                role="menuitemradio"
+                :aria-checked="interactionPrefs.acceptSuggestionKey === key"
+                @click="setAcceptSuggestionKey(key)"
+              >
+                <span class="command-suggest-accept-menu-check" aria-hidden="true">{{
+                  interactionPrefs.acceptSuggestionKey === key ? "✓" : ""
+                }}</span>
+                <span>{{ acceptSuggestionKeyLabel(key) }}</span>
+              </button>
+              <div class="command-suggest-accept-menu-sep" role="separator" />
+              <button
+                type="button"
+                class="command-suggest-accept-menu-item"
+                role="menuitem"
+                @click="customizeAcceptSuggestionKey"
+              >{{ t("interactionPrefs.acceptKeyHintCustomize") }}</button>
+              <button
+                type="button"
+                class="command-suggest-accept-menu-item"
+                role="menuitem"
+                @click="turnOffAcceptKeyHint"
+              >{{ t("interactionPrefs.acceptKeyHintTurnOff") }}</button>
+            </div>
+          </span>
+        </div>
         <div v-if="reconnectPending" class="reconnect-banner" role="status">
           <Loader2 class="spinning" />
           <span class="reconnect-text">{{ t("reconnectBanner.label") }}</span>
@@ -11572,9 +14482,9 @@ onBeforeUnmount(() => {
             </div>
           </section>
         </div>
-        <!-- 批量发送结果：右下角紧凑 toast，成功自动消失，失败稍长，可手动关。 -->
+        <!-- 批量发送 / 批量上传结果：右下角紧凑 toast。 -->
         <div
-          v-if="connected && batchBarOpen && (batchSummary || batchError)"
+          v-if="connected && batchBarOpen && batchMode === 'command' && (batchSummary || batchError)"
           class="batch-bar-status"
           :class="{ 'is-error': batchError || (batchSummary && batchSummary.failed) }"
           role="status"
@@ -11592,10 +14502,51 @@ onBeforeUnmount(() => {
           <p v-else class="task-error">{{ batchError }}</p>
           <button class="icon-button compact" :title="t('close')" @click="dismissBatchResult"><X /></button>
         </div>
+        <div
+          v-if="connected && batchBarOpen && batchMode === 'upload' && (uploadSummary || uploadError || uploadProgress)"
+          class="batch-bar-status"
+          :class="{ 'is-error': !!uploadError || !!(uploadSummary && (uploadSummary.failed || uploadSummary.skipped)) }"
+          role="status"
+        >
+          <template v-if="uploadProgress">
+            <p>
+              {{ t("batchUploadRunning", {
+                target: uploadProgress.targetIndex,
+                targets: uploadProgress.targetCount,
+                file: uploadProgress.fileIndex,
+                files: uploadProgress.fileCount,
+              }) }}
+              · {{ uploadProgress.label }} · {{ uploadProgress.fileName }}
+            </p>
+          </template>
+          <template v-else-if="uploadSummary">
+            <p :class="uploadSummary.failed || uploadSummary.skipped ? 'task-error' : undefined">
+              {{ uploadSummary.failed || uploadSummary.skipped
+                ? t("batchUploadPartial", { uploaded: uploadSummary.uploaded, failed: uploadSummary.failed, skipped: uploadSummary.skipped })
+                : t("batchUploadDone", { count: uploadSummary.uploaded }) }}
+            </p>
+            <div v-if="uploadSummary.failed || uploadSummary.skipped" class="batch-result-list">
+              <span
+                v-for="row in uploadSummary.rows.filter((item) => item.status !== 'uploaded').slice(0, 5)"
+                :key="`${row.sessionId}:${row.fileName}:${row.status}`"
+                class="batch-result-row mono"
+              >
+                {{ batchSessionLabel(row.sessionId) }} · {{ row.fileName }} · {{ row.status === "skipped" ? t("batchUploadSkipped") : row.error || t("batchUploadFailed") }}
+              </span>
+            </div>
+          </template>
+          <p v-else class="task-error">{{ uploadError }}</p>
+          <button class="icon-button compact" :title="t('close')" @click="dismissUploadResult"><X /></button>
+        </div>
         <!-- 批量发送命令条（Electerm quick-command bar）：贴终端底部，回车即发送；
              目标选择/快速命令切换/保存为快速命令均在条上完成。 -->
         <section v-if="connected && batchBarOpen" class="batch-bar" @contextmenu.stop @mousedown.stop @click.stop>
-          <div>
+          <div class="batch-mode-switch" role="tablist" :aria-label="t('batchUploadSummary')">
+            <button type="button" role="tab" :aria-selected="batchMode === 'command'" :class="{ active: batchMode === 'command' }" :title="t('batchModeCommand')" @click="setBatchMode('command')"><SquareTerminal /><span>{{ t("batchModeCommand") }}</span></button>
+            <button type="button" role="tab" :aria-selected="batchMode === 'upload'" :class="{ active: batchMode === 'upload' }" :title="t('batchModeUpload')" @click="setBatchMode('upload')"><FileUp /><span>{{ t("batchModeUpload") }}</span></button>
+          </div>
+          <input ref="batchUploadInput" class="hidden" type="file" multiple @change="onUploadFilesInput" />
+          <div class="batch-bar-slot">
             <!-- 底部条上的 popover 向上展开（reka side="top"，旧绝对定位会被裁切）。 -->
             <Popover :open="batchTargetsOpen" @update:open="(open) => { if (!open) batchTargetsOpen = false; }">
               <PopoverAnchor as-child>
@@ -11638,7 +14589,7 @@ onBeforeUnmount(() => {
               </PopoverContent>
             </Popover>
           </div>
-          <template v-if="batchSaveMode">
+          <template v-if="batchMode === 'command' && batchSaveMode">
             <label
               class="quick-scope-bind batch-scope-bind"
               :class="{ disabled: batchSaving || !connectionId }"
@@ -11664,7 +14615,7 @@ onBeforeUnmount(() => {
             <button class="icon-button icon-emerald" :title="t('save')" :disabled="batchSaving || !batchScopeCanAdd" @click="confirmBatchBarSave"><Save /></button>
             <button class="icon-button" :title="t('cancel')" :disabled="batchSaving" @click="cancelBatchBarSave"><X /></button>
           </template>
-          <template v-else>
+          <template v-else-if="batchMode === 'command'">
             <!-- 一体输入：快捷命令+历史联想；Ctrl+Space / ↓ / 左侧按钮打开；Enter 执行选中项。 -->
             <Popover
               v-if="batchSuggestAvailable"
@@ -11692,6 +14643,23 @@ onBeforeUnmount(() => {
                     @input="onBatchDraftInput"
                     @keydown="onBatchDraftKeydown"
                   />
+                  <button
+                    type="button"
+                    class="batch-bar-compose-action"
+                    :title="t('batchBarSave')"
+                    :disabled="!batchDraft.trim() || (!canAddQuickCommandInScope(quickCommands, connectionId || null) && !canAddQuickCommandInScope(quickCommands, null))"
+                    @click="openBatchBarSave"
+                  ><Save /></button>
+                  <button
+                    type="button"
+                    class="batch-bar-compose-action batch-bar-compose-action--send"
+                    :title="t('batchSendSend')"
+                    :disabled="batchSending || !batchDraft.trim() || !batchSelected.length"
+                    @click="sendBatchCommand"
+                  >
+                    <Loader2 v-if="batchSending" class="spinning" />
+                    <Send v-else />
+                  </button>
                 </div>
               </PopoverAnchor>
               <!-- 禁止 open/close 自动抢焦点：输入联想打开时必须焦点留在 input。 -->
@@ -11747,53 +14715,245 @@ onBeforeUnmount(() => {
                 @keydown.down.prevent="browseBatchHistoryDown"
                 @keydown.enter="sendBatchCommand"
               />
+              <button
+                type="button"
+                class="batch-bar-compose-action"
+                :title="t('batchBarSave')"
+                :disabled="!batchDraft.trim() || (!canAddQuickCommandInScope(quickCommands, connectionId || null) && !canAddQuickCommandInScope(quickCommands, null))"
+                @click="openBatchBarSave"
+              ><Save /></button>
+              <button
+                type="button"
+                class="batch-bar-compose-action batch-bar-compose-action--send"
+                :title="t('batchSendSend')"
+                :disabled="batchSending || !batchDraft.trim() || !batchSelected.length"
+                @click="sendBatchCommand"
+              >
+                <Loader2 v-if="batchSending" class="spinning" />
+                <Send v-else />
+              </button>
             </div>
-            <button
-              class="icon-button"
-              :title="t('batchBarSave')"
-              :disabled="!batchDraft.trim() || (!canAddQuickCommandInScope(quickCommands, connectionId || null) && !canAddQuickCommandInScope(quickCommands, null))"
-              @click="openBatchBarSave"
-            ><Save /></button>
           </template>
-          <button class="icon-button icon-emerald batch-bar-send" :title="t('batchSendSend')" :disabled="batchSending || !batchDraft.trim() || !batchSelected.length" @click="sendBatchCommand">
-            <Loader2 v-if="batchSending" class="spinning" />
-            <Send v-else />
-          </button>
+          <template v-else-if="batchMode === 'upload'">
+            <div class="batch-bar-compose batch-bar-compose--upload">
+              <input
+                v-model="uploadDir"
+                class="batch-bar-compose-input mono"
+                spellcheck="false"
+                :disabled="uploading"
+                :title="t('batchUploadPath')"
+                :placeholder="t('batchUploadPathPlaceholder')"
+                @keydown.enter="runBatchUpload"
+              />
+              <button
+                type="button"
+                class="batch-bar-compose-chip"
+                :title="t('batchUploadPick')"
+                :aria-label="t('batchUploadPick')"
+                :disabled="uploading"
+                @click="pickUploadFiles"
+              ><FileUp /><span>{{ t("batchUploadPick") }}</span></button>
+              <Popover :open="uploadFilesOpen" @update:open="(open) => { uploadFilesOpen = open === true; }">
+                <PopoverAnchor as-child>
+                  <button
+                    type="button"
+                    class="batch-bar-compose-chip"
+                    :title="t('batchUploadFiles', { count: uploadFiles.length })"
+                    :aria-label="t('batchUploadFiles', { count: uploadFiles.length })"
+                    :disabled="!uploadFiles.length"
+                    @click.stop="uploadFilesOpen = !uploadFilesOpen"
+                  >
+                    <FileText /><span>{{ t("batchUploadFiles", { count: uploadFiles.length }) }}</span>
+                  </button>
+                </PopoverAnchor>
+                <PopoverContent class="popover batch-upload-files-popover" side="top" align="start" :side-offset="6" @open-auto-focus.prevent @close-auto-focus.prevent>
+                  <div class="command-history-header">
+                    <span>{{ t("batchUploadFiles", { count: uploadFiles.length }) }} · {{ batchUploadBytesLabel }}</span>
+                    <button v-if="uploadFiles.length" class="link-button" @click="clearUploadFiles">{{ t("batchUploadClear") }}</button>
+                  </div>
+                  <p v-if="!uploadFiles.length" class="muted batch-send-hint">{{ t("batchUploadFilesEmpty") }}</p>
+                  <div v-else class="batch-upload-file-list">
+                    <div v-for="entry in uploadFiles" :key="entry.id" class="batch-upload-file-row">
+                      <FileText />
+                      <span class="batch-upload-file-name" :title="entry.name">{{ entry.name }}</span>
+                      <span class="batch-upload-file-size muted">{{ formatBytes(entry.size) }}</span>
+                      <button class="icon-button" :title="t('batchUploadRemove')" :aria-label="t('batchUploadRemove')" @click="removeUploadFile(entry.id)"><X /></button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <Select
+                :model-value="uploadPolicy"
+                :disabled="uploading"
+                @update:model-value="(v) => { if (v === 'overwrite' || v === 'rename' || v === 'skip') uploadPolicy = v; }"
+              >
+                <SelectTrigger
+                  size="xs"
+                  class="batch-bar-compose-select"
+                  :title="t('batchUploadPolicy')"
+                  :aria-label="t('batchUploadPolicy')"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent side="top" :side-offset="6">
+                  <SelectItem value="overwrite">{{ t("batchUploadPolicyOverwrite") }}</SelectItem>
+                  <SelectItem value="rename">{{ t("batchUploadPolicyRename") }}</SelectItem>
+                  <SelectItem value="skip">{{ t("batchUploadPolicySkip") }}</SelectItem>
+                </SelectContent>
+              </Select>
+              <button
+                type="button"
+                class="batch-bar-compose-action batch-bar-compose-action--send"
+                :title="t('batchUploadStart')"
+                :aria-label="t('batchUploadStart')"
+                :disabled="!uploadReady"
+                @click="runBatchUpload"
+              >
+                <Loader2 v-if="uploading" class="spinning" />
+                <FileUp v-else />
+              </button>
+            </div>
+          </template>
         </section>
       </section>
         </ContextMenuTrigger>
         <ContextMenuContent class="terminal-context-menu">
-          <!-- 精简 Xshell 核心项；字号/会话/sudo/批量等仍在工具栏。 -->
-          <ContextMenuItem :disabled="!terminal?.hasSelection()" @select="copyTerminalSelection"><Copy />{{ t("terminalCopy") }}</ContextMenuItem>
-          <ContextMenuItem :disabled="!terminal?.hasSelection() || !connected" @select="askCopilotAboutTerminalSelection"><Sparkles />{{ t("copilot.explainTerminal") }}</ContextMenuItem>
-          <ContextMenuItem :disabled="!connected || terminalTransferBusy" @select="pasteTerminal"><ClipboardPaste />{{ t("terminalPaste") }}</ContextMenuItem>
-          <ContextMenuItem :disabled="!terminal?.hasSelection() || !connected || terminalTransferBusy" @select="pasteTerminalSelection"><ClipboardPaste />{{ t("terminalPasteSelection") }}</ContextMenuItem>
-          <ContextMenuItem @select="selectAllTerminal"><TextSelect />{{ t("terminalSelectAll") }}</ContextMenuItem>
-          <ContextMenuItem v-if="currentTerminalSelectionUrl()" @select="openTerminalSelectionUrl"><Link2 />{{ t("terminalOpenUrl") }}</ContextMenuItem>
+          <!-- Motty-aligned groups: edit → split → files → assistant/tools → session -->
+          <ContextMenuItem :disabled="!terminal?.hasSelection()" @select="copyTerminalSelection">
+            <Copy />{{ t("terminalCopy") }}<ContextMenuShortcut>{{ mottyShortcutLabels.copy }}</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem :disabled="!connected || terminalTransferBusy" @select="pasteTerminal">
+            <ClipboardPaste />{{ t("terminalPaste") }}<ContextMenuShortcut>{{ mottyShortcutLabels.paste }}</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem
+            :disabled="!terminal?.hasSelection() || !connected || terminalTransferBusy"
+            @select="pasteTerminalSelection"
+          >
+            <ClipboardPaste />{{ t("terminalPasteSelection") }}
+          </ContextMenuItem>
+          <ContextMenuItem @select="selectAllTerminal">
+            <TextSelect />{{ t("terminalSelectAll") }}
+          </ContextMenuItem>
+          <ContextMenuItem @select="clearTerminal">
+            <Eraser />{{ t("terminalClear") }}<ContextMenuShortcut>{{ mottyShortcutLabels.clear }}</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem
+            :disabled="!terminal || !terminalHasScrollback(terminal)"
+            @select="clearTerminalScrollback"
+          >
+            <Trash2 />{{ t("terminalClearScrollback") }}
+          </ContextMenuItem>
+          <ContextMenuItem v-if="currentTerminalSelectionUrl()" @select="openTerminalSelectionUrl">
+            <Link2 />{{ t("terminalOpenUrl") }}
+          </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem @select="openTerminalSearch"><Search />{{ t("terminalSearch.open") }}</ContextMenuItem>
-          <ContextMenuItem :disabled="!connected" @select="toggleHistoryPanel"><History />{{ t("historyPanel.titleShortcut") }}</ContextMenuItem>
-          <ContextMenuItem :disabled="!connected" @select="toggleQuickPalette"><Zap />{{ t("quickPalette.titleShortcut") }}</ContextMenuItem>
-          <ContextMenuItem :disabled="!connected" @select="toggleBatchBar"><ListChecks />{{ t("batchSendTitle") }}</ContextMenuItem>
+          <ContextMenuItem
+            :disabled="(!connected || !session || splitBusy) && !splitActive"
+            @select="openTerminalSplitFromMenu('vertical')"
+          >
+            <Columns2 />{{ t("terminalMenu.splitRight") }}<ContextMenuShortcut>{{ mottyShortcutLabels.splitRight }}</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem
+            :disabled="(!connected || !session || splitBusy) && !splitActive"
+            @select="openTerminalSplitFromMenu('horizontal')"
+          >
+            <Rows2 />{{ t("terminalMenu.splitDown") }}<ContextMenuShortcut>{{ mottyShortcutLabels.splitDown }}</ContextMenuShortcut>
+          </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem @select="clearTerminal"><Eraser />{{ t("terminalClear") }}</ContextMenuItem>
-          <ContextMenuItem :disabled="!connected || terminalTransferBusy" @select="sendTerminalInterrupt"><CircleStop />{{ t("terminalInterrupt") }}</ContextMenuItem>
+          <ContextMenuItem
+            :disabled="!(connected || (protocolSession && (protocolSession.kind === 'local' || protocolSession.kind === 'telnet')))"
+            @select="openTerminalFilesPane"
+          >
+            <Folder />{{ t("terminalMenu.files") }}
+          </ContextMenuItem>
+          <ContextMenuItem :disabled="!connected" @select="openTerminalTransferPanel">
+            <ArrowUpDown />{{ t("terminalMenu.transfer") }}
+          </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem :disabled="!connected || terminalTransferBusy || !canWrite" @select="chooseZmodem"><FileUp />{{ t("zmodemUpload") }}</ContextMenuItem>
-          <ContextMenuItem :disabled="!connected || terminalTransferBusy || !canWrite" @select="chooseTrzszUpload"><FileUp />{{ t("trzszUpload") }}</ContextMenuItem>
+          <ContextMenuItem
+            :disabled="!terminal?.hasSelection() || !connected"
+            @select="askCopilotAboutTerminalSelection"
+          >
+            <Bot />{{ t("terminalMenu.askSelection") }}
+          </ContextMenuItem>
+          <ContextMenuItem :disabled="!terminal || !connected" @select="askCopilotAboutRecentOutput">
+            <Sparkles />{{ t("terminalMenu.explainOutput") }}
+          </ContextMenuItem>
+          <ContextMenuItem :disabled="!connected" @select="toggleHistoryPanel">
+            <History />{{ t("historyPanel.title") }}<ContextMenuShortcut>{{ mottyShortcutLabels.history }}</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger class="gap-2">
+              <MoreHorizontal />{{ t("terminalMenu.moreGroup") }}<ChevronRight class="ml-auto opacity-60" />
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent class="terminal-context-submenu">
+              <ContextMenuItem :disabled="!terminal" @select="saveTerminalOutputAsText">
+                <Save />{{ t("terminalSaveOutput") }}
+              </ContextMenuItem>
+              <ContextMenuItem :disabled="!canRevealTerminalFolder()" @select="revealTerminalFolder">
+                <FolderOpen />{{ t("terminalMenu.openFolder") }}
+              </ContextMenuItem>
+              <ContextMenuItem
+                :disabled="!terminal?.hasSelection()"
+                @select="searchTerminalSelectionOnWeb"
+              >
+                <Search />{{ t("terminalMenu.searchWeb") }}
+              </ContextMenuItem>
+              <ContextMenuItem @select="openTerminalSearch">
+                <Search />{{ t("terminalSearch.open") }}
+              </ContextMenuItem>
+              <ContextMenuItem :disabled="!connected" @select="openTerminalMetricsFromMenu">
+                <Gauge />{{ t("terminalMenu.metrics") }}
+              </ContextMenuItem>
+              <ContextMenuItem :disabled="!connected" @select="openTerminalDockerFromMenu">
+                <Container />{{ t("terminalMenu.processes") }}
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem :disabled="!connected || terminalTransferBusy || !canWrite" @select="chooseZmodem">
+                <FileUp />{{ t("zmodemUpload") }}
+              </ContextMenuItem>
+              <ContextMenuItem :disabled="!connected || terminalTransferBusy || !canWrite" @select="chooseTrzszUpload">
+                <FileUp />{{ t("trzszUpload") }}
+              </ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            :disabled="terminalState === 'connecting' && !reconnectPending"
+            @select="reconnectFromTerminalMenu"
+          >
+            <RotateCw />{{ t("reconnect") }}
+          </ContextMenuItem>
+          <ContextMenuItem :disabled="!session && !protocolSession" @select="disconnectFromTerminalMenu">
+            <Unplug />{{ t("terminalMenu.disconnect") }}
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
 
-      <div v-if="sftpPaneOpen" class="divider" @pointerdown="startDividerDrag" />
+      <div v-if="sftpPaneOpen && !sftpDrawerMode" class="divider" @pointerdown="startDividerDrag" />
 
-      <section v-if="sftpPaneOpen" ref="sftpPane" class="sftp-pane" tabindex="-1" :class="{ 'drag-active': dragActive }" @pointerdown="focusSftpPaneOnPointerDown" @paste.capture="onSftpClipboardPaste" @dragenter.prevent="dragActive = true" @dragover.prevent @dragleave.self="dragActive = false" @drop.prevent="onDrop">
-        <div class="path-toolbar">
-          <button class="icon-button" :title="t('parentFolder')" :disabled="currentPath === '/'" @click="goParent"><ArrowUp /></button>
-          <button class="icon-button icon-amber" :title="t('home')" :disabled="!connected" @click="loadHome"><Home /></button>
-          <button class="icon-button icon-cyan" :title="t('refresh')" :disabled="!connected || loadingFiles" @click="loadDirectory()"><RefreshCw :class="{ spinning: loadingFiles }" /></button>
-          <!-- #54 路径栏双态：非编辑态把当前路径渲染成可点击分段（末段为当前位置），
-               点击分段直接回跳、点击分段外区域进入编辑；编辑态是原先的完整输入框，
-               提交后回到分段展示。分段切分走 remotePathInput（有单测）。 -->
+      <section v-if="sftpPaneOpen" ref="sftpPane" class="sftp-pane" tabindex="-1" :class="{ 'drag-active': dragActive }" :style="sftpPaneStyle" @pointerdown="focusSftpPaneOnPointerDown" @paste.capture="onSftpClipboardPaste" @dragenter.prevent="dragActive = true" @dragover.prevent @dragleave.self="dragActive = false" @drop.prevent="onDrop">
+        <!-- Motty hierarchy: title → tools → path → list -->
+        <header class="sftp-title-bar">
+          <strong class="sftp-title-bar-label">{{ t("sftpPane.title") }}</strong>
+          <span class="sftp-title-bar-path mono" :title="currentPath">{{ currentPath }}</span>
+          <button class="icon-button compact icon-neutral" :title="t('sftpPane.close')" @click="toggleSftpPane"><X /></button>
+        </header>
+        <div class="sftp-tools">
+          <button class="icon-button icon-neutral" :title="t('refresh')" :disabled="!connected || loadingFiles" @click="loadDirectory()"><RefreshCw :class="{ spinning: loadingFiles }" /></button>
+          <button class="icon-button icon-neutral" :title="t('sftpPaste.action')" :disabled="!connected || !canWrite || !sftpClipboard || pasteBusy" @click="pasteClipboard"><ClipboardPaste /></button>
+          <button class="icon-button icon-neutral" :title="`${t('upload')} · Ctrl/Cmd+V`" :disabled="!connected || !canWrite" @click.stop="chooseUpload"><FileUp /></button>
+          <button class="icon-button icon-neutral" :class="{ 'is-active': localPaneOpen }" :title="t('localPane.toggle')" :aria-pressed="localPaneOpen" @click="localPaneOpen = !localPaneOpen"><HardDrive /></button>
+          <button class="icon-button icon-neutral" :title="t('newFolder')" :disabled="!connected || !canWrite" @click="operationDraft = ''; operationDialog = 'mkdir'"><FolderPlus /></button>
+          <button class="icon-button icon-neutral" :title="t('sftpNewFile.action')" :disabled="!connected || !canWrite" @click="openNewFileDialog"><FilePlus /></button>
+          <label class="follow-directory-control sudo-label" :title="!canWrite ? t('readOnly') : undefined">
+            <Switch size="sm" :model-value="sudoMode" :disabled="!connected || !canWrite" @update:model-value="toggleSudoMode" />
+            <span>{{ t("sudo.mode") }}</span>
+          </label>
+        </div>
+        <div class="sftp-path-bar">
+          <button class="icon-button icon-neutral" :title="t('parentFolder')" :disabled="currentPath === '/'" @click="goParent"><ArrowUp /></button>
+          <button class="icon-button icon-neutral" :title="t('home')" :disabled="!connected" @click="loadHome"><Home /></button>
           <div class="path-bar">
             <input
               v-show="pathBarEditing"
@@ -11815,9 +14975,8 @@ onBeforeUnmount(() => {
           <div>
             <Popover :open="bookmarkSaveOpen" @update:open="(open) => { if (!open) bookmarkSaveOpen = false; }">
               <PopoverAnchor as-child>
-                <button class="icon-button icon-amber" :title="t('sftpBookmark.add')" :disabled="!connected" @click.stop="toggleBookmarkSave"><Star /></button>
+                <button class="icon-button icon-neutral" :title="t('sftpBookmark.add')" :disabled="!connected" @click.stop="toggleBookmarkSave"><Star /></button>
               </PopoverAnchor>
-              <!-- 星标收藏弹层：label 默认取路径末段，可编辑后保存（前端先行校验 + 后端错误回显） -->
               <PopoverContent class="popover bookmark-save-popover" align="end" :side-offset="5">
               <strong class="path-history-title">{{ t("sftpBookmark.add") }}</strong>
               <span class="bookmark-save-path mono" :title="currentPath">{{ currentPath }}</span>
@@ -11832,13 +14991,12 @@ onBeforeUnmount(() => {
           <div>
             <Popover :open="pathHistoryOpen" @update:open="(open) => { if (!open) pathHistoryOpen = false; }">
               <PopoverAnchor as-child>
-                <button class="icon-button" :title="t('sftpPathHistory.title')" :disabled="!connected" @click.stop="togglePathHistoryMenu"><History /></button>
+                <button class="icon-button icon-neutral" :title="t('sftpPathHistory.title')" :disabled="!connected" @click.stop="togglePathHistoryMenu"><History /></button>
               </PopoverAnchor>
               <PopoverContent class="popover path-history-popover" align="end" :side-offset="5">
               <strong class="path-history-title">{{ t("sftpPathHistory.title") }}</strong>
               <button v-for="item in currentPathHistory" :key="item" class="path-item mono" :title="item" @click="goToPath(item)">{{ item }}</button>
               <div v-if="!currentPathHistory.length" class="empty compact">{{ t("sftpPathHistory.empty") }}</div>
-              <!-- 书签区：点击跳转，行尾悬浮删除；全局清单（跨连接共享） -->
               <strong class="path-history-title">{{ t("sftpBookmark.title") }}</strong>
               <template v-if="sftpBookmarks.length">
                 <div v-for="bookmark in sftpBookmarks" :key="bookmark.id" class="bookmark-row">
@@ -11852,15 +15010,6 @@ onBeforeUnmount(() => {
               </PopoverContent>
             </Popover>
           </div>
-          <button class="icon-button" :title="t('sftpPaste.action')" :disabled="!connected || !canWrite || !sftpClipboard || pasteBusy" @click="pasteClipboard"><ClipboardPaste /></button>
-          <button class="icon-button icon-teal" :title="`${t('upload')} · Ctrl/Cmd+V`" :disabled="!connected || !canWrite" @click.stop="chooseUpload"><FileUp /></button>
-          <button class="icon-button icon-neutral" :class="{ 'is-active': localPaneOpen }" :title="t('localPane.toggle')" :aria-pressed="localPaneOpen" @click="localPaneOpen = !localPaneOpen"><HardDrive /></button>
-          <button class="icon-button icon-amber" :title="t('newFolder')" :disabled="!connected || !canWrite" @click="operationDraft = ''; operationDialog = 'mkdir'"><FolderPlus /></button>
-          <button class="icon-button icon-amber" :title="t('sftpNewFile.action')" :disabled="!connected || !canWrite" @click="openNewFileDialog"><FilePlus /></button>
-          <label class="follow-directory-control sudo-label" :title="!canWrite ? t('readOnly') : undefined">
-            <Switch size="sm" :model-value="sudoMode" :disabled="!connected || !canWrite" @update:model-value="toggleSudoMode" />
-            <span>{{ t("sudo.mode") }}</span>
-          </label>
         </div>
         <!-- SFTP 面板主体：本机半栏 + 远端 tree/quick 侧栏 + 文件区 -->
         <div class="sftp-body">
@@ -11900,8 +15049,8 @@ onBeforeUnmount(() => {
           <div class="sftp-filter-bar">
             <label class="sftp-search-input">
               <Search />
-              <input v-model="sftpSearch" type="search" :placeholder="t('sftpSearch.placeholder')" spellcheck="false" />
-              <button v-if="sftpSearch" class="sftp-search-clear" :title="t('cancel')" @click.prevent="sftpSearch = ''"><X /></button>
+              <input v-model="sftpSearchDraft" type="search" :placeholder="t('sftpSearch.placeholder')" spellcheck="false" />
+              <button v-if="sftpSearchDraft" class="sftp-search-clear" :title="t('cancel')" @click.prevent="clearSftpSearch()"><X /></button>
             </label>
             <Select :model-value="sftpTypeFilter" @update:model-value="(v) => (sftpTypeFilter = v as SftpTypeFilter)">
               <SelectTrigger size="xs" class="sftp-type-filter" :title="t('sftpFilter.all')">
@@ -11940,7 +15089,7 @@ onBeforeUnmount(() => {
                  定位/碰撞/Esc/外点关闭均由 reka 承担。 -->
             <ContextMenu :open="!!(fileMenu || blankMenu)" @update:open="(open) => { if (!open) { fileMenu = undefined; blankMenu = false; } }">
               <ContextMenuTrigger as-child>
-            <div class="file-rows" @contextmenu="onFileAreaContextMenu">
+            <div class="file-rows" ref="fileRowsEl" @scroll="onFileRowsScroll" @contextmenu="onFileAreaContextMenu">
               <div class="file-header" :style="sftpGridStyle">
                 <button class="col-wrap" @click="toggleSort('name')">{{ t("name") }}<component :is="sortIcon('name')" /><span class="col-resizer" @pointerdown="(e) => onColResizeStart('name', e)" /></button>
                 <button v-if="visibleColumns.includes('size')" class="col-wrap" @click="toggleSort('size')">{{ t("size") }}<component :is="sortIcon('size')" /><span class="col-resizer" @pointerdown="(e) => onColResizeStart('size', e)" /></button>
@@ -11949,10 +15098,16 @@ onBeforeUnmount(() => {
                 <span v-if="visibleColumns.includes('group')" class="col-wrap" :title="t('group')">{{ t("group") }}<span class="col-resizer" @pointerdown="(e) => onColResizeStart('group', e)" /></span>
                 <span v-if="visibleColumns.includes('permissions')" class="col-wrap">{{ t("permissions") }}<span class="col-resizer" @pointerdown="(e) => onColResizeStart('permissions', e)" /></span>
               </div>
-              <div v-if="loadingFiles" class="empty"><Loader2 class="spinning" />{{ t("loading") }}</div>
+              <!-- beta.42：加载态改为挂在 .file-table 上的绝对定位浮层，行列表
+                   始终渲染。旧版用 v-if/v-else 整块替换列表，换目录时会闪空、
+                   丢滚动位置、并重置虚拟窗口。 -->
+              <!-- 窗口化 spacer：撑起视口外行的总高，滚动条比例保持真实。
+                   spacer 与行列表永远并存，二者都不挂 v-else：若把 v-else
+                   写在行或紧邻的 padTop spacer 上，滚动过前几行后整个行列表
+                   不再渲染，大目录表现为「滚动失效、列表空白」（issue #151）。 -->
+              <div v-if="virtualFileWindow.padTop" :style="{ height: `${virtualFileWindow.padTop}px` }" aria-hidden="true"></div>
               <button
-                v-for="entry in visibleEntries"
-                v-else
+                v-for="entry in windowedEntries"
                 :key="entry.uri"
                 class="file-row"
                 :class="{ selected: selectedPath === entry.uri || selectedUris.includes(entry.uri) }"
@@ -11986,7 +15141,8 @@ onBeforeUnmount(() => {
                 <span v-if="visibleColumns.includes('group')" class="mono" :title="entry.group">{{ entry.group || "-" }}</span>
                 <span v-if="visibleColumns.includes('permissions')" class="mono">{{ entry.permissions }}</span>
               </button>
-              <div v-if="!loadingFiles && !visibleEntries.length" class="empty">{{ entries.length ? t("sftpSearch.noMatch") : t("emptyFolder") }}</div>
+              <div v-if="virtualFileWindow.padBottom" :style="{ height: `${virtualFileWindow.padBottom}px` }" aria-hidden="true"></div>
+              <div v-if="!visibleEntries.length" class="empty">{{ entries.length ? t("sftpSearch.noMatch") : t("emptyFolder") }}</div>
             </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
@@ -12003,6 +15159,7 @@ onBeforeUnmount(() => {
                   <ContextMenuItem v-if="fileMenu.entry.kind === 'directory' || fileMenu.entry.kind === 'file'" @select="openEntry(fileMenu.entry)"><Folder v-if="fileMenu.entry.kind === 'directory'" /><FileText v-else />{{ fileMenu.entry.kind === "directory" ? t("openFolder") : t("preview") }}</ContextMenuItem>
                   <ContextMenuItem @select="askCopilotAboutSelection"><Sparkles />{{ t("copilot.explainSelection") }}</ContextMenuItem>
                   <ContextMenuItem v-if="fileMenu.entry.kind === 'file' || fileMenu.entry.kind === 'directory'" @select="downloadEntry(fileMenu.entry)"><Download />{{ t("download") }}</ContextMenuItem>
+                  <ContextMenuItem v-if="fileMenu.entry.kind === 'file' && localCanSave" @select="downloadEntry(fileMenu.entry, false, true)"><FolderOpen />{{ t("downloadTo") }}</ContextMenuItem>
                   <ContextMenuItem v-if="fileMenu.entry.kind === 'file' && fileMenu.entry.name.endsWith('.dbxz')" @select="downloadEntry(fileMenu.entry, true)"><PackageOpen />{{ t("sftpLzpack.expandAction") }}</ContextMenuItem>
                   <ContextMenuSub v-if="fileMenu.entry.kind === 'file'" @update:open="(open) => { if (open) void ensureExternalEditors(); }">
                     <ContextMenuSubTrigger :disabled="!canWrite || !localCanSave" class="gap-2"><ExternalLink />{{ t("sftpEdit.openWith") }}<ChevronRight class="ml-auto opacity-60" /></ContextMenuSubTrigger>
@@ -12044,6 +15201,11 @@ onBeforeUnmount(() => {
                 </template>
               </ContextMenuContent>
             </ContextMenu>
+            <!-- 换目录加载态：绝对定位覆盖列表，旧列表保持可见但不可误点。
+                 列表 DOM / 滚动位置 / 虚拟窗口都不被卸载，消除闪空。 -->
+            <div v-if="loadingFiles" class="file-loading-overlay" role="status" aria-live="polite">
+              <Loader2 class="spinning" /><span>{{ t("loading") }}</span>
+            </div>
             <footer class="file-footer"><span>{{ sftpFiltersActive ? t("sftpSearch.footerMatch", { matched: visibleEntries.length, total: entries.length }) : t("items", { count: entries.length }) }}</span><span v-if="diskUsage" :title="`${diskUsage.filesystem} → ${diskUsage.mount}`">{{ formatBytes(diskUsage.availableBytes) }} {{ t("diskFreeOf", { total: formatBytes(diskUsage.totalBytes) }) }}</span><span>{{ currentPath }}</span></footer>
           </div>
           </div>
@@ -12052,8 +15214,45 @@ onBeforeUnmount(() => {
       </section>
     </section>
 
+    <MonitorDock
+      v-if="!settingsOpen && connected && resourceStripEnabled"
+      :metrics="metrics"
+      :loading="metricsLoading"
+      :error="metricsError"
+      :t="t"
+      @open-metrics="openMetricsFromStrip"
+      @close="closeMonitorDock"
+    />
+    <RightToolRail
+      v-if="rightRailOpen"
+      :prefs="rightToolRailPrefs"
+      :connected="connected"
+      :session-ready="!!session"
+      :is-jump-server-mode="isJumpServerMode"
+      :can-record="canRecord"
+      :recording-active="recordingActive"
+      :monitor-open="resourceStripEnabled"
+      :copilot-open="copilotDockOpen"
+      :docker-open="dockerOpen"
+      :history-open="historyPanelOpen"
+      :otp-open="otpOpen"
+      :assets-open="assetsOpen"
+      :batch-bar-open="batchBarOpen"
+      :t="t"
+      @monitor="toggleMonitorDock"
+      @copilot="setCopilotDockOpen(!copilotDockOpen)"
+      @forwards="forwardsOpen = true"
+      @docker="toggleDocker"
+      @history="toggleHistoryPanel"
+      @otp="toggleOtpPanel"
+      @assets="toggleAssets"
+      @command="openCommandDialog"
+      @batch="toggleBatchBar"
+      @record="toggleRecording"
+      @recordings="toggleRecordings"
+    />
     <CopilotDock
-      :open="copilotDockOpen"
+      :open="!settingsOpen && copilotDockOpen"
       :enabled="copilotEnabled"
       :chat-mode="copilotChatMode"
       :model-preference="copilotModelPreference"
@@ -12437,49 +15636,6 @@ onBeforeUnmount(() => {
       </DialogContent>
     </Dialog>
 
-    <SettingsDialog
-      v-if="settingsOpen || profilesOpen"
-      ref="settingsDialog"
-      :open="settingsOpen"
-      @update:open="onSettingsOpenChange"
-      v-model:profilesOpen="profilesOpen"
-      :focus-category="settingsFocusCategory"
-      :focus-add-model="settingsFocusAddModel"
-      :session-id="session?.sessionId"
-      :connection-id="connectionId"
-      :terminal-font-size="terminalFontSize"
-      :host-font-size="appearance.terminal.fontSize"
-      :host-color-scheme="appearance.colorScheme"
-      :local-download-dir="localDownloadDir"
-      :local-can-save="localCanSave"
-      :webgl-enabled="webglEnabled"
-      :term-select-copy="termSelectCopy"
-      :term-click-cursor="termClickCursor"
-      :resource-strip-enabled="resourceStripEnabled"
-      :copilot-dock-default-open="copilotDockOpen"
-      :copilot-chat-mode="copilotChatMode"
-      :copilot-reply-language="copilotReplyLanguage"
-      :interaction-prefs="interactionPrefs"
-      :download-prefs="downloadPrefsAdapter"
-      :editor-prefs="editorPrefsAdapter"
-      :terminal-appearance="terminalAppearance"
-      :t="t"
-      @notice="showNotice"
-      @error="showError"
-      @browse-download-dir="folderPickerTarget = 'settings'"
-      @update:webgl="setWebglEnabled"
-      @toggle-select-copy="toggleSelectCopy"
-      @toggle-click-cursor="toggleClickCursor"
-      @update:resource-strip="setResourceStripEnabled"
-      @update:copilot-dock-default-open="setCopilotDockOpen"
-      @update:copilot-chat-mode="setCopilotChatMode"
-      @update:copilot-reply-language="setCopilotReplyLanguage"
-      @copilot-llm-saved="refreshCopilotModelSource"
-      @update:interaction-prefs="updateInteractionPrefs"
-      @apply-font="(payload) => applyTerminalFontSettings(payload.family, payload.size)"
-      @update:terminal-appearance="updateTerminalAppearanceState"
-    />
-
     <Dialog :open="auditOpen" @update:open="(open) => { if (!open) auditOpen = false; }">
       <DialogContent class="modal audit-modal" @escape-key-down.prevent>
         <header><DialogTitle>{{ t("auditLog.title") }}</DialogTitle><button :title="t('close')" class="icon-button" @click="auditOpen = false"><X /></button></header>
@@ -12609,12 +15765,12 @@ onBeforeUnmount(() => {
       </DialogContent>
     </Dialog>
 
-    <Dialog :open="!!pasteConfirm" @update:open="(open) => { if (!open) resolvePasteConfirm(false); }">
+    <Dialog :open="!!pasteConfirm" @update:open="(open) => { if (!open) resolvePasteConfirm(); }">
       <DialogContent class="modal small-modal" @escape-key-down.prevent>
         <template v-if="pasteConfirm">
         <header>
-          <DialogTitle>{{ pasteConfirm.danger ? t("terminalDanger.title") : t("terminalPasteConfirm.title") }}</DialogTitle>
-          <button :title="t('close')" class="icon-button" @click="resolvePasteConfirm(false)"><X /></button>
+          <DialogTitle>{{ pasteConfirm.danger ? t("terminalDanger.title") : pasteConfirm.glyphOnly ? t("terminalGlyphFix.title") : t("terminalPasteConfirm.title") }}</DialogTitle>
+          <button :title="t('close')" class="icon-button" @click="resolvePasteConfirm()"><X /></button>
         </header>
         <div v-if="pasteConfirm.danger" class="destructive-copy warning">
           <span class="destructive-icon"><TriangleAlert /></span>
@@ -12624,12 +15780,129 @@ onBeforeUnmount(() => {
             <p class="muted">{{ t("terminalDanger.desc") }}</p>
           </div>
         </div>
-        <p v-else class="muted">{{ t("terminalPasteConfirm.desc") }}</p>
+        <div v-if="pasteConfirm.glyphFix" class="glyph-fix-notice">
+          <strong>{{ t("terminalGlyphFix.detected") }}</strong>
+          <p class="muted">{{ t("terminalGlyphFix.desc") }}</p>
+          <ul class="mono">
+            <li v-for="detail in pasteConfirm.glyphFix.details" :key="detail">{{ detail }}</li>
+          </ul>
+        </div>
+        <p v-else-if="!pasteConfirm.danger" class="muted">{{ t("terminalPasteConfirm.desc") }}</p>
         <p class="muted">{{ t("terminalPasteConfirm.summary", { lines: pasteConfirm.lines, chars: pasteConfirm.chars }) }}<template v-if="pasteConfirm.lines > 1"> · {{ t("terminalPasteConfirm.multiline") }}</template></p>
         <pre class="command-output mono">{{ pasteConfirm.preview }}</pre>
         <footer>
-          <button @click="resolvePasteConfirm(false)">{{ t("cancel") }}</button>
-          <button :class="pasteConfirm.danger ? 'danger-button' : 'primary-button'" @click="resolvePasteConfirm(true)">{{ t("terminalPasteConfirm.confirm") }}</button>
+          <button @click="resolvePasteConfirm()">{{ t("cancel") }}</button>
+          <button v-if="pasteConfirm.glyphFix" class="primary-button" @click="resolvePasteConfirm(pasteConfirm.glyphFix.fixed)">{{ t("terminalGlyphFix.useAscii") }}</button>
+          <button :class="pasteConfirm.danger ? 'danger-button' : 'primary-button'" @click="resolvePasteConfirm(pasteConfirm.text)">{{ t("terminalPasteConfirm.confirm") }}</button>
+        </footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!quickCommandVars" @update:open="(open) => { if (!open) closeQuickCommandVars(); }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="quickCommandVars">
+        <header>
+          <DialogTitle>{{ t("quickCommandVars.title") }}</DialogTitle>
+          <button :title="t('close')" class="icon-button" @click="closeQuickCommandVars()"><X /></button>
+        </header>
+        <p class="muted">{{ t("quickCommandVars.desc") }}</p>
+        <p v-if="quickCommandVars.parsed.unclosed" class="task-error mono">{{ t("quickCommandVars.unclosed") }}</p>
+        <pre class="command-output mono">{{ quickCommandVars.item.command }}</pre>
+        <div class="quick-command-vars-fields">
+          <label v-for="variable in quickCommandVars.parsed.variables" :key="variable.name" class="settings-field">
+            <span class="mono">{{ variable.name }}<template v-if="variable.defaultValue !== undefined"> = {{ variable.defaultValue }}</template></span>
+            <input
+              :value="quickCommandVars.values[variable.name]"
+              type="text"
+              spellcheck="false"
+              autocomplete="off"
+              @input="setQuickCommandVar(variable.name, $event)"
+            />
+          </label>
+        </div>
+        <pre class="command-output mono quick-command-vars-preview">{{ quickCommandVarsRendered.text }}</pre>
+        <p v-if="quickCommandVarsRendered.unresolved.length" class="task-error mono">{{ t("quickCommandVars.empty") }}</p>
+        <footer>
+          <button @click="closeQuickCommandVars()">{{ t("quickCommandVars.cancel") }}</button>
+          <button
+            class="primary-button"
+            :disabled="quickCommandVarsRendered.unresolved.length > 0"
+            @click="confirmQuickCommandVars()"
+          >{{ quickCommandVars.execute ? t("quickCommandVars.run") : t("quickCommandVars.paste") }}</button>
+        </footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!osc52AskText" @update:open="(open) => { if (!open) resolveOsc52Ask(false); }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="osc52AskText !== null">
+        <header>
+          <DialogTitle>{{ t("sessionPrefs.osc52AskTitle") }}</DialogTitle>
+          <button :title="t('close')" class="icon-button" @click="resolveOsc52Ask(false)"><X /></button>
+        </header>
+        <p class="muted">{{ t("sessionPrefs.osc52AskBody") }}</p>
+        <pre class="command-output mono">{{ osc52AskText }}</pre>
+        <footer>
+          <button @click="resolveOsc52Ask(false)">{{ t("sessionPrefs.osc52AskDeny") }}</button>
+          <button class="primary-button" @click="resolveOsc52Ask(true)">{{ t("sessionPrefs.osc52AskAllow") }}</button>
+        </footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!autofillOffer" @update:open="(open) => { if (!open) dismissAutofillOffer(); }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="autofillOffer">
+        <header>
+          <DialogTitle>{{ t("autofillRules.offerTitle") }}</DialogTitle>
+          <button :title="t('close')" class="icon-button" @click="dismissAutofillOffer"><X /></button>
+        </header>
+        <p class="muted">{{ t("autofillRules.offerBody", { name: autofillOffer.rule.name }) }}</p>
+        <pre class="command-output mono">{{ autofillOffer.payload.replace(/\r/g, "⏎") }}</pre>
+        <footer>
+          <button @click="dismissAutofillOffer">{{ t("autofillRules.offerDeny") }}</button>
+          <button class="primary-button" @click="acceptAutofillOffer">{{ t("autofillRules.offerSend") }}</button>
+        </footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!passwordHintOffer" @update:open="(open) => { if (!open) dismissPasswordHint(); }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="passwordHintOffer">
+        <header>
+          <DialogTitle>{{ t("sessionPrefs.passwordHintTitle") }}</DialogTitle>
+          <button :title="t('close')" class="icon-button" @click="dismissPasswordHint"><X /></button>
+        </header>
+        <p class="muted">{{ t("sessionPrefs.passwordHintBody") }}</p>
+        <ul class="password-hint-list" role="listbox" :aria-label="t('sessionPrefs.passwordHintTitle')">
+          <li v-for="candidate in passwordHintOffer.candidates" :key="`${candidate.kind}:${candidate.id}`">
+            <button type="button" class="password-hint-item" @click="pickPasswordHintCandidate(candidate)">
+              <ShieldCheck />
+              <span>{{ candidate.label }}</span>
+            </button>
+          </li>
+        </ul>
+        <footer>
+          <button @click="dismissPasswordHint">{{ t("sessionPrefs.passwordHintDeny") }}</button>
+        </footer>
+        </template>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="!!passwordHintPending" @update:open="(open) => { if (!open) dismissPasswordHint(); }">
+      <DialogContent class="modal small-modal" @escape-key-down.prevent>
+        <template v-if="passwordHintPending">
+        <header>
+          <DialogTitle>{{ t("sessionPrefs.passwordHintConfirmTitle") }}</DialogTitle>
+          <button :title="t('close')" class="icon-button" @click="dismissPasswordHint"><X /></button>
+        </header>
+        <p class="muted">{{ t("sessionPrefs.passwordHintConfirmBody", { name: passwordHintPending.label }) }}</p>
+        <footer>
+          <button :disabled="passwordHintBusy" @click="dismissPasswordHint">{{ t("sessionPrefs.passwordHintDeny") }}</button>
+          <button class="primary-button" :disabled="passwordHintBusy" @click="confirmPasswordHintSend">{{ t("sessionPrefs.passwordHintSend") }}</button>
         </footer>
         </template>
       </DialogContent>

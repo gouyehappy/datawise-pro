@@ -1,8 +1,16 @@
 import type {TreeNode, TreeNodeType} from '@/core/types'
 import {isViewModelDraftNode} from '@/features/explorer/services/view-model-tree.service'
+import {resolvePlatformFeatureNodeOpen} from '@/features/explorer/services/explorer-platform-menu-actions.service'
 
 /**
- * Primary open target for explorer double-click / Enter.
+ * Explorer click contract (select ≠ open):
+ * - Single-click / keyboard activate → select (+ delayed Info for info nodes)
+ * - Twistie / Space / ←→ → expand only
+ * - Double-click / Enter / open shortcut / context「打开」→ activate below
+ *
+ * Activate means: open a tab, connect, or toggle expand for pure folders.
+ * Leaf meta (column / index / …) has no activate action — keep select + Info.
+ *
  * Platform feature children (redis-feature, kafka-feature, …) stay on
  * {@link resolvePlatformFeatureNodeOpen}.
  */
@@ -24,7 +32,11 @@ export type ExplorerNodeOpenKind =
     /** Directory / folder row: toggle expand (not open an editor). */
     | 'expand'
 
-/** Node types whose primary double-click action is expand/collapse. */
+/**
+ * Node types whose primary double-click action is expand/collapse.
+ * Namespace rows are listed as fallback when platform open cannot parse the id;
+ * a successful {@link resolvePlatformFeatureNodeOpen} wins and opens the console.
+ */
 const EXPAND_ON_OPEN_TYPES = new Set<TreeNodeType>([
     'group',
     'folder',
@@ -63,6 +75,14 @@ export function resolveExplorerNodeOpenKind(
     if (node.type === 'database') return 'database'
     if (isExpandOnOpenTreeType(node.type)) return 'expand'
     return null
+}
+
+/** True when double-click / Enter should activate (not merely keep selection + Info). */
+export function hasExplorerNodeActivateAction(
+    node: Pick<TreeNode, 'type' | 'label' | 'meta'>,
+): boolean {
+    return resolveExplorerNodeOpenKind(node) != null
+        || resolvePlatformFeatureNodeOpen(node) != null
 }
 
 /** Trimmed rename value, or null when unchanged / blank (no-op). */

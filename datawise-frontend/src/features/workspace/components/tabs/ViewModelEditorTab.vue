@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import {computed, defineAsyncComponent, nextTick, onMounted, ref, watch} from 'vue'
+import {computed, nextTick, onMounted, ref, watch} from 'vue'
+import {defineEditionAsyncComponent} from '@/features/pack/define-edition-async-component'
 import {storeToRefs} from 'pinia'
 import {useI18n} from 'vue-i18n'
 import {SqlEditor} from '@datawise/sql-editor'
@@ -31,6 +32,7 @@ import {UserResource} from '@/features/auth/types/user-resource.types'
 import {usePluginStore} from '@/features/plugin/stores/plugin-store'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
+import type {AiPreferences} from '@/shared/config/app-config.types'
 import {useEditorFullscreen} from '@/features/workspace/composables/useEditorFullscreen'
 import {useAiPromptPanel} from '@/features/workspace/composables/useAiPromptPanel'
 import {useSqlEditorShortcuts} from '@/features/workspace/composables/useSqlEditorShortcuts'
@@ -58,11 +60,10 @@ import {
 
 const isStandardEdition = import.meta.env.VITE_DATAWISE_EDITION === 'standard'
 
-const ViewModelLineagePreviewPanel = defineAsyncComponent((() =>
-    isStandardEdition
-        ? import('@/features/pack/stubs/LineageWorkbenchStub.vue')
-        : import('@/features/workspace/components/tabs/ViewModelLineagePreviewPanel.vue')
-) as any)
+const ViewModelLineagePreviewPanel = defineEditionAsyncComponent(
+    () => import('@/features/workspace/components/tabs/ViewModelLineagePreviewPanel.vue'),
+    () => import('@/features/pack/stubs/LineageWorkbenchStub.vue'),
+)
 
 const props = defineProps<{ tab: WorkspaceTab }>()
 const {t} = useI18n()
@@ -218,7 +219,7 @@ async function resolveAiSqlRequest() {
     return {
         connectionId: connId,
         database: db,
-        prefs: appConfig.aiPreferences,
+        prefs: appConfig.aiPreferences as AiPreferences,
     }
 }
 
@@ -674,7 +675,7 @@ onMounted(async () => {
 .dw-console-toolbar__context {
   display: flex;
   flex: 1;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--dw-gap);

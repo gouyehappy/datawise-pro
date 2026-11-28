@@ -178,6 +178,24 @@ class CommunityPluginHostConnectionTest {
     }
 
     @Test
+    void disconnectWhenAlreadyStoppedDoesNotRespawnSidecar() {
+        ConnectionConfig config = new ConnectionConfig();
+        config.setId("c1");
+        config.setName("Hello");
+        config.setDbType("plugin");
+        config.setPluginId("io.datawise.example.hello");
+        config.setPluginConnectionProvider("io.datawise.example.hello.connection");
+
+        host.stop("io.datawise.example.hello");
+        JsonNode result = host.disconnect(config);
+        assertTrue(result.path("success").asBoolean());
+        assertTrue(result.path("alreadyStopped").asBoolean());
+        // Still idle — a follow-up disconnect must not activate.
+        JsonNode again = host.disconnect(config);
+        assertTrue(again.path("alreadyStopped").asBoolean());
+    }
+
+    @Test
     void workbenchCloseWhenAlreadyStoppedDoesNotRespawnSidecar() {
         host.stop("io.datawise.example.hello");
         JsonNode result = host.invoke(

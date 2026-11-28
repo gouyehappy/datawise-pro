@@ -2,7 +2,7 @@
 import {computed, nextTick, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import type {SettingsSection} from '@/core/types'
-import {DwIcon, DwInput, DwSplitPane, EmptyState} from '@/core/components'
+import {DwIcon, DwSplitPane, EmptyState, SearchInput} from '@/core/components'
 import {useDebouncedRef} from '@/core/utils/debounced-ref'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
@@ -11,7 +11,6 @@ import {resolveSettingsPanel} from '@/features/settings/settings-section-registr
 import {
   buildSettingsNavGroups,
   isAiSettingsSection,
-  shouldCollapseSettingsGroup,
 } from '@/features/settings/constants/settings-nav.config'
 import SettingsNavIcon from '@/features/settings/components/SettingsNavIcon.vue'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
@@ -27,8 +26,6 @@ defineOptions({name: 'SettingsView'})
 
 void ensureDeferredDwIcons()
 
-/** v5: B3-2 + workbench-focus preferred-open for AI / org-security. */
-const NAV_COLLAPSE_KEY = 'dw.settings.nav.collapsed.v5'
 /** PERF-07: align with explorer / global search (~200ms); clear flushes immediately. */
 const SETTINGS_SEARCH_DEBOUNCE_MS = 180
 
@@ -44,7 +41,6 @@ const debouncedSearchQuery = useDebouncedRef(searchQuery, SETTINGS_SEARCH_DEBOUN
 })
 const searchHits = ref<SettingsSearchHit[]>([])
 const lastSearchedQuery = ref('')
-const collapseHydrated = ref(false)
 const searchSettled = computed(() => searchQuery.value === lastSearchedQuery.value)
 
 const navGroups = computed(() => buildSettingsNavGroups({
@@ -54,134 +50,44 @@ const navGroups = computed(() => buildSettingsNavGroups({
   hideAiSections: isStandardEdition(),
 }))
 
-const visibleNavGroups = computed(() =>
-    navGroups.value
-        .map((group) => ({
-            ...group,
-            items: group.items.filter((item) => appConfig.canOpenSettingsSection(item.id)),
-        }))
-        .filter((group) => group.items.length > 0),
+/** Flat Cursor-style list: all allowed items, no collapsible groups. */
+const navItems = computed(() =>
+    navGroups.value.flatMap((group) =>
+        group.items.filter((item) => appConfig.canOpenSettingsSection(item.id)),
+    ),
 )
 
 const allowedSections = computed(() => {
   const set = new Set<SettingsSection>()
-  for (const group of visibleNavGroups.value) {
-    for (const item of group.items) set.add(item.id)
-  }
+  for (const item of navItems.value) set.add(item.id)
   return set
 })
 
 const activeSection = computed(() => layout.settingsSection)
 const activePanel = computed(() => resolveSettingsPanel(activeSection.value))
+const shellRef = ref<{ $el?: HTMLElement } | null>(null)
 
-/** Collapsed group labelKeys */
-const collapsedGroups = ref<Set<string>>(new Set())
-
-function readStoredCollapsed(): Set<string> | null {
-  try {
-    const raw = localStorage.getItem(NAV_COLLAPSE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return null
-    return new Set(parsed.filter((k): k is string => typeof k === 'string'))
-  } catch {
-    return null
-  }
+function scrollMainToTop() {
+  const root = shellRef.value?.$el
+  if (!root) return
+  const main = root.classList?.contains('module-shell__main')
+      ? root
+      : root.querySelector<HTMLElement>('.module-shell__main')
+  if (main) main.scrollTop = 0
 }
-
-function persistCollapsed() {
-  try {
-    localStorage.setItem(NAV_COLLAPSE_KEY, JSON.stringify([...collapsedGroups.value]))
-  } catch {
-    /* ignore */
-  }
-}
-
-function hydrateCollapseState() {
-  if (collapseHydrated.value) return
-  if (!visibleNavGroups.value.length) return
-  const stored = readStoredCollapsed()
-  if (stored) {
-    const known = new Set(visibleNavGroups.value.map((g) => g.labelKey))
-    collapsedGroups.value = new Set([...stored].filter((k) => known.has(k)))
-  } else {
-    // B3-2 / rem-3: collapse advanced unless current workbench focus prefers them open.
-    collapsedGroups.value = new Set(
-        visibleNavGroups.value
-            .filter((g) => shouldCollapseSettingsGroup(g, appConfig.workbenchMode))
-            .map((g) => g.labelKey),
-    )
-  }
-  collapseHydrated.value = true
-  persistCollapsed()
-}
-
-/** Soft-expand preferred groups when focus changes; never force-collapse user opens. */
-function applyWorkbenchFocusNavExpand(mode = appConfig.workbenchMode) {
-  if (!collapseHydrated.value) return
-  if (searchQuery.value.trim()) return
-  let changed = false
-  const next = new Set(collapsedGroups.value)
-  for (const group of visibleNavGroups.value) {
-    if (!group.preferredOpenInModes?.includes(mode)) continue
-    if (!next.has(group.labelKey)) continue
-    next.delete(group.labelKey)
-    changed = true
-  }
-  if (!changed) return
-  collapsedGroups.value = next
-  persistCollapsed()
-}
-
-function isGroupCollapsed(labelKey: string): boolean {
-  return collapsedGroups.value.has(labelKey)
-}
-
-function toggleGroup(labelKey: string) {
-  const next = new Set(collapsedGroups.value)
-  if (next.has(labelKey)) next.delete(labelKey)
-  else next.add(labelKey)
-  collapsedGroups.value = next
-  persistCollapsed()
-}
-
-function expandGroupForSection(section: SettingsSection) {
-  const group = visibleNavGroups.value.find((g) => g.items.some((item) => item.id === section))
-  if (!group) return
-  if (!collapsedGroups.value.has(group.labelKey)) return
-  const next = new Set(collapsedGroups.value)
-  next.delete(group.labelKey)
-  collapsedGroups.value = next
-  persistCollapsed()
-}
-
-function groupContainsActive(labelKey: string): boolean {
-  const group = visibleNavGroups.value.find((g) => g.labelKey === labelKey)
-  return Boolean(group?.items.some((item) => item.id === activeSection.value))
-}
-
-watch(
-    visibleNavGroups,
-    () => hydrateCollapseState(),
-    {immediate: true},
-)
-
-watch(
-    () => appConfig.workbenchMode,
-    (mode) => applyWorkbenchFocusNavExpand(mode),
-)
 
 watch(
     activeSection,
     (section) => {
-      if (!isStandardEdition() || !isAiSettingsSection(section)) {
-        expandGroupForSection(section)
+      if (isStandardEdition() && isAiSettingsSection(section)) {
+        const fallback = navItems.value[0]?.id ?? 'basic'
+        layout.setSettingsSection(fallback)
         return
       }
-      const fallback = visibleNavGroups.value[0]?.items[0]?.id ?? 'basic'
-      layout.setSettingsSection(fallback)
+      // 搜索锚点跳转留给 flashSettingsAnchor；普通切菜单时右栏置顶
+      if (layout.settingsScrollAnchor) return
+      void nextTick(() => scrollMainToTop())
     },
-    {immediate: true},
 )
 
 function runSettingsSearch(q: string) {
@@ -190,10 +96,6 @@ function runSettingsSearch(q: string) {
     translate: (key) => t(key),
     allowedSections: allowedSections.value,
   }).slice(0, 8)
-  // Searching: expand all so hits are reachable via list + dropdown still works.
-  if (q.trim() && collapseHydrated.value) {
-    collapsedGroups.value = new Set()
-  }
 }
 
 watch(debouncedSearchQuery, (q) => runSettingsSearch(q))
@@ -210,11 +112,13 @@ function selectSection(section: SettingsSection, anchor?: string) {
     entitlement.openPaywall('pack.ai', 'settings.ai')
     return
   }
-  layout.setSettingsSection(section)
-  expandGroupForSection(section)
   if (anchor) {
     layout.openSettingsModule(section, anchor)
     void nextTick(() => flashSettingsAnchor(anchor))
+  } else {
+    layout.clearSettingsScrollAnchor()
+    layout.setSettingsSection(section)
+    void nextTick(() => scrollMainToTop())
   }
   searchQuery.value = ''
   searchHits.value = []
@@ -228,19 +132,25 @@ function backToWorkspace() {
   layout.setModule('database')
 }
 
-/** Collapsed header click: expand; if already has active, also a no-op expand. */
-function onGroupHeaderClick(labelKey: string) {
-  toggleGroup(labelKey)
+const profileInitial = computed(() => {
+  const name = (layout.profileName || '').trim()
+  if (!name) return '?'
+  return Array.from(name)[0]?.toUpperCase() ?? '?'
+})
+
+function openProfile() {
+  selectSection('profile')
 }
 </script>
 
 <template>
   <DwSplitPane
-      class="module-shell"
+      ref="shellRef"
+      class="module-shell module-shell--settings"
       storage-key="dw.split.settings-shell"
       default-ratio="sidebar"
-      :default-width="220"
-      :min-width="180"
+      :default-width="252"
+      :min-width="212"
       :max-width="360"
       :max-ratio="0.4"
       :end-min-width="360"
@@ -250,11 +160,14 @@ function onGroupHeaderClick(labelKey: string) {
       handle-variant="line"
   >
     <template #start>
-      <h1 class="module-shell__nav-title">{{ t('settings.title') }}</h1>
+      <button class="module-shell__back" type="button" @click="backToWorkspace">
+        <DwIcon name="chevron-left" size="sm" :stroke-width="2.2" aria-hidden="true"/>
+        <span>{{ t('settings.backToWorkspace') }}</span>
+      </button>
       <div class="settings-search">
-        <DwInput
+        <SearchInput
             v-model="searchQuery"
-            type="search"
+            size="sm"
             :placeholder="t('settings.searchPlaceholder')"
             @keydown.enter.prevent="onSearchEnter"
         />
@@ -278,57 +191,40 @@ function onGroupHeaderClick(labelKey: string) {
         />
       </div>
       <nav class="module-shell__nav-list" aria-label="settings">
-        <section
-            v-for="group in visibleNavGroups"
-            :key="group.labelKey"
-            class="module-shell__nav-group"
-            :class="{
-              'is-collapsed': isGroupCollapsed(group.labelKey),
-              'has-active': groupContainsActive(group.labelKey),
-            }"
+        <button
+            v-for="item in navItems"
+            :key="item.id"
+            class="module-shell__nav-item"
+            :class="{'is-active': activeSection === item.id}"
+            type="button"
+            @click="selectSection(item.id)"
         >
-          <button
-              type="button"
-              class="module-shell__nav-group-toggle"
-              :aria-expanded="!isGroupCollapsed(group.labelKey)"
-              @click="onGroupHeaderClick(group.labelKey)"
-          >
-            <DwIcon
-                name="chevron-down"
-                class="module-shell__nav-group-toggle__chevron"
-                size="sm"
-                :stroke-width="2.2"
-            />
-            <span class="module-shell__nav-group-toggle__label">{{ t(group.labelKey) }}</span>
-            <span class="module-shell__nav-group-toggle__count" aria-hidden="true">
-              {{ group.items.length }}
-            </span>
-          </button>
-          <div
-              v-show="!isGroupCollapsed(group.labelKey)"
-              class="module-shell__nav-group__items"
-              role="group"
-              :aria-label="t(group.labelKey)"
-          >
-            <button
-                v-for="item in group.items"
-                :key="item.id"
-                class="module-shell__nav-item"
-                :class="{'is-active': activeSection === item.id}"
-                type="button"
-                @click="selectSection(item.id)"
-            >
-              <span class="module-shell__nav-item-icon" aria-hidden="true">
-                <SettingsNavIcon :section="item.id"/>
-              </span>
-              <span class="module-shell__nav-item-label">{{ t(item.labelKey) }}</span>
-            </button>
-          </div>
-        </section>
+          <span class="module-shell__nav-item-icon" aria-hidden="true">
+            <SettingsNavIcon :section="item.id"/>
+          </span>
+          <span class="module-shell__nav-item-label">{{ t(item.labelKey) }}</span>
+        </button>
       </nav>
-      <button class="module-shell__back" type="button" @click="backToWorkspace">
-        {{ t('settings.backToWorkspace') }}
-      </button>
+      <div class="module-shell__profile">
+        <button
+            type="button"
+            class="module-shell__profile-main"
+            :class="{'is-active': activeSection === 'profile'}"
+            :title="layout.profileName"
+            @click="openProfile"
+        >
+          <span class="module-shell__profile-avatar" aria-hidden="true">{{ profileInitial }}</span>
+          <span class="module-shell__profile-email">{{ layout.profileEmail }}</span>
+        </button>
+        <button
+            type="button"
+            class="module-shell__profile-gear"
+            :aria-label="t('settings.nav.profile')"
+            @click="openProfile"
+        >
+          <DwIcon name="settings" size="sm" :stroke-width="1.6" aria-hidden="true"/>
+        </button>
+      </div>
     </template>
 
     <template #end>
@@ -340,14 +236,14 @@ function onGroupHeaderClick(labelKey: string) {
 <style scoped>
 .settings-search {
   position: relative;
-  padding: 0 var(--dw-space-4) var(--dw-space-3);
+  padding: 0 0 var(--dw-space-3);
   flex-shrink: 0;
 }
 
 .settings-search__hits {
   position: absolute;
-  left: var(--dw-space-4);
-  right: var(--dw-space-4);
+  left: 0;
+  right: 0;
   z-index: 20;
   margin: 4px 0 0;
   padding: var(--dw-space-1);

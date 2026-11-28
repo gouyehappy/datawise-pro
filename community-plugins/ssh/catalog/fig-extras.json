@@ -1,0 +1,137 @@
+{
+  "version": "2026.11.25",
+  "notes": "Curated Fig extras for DataWise SSH (X-CATALOG). Overlay merges onto Wave 1+2 bundled specs; does not replace the full withfig corpus.",
+  "specs": {
+    "htop": {
+      "name": "htop",
+      "description": "Interactive process viewer",
+      "options": [
+        { "name": ["-d", "--delay"], "description": "Update delay", "args": { "name": "tenths" } },
+        { "name": ["-t", "--tree"], "description": "Tree view" },
+        { "name": ["-u", "--user"], "description": "Show only processes of a user", "args": { "name": "user" } }
+      ]
+    },
+    "top": {
+      "name": "top",
+      "description": "Display Linux processes",
+      "options": [
+        { "name": ["-b"], "description": "Batch mode" },
+        { "name": ["-n"], "description": "Number of iterations", "args": { "name": "N" } },
+        { "name": ["-p"], "description": "Monitor PIDs", "args": { "name": "PID", "isVariadic": true } }
+      ]
+    },
+    "dig": {
+      "name": "dig",
+      "description": "DNS lookup utility",
+      "options": [
+        { "name": ["+short"], "description": "Short answer" },
+        { "name": ["+trace"], "description": "Trace delegation path" },
+        { "name": ["-x"], "description": "Reverse lookup", "args": { "name": "addr" } },
+        { "name": ["-t"], "description": "Query type", "args": { "name": "type", "suggestions": ["A", "AAAA", "MX", "TXT", "CNAME", "NS", "SOA"] } }
+      ],
+      "args": { "name": "name" }
+    },
+    "ping": {
+      "name": "ping",
+      "description": "Send ICMP ECHO_REQUEST",
+      "options": [
+        { "name": ["-c"], "description": "Stop after count replies", "args": { "name": "count" } },
+        { "name": ["-i"], "description": "Interval seconds", "args": { "name": "sec" } },
+        { "name": ["-W"], "description": "Timeout seconds", "args": { "name": "sec" } }
+      ],
+      "args": { "name": "host" }
+    },
+    "systemctl": {
+      "name": "systemctl",
+      "description": "Control the systemd system and service manager",
+      "subcommands": [
+        { "name": "status", "description": "Show unit status", "args": { "name": "unit", "isOptional": true } },
+        { "name": "start", "description": "Start unit(s)", "args": { "name": "unit" } },
+        { "name": "stop", "description": "Stop unit(s)", "args": { "name": "unit" } },
+        { "name": "restart", "description": "Restart unit(s)", "args": { "name": "unit" } },
+        { "name": "reload", "description": "Reload unit(s)", "args": { "name": "unit" } },
+        { "name": "enable", "description": "Enable unit(s)", "args": { "name": "unit" } },
+        { "name": "disable", "description": "Disable unit(s)", "args": { "name": "unit" } },
+        { "name": "daemon-reload", "description": "Reload systemd manager configuration" },
+        { "name": "list-units", "description": "List units", "options": [{ "name": ["--type"], "args": { "name": "type", "suggestions": ["service", "socket", "timer", "target"] } }] }
+      ],
+      "options": [
+        { "name": ["-l", "--full"], "description": "Do not ellipsize" },
+        { "name": ["--user"], "description": "Connect to user manager" },
+        { "name": ["--system"], "description": "Connect to system manager" }
+      ]
+    },
+    "journalctl": {
+      "name": "journalctl",
+      "description": "Query the systemd journal",
+      "options": [
+        { "name": ["-u", "--unit"], "description": "Show logs for unit", "args": { "name": "unit" } },
+        { "name": ["-f", "--follow"], "description": "Follow new entries" },
+        { "name": ["-n", "--lines"], "description": "Number of lines", "args": { "name": "N" } },
+        { "name": ["-xe"], "description": "Explain + priority notice and above" },
+        { "name": ["--since"], "description": "Entries since", "args": { "name": "date" } },
+        { "name": ["--until"], "description": "Entries until", "args": { "name": "date" } },
+        { "name": ["-b", "--boot"], "description": "Current boot" },
+        { "name": ["-o", "--output"], "description": "Output format", "args": { "name": "format", "suggestions": ["short", "json", "verbose", "cat"] } }
+      ]
+    },
+    "ss": {
+      "name": "ss",
+      "description": "Socket statistics",
+      "options": [
+        { "name": ["-t", "--tcp"], "description": "TCP sockets" },
+        { "name": ["-u", "--udp"], "description": "UDP sockets" },
+        { "name": ["-l", "--listening"], "description": "Listening sockets" },
+        { "name": ["-n", "--numeric"], "description": "Numeric ports" },
+        { "name": ["-p", "--processes"], "description": "Show process" },
+        { "name": ["-a", "--all"], "description": "All sockets" }
+      ]
+    },
+    "df": {
+      "name": "df",
+      "description": "Report file system disk space usage",
+      "options": [
+        { "name": ["-h", "--human-readable"], "description": "Human readable sizes" },
+        { "name": ["-T", "--print-type"], "description": "Print filesystem type" },
+        { "name": ["-i", "--inodes"], "description": "List inode information" }
+      ]
+    },
+    "free": {
+      "name": "free",
+      "description": "Display amount of free and used memory",
+      "options": [
+        { "name": ["-h", "--human"], "description": "Human readable" },
+        { "name": ["-m", "--mebi"], "description": "Display in mebibytes" },
+        { "name": ["-s", "--seconds"], "description": "Repeat every N seconds", "args": { "name": "N" } }
+      ]
+    },
+    "tar": {
+      "name": "tar",
+      "description": "Tape archive",
+      "options": [
+        { "name": ["-x"], "description": "Extract" },
+        { "name": ["-c"], "description": "Create" },
+        { "name": ["-t"], "description": "List" },
+        { "name": ["-z"], "description": "gzip" },
+        { "name": ["-j"], "description": "bzip2" },
+        { "name": ["-J"], "description": "xz" },
+        { "name": ["-v"], "description": "Verbose" },
+        { "name": ["-f"], "description": "Archive file", "args": { "name": "file", "template": "filepaths" } },
+        { "name": ["-C"], "description": "Change to directory", "args": { "name": "dir", "template": "folders" } }
+      ]
+    },
+    "uptime": {
+      "name": "uptime",
+      "description": "Tell how long the system has been running",
+      "options": [
+        { "name": ["-p", "--pretty"], "description": "Pretty format" },
+        { "name": ["-s", "--since"], "description": "System up since" }
+      ]
+    },
+    "which": {
+      "name": "which",
+      "description": "Locate a command",
+      "args": { "name": "command", "isVariadic": true }
+    }
+  }
+}

@@ -43,7 +43,8 @@ const PANEL_LOADERS = {
     tenants: () => import('@/features/settings/components/TenantsSettingsPanel.vue'),
     projects: () => import('@/features/settings/components/ProjectsSettingsPanel.vue'),
     configPortability: () => import('@/features/settings/components/ConfigPortabilitySettingsPanel.vue'),
-    configCloudSync: () => import('@/features/settings/components/ConfigCloudSyncSettingsPanel.vue'),
+    /** @deprecated 已并入 configPortability；保留别名以免旧深链失效 */
+    configCloudSync: () => import('@/features/settings/components/ConfigPortabilitySettingsPanel.vue'),
     backupCenter: () =>
         import.meta.env.VITE_DATAWISE_EDITION === 'standard'
             ? import('@/features/pack/stubs/BackupSettingsStub.vue')

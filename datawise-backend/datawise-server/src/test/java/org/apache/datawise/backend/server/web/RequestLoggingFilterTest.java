@@ -56,4 +56,22 @@ class RequestLoggingFilterTest {
         );
         assertEquals("GET /api/notifications 200 1ms", read);
     }
+
+    @Test
+    void redactSensitiveQueryMasksPasswordKeys() {
+        assertEquals(
+                "userName=alice&userPassword=***",
+                RequestLoggingFilter.redactSensitiveQuery("userName=alice&userPassword=s3cret")
+        );
+        assertEquals(
+                "password=***&refresh=true",
+                RequestLoggingFilter.redactSensitiveQuery("password=plain&refresh=true")
+        );
+        assertEquals(
+                "sshPassword=***",
+                RequestLoggingFilter.redactSensitiveQuery("sshPassword=x")
+        );
+        assertEquals("ok=1", RequestLoggingFilter.redactSensitiveQuery("ok=1"));
+        assertEquals("", RequestLoggingFilter.redactSensitiveQuery(""));
+    }
 }

@@ -1,9 +1,20 @@
 <script setup lang="ts">
 import {computed, reactive, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {DwButton, DwCheckbox, DwInput} from '@/core/components'
+import {
+  AppModal,
+  DwButton,
+  DwInlineAlert,
+  DwInput,
+  FormField,
+  ModalActions,
+  SettingsSelect,
+} from '@/core/components'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
-import SettingsSectionCard from '@/features/settings/components/SettingsSectionCard.vue'
+import SettingsActions from '@/features/settings/components/SettingsActions.vue'
+import ConfigHubCard from '@/features/settings/components/ConfigHubCard.vue'
+import ConfigCloudSyncSettingsPanel from '@/features/settings/components/ConfigCloudSyncSettingsPanel.vue'
+import ProfileDomainPicker from '@/features/settings/components/ProfileDomainPicker.vue'
 import {useAppToast} from '@/features/layout/composables/useAppToast'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import {useResourceWriteGuard} from '@/features/auth/composables/useResourceWriteGuard'
@@ -29,6 +40,11 @@ const explorer = useExplorerStore()
 const shortcutPanel = useShortcutPanelStore()
 const {readOnly, denyIfReadOnly} = useResourceWriteGuard(UserResource.AppConfig)
 
+const projectConflictOptions = computed(() => [
+  {value: 'preferImported', label: t('settings.configPortability.preferImported')},
+  {value: 'keepLocal', label: t('settings.configPortability.keepLocal')},
+])
+
 const exportDomains = reactive<ProfileDomainOptions>({...DEFAULT_PROFILE_DOMAINS})
 const importDomains = reactive<ProfileDomainOptions>({...DEFAULT_PROFILE_DOMAINS})
 const exportPassphrase = ref('')
@@ -38,6 +54,10 @@ const importFile = ref<File | null>(null)
 const preflight = ref<ProfilePreflightResult | null>(null)
 const busy = ref(false)
 const fileInputRef = ref<HTMLInputElement>()
+const exportOpen = ref(false)
+const importOpen = ref(false)
+const exportError = ref('')
+const importError = ref('')
 
 const passphraseMismatch = computed(
     () => exportPassphrase.value.length > 0
@@ -47,17 +67,60 @@ const passphraseMismatch = computed(
 const passphraseTooShort = computed(
     () => exportPassphrase.value.length > 0 && exportPassphrase.value.length < 4,
 )
+const hasDomain = (domains: ProfileDomainOptions) =>
+    domains.connections || domains.app || domains.snippets
+        || domains.aiWorkspace || domains.projects
+        || domains.savedConsoles || domains.sqlHistory
+
 const canExport = computed(
     () => !readOnly.value
         && exportPassphrase.value.length >= 4
         && exportPassphrase.value === exportConfirm.value
-        && (exportDomains.connections || exportDomains.app || exportDomains.snippets
-            || exportDomains.aiWorkspace || exportDomains.projects
-            || exportDomains.savedConsoles || exportDomains.sqlHistory),
+        && hasDomain(exportDomains),
 )
+
+const canImport = computed(
+    () => !readOnly.value
+        && !!importFile.value
+        && !!importPassphrase.value
+        && hasDomain(importDomains)
+        && (preflight.value == null
+            || (preflight.value.passphraseOk && preflight.value.schemaCompatible)),
+)
+
+function openExport() {
+  if (denyIfReadOnly()) return
+  exportError.value = ''
+  exportOpen.value = true
+}
+
+function closeExport() {
+  exportOpen.value = false
+  exportError.value = ''
+}
+
+function openImport() {
+  if (denyIfReadOnly()) return
+  importError.value = ''
+  importOpen.value = true
+}
+
+function closeImport() {
+  importOpen.value = false
+  importError.value = ''
+}
 
 async function onExport() {
   if (denyIfReadOnly() || !canExport.value) return
+  exportError.value = ''
+  if (passphraseTooShort.value) {
+    exportError.value = t('settings.configPortability.passphraseTooShort')
+    return
+  }
+  if (passphraseMismatch.value) {
+    exportError.value = t('settings.configPortability.passphraseMismatch')
+    return
+  }
   busy.value = true
   try {
     const {blob, fileName} = await exportProfilePackage({
@@ -66,6 +129,7 @@ async function onExport() {
       domains: {...exportDomains},
     })
     downloadBlob(blob, fileName)
+    closeExport()
     toast.notify({
       category: 'export',
       titleKey: 'exportDone',
@@ -75,10 +139,8 @@ async function onExport() {
     exportPassphrase.value = ''
     exportConfirm.value = ''
   } catch (err) {
-    toast.error(
-        resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
-        || t('settings.configPortability.exportFailed'),
-    )
+    exportError.value = resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
+        || t('settings.configPortability.exportFailed')
   } finally {
     busy.value = false
   }
@@ -90,38 +152,37 @@ function pickImportFile() {
 
 function onFileChosen(event: Event) {
   const input = event.target as HTMLInputElement
-  const file = input.files?.[0] ?? null
-  importFile.value = file
+  importFile.value = input.files?.[0] ?? null
   preflight.value = null
+  importError.value = ''
   input.value = ''
 }
 
 async function onPreflight() {
   if (denyIfReadOnly() || !importFile.value || !importPassphrase.value) return
+  importError.value = ''
   busy.value = true
   try {
     preflight.value = await preflightProfilePackage(importFile.value, importPassphrase.value)
     if (!preflight.value.passphraseOk) {
-      toast.error(t('settings.configPortability.passphraseIncorrect'))
+      importError.value = t('settings.configPortability.passphraseIncorrect')
     } else if (!preflight.value.schemaCompatible) {
-      toast.error(t('settings.configPortability.schemaUnsupported'))
-    } else {
+      importError.value = t('settings.configPortability.schemaUnsupported')
     }
   } catch (err) {
-    toast.error(
-        resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
-        || t('settings.configPortability.preflightFailed'),
-    )
+    importError.value = resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
+        || t('settings.configPortability.preflightFailed')
   } finally {
     busy.value = false
   }
 }
 
 async function onImport() {
-  if (denyIfReadOnly() || !importFile.value || !importPassphrase.value) return
+  if (denyIfReadOnly() || !canImport.value || !importFile.value || !importPassphrase.value) return
   if (preflight.value && (!preflight.value.passphraseOk || !preflight.value.schemaCompatible)) {
     return
   }
+  importError.value = ''
   busy.value = true
   try {
     const result = await importProfilePackage(
@@ -135,6 +196,13 @@ async function onImport() {
       syncSqlEditorLayersFromServer(),
       shortcutPanel.load(),
     ])
+    closeImport()
+    toast.notify({
+      category: 'workspace',
+      titleKey: 'importDone',
+      bodyKey: 'importDone',
+      params: {name: t('settings.configPortability.importSuccess')},
+    })
     if (result.restartRecommended) {
       toast.warning(t('settings.configPortability.restartRecommended'))
     }
@@ -142,10 +210,8 @@ async function onImport() {
     importFile.value = null
     preflight.value = null
   } catch (err) {
-    toast.error(
-        resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
-        || t('settings.configPortability.importFailed'),
-    )
+    importError.value = resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
+        || t('settings.configPortability.importFailed')
   } finally {
     busy.value = false
   }
@@ -158,109 +224,123 @@ async function onImport() {
       :title="t('settings.configPortability.title')"
       :subtitle="t('settings.configPortability.subtitle')"
   >
-    <SettingsSectionCard
-        :title="t('settings.configPortability.exportTitle')"
-        :hint="t('settings.configPortability.exportHint')"
-        icon="export"
-        tone="panel"
-    >
-      <div class="portability-domains">
-        <DwCheckbox v-model="exportDomains.connections" :label="t('settings.configPortability.domain.connections')"/>
-        <DwCheckbox v-model="exportDomains.app" :label="t('settings.configPortability.domain.app')"/>
-        <DwCheckbox v-model="exportDomains.snippets" :label="t('settings.configPortability.domain.snippets')"/>
-        <DwCheckbox v-model="exportDomains.aiWorkspace" :label="t('settings.configPortability.domain.aiWorkspace')"/>
-        <DwCheckbox v-model="exportDomains.projects" :label="t('settings.configPortability.domain.projects')"/>
-        <DwCheckbox v-model="exportDomains.savedConsoles" :label="t('settings.configPortability.domain.savedConsoles')"/>
-        <DwCheckbox v-model="exportDomains.sqlHistory" :label="t('settings.configPortability.domain.sqlHistory')"/>
-      </div>
-      <div class="portability-fields">
-        <label>
-          <span>{{ t('settings.configPortability.passphrase') }}</span>
-          <DwInput v-model="exportPassphrase" type="password" autocomplete="new-password"/>
-        </label>
-        <label>
-          <span>{{ t('settings.configPortability.confirmPassphrase') }}</span>
-          <DwInput v-model="exportConfirm" type="password" autocomplete="new-password"/>
-        </label>
-      </div>
-      <p v-if="passphraseTooShort" class="portability-warn">{{ t('settings.configPortability.passphraseTooShort') }}</p>
-      <p v-else-if="passphraseMismatch" class="portability-warn">{{ t('settings.configPortability.passphraseMismatch') }}</p>
-      <p class="portability-muted">{{ t('settings.configPortability.passphraseHint') }}</p>
-      <DwButton
-          variant="primary"
-          size="sm"
-          :loading="busy"
-          :disabled="!canExport || busy"
-          @click="onExport"
-      >
-        {{ t('settings.configPortability.exportAction') }}
-      </DwButton>
-    </SettingsSectionCard>
+    <div class="config-hub-stack">
+      <section class="config-hub-group">
+        <header class="config-hub-group__head">
+          <h3 class="config-hub-group__title">{{ t('settings.configPortability.hubGroupTitle') }}</h3>
+          <p class="config-hub-group__hint">{{ t('settings.configPortability.hubGroupHint') }}</p>
+        </header>
+        <div class="config-hub">
+          <ConfigHubCard
+              :title="t('settings.configPortability.exportTitle')"
+              :hint="t('settings.configPortability.exportHint')"
+              icon="export"
+              :action-label="t('settings.configPortability.hubOpen')"
+              :disabled="readOnly"
+              @click="openExport"
+          />
+          <ConfigHubCard
+              :title="t('settings.configPortability.importTitle')"
+              :hint="t('settings.configPortability.importHint')"
+              icon="import"
+              :action-label="t('settings.configPortability.hubOpen')"
+              :disabled="readOnly"
+              @click="openImport"
+          />
+        </div>
+      </section>
 
-    <SettingsSectionCard
-        :title="t('settings.configPortability.importTitle')"
-        :hint="t('settings.configPortability.importHint')"
-        icon="import"
-        tone="panel"
-    >
-      <input
-          ref="fileInputRef"
-          class="portability-file-input"
-          type="file"
-          accept=".dwprofile,.json,.xml,application/zip,application/json,text/xml"
-          @change="onFileChosen"
+      <ConfigCloudSyncSettingsPanel embedded/>
+    </div>
+  </SettingsPageShell>
+
+  <AppModal
+      :open="exportOpen"
+      :title="t('settings.configPortability.exportTitle')"
+      :subtitle="t('settings.configPortability.exportModalSubtitle')"
+      width="560px"
+      @close="closeExport"
+  >
+    <form class="modal-form modal-form--compact" @submit.prevent="onExport">
+      <div class="config-modal-section">
+        <p class="config-modal-label">{{ t('settings.configPortability.exportTitle') }}</p>
+        <ProfileDomainPicker
+            v-model="exportDomains"
+            :aria-label="t('settings.configPortability.exportTitle')"
+            :disabled="readOnly"
+        />
+      </div>
+      <FormField
+          :label="t('settings.configPortability.passphrase')"
+          :hint="t('settings.configPortability.passphraseHint')"
       >
-      <div class="portability-file-row">
+        <DwInput v-model="exportPassphrase" type="password" autocomplete="new-password"/>
+      </FormField>
+      <FormField :label="t('settings.configPortability.confirmPassphrase')">
+        <DwInput v-model="exportConfirm" type="password" autocomplete="new-password"/>
+      </FormField>
+      <DwInlineAlert
+          v-if="exportError || passphraseTooShort || passphraseMismatch"
+          :message="exportError
+            || (passphraseTooShort
+              ? t('settings.configPortability.passphraseTooShort')
+              : t('settings.configPortability.passphraseMismatch'))"
+          density="banner"
+      />
+    </form>
+    <template #footer>
+      <ModalActions
+          :confirm-label="t('settings.configPortability.exportAction')"
+          :confirm-disabled="!canExport || busy"
+          :confirm-loading="busy"
+          @cancel="closeExport"
+          @confirm="onExport"
+      />
+    </template>
+  </AppModal>
+
+  <AppModal
+      :open="importOpen"
+      :title="t('settings.configPortability.importTitle')"
+      :subtitle="t('settings.configPortability.importModalSubtitle')"
+      width="560px"
+      @close="closeImport"
+  >
+    <input
+        ref="fileInputRef"
+        class="config-file-input"
+        type="file"
+        accept=".dwprofile,.json,.xml,application/zip,application/json,text/xml"
+        @change="onFileChosen"
+    >
+    <form class="modal-form modal-form--compact" @submit.prevent="onImport">
+      <FormField
+          :label="t('settings.configPortability.chooseFile')"
+          :hint="importFile?.name || t('settings.configPortability.noFile')"
+      >
         <DwButton variant="secondary" size="sm" :disabled="busy || readOnly" @click="pickImportFile">
           {{ t('settings.configPortability.chooseFile') }}
         </DwButton>
-        <span class="portability-muted">{{ importFile?.name || t('settings.configPortability.noFile') }}</span>
+      </FormField>
+      <div class="config-modal-section">
+        <p class="config-modal-label">{{ t('settings.configPortability.importTitle') }}</p>
+        <ProfileDomainPicker
+            v-model="importDomains"
+            :aria-label="t('settings.configPortability.importTitle')"
+            :disabled="readOnly"
+        />
       </div>
-      <div class="portability-domains">
-        <DwCheckbox v-model="importDomains.connections" :label="t('settings.configPortability.domain.connections')"/>
-        <DwCheckbox v-model="importDomains.app" :label="t('settings.configPortability.domain.app')"/>
-        <DwCheckbox v-model="importDomains.snippets" :label="t('settings.configPortability.domain.snippets')"/>
-        <DwCheckbox v-model="importDomains.aiWorkspace" :label="t('settings.configPortability.domain.aiWorkspace')"/>
-        <DwCheckbox v-model="importDomains.projects" :label="t('settings.configPortability.domain.projects')"/>
-        <DwCheckbox v-model="importDomains.savedConsoles" :label="t('settings.configPortability.domain.savedConsoles')"/>
-        <DwCheckbox v-model="importDomains.sqlHistory" :label="t('settings.configPortability.domain.sqlHistory')"/>
-      </div>
-      <fieldset class="portability-conflict">
-        <legend>{{ t('settings.configPortability.projectConflict') }}</legend>
-        <label>
-          <input v-model="importDomains.projectFileConflict" type="radio" value="preferImported">
-          {{ t('settings.configPortability.preferImported') }}
-        </label>
-        <label>
-          <input v-model="importDomains.projectFileConflict" type="radio" value="keepLocal">
-          {{ t('settings.configPortability.keepLocal') }}
-        </label>
-      </fieldset>
-      <label class="portability-fields">
-        <span>{{ t('settings.configPortability.passphrase') }}</span>
+      <FormField :label="t('settings.configPortability.projectConflict')">
+        <SettingsSelect
+            :model-value="importDomains.projectFileConflict ?? 'preferImported'"
+            :options="projectConflictOptions"
+            @update:model-value="importDomains.projectFileConflict = $event as 'preferImported' | 'keepLocal'"
+        />
+      </FormField>
+      <FormField :label="t('settings.configPortability.passphrase')">
         <DwInput v-model="importPassphrase" type="password" autocomplete="current-password"/>
-      </label>
-      <div class="portability-actions">
-        <DwButton
-            variant="secondary"
-            size="sm"
-            :loading="busy"
-            :disabled="busy || readOnly || !importFile || !importPassphrase"
-            @click="onPreflight"
-        >
-          {{ t('settings.configPortability.preflightAction') }}
-        </DwButton>
-        <DwButton
-            variant="primary"
-            size="sm"
-            :loading="busy"
-            :disabled="busy || readOnly || !importFile || !importPassphrase || (preflight != null && (!preflight.passphraseOk || !preflight.schemaCompatible))"
-            @click="onImport"
-        >
-          {{ t('settings.configPortability.importAction') }}
-        </DwButton>
-      </div>
-      <div v-if="preflight" class="portability-preflight">
+      </FormField>
+      <div v-if="preflight" class="config-preflight">
         <p>{{ t('settings.configPortability.preflightSummary', {
           connections: preflight.counts?.connections ?? '—',
           conflicts: preflight.conflicts?.length ?? 0,
@@ -274,80 +354,111 @@ async function onImport() {
           <li v-for="(w, i) in preflight.warnings" :key="i">{{ w }}</li>
         </ul>
       </div>
-    </SettingsSectionCard>
-  </SettingsPageShell>
+      <DwInlineAlert v-if="importError" :message="importError" density="banner"/>
+    </form>
+    <template #footer>
+      <SettingsActions>
+        <DwButton variant="ghost" type="button" @click="closeImport">
+          {{ t('common.cancel') }}
+        </DwButton>
+        <DwButton
+            variant="secondary"
+            type="button"
+            :loading="busy"
+            :disabled="busy || readOnly || !importFile || !importPassphrase"
+            @click="onPreflight"
+        >
+          {{ t('settings.configPortability.preflightAction') }}
+        </DwButton>
+        <DwButton
+            variant="primary"
+            type="button"
+            :loading="busy"
+            :disabled="!canImport || busy"
+            @click="onImport"
+        >
+          {{ t('settings.configPortability.importAction') }}
+        </DwButton>
+      </SettingsActions>
+    </template>
+  </AppModal>
 </template>
 
 <style scoped>
-.portability-domains {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-  margin-bottom: 12px;
-}
-
-.portability-fields {
+.config-hub-stack {
   display: grid;
-  gap: 10px;
-  max-width: 360px;
-  margin-bottom: 8px;
+  gap: var(--dw-space-6);
+  max-width: 48rem;
 }
 
-.portability-fields label,
-.portability-fields {
+.config-hub-group {
   display: grid;
-  gap: 4px;
+  gap: var(--dw-space-3);
 }
 
-.portability-muted {
+.config-hub-group__head {
+  display: grid;
+  gap: var(--dw-space-1);
+}
+
+.config-hub-group__title {
+  margin: 0;
+  font-size: var(--dw-text-md);
+  font-weight: 650;
+  color: var(--dw-text);
+  line-height: var(--dw-leading-snug);
+}
+
+.config-hub-group__hint {
+  margin: 0;
+  font-size: var(--dw-text-xs);
   color: var(--dw-text-muted);
-  font-size: var(--dw-text-sm);
-  margin: 0 0 12px;
+  line-height: var(--dw-leading-relaxed);
 }
 
-.portability-warn {
-  color: var(--dw-danger);
-  font-size: var(--dw-text-sm);
-  margin: 0 0 8px;
+.config-hub {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--dw-space-3);
 }
 
-.portability-file-input {
+@media (max-width: 640px) {
+  .config-hub {
+    grid-template-columns: 1fr;
+  }
+}
+
+.config-file-input {
   display: none;
 }
 
-.portability-file-row,
-.portability-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+.config-modal-section {
+  display: grid;
+  gap: var(--dw-space-2);
 }
 
-.portability-preflight {
-  margin-top: 8px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--dw-surface-muted, rgba(0, 0, 0, 0.04));
-  font-size: var(--dw-text-md);
+.config-modal-label {
+  margin: 0;
+  font-size: var(--dw-text-xs);
+  font-weight: 600;
+  color: var(--dw-text-secondary);
 }
 
-.portability-conflict {
-  border: 0;
-  margin: 0 0 12px;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-}
-
-.portability-conflict legend {
-  width: 100%;
+.config-preflight {
+  padding: var(--dw-space-3) var(--dw-space-4);
+  border: 1px solid var(--dw-border);
+  border-radius: var(--dw-control-radius);
+  background: color-mix(in srgb, var(--dw-text) 4%, transparent);
   font-size: var(--dw-text-sm);
-  margin-bottom: 4px;
+  color: var(--dw-text-secondary);
 }
 
-.portability-preflight ul {
-  margin: 8px 0 0;
-  padding-left: 18px;
+.config-preflight p {
+  margin: 0;
+}
+
+.config-preflight ul {
+  margin: var(--dw-space-2) 0 0;
+  padding-left: var(--dw-space-6);
 }
 </style>

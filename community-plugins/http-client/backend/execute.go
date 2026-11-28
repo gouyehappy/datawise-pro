@@ -41,8 +41,16 @@ type redirectOut struct {
 	Location string `json:"location"`
 }
 
+type attemptOut struct {
+	Attempt    int    `json:"attempt"`
+	Status     int    `json:"status"`
+	DurationMs int64  `json:"durationMs"`
+	Error      string `json:"error,omitempty"`
+}
+
 type sendResult struct {
 	RequestID          string            `json:"requestId"`
+	Attempts           []attemptOut      `json:"attempts,omitempty"`
 	OK                 bool              `json:"ok"`
 	Error              *requestError     `json:"error,omitempty"`
 	Method             string            `json:"method"`
@@ -291,11 +299,80 @@ func (e *executor) execute(spec *sendRequest, emitter *rpc.Emitter) *sendResult 
 		}
 	}
 
-	emitter.Event("http/progress", map[string]any{"requestId": spec.RequestID, "phase": "sending"})
+	retryCount := spec.Options.RetryCount
+	if retryCount < 0 {
+		retryCount = 0
+	}
+	if retryCount > 5 {
+		retryCount = 5
+	}
+	backoffMs := spec.Options.RetryBackoffMs
+	if backoffMs <= 0 {
+		backoffMs = 300
+	}
+	retryStatuses := spec.Options.RetryStatuses
+	if len(retryStatuses) == 0 {
+		retryStatuses = []int{429, 500, 502, 503, 504}
+	}
+	shouldRetryStatus := func(status int) bool {
+		for _, code := range retryStatuses {
+			if status == code {
+				return true
+			}
+		}
+		return false
+	}
 
-	response, err := client.Do(request.WithContext(ctx))
-	result.FirstByteMs = msSince(started)
-	emitter.Event("http/progress", map[string]any{"requestId": spec.RequestID, "phase": "receiving"})
+	var response *http.Response
+	var err error
+	for attempt := 1; attempt <= retryCount+1; attempt++ {
+		if attempt > 1 {
+			if request.GetBody != nil {
+				request.Body, err = request.GetBody()
+				if err != nil {
+					break
+				}
+			}
+			delay := time.Duration(backoffMs) * time.Duration(1<<uint(attempt-2))
+			if delay > 5*time.Second {
+				delay = 5 * time.Second
+			}
+			select {
+			case <-ctx.Done():
+				err = ctx.Err()
+			case <-time.After(delay):
+			}
+			if err != nil {
+				break
+			}
+			redirects = nil
+		}
+		emitter.Event("http/progress", map[string]any{"requestId": spec.RequestID, "phase": "sending"})
+		attemptStarted := time.Now()
+		response, err = client.Do(request.WithContext(ctx))
+		attemptMs := msSince(attemptStarted)
+		if err == nil {
+			result.Attempts = append(result.Attempts, attemptOut{
+				Attempt: attempt, Status: response.StatusCode, DurationMs: attemptMs,
+			})
+			emitter.Event("http/progress", map[string]any{"requestId": spec.RequestID, "phase": "receiving"})
+			if result.FirstByteMs == 0 {
+				result.FirstByteMs = msSince(started)
+			}
+			if attempt <= retryCount && shouldRetryStatus(response.StatusCode) {
+				_ = response.Body.Close()
+				response = nil
+				continue
+			}
+			break
+		}
+		result.Attempts = append(result.Attempts, attemptOut{
+			Attempt: attempt, DurationMs: attemptMs, Error: err.Error(),
+		})
+		if !spec.Options.RetryOnNetwork || attempt > retryCount {
+			break
+		}
+	}
 	if err != nil {
 		result.Error = classifyError(err)
 		result.DurationMs = msSince(started)

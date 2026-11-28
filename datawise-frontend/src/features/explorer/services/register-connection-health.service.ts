@@ -2,6 +2,7 @@ import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import {useExplorerStore} from '@/features/explorer/stores/explorer'
 import {ensureWatchedConnectionId} from '@/features/explorer/services/connection-health-alert.service'
 import {isStatelessConnector} from '@/features/explorer/services/explorer-connection-state.service'
+import type {ConnectionHealthPreferences} from '@/shared/config/app-config.types'
 
 /** 连接被实际使用后登记绿标；JDBC 另纳入周期 ping，无状态 connector 仅在实际操作时判错。 */
 export function registerConnectionHealthCheck(
@@ -21,7 +22,7 @@ export function registerConnectionHealthCheck(
     const appConfig = useAppConfigStore()
     const nextWatched = ensureWatchedConnectionId(
         connectionId,
-        appConfig.connectionHealthPreferences,
+        appConfig.connectionHealthPreferences as ConnectionHealthPreferences,
     )
     if (nextWatched) {
         appConfig.patchConnectionHealth({watchedConnectionIds: nextWatched})

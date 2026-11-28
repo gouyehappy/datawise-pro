@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {ConfirmDialog, DwButton, DwInlineAlert, EmptyState} from '@/core/components'
+import {ConfirmDialog, DwButton, DwInlineAlert, EmptyState, SettingsRow} from '@/core/components'
+import SettingsSelect from '@/core/components/SettingsSelect.vue'
 import {DwIcon} from '@/core/icons'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
+import SettingsGroup from '@/features/settings/components/SettingsGroup.vue'
 import type {RuntimeOverview} from '@/features/datasource/types/datasource.types'
 import {
     deleteCachedDriver,
@@ -77,6 +79,23 @@ const jreSources: Array<{id: JreSource; labelKey: string; hintKey: string}> = [
     {id: 'system', labelKey: 'settings.runtime.jreSourceSystem', hintKey: 'settings.runtime.jreSourceSystemHint'},
     {id: 'custom', labelKey: 'settings.runtime.jreSourceCustom', hintKey: 'settings.runtime.jreSourceCustomHint'},
 ]
+
+const jreSourceOptions = computed(() =>
+    jreSources.map((option) => ({
+        value: option.id,
+        label: t(option.labelKey),
+    })),
+)
+
+const jreSourceHint = computed(() => {
+    const match = jreSources.find((option) => option.id === jreSource.value)
+    return match ? t(match.hintKey) : ''
+})
+
+function onJreSourceChange(value: string) {
+    jreSource.value = value as JreSource
+    markJreDirty()
+}
 
 async function refresh() {
     if (loading.value) return
@@ -371,12 +390,40 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-if="desktopApp" class="runtime-library runtime-jre" aria-label="jre preferences">
-        <header class="runtime-library__head">
-          <div>
-            <h3>{{ t('settings.runtime.jreConfigTitle') }}</h3>
-            <p>{{ t('settings.runtime.jreConfigHint') }}</p>
+      <SettingsGroup
+          v-if="desktopApp"
+          :title="t('settings.runtime.jreConfigTitle')"
+          :hint="t('settings.runtime.jreConfigHint')"
+      >
+        <SettingsRow
+            :label="t('settings.runtime.jreConfigTitle')"
+            :hint="jreSourceHint"
+        >
+          <SettingsSelect
+              id="runtime-jre-source"
+              :model-value="jreSource"
+              :options="jreSourceOptions"
+              @update:model-value="onJreSourceChange"
+          />
+        </SettingsRow>
+        <SettingsRow
+            v-if="jreSource === 'custom'"
+            :label="t('settings.runtime.jreBrowse')"
+        >
+          <div class="runtime-jre__custom">
+            <input
+                v-model="jreCustomHome"
+                class="runtime-jre__input runtime-mono"
+                type="text"
+                :placeholder="t('settings.runtime.jreCustomPlaceholder')"
+                @input="markJreDirty"
+            >
+            <DwButton size="sm" variant="secondary" @click="browseCustomJre">
+              {{ t('settings.runtime.jreBrowse') }}
+            </DwButton>
           </div>
+        </SettingsRow>
+        <SettingsRow :label="t('settings.runtime.jreSave')">
           <div class="runtime-jre__actions">
             <DwButton
                 size="sm"
@@ -391,43 +438,11 @@ onMounted(() => {
               {{ jreSaving ? t('settings.runtime.jreSaving') : t('settings.runtime.jreSave') }}
             </DwButton>
           </div>
-        </header>
-        <DwInlineAlert v-if="jreMessage" variant="info" density="banner" class="runtime-jre__alert">
-          {{ jreMessage }}
-        </DwInlineAlert>
-        <div class="runtime-jre__options" role="radiogroup">
-          <label
-              v-for="option in jreSources"
-              :key="option.id"
-              class="runtime-jre__option"
-              :class="{'is-active': jreSource === option.id}"
-          >
-            <input
-                v-model="jreSource"
-                type="radio"
-                name="jre-source"
-                :value="option.id"
-                @change="markJreDirty"
-            >
-            <span>
-              <strong>{{ t(option.labelKey) }}</strong>
-              <span class="runtime-jre__hint">{{ t(option.hintKey) }}</span>
-            </span>
-          </label>
+        </SettingsRow>
+        <div v-if="jreMessage" class="settings-section__block">
+          <DwInlineAlert variant="info" density="banner">{{ jreMessage }}</DwInlineAlert>
         </div>
-        <div v-if="jreSource === 'custom'" class="runtime-jre__custom">
-          <input
-              v-model="jreCustomHome"
-              class="runtime-jre__input runtime-mono"
-              type="text"
-              :placeholder="t('settings.runtime.jreCustomPlaceholder')"
-              @input="markJreDirty"
-          >
-          <DwButton size="sm" variant="secondary" @click="browseCustomJre">
-            {{ t('settings.runtime.jreBrowse') }}
-          </DwButton>
-        </div>
-      </section>
+      </SettingsGroup>
 
       <section class="runtime-library">
         <header class="runtime-library__head">
@@ -910,15 +925,15 @@ onMounted(() => {
   font-size: var(--dw-text-xs);
   font-weight: 500;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--dw-control-radius-sm);
   border: 1px solid var(--dw-border);
   color: var(--dw-text-muted);
   background: var(--dw-bg);
 }
 
 .driver-family__delivery.is-sidecar {
-  color: var(--dw-warning, #b45309);
-  border-color: color-mix(in srgb, var(--dw-warning, #b45309) 40%, var(--dw-border));
+  color: var(--dw-text-secondary);
+  border-color: var(--dw-border-strong, var(--dw-text-secondary));
 }
 
 .driver-family__delivery.is-on-demand {

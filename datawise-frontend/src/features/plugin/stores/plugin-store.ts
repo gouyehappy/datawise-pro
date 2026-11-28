@@ -54,6 +54,8 @@ import {
     isDevProductivityPlugin,
 } from '@/features/pack/services/dev-productivity-entitlement'
 import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
+import {isGuestOrAnonymousSession} from '@/features/auth/services/user-access-policy'
+import {LOCAL_PLUGIN_CATALOG} from '@/features/plugin/services/plugin-catalog.seed'
 import type {PluginDevTab} from '@/features/plugin/components/PluginDeveloperToolsSection.vue'
 
 /** 插件列表、启用状态（持久化到 app-config）与运行时门禁 */
@@ -260,7 +262,21 @@ export const usePluginStore = defineStore('plugin', () => {
         setEnabled(item.id, !item.enabled)
     }
 
+    /**
+     * 访客不请求 `/api/plugins`（后端按 NAV_PLUGIN 返回 403）。
+     * 用与后端 seed 一致的本地目录，保证数据源、导出、AI、快捷栏等门禁照常工作。
+     */
+    function loadLocalCatalog() {
+        catalog.value = LOCAL_PLUGIN_CATALOG.map((item) => ({...item}))
+        ready.value = true
+        syncAllRuntimeGates()
+    }
+
     async function load() {
+        if (isGuestOrAnonymousSession()) {
+            loadLocalCatalog()
+            return
+        }
         catalog.value = await pluginsApi.fetchAll()
         ready.value = true
         syncAllRuntimeGates()

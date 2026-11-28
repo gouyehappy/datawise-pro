@@ -236,9 +236,16 @@ public class CommunityPluginHost implements CommunityPluginSidecarLifecycle {
 
     public JsonNode disconnect(ConnectionConfig config) {
         String pluginId = requirePluginId(config);
+        // Idle-stopped after last workbench/close — do not respawn just to tear down.
+        CommunityPluginSidecarSession existing = sessions.get(pluginId);
+        if (existing == null) {
+            return objectMapper.createObjectNode()
+                    .put("success", true)
+                    .put("alreadyStopped", true);
+        }
         CommunityPluginContribution.ConnectionProvider provider =
                 resolveConnectionProvider(pluginId, config.getPluginConnectionProvider());
-        return activate(pluginId).invoke("connection/disconnect", connectionParams(config, provider));
+        return existing.invoke("connection/disconnect", connectionParams(config, provider));
     }
 
     public JsonNode connectionAction(ConnectionConfig config, String actionId, JsonNode actionParams) {

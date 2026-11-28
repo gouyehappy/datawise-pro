@@ -351,6 +351,19 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
         }
         node.expanded = true
         deps.touchTree()
+        // Warm SQL script content cache when opening scripts / workspaces.
+        const folderLabel = node.label.toLowerCase()
+        if (
+            node.type === 'folder'
+            && (folderLabel === 'scripts' || folderLabel === 'workspaces')
+            && (node.children?.some((child) => child.type === 'sql_file') ?? false)
+        ) {
+            void import('@/features/explorer/services/sql-script-content.service').then(
+                ({prefetchSqlScriptsForExplorerFolder}) => {
+                    prefetchSqlScriptsForExplorerFolder(deps.tree.value, node)
+                },
+            )
+        }
     }
 
     function isRootTreeNode(nodeId: string) {
@@ -472,10 +485,54 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
     function findDatabaseNode(connectionId: string, instanceLabel: string, instanceId?: string | null): TreeNode | null {
         const connection = deps.findNode(connectionId)
         const dbType = resolveConnectionDbType(deps.tree.value, connectionId) ?? connection?.dbType
+        const trimmedLabel = instanceLabel.trim()
+
+        // Connection-level scripts/ai must win over a stale schema instanceId from the console tab.
+        if (connection && isCatalogSchemaDbType(dbType)) {
+            if (
+                trimmedLabel === '_scripts'
+                || trimmedLabel.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+            ) {
+                return connection.children?.find(
+                    (node) =>
+                        node.type === 'folder'
+                        && node.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0,
+                ) ?? null
+            }
+            if (
+                trimmedLabel === '_connection'
+                || trimmedLabel.localeCompare('ai', undefined, {sensitivity: 'accent'}) === 0
+            ) {
+                return connection.children?.find(
+                    (node) =>
+                        node.type === 'folder'
+                        && node.label.localeCompare('ai', undefined, {sensitivity: 'accent'}) === 0,
+                ) ?? null
+            }
+        }
 
         if (instanceId) {
             const byId = deps.findNode(instanceId)
             if (byId && (byId.type === 'database' || byId.type === 'schema')) {
+                const parentConnectionId = resolveConnectionId(deps.tree.value, byId.id)
+                if (parentConnectionId === connectionId) {
+                    // catalog.schema label + catalog id would wrongly stop on the catalog;
+                    // fall through so schema scope can resolve.
+                    const catalogSchemaLabel =
+                        isCatalogSchemaDbType(dbType) && trimmedLabel.includes('.')
+                    if (!(catalogSchemaLabel && byId.type === 'database')) {
+                        return byId
+                    }
+                }
+            }
+            if (
+                byId
+                && byId.type === 'folder'
+                && (
+                    byId.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+                    || byId.label.localeCompare('ai', undefined, {sensitivity: 'accent'}) === 0
+                )
+            ) {
                 const parentConnectionId = resolveConnectionId(deps.tree.value, byId.id)
                 if (parentConnectionId === connectionId) {
                     return byId
@@ -536,7 +593,9 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
         if (!databaseNode && databaseNodeId) {
             databaseNode = findDatabaseNode(connectionId, databaseLabel)
         }
-        if (!databaseNode) return
+        if (!databaseNode) {
+            throw new Error(i18n.global.t('explorer.refreshFailed'))
+        }
 
         await expandPathToNode(databaseNode.id)
         await loadNodeChildren(connectionId, databaseNode.id, {refresh: true})
@@ -545,7 +604,9 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
             ?? findDatabaseNode(connectionId, databaseLabel)
             ?? databaseNode
         const folder = findExplorerTablesFolder(databaseNode)
-        if (!folder) return
+        if (!folder) {
+            throw new Error(i18n.global.t('explorer.refreshFailed'))
+        }
 
         childEtags.delete(`${connectionId}:${folder.id}`)
         const ok = await loadNodeChildren(connectionId, folder.id, {refresh: true})
@@ -562,19 +623,46 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
         instanceId?: string | null,
     ) {
         const connectionNode = deps.findNode(connectionId)
-        if (connectionNode && !connectionNode.children?.length) {
+        if (connectionNode && (!connectionNode.children?.length || connectionNode.children == null)) {
             await forceLoadChildren(connectionId, connectionNode)
             connectionNode.expanded = true
             deps.touchTree()
         }
 
         let scopeNode = findDatabaseNode(connectionId, instanceLabel, instanceId)
+        if (!scopeNode) {
+            // Scripts/ai folder may be missing until connection roots are (re)loaded.
+            if (connectionNode) {
+                await forceLoadChildren(connectionId, connectionNode)
+                connectionNode.expanded = true
+                deps.touchTree()
+            }
+            scopeNode = findDatabaseNode(connectionId, instanceLabel)
+        }
         if (!scopeNode && instanceId) {
             scopeNode = findDatabaseNode(connectionId, instanceLabel)
         }
         if (!scopeNode) return
 
         await expandPathToNode(scopeNode.id)
+
+        // Connection-level scripts folder: SQL files are direct children (no nested workspaces).
+        if (
+            scopeNode.type === 'folder'
+            && scopeNode.label.localeCompare('scripts', undefined, {sensitivity: 'accent'}) === 0
+        ) {
+            await forceLoadChildren(connectionId, scopeNode)
+            scopeNode.expanded = true
+            deps.touchTree()
+            await expandPathToNode(scopeNode.id)
+            void import('@/features/explorer/services/sql-script-content.service').then(
+                ({prefetchSqlScriptsForExplorerFolder}) => {
+                    prefetchSqlScriptsForExplorerFolder(deps.tree.value, scopeNode)
+                },
+            )
+            return
+        }
+
         await forceLoadChildren(connectionId, scopeNode)
 
         const folder = scopeNode.children?.find(
@@ -586,6 +674,11 @@ export function createExplorerLazyLoadDomain(deps: ExplorerLazyLoadDomainDeps) {
         folder.expanded = true
         deps.touchTree()
         await expandPathToNode(folder.id)
+        void import('@/features/explorer/services/sql-script-content.service').then(
+            ({prefetchSqlScriptsForExplorerFolder}) => {
+                prefetchSqlScriptsForExplorerFolder(deps.tree.value, folder)
+            },
+        )
     }
 
     async function reloadModelsFolder(

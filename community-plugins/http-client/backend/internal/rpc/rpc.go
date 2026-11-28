@@ -13,6 +13,12 @@ import (
 
 const ProtocolVersion = 1
 
+// maxFrameSize is the maximum size of a single inbound JSONL frame. It is
+// generous enough to hold a 32 MiB body transported as base64 (~43 MiB after
+// encoding) plus JSON framing overhead, while preventing unbounded allocation
+// on a peer that never terminates a line.
+const maxFrameSize = 128 << 20 // 128 MiB
+
 // PluginError is a JSON-RPC error returned to the host.
 type PluginError struct {
 	Code    int    `json:"code"`
@@ -47,6 +53,9 @@ type Emitter struct {
 }
 
 func (e *Emitter) Event(method string, params any) error {
+	if e == nil || e.mu == nil || e.out == nil {
+		return nil
+	}
 	if params == nil {
 		params = map[string]any{}
 	}
@@ -58,6 +67,9 @@ func (e *Emitter) Event(method string, params any) error {
 }
 
 func (e *Emitter) write(payload any) error {
+	if e == nil || e.mu == nil || e.out == nil {
+		return nil
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -69,6 +81,11 @@ func (e *Emitter) write(payload any) error {
 	}
 	_, err = e.out.Write([]byte("\n"))
 	return err
+}
+
+// DiscardEmitter returns an emitter that drops all notifications.
+func DiscardEmitter() *Emitter {
+	return &Emitter{}
 }
 
 func (e *Emitter) respond(id int64, result any, rpcErr *PluginError) error {
@@ -140,7 +157,7 @@ func (s *Server) ServeIO(in io.Reader, out io.Writer) error {
 	emitter := &Emitter{mu: &writeMu, out: out}
 	reader := bufio.NewReader(in)
 	for {
-		line, err := reader.ReadBytes('\n')
+		line, err := readFrame(reader)
 		if len(line) > 0 {
 			payload := trimSpace(line)
 			if len(payload) > 0 {
@@ -153,6 +170,29 @@ func (s *Server) ServeIO(in io.Reader, out io.Writer) error {
 			}
 			return err
 		}
+	}
+}
+
+// readFrame reads a newline-terminated line from r, mirroring
+// bufio.Reader.ReadBytes but capping the frame at maxFrameSize. On overflow it
+// returns a descriptive error instead of growing the buffer without bound.
+// The EOF/data semantics match ReadBytes so the existing ServeIO error path is
+// unchanged.
+func readFrame(r *bufio.Reader) ([]byte, error) {
+	var line []byte
+	for {
+		chunk, err := r.ReadSlice('\n')
+		if len(line)+len(chunk) > maxFrameSize {
+			return nil, fmt.Errorf("rpc: inbound frame exceeds maximum size of %d bytes", maxFrameSize)
+		}
+		line = append(line, chunk...)
+		if err == nil {
+			return line, nil
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		return line, err
 	}
 }
 

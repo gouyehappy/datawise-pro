@@ -10,11 +10,21 @@
 export interface TerminalInputQueueOptions {
   send(sessionId: string, payload: Uint8Array): Promise<void> | void;
   onError?(cause: unknown): void;
+  /** Bound a stalled host bridge send so one dropped browser connection cannot
+   * keep every later keystroke chained behind a promise that never settles. */
+  sendTimeoutMs?: number | ((sessionId: string) => number | undefined);
 }
 
 export interface TerminalInputQueue {
   enqueue(sessionId: string, data: Uint8Array): number;
   reset(): void;
+}
+
+export class TerminalInputTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Terminal input bridge did not respond within ${timeoutMs} ms`);
+    this.name = "TerminalInputTimeoutError";
+  }
 }
 
 function writeU64(target: Uint8Array, offset: number, value: number) {
@@ -26,6 +36,35 @@ export function createTerminalInputQueue(options: TerminalInputQueueOptions): Te
   let nextSequence = 0;
   let generation = 0;
   let tail = Promise.resolve();
+
+  function sendWithTimeout(sessionId: string, payload: Uint8Array): Promise<void> {
+    const timeoutOption = options.sendTimeoutMs;
+    const timeoutMs = typeof timeoutOption === "function" ? timeoutOption(sessionId) : timeoutOption;
+    if (!timeoutMs || timeoutMs <= 0) return Promise.resolve(options.send(sessionId, payload));
+    return new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        settled = true;
+        reject(new TerminalInputTimeoutError(timeoutMs));
+      }, timeoutMs);
+      Promise.resolve()
+        .then(() => options.send(sessionId, payload))
+        .then(
+          () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve();
+          },
+          (cause: unknown) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            reject(cause);
+          },
+        );
+    });
+  }
 
   function enqueue(sessionId: string, data: Uint8Array) {
     const sequence = ++nextSequence;
@@ -44,7 +83,7 @@ export function createTerminalInputQueue(options: TerminalInputQueueOptions): Te
         // session. An already-running send cannot be cancelled, so new input
         // remains behind it and is sent only after the old frame settles.
         if (itemGeneration !== generation) return;
-        await options.send(sessionId, payload);
+        await sendWithTimeout(sessionId, payload);
       })
       .catch((cause) => {
         try {

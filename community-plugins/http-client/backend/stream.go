@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -300,6 +301,16 @@ func dialWebSocket(ctx context.Context, rawURL string, headers map[string]string
 		lower := strings.ToLower(k)
 		if lower == "host" || lower == "upgrade" || lower == "connection" || lower == "sec-websocket-key" || lower == "sec-websocket-version" {
 			continue
+		}
+		// Reject header injection: CR/LF in either part (or a colon in the
+		// name) would let the value forge additional handshake headers.
+		if strings.ContainsAny(k, "\r\n:") {
+			_ = conn.Close()
+			return nil, nil, fmt.Errorf("websocket header name %q contains invalid character (CR, LF or colon)", k)
+		}
+		if strings.ContainsAny(v, "\r\n") {
+			_ = conn.Close()
+			return nil, nil, fmt.Errorf("websocket header value for %q contains CR or LF", k)
 		}
 		req.WriteString(k + ": " + v + "\r\n")
 	}

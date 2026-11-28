@@ -74,7 +74,7 @@ function chipLabel(chip: SqlQuickChipConfig): string {
   min-width: 28px;
   height: 20px;
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   border: 1px solid var(--se-border);
   background: var(--se-bg-muted);
   font-size: 10px;

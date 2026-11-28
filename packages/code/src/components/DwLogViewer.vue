@@ -637,7 +637,7 @@ defineExpose({
 
 .dw-log-viewer__icon-btn {
   color: var(--dw-terminal-fg);
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
 }
 
 .dw-log-viewer__icon-btn:hover:not(:disabled) {

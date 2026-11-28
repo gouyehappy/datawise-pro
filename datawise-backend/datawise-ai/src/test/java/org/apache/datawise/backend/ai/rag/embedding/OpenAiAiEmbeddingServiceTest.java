@@ -29,8 +29,11 @@ class OpenAiAiEmbeddingServiceTest {
         config.setDimensions(3);
 
         AiLlmCallPolicy callPolicy = mock(AiLlmCallPolicy.class);
-        when(callPolicy.executeForResult(eq("embedding-batch"), org.mockito.ArgumentMatchers.any()))
-                .thenAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(1)).get());
+        when(callPolicy.executeForResult(
+                eq("embedding-batch"),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any()
+        )).thenAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(2)).get());
 
         OpenAiAiEmbeddingService service = new OpenAiAiEmbeddingService(model, callPolicy, config);
         assertEquals("openai", service.provider());

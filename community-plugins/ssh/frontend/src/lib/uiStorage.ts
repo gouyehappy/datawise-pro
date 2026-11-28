@@ -52,28 +52,34 @@ function localSnapshot(): Record<string, string> {
   }
 }
 
-/** 预取宿主存储进缓存；无桥/失败时缓存为本地快照（可能为空表）。 */
-export async function initUiStorage(): Promise<void> {
-  const plugin = (window as unknown as { datawisePlugin?: { storage?: BridgeStorage } })
-    .datawisePlugin;
-  const storage = plugin?.storage;
-  if (storage && typeof storage.getAll === "function") {
-    try {
-      const values = await storage.getAll();
-      if (values && typeof values === "object") {
-        const plain: Record<string, string> = {};
-        for (const [key, value] of Object.entries(values)) {
-          if (typeof value === "string") plain[key] = value;
+let initPromise: Promise<void> | null = null;
+
+/** 预取宿主存储进缓存；无桥/失败时缓存为本地快照（可能为空表）。可重复 await，只拉一次。 */
+export function initUiStorage(): Promise<void> {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    const plugin = (window as unknown as { datawisePlugin?: { storage?: BridgeStorage } })
+      .datawisePlugin;
+    const storage = plugin?.storage;
+    if (storage && typeof storage.getAll === "function") {
+      try {
+        const values = await storage.getAll();
+        if (values && typeof values === "object") {
+          const plain: Record<string, string> = {};
+          for (const [key, value] of Object.entries(values)) {
+            if (typeof value === "string") plain[key] = value;
+          }
+          cache = plain;
+          bridgeStorage = storage;
+          return;
         }
-        cache = plain;
-        bridgeStorage = storage;
-        return;
+      } catch {
+        // 桥不可用：回退本地。
       }
-    } catch {
-      // 桥不可用：回退本地。
     }
-  }
-  cache = localSnapshot();
+    cache = localSnapshot();
+  })();
+  return initPromise;
 }
 
 /** localStorage 同步语义的宿主存储视图；initUiStorage 之后读写才命中宿主缓存。 */

@@ -20,6 +20,7 @@ public class OpenAiAiEmbeddingService implements AiEmbeddingService {
     private final AiLlmCallPolicy callPolicy;
     private final int dimensions;
     private final String model;
+    private final String profileId;
 
     public OpenAiAiEmbeddingService(
             EmbeddingModel embeddingModel,
@@ -30,6 +31,12 @@ public class OpenAiAiEmbeddingService implements AiEmbeddingService {
         this.callPolicy = callPolicy;
         this.dimensions = config.resolvedDimensions();
         this.model = config.getModel();
+        this.profileId = "embedding|"
+                + nullToEmpty(config.getProvider())
+                + "|"
+                + nullToEmpty(config.getBaseUrl())
+                + "|"
+                + nullToEmpty(config.getModel());
     }
 
     @Override
@@ -63,7 +70,8 @@ public class OpenAiAiEmbeddingService implements AiEmbeddingService {
         for (String text : texts) {
             normalized.add(text == null || text.isBlank() ? "" : text);
         }
-        return callPolicy.executeForResult("embedding-batch", () -> {
+        String circuitKey = AiLlmCallPolicy.circuitKeyForCurrentTenant(profileId);
+        return callPolicy.executeForResult("embedding-batch", circuitKey, () -> {
             long started = System.currentTimeMillis();
             List<float[]> vectors = embeddingModel.embed(normalized);
             if (vectors == null || vectors.size() != normalized.size()) {
@@ -94,5 +102,9 @@ public class OpenAiAiEmbeddingService implements AiEmbeddingService {
             log.debug("Embedded batch size={} in {}ms (model={})", normalized.size(), System.currentTimeMillis() - started, model);
             return out;
         });
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 }

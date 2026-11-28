@@ -210,19 +210,38 @@ func (p *plugin) containerStats(sess *session, raw json.RawMessage) (any, error)
 		return nil, errInvalidParams
 	}
 	ids := in.ContainerIDs
-	if len(ids) > 128 {
-		ids = ids[:128]
+	// Hard cap: list polling must stay snappy. Unbounded ContainerStatsOneShot
+	// (esp. Docker Desktop on Windows) produced 25–70s invokes, queued up through
+	// the host's 6‑minute binary-plugin timeout, and starved other HTTP work
+	// until the UI showed「服务暂不可用」.
+	const maxIDs = 12
+	if len(ids) > maxIDs {
+		ids = ids[:maxIDs]
 	}
+	if len(ids) == 0 {
+		return []DockerContainerStats{}, nil
+	}
+
+	// Overall budget for one RPC — never let stats block the sidecar for minutes.
+	const overallBudget = 4 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), overallBudget)
+	defer cancel()
+
 	results := make([]DockerContainerStats, len(ids))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 8)
+	sem := make(chan struct{}, 3)
 	for i, id := range ids {
 		wg.Add(1)
 		go func(i int, id string) {
 			defer wg.Done()
-			sem <- struct{}{}
+			select {
+			case <-ctx.Done():
+				results[i] = DockerContainerStats{ContainerID: id}
+				return
+			case sem <- struct{}{}:
+			}
 			defer func() { <-sem }()
-			stats, err := sampleContainerStats(sess.client.cli, id)
+			stats, err := sampleContainerStats(ctx, sess.client.cli, id)
 			if err != nil {
 				results[i] = DockerContainerStats{ContainerID: id}
 				return
@@ -231,17 +250,18 @@ func (p *plugin) containerStats(sess *session, raw json.RawMessage) (any, error)
 		}(i, id)
 	}
 	wg.Wait()
+	// Drop empty stubs so the UI keeps the previous painted value.
 	out := make([]DockerContainerStats, 0, len(results))
 	for _, r := range results {
-		if r.ContainerID != "" {
+		if r.ReadAt != "" {
 			out = append(out, r)
 		}
 	}
 	return out, nil
 }
 
-func sampleContainerStats(cli dockerAPI, containerID string) (DockerContainerStats, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+func sampleContainerStats(parent context.Context, cli dockerAPI, containerID string) (DockerContainerStats, error) {
+	ctx, cancel := context.WithTimeout(parent, 1500*time.Millisecond)
 	defer cancel()
 	resp, err := cli.ContainerStatsOneShot(ctx, containerID)
 	if err != nil {

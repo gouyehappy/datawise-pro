@@ -130,7 +130,8 @@ public final class AiAnalysisGsonStateSerializer extends GsonStateSerializer {
      */
     private OverAllState readLegacyWriteUtfPayload(ObjectInput in, int marker) throws IOException {
         int utfLength = (marker >>> 16) & 0xFFFF;
-        if (utfLength <= 0 || utfLength > 65_535) {
+        // writeUTF payload is at least 2 body bytes already consumed into the marker low word.
+        if (utfLength < 2 || utfLength > 65_535) {
             throw new IOException("Unsupported analysis checkpoint format marker: " + marker);
         }
 

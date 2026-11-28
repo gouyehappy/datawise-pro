@@ -2,152 +2,54 @@
   SQL 控制台 Tab — 业务逻辑在 composables / services，本组件负责布局与事件绑定。
 -->
 <script setup lang="ts">
-import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-
+import {computed, defineAsyncComponent, onBeforeUnmount, ref, watch} from 'vue'
 defineOptions({name: 'SqlConsoleTab'})
-import {storeToRefs} from 'pinia'
 import {useI18n} from 'vue-i18n'
-import {ConsoleCtxBar, ConsoleTransactionBar, QueryResultPane} from '@/features/workspace/components'
-import ConsoleRunSplitButton from '@/features/workspace/components/ConsoleRunSplitButton.vue'
-import {ContextMenuHost} from '@/core/context-menu'
-import EditorFullscreenButton from '@/core/components/EditorFullscreenButton.vue'
-import IconButton from '@/core/components/IconButton.vue'
-import ConsoleToolbarIcon from '@/core/components/ConsoleToolbarIcon.vue'
-import {SqlEditor} from '@datawise/sql-editor'
+import SqlConsoleToolbar from '@/features/workspace/components/SqlConsoleToolbar.vue'
+import SqlConsoleDialogs from '@/features/workspace/components/console/SqlConsoleDialogs.vue'
+import SqlConsoleEditorSection from '@/features/workspace/components/console/SqlConsoleEditorSection.vue'
+import SqlConsoleResultSection from '@/features/workspace/components/console/SqlConsoleResultSection.vue'
 import type {SqlEditorExpose} from '@datawise/sql-editor'
-import {getActiveSqlEditorRuntime} from '@datawise/sql-editor/runtime/sql-editor-runtime'
 import {useExplorerSqlSchemaProvider} from '@/features/workspace/adapters/explorer-sql-schema-provider'
-import {useShortcutPanelStore} from '@/features/layout/stores/shortcut-panel-store'
-import {buildRecentQueriesFromSqlLogs} from '@/features/workspace/services/recent-sql-suggest.service'
-import {sqlLogsRecentSyncKey} from '@/features/workspace/services/sql-logs-recent-sync.policy'
-import ResizeHandle from '@/core/components/ResizeHandle.vue'
-import {shortcutTooltip} from '@/features/layout/composables/useAppShortcutListener'
-import {useSqlEditorShortcuts} from '@/features/workspace/composables/useSqlEditorShortcuts'
-import {useEditorContextMenu} from '@/features/workspace/composables/useEditorContextMenu'
-import {openSqlTableFromPeek} from '@/features/workspace/services/sql-table-peek.actions'
-import type {WorkspaceTab} from '@/core/types'
+import type {DbType, WorkspaceTab} from '@/core/types'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
-import {useConsoleConnectionContext} from '@/features/workspace/composables/useConsoleConnectionContext'
-import {
-  DEFAULT_TABLE_SHORTCUT_ROWS,
-  buildTableShortcutSql,
-} from '@/features/workspace/services/sql-table-shortcut.service'
-import {useConnectionCapabilities} from '@/features/datasource/composables/useConnectionCapabilities'
-import WriteUnlockToolbar from '@/features/connection/components/WriteUnlockToolbar.vue'
-import {fetchConnectionConfig} from '@/shared/config/connections-catalog.service'
-import {useLayoutStore} from '@/features/layout/stores/layout'
-import {useEntitlementStore} from '@/features/pack/stores/entitlement-store'
-import {resolveCaughtApiErrorMessage} from '@/shared/api'
 import {useEditorFullscreen} from '@/features/workspace/composables/useEditorFullscreen'
-import {useSqlEditorActions, type SqlRunOptions} from '@/features/workspace/composables/useSqlEditorActions'
 import {useResourceWriteGuard} from '@/features/auth/composables/useResourceWriteGuard'
-import {useFeaturePermission} from '@/features/auth/composables/useFeaturePermission'
-import {FeaturePermission} from '@/features/auth/types/feature-permission.types'
 import {UserResource} from '@/features/auth/types/user-resource.types'
-import type {QueryResultRefreshRequest} from '@/features/workspace/services/query-result-refresh.service'
-import {resolveConsoleInstanceLabel, buildExplorerScopedLabelResolver} from '@/features/workspace/services/resolve-console-instance'
 import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
-import {useExplorerStore} from '@/features/explorer/stores/explorer'
-import {usePluginStore} from '@/features/plugin/stores/plugin-store'
-import {sqlApi} from '@/api'
-import {mergeCursorPageIntoQueryResult} from '@/features/workspace/services/query-result-cursor.service'
-import {DANGEROUS_SQL_PREVIEW_ROWS} from '@/features/workspace/constants/query-result-limits'
-import {
-  resolveCursorLoadedRowsMax,
-  resolveClientMaxResultRows,
-  resolveSqlPageSize,
-} from '@/features/settings/services/query-limit.service'
-import {useProductionPerfMode} from '@/features/settings/composables/useProductionPerfMode'
-import {ensureSqlEditorPlugin} from '@/features/workspace/services/ensure-sql-editor-plugin'
-import {useQueryBookmarkSave} from '@/features/workspace/composables/useQueryBookmarkSave'
-import {isViewModelSelectSql} from '@/api/modules/view-model'
 import DangerousSqlPendingBar from '@/features/workspace/components/DangerousSqlPendingBar.vue'
-import ConsoleSqlCancelDialog from '@/features/workspace/components/ConsoleSqlCancelDialog.vue'
-import SqlParameterPanel from '@/features/workspace/components/SqlParameterPanel.vue'
-import SqlExecutionLimitHint from '@/features/workspace/components/SqlExecutionLimitHint.vue'
-import DwPanelState from '@/core/components/DwPanelState.vue'
-import {DwButton} from '@/core/components'
-import {useIndexDraftSuggest} from '@/features/workspace/composables/useIndexDraftSuggest'
-import {useDangerousSqlPending} from '@/features/workspace/composables/useDangerousSqlPending'
-import {normalizeConnectionEnvironment} from '@/features/connection/services/connection-environment.service'
-import {shouldConfirmDangerousSql} from '@/features/workspace/services/dangerous-sql-confirm-policy.service'
-import {splitSqlStatements} from '@/features/workspace/services/split-sql-statements'
-import {resolveExecutableSql} from '@/features/workspace/services/resolve-executable-sql'
-import type {SqlExecuteMode} from '@/features/workspace/services/resolve-executable-sql'
-import {formatDurationMs} from '@/features/workspace/services/sql-stats.service'
+import {useConsoleQueryResultActions} from '@/features/workspace/composables/useConsoleQueryResultActions'
+import {useConsoleAiAskBridge} from '@/features/workspace/composables/useConsoleAiAskBridge'
+import {extractSqlParameters} from '@/features/workspace/services/sql-parameters.service'
+import {useConsoleToolbarFeatures} from '@/features/workspace/composables/useConsoleToolbarFeatures'
+import {useConsoleVisualQueryBridge} from '@/features/workspace/composables/useConsoleVisualQueryBridge'
+import {useConsoleEditorFileDrop} from '@/features/workspace/composables/useConsoleEditorFileDrop'
+import {useSqlConsoleTabSync} from '@/features/workspace/composables/useSqlConsoleTabSync'
+import {useSqlEditorShortcuts} from '@/features/workspace/composables/useSqlEditorShortcuts'
 import {useConsoleSqlCancel} from '@/features/workspace/composables/useConsoleSqlCancel'
 import {useTeamStore} from '@/features/team/stores/team-store'
-import {resolveProductionApprovalTeams} from '@/features/team/services/production-approval-policy.service'
 import {canDmlConnection} from '@/features/team/services/connection-access.service'
-import {applySqlParameters, extractSqlParameters} from '@/features/workspace/services/sql-parameters.service'
+import {useConsoleRunningElapsed} from '@/features/workspace/composables/useConsoleRunningElapsed'
+import {useConsoleSqlRunActions} from '@/features/workspace/composables/useConsoleSqlRunActions'
+import {useConsoleEditorMenuBridge} from '@/features/workspace/composables/useConsoleEditorMenuBridge'
+import {useSqlConsoleExecution} from '@/features/workspace/composables/useSqlConsoleExecution'
+import {useSqlConsoleTabContext} from '@/features/workspace/composables/useSqlConsoleTabContext'
+import {useSqlConsoleAuxDialogs} from '@/features/workspace/composables/useSqlConsoleAuxDialogs'
 import {
-  buildOrderByFillInsert,
-  buildWhereFillInsert,
-  buildWhereInFillInsert,
-} from '@/features/workspace/services/result-sql-fill.service'
-import {
-  applyOrderByToSql,
-  applyWhereConditionToSql,
-  nextOrderDirection,
-} from '@/features/workspace/services/result-sql-rewrite.service'
-import {buildWhereEqualsClause} from '@/features/workspace/services/grid-cell-context.service'
-import {
-    supportsExplainAnalyze,
-    wrapExplainSql,
-} from '@/features/workspace/services/explain-plan.service'
-import {validateCrossEnvCompareSql, buildCrossEnvCompareScope} from '@/features/cross-env-compare/services/cross-env-compare.service'
-import {reviewSql} from '@/features/platform/services/sql-review.service'
-import type {SqlReviewFinding} from '@/features/platform/types/platform.types'
-import {isJdbcSshTunnelEnabled} from '@/features/ssh/services/ssh-jdbc-tunnel.service'
-import {
-  LOCAL_FILE_ABS_PATH_MIME,
-  LOCAL_FILE_PATH_MIME,
-  dataTransferHasType,
-  readLocalAbsPathFromDataTransfer,
-  readLocalFilePathFromDataTransfer,
-} from '@/features/local-files/services/local-files-dnd'
-import {openLocalWorkspaceFile} from '@/features/local-files/services/open-local-file.service'
-import {
-  buildResultAskPrompt,
-  buildSelectionInstruction,
-  requestAiAsk,
-  type AiAskIntent,
-} from '@/features/ai/shared/services/ai-ask.service'
-import type {AiConversationBinding} from '@/features/ai/types/session'
-import {extractTableNamesFromSql} from '@/features/workspace/services/sql-history-knowledge.utils'
-
-import {
-  CONSOLE_EDITOR_HEIGHT_DEFAULT,
   CONSOLE_EDITOR_HEIGHT_MAX,
   CONSOLE_EDITOR_HEIGHT_MIN,
-  CONSOLE_EDITOR_HEIGHT_RATIO,
-  CONSOLE_RESULT_MIN_HEIGHT
 } from '@/features/workspace/constants/defaults'
+import {
+  hideSqlSelectionToolbar,
+  showSqlSelectionToolbar,
+} from '@/features/workspace/services/sql-selection-toolbar.singleton'
 
-const SqlConsoleAiLayer = defineAsyncComponent((() =>
-    import.meta.env.VITE_DATAWISE_EDITION === 'standard'
-        ? import('@/features/pack/stubs/AiConsoleLayerStub.vue')
-        : import('@/features/workspace/components/tabs/SqlConsoleAiLayer.vue')
-) as any)
-const IndexSuggestDialog = defineAsyncComponent(
-    () => import('@/features/workspace/components/IndexSuggestDialog.vue'),
-)
 const SqlConsoleTeamCollabLayer = defineAsyncComponent(
     () => import('@/features/workspace/components/tabs/SqlConsoleTeamCollabLayer.vue'),
-)
-const SaveBookmarkDialog = defineAsyncComponent(
-    () => import('@/features/workspace/components/SaveBookmarkDialog.vue'),
-)
-const SubmitProductionApprovalDialog = defineAsyncComponent(
-    () => import('@/features/workspace/components/SubmitProductionApprovalDialog.vue'),
-)
-const VisualQueryBuilderDialog = defineAsyncComponent(
-    () => import('@/features/workspace/components/VisualQueryBuilderDialog.vue'),
 )
 
 const {t} = useI18n()
 const {readOnly: guestReadOnly, hint: guestReadOnlyHint} = useResourceWriteGuard(UserResource.WorkspaceScripts)
-const {can} = useFeaturePermission()
 const props = withDefaults(
     defineProps<{
       tab: WorkspaceTab
@@ -158,13 +60,8 @@ const props = withDefaults(
 )
 
 const workspace = useWorkspaceStore()
-const explorer = useExplorerStore()
-const layout = useLayoutStore()
-const entitlement = useEntitlementStore()
 const appConfig = useAppConfigStore()
-const pluginStore = usePluginStore()
-const shortcutPanel = useShortcutPanelStore()
-const {consoleQueryByTabId} = storeToRefs(workspace)
+const teamStore = useTeamStore()
 
 const sql = ref(props.tab.sql ?? '')
 const sqlParamValues = ref<Record<string, string>>({})
@@ -174,19 +71,15 @@ const parameterNames = computed(() => extractSqlParameters(sql.value))
 const aiSelectionSql = ref('')
 const splitRef = ref<HTMLElement>()
 const editorRef = ref<SqlEditorExpose>()
-/** A3-1: 空编辑器引导（有内容后自动消失） */
-const showEmptyEditorHint = computed(() => editorReady.value && !sql.value.trim())
-
-function insertSampleSql() {
-  sql.value = 'SELECT 1;'
-  void nextTick(() => {
-    editorRef.value?.goToLine(1, false)
-    editorRef.value?.layout()
-  })
-}
+const aiLayerRef = ref<any>(null)
+/** Plain host so child can write parent Refs without template unwrap. */
+const editorRefs = {editor: editorRef, aiLayer: aiLayerRef}
 const cursorLoading = ref(false)
-const transactionBarRef = ref<{ refreshStatus: () => Promise<void> } | null>(null)
+const toolbarRef = ref<{ refreshTransactionStatus: () => void | Promise<void> } | null>(null)
 const schemaProvider = useExplorerSqlSchemaProvider()
+
+let clampEditorHeight = (value: number) =>
+  Math.min(CONSOLE_EDITOR_HEIGHT_MAX, Math.max(CONSOLE_EDITOR_HEIGHT_MIN, value))
 
 const editorHeight = computed({
   get: () => appConfig.consoleEditorHeight,
@@ -195,47 +88,6 @@ const editorHeight = computed({
 
 /** 本 Tab 内控制；打开工作台默认收起，不跟配置/其它 Tab 粘连 */
 const showResultPanel = ref(false)
-
-const sqlFormatEnabled = computed(() => pluginStore.isEnabled('p-sql-format'))
-const isStandardEdition = import.meta.env.VITE_DATAWISE_EDITION === 'standard'
-const consoleAiEnabled = computed(
-    () => !isStandardEdition && pluginStore.isEnabled('p-console-ai'),
-)
-const indexSuggestEnabled = computed(
-    () => import.meta.env.VITE_DATAWISE_EDITION !== 'standard' && pluginStore.isEnabled('p-ai-index-suggest'),
-)
-const aiSqlFixEnabled = computed(
-    () => import.meta.env.VITE_DATAWISE_EDITION !== 'standard' && pluginStore.isEnabled('p-ai-sql-fix'),
-)
-const aiResultSummaryEnabled = computed(
-    () =>
-        import.meta.env.VITE_DATAWISE_EDITION !== 'standard'
-        && pluginStore.isEnabled('p-ai-result-summary')
-        && can(FeaturePermission.WorkbenchResultAiSummary),
-)
-const aiExplainEnabled = computed(
-    () => import.meta.env.VITE_DATAWISE_EDITION !== 'standard' && pluginStore.isEnabled('p-ai-explain'),
-)
-const dmlGenerateEnabled = computed(() => pluginStore.isSwitchEnabled('p-dml-generate'))
-/**
- * P2-2：AI 是全局入口，控制台里的 SQL / 结果也能直接交给 AI 工作台，
- * 不必让用户先切模块再重新描述一遍上下文。
- */
-const canAskAi = computed(
-    () => import.meta.env.VITE_DATAWISE_EDITION !== 'standard' && layout.canAccessNavModule('ai'),
-)
-const explainPlanEnabled = computed(() => pluginStore.isEnabled('p-explain-plan'))
-const crossEnvCompareEnabled = computed(() => pluginStore.isEnabled('p-cross-env-compare'))
-const bookmarksEnabled = computed(() => pluginStore.isEnabled('p-sql-bookmarks'))
-const anyAiFeatureEnabled = computed(() =>
-    consoleAiEnabled.value
-    || aiSqlFixEnabled.value
-    || indexSuggestEnabled.value
-    || aiResultSummaryEnabled.value
-    || aiExplainEnabled.value,
-)
-const teamCollabEnabled = computed(() => Boolean(props.tab.teamSharedQuery?.teamId && props.tab.teamSharedQuery?.queryId))
-const aiLayerRef = ref<any>(null)
 
 function getSqlEditor() {
   return editorRef.value
@@ -257,38 +109,23 @@ function expandResultPanel() {
   showResultPanel.value = true
 }
 
-const {connectionId, instanceId, dataSources, source, activeInstance, workspaceBound} =
-    useConsoleConnectionContext(props.tab)
-
-const jdbcTunnelSshEnabled = ref(false)
-
-watch(
-    () => connectionId.value || props.tab.connectionId,
-    (connId) => {
-        if (!connId) {
-            jdbcTunnelSshEnabled.value = false
-            return
-        }
-        void fetchConnectionConfig(connId)
-            .then((config) => {
-                jdbcTunnelSshEnabled.value = isJdbcSshTunnelEnabled(config)
-            })
-            .catch(() => {
-                jdbcTunnelSshEnabled.value = false
-            })
-    },
-    {immediate: true},
-)
-
-function openJdbcTunnelSshTerminal() {
-    const connId = connectionId.value || props.tab.connectionId
-    if (!connId) return
-    workspace.openSshTerminal({
-        connectionId: connId,
-        connectionName: source.value?.label ?? explorer.findNode(connId)?.label ?? connId,
-        explorerNodeId: connId,
-    })
-}
+const {
+  connectionId,
+  instanceId,
+  dataSources,
+  source,
+  activeInstance,
+  workspaceBound,
+  jdbcTunnelSshEnabled,
+  openJdbcTunnelSshTerminal,
+  databaseName,
+  dbDialect,
+  connectionEnvironment,
+  productionPerfActive,
+  connectionCaps,
+  capabilityHint,
+  connectionWriteGuard,
+} = useSqlConsoleTabContext(props.tab)
 
 const {
   bookmarkDialogOpen,
@@ -296,286 +133,126 @@ const {
   bookmarkDefaults,
   openSaveBookmarkDialog,
   onSaveBookmark,
-} = useQueryBookmarkSave(() => ({
-  name: props.tab.title?.trim() || 'Query',
-  connectionName: source.value?.label ?? '',
-  sql: sql.value,
-}))
+  openSaveViewModelDialog,
+  indexDraftDialogOpen,
+  indexDraftQuery,
+  indexDraftSql,
+  requestIndexDraft,
+  applyIndexDraft,
+} = useSqlConsoleAuxDialogs({
+  tabTitle: () => props.tab.title,
+  connectionId: () => connectionId.value || props.tab.connectionId,
+  instanceId: () => instanceId.value,
+  tabInstanceId: () => props.tab.instanceId,
+  databaseName,
+  dbDialect: dbDialect as unknown as import('vue').Ref<DbType | undefined>,
+  connectionLabel: () => source.value?.label,
+  sql,
+})
 
-function openSaveViewModelDialog() {
-  const connId = connectionId.value || props.tab.connectionId
-  const instance = databaseName.value
-  if (!connId || !instance) {
-    workspace.setStatus(t('viewModel.saveFailed'))
-    return
-  }
-  if (!isViewModelSelectSql(sql.value)) {
-    workspace.setStatus(t('viewModel.selectOnly'))
-    return
-  }
-  layout.setModule('database')
-  void workspace.openViewModelEditor({
-    connectionId: connId,
-    instanceId: instanceId.value ?? props.tab.instanceId ?? undefined,
-    database: instance,
-    sql: sql.value,
-  })
-}
-
-const visualQueryBuilderOpen = ref(false)
+const {isFullscreen: isEditorFullscreen, toggle: toggleEditorFullscreen, exit: exitEditorFullscreen} =
+    useEditorFullscreen()
 
 const {
-  dialogOpen: indexDraftDialogOpen,
-  originalSql: indexDraftQuery,
-  suggestedSql: indexDraftSql,
-  requestDraft: requestIndexDraft,
-  applyDraft: applyIndexDraft,
-} = useIndexDraftSuggest({
-  getConnectionId: () => connectionId.value || props.tab.connectionId,
-  getDatabase: () => databaseName.value,
-  getDbType: () => dbDialect.value,
-  openConsole: (options) => workspace.openConsole(options),
-  buildConsoleTitle: () => t('queryResult.indexSuggestConsoleTitle'),
-  emptyMessage: () => t('queryResult.indexDraftEmpty'),
-})
-
-function openVisualQueryBuilder() {
-  const connId = connectionId.value || props.tab.connectionId
-  const database = databaseName.value
-  if (!connId || !database) {
-    workspace.setStatus(t('console.visualQuery.needConnection'))
-    return
-  }
-  visualQueryBuilderOpen.value = true
-}
-
-function applyVisualQuerySql(generatedSql: string, mode: 'replace' | 'insert') {
-  const next = generatedSql.trim()
-  if (!next) return
-  if (mode === 'replace') {
-    setConsoleSql(next)
-    return
-  }
-  const current = sql.value.trim()
-  setConsoleSql(current ? `${current}\n\n${next}` : next)
-}
-
-function applyAndRunVisualQuerySql(generatedSql: string) {
-  const next = generatedSql.trim()
-  if (!next) return
-  setConsoleSql(next)
-  executeSql(next, {perfSource: 'vqb'})
-}
-
-function onVisualQueryTextToSql(prompt: string) {
-  const text = prompt.trim()
-  if (!text) return
-  void aiLayerRef.value?.openAiInput(text)
-}
-
-const databaseName = computed(() => {
-  // Depend on connection/instance ids (not explorer.treeVersion) so unrelated tree bumps
-  // do not invalidate execute options / recent-query watches.
-  return resolveConsoleInstanceLabel({
-    activeInstanceLabel: activeInstance.value?.label,
-    instanceId: instanceId.value,
-    tabInstanceId: props.tab.instanceId,
-    tabDatabase: props.tab.database,
-    findNodeLabel: (nodeId) => explorer.findNode(nodeId)?.label,
-    resolveScopedLabel: buildExplorerScopedLabelResolver(explorer.tree, (nodeId) => explorer.findNode(nodeId)),
-  })
-})
-
-const dbDialect = computed(() => source.value?.dbType)
-
-watch(
-    () =>
-        sqlLogsRecentSyncKey(
-            shortcutPanel.sqlLogs,
-            connectionId.value || props.tab.connectionId,
-            databaseName.value,
-        ),
-    () => {
-      const connId = connectionId.value || props.tab.connectionId
-      const database = databaseName.value
-      const runtime = getActiveSqlEditorRuntime()
-      runtime.setRecentQueryScope({
-        connectionId: connId,
-        database,
-      })
-      runtime.setRecentQueries(
-          buildRecentQueriesFromSqlLogs(shortcutPanel.sqlLogs, {
-            connectionId: connId,
-            database,
-          }),
-      )
-    },
-    {immediate: true},
-)
-
-const connectionEnvironment = computed(() => {
-  const connId = connectionId.value || props.tab.connectionId
-  if (!connId) return normalizeConnectionEnvironment(null, null).env
-  const node = explorer.findNode(connId)
-  return normalizeConnectionEnvironment(node?.env, node?.envCustom).env
-})
-
-const {productionPerfActive} = useProductionPerfMode(() => connectionId.value || props.tab.connectionId)
-
-const {caps: connectionCaps, hint: capabilityHint} = useConnectionCapabilities(dbDialect)
-
-const connectionWriteGuard = ref(false)
-watch(
-  () => connectionId.value || props.tab.connectionId,
-  async (id) => {
-    connectionWriteGuard.value = false
-    if (!id) return
-    try {
-      const config = await fetchConnectionConfig(id)
-      connectionWriteGuard.value = Boolean(config.writeGuard)
-    } catch {
-      connectionWriteGuard.value = false
-    }
-  },
-  {immediate: true},
-)
-
-const {
-  pending: dangerousSqlPending,
-  pendingSql: dangerousSqlPendingSql,
-  preview: dangerousSqlPreview,
-  loading: dangerousSqlLoading,
-  affectedCount: dangerousSqlAffectedCount,
-  sampleRows: dangerousSqlSampleRows,
-  sampleColumns: dangerousSqlSampleColumns,
-  errorMessage: dangerousSqlErrorMessage,
-  productionForced: dangerousSqlProductionForced,
-  risk: dangerousSqlRisk,
-  autoApprovedRows: dangerousSqlAutoApprovedRows,
-  requiresConfirmation: requiresDangerousSqlConfirmation,
-  armPending: armDangerousSqlPending,
-  disarm: disarmDangerousSqlPending,
-} = useDangerousSqlPending(async (previewSql) => {
-  const connId = connectionId.value || props.tab.connectionId
-  if (!connId) {
-    throw new Error(t('console.connectionRequired'))
-  }
-  const result = await sqlApi.execute(previewSql, {
-    connectionId: connId,
-    database: databaseName.value,
-    sessionKey: props.tab.id,
-    pageSize: DANGEROUS_SQL_PREVIEW_ROWS,
-    maxRows: DANGEROUS_SQL_PREVIEW_ROWS,
-  })
-  return {
-    rows: result.rows ?? [],
-    columns: result.columns ?? [],
-  }
-}, {
-  shouldConfirm: (_sql, preview) => shouldConfirmDangerousSql(preview, {
-    env: connectionEnvironment.value,
-    preferences: appConfig.dangerousSqlPreferences,
-  }),
-  productionForced: () => connectionEnvironment.value === 'prod',
-})
-
-const teamStore = useTeamStore()
-const productionApprovalDialogOpen = ref(false)
-const productionApprovalSubmitting = ref(false)
-const productionApprovalError = ref('')
-/** Prod write SQL that skipped the dangerous-confirm bar (INSERT / ALTER / CREATE…). */
-const productionApprovalSql = ref<string | null>(null)
-const sqlReviewFindings = ref<SqlReviewFinding[]>([])
-/** Fail-closed: block until review completes successfully. */
-const sqlReviewBlocked = ref(true)
-const sqlReviewSuggestedSql = ref<string | null>(null)
-const sqlReviewRewriteNote = ref<string | null>(null)
-const sqlReviewRewriteLoading = ref(false)
-let sqlReviewGeneration = 0
-
-const approvalContextSql = computed(
-    () => dangerousSqlPendingSql.value?.trim() || productionApprovalSql.value?.trim() || '',
-)
-
-function promptProductionApproval(sqlText: string) {
-  const trimmed = sqlText.trim()
-  if (!trimmed) return
-  productionApprovalError.value = ''
-  productionApprovalSql.value = trimmed
-  productionApprovalDialogOpen.value = true
-}
-
-function clearProductionApprovalPrompt() {
-  productionApprovalSql.value = null
-  productionApprovalError.value = ''
-  productionApprovalDialogOpen.value = false
-}
-
-const {runSql, saveConsole, formatSql, formatSelection, jumpToErrorLine, running} = useSqlEditorActions({
-  getTabId: () => props.tab.id,
-  getSql: () => sql.value,
-  getSqlFile: () => props.tab.sqlFile,
-  getConnectionId: () => connectionId.value || props.tab.connectionId,
-  getInstanceId: () => instanceId.value ?? props.tab.instanceId,
-  getDatabase: () => databaseName.value,
-  getConnectionLabel: () => source.value?.label ?? t('common.unnamedConnection'),
-  getInstanceLabel: () => databaseName.value,
-  getDbType: () => dbDialect.value,
-  editorRef: () => editorRef.value ?? null,
+  dangerousSqlPending,
+  dangerousSqlPendingSql,
+  dangerousSqlPreview,
+  dangerousSqlLoading,
+  dangerousSqlAffectedCount,
+  dangerousSqlSampleRows,
+  dangerousSqlSampleColumns,
+  dangerousSqlErrorMessage,
+  dangerousSqlProductionForced,
+  dangerousSqlRisk,
+  disarmDangerousSqlPending,
+  productionApprovalDialogOpen,
+  productionApprovalSubmitting,
+  productionApprovalError,
+  sqlReviewFindings,
+  sqlReviewBlocked,
+  sqlReviewSuggestedSql,
+  sqlReviewRewriteNote,
+  sqlReviewRewriteLoading,
+  productionApprovalTeams,
+  needsProductionApproval,
+  dangerousSqlSubmitTitle,
+  approvalContextSql,
+  applySqlReviewSuggestion,
+  executeSql,
+  submitDangerousSql,
+  onSubmitProductionApproval,
+  onProductionApprovalDialogOpen,
+  rollbackDangerousSql,
+  saveConsole,
+  formatSql,
+  formatSelection,
+  jumpToErrorLine,
+  running,
+} = useSqlConsoleExecution({
+  tabId: () => props.tab.id,
+  tabConnectionId: () => props.tab.connectionId,
+  tabInstanceId: () => props.tab.instanceId,
+  tabSqlFile: () => props.tab.sqlFile,
+  sql,
+  sqlParamValues,
+  connectionId,
+  instanceId,
+  databaseName,
+  connectionLabel: () => source.value?.label,
+  connectionEnvironment,
+  dbDialect: dbDialect as unknown as import('vue').Ref<DbType | undefined>,
+  productionPerfActive,
+  editorRef,
+  isEditorFullscreen: () => isEditorFullscreen.value,
+  exitEditorFullscreen,
   onExecuteComplete: () => {
-    void transactionBarRef.value?.refreshStatus()
+    void toolbarRef.value?.refreshTransactionStatus()
   },
-  onProductionApprovalRequired: (blockedSql) => {
-    promptProductionApproval(blockedSql)
-  },
-  applyParameters: (text) => applySqlParameters(text, sqlParamValues.value),
-  getProductionPerfActive: () => productionPerfActive.value,
-  getSchema: () => getActiveSqlEditorRuntime().getSchema(),
 })
 
-const showToolbarRunGroup = computed(() =>
-    can(FeaturePermission.WorkbenchConsoleRun)
-    || (explainPlanEnabled.value && can(FeaturePermission.WorkbenchConsoleExplain))
-    || can(FeaturePermission.WorkbenchConsoleDangerousSql)
-    || (running.value && can(FeaturePermission.WorkbenchConsoleRun)),
-)
-
-const showToolbarSaveGroup = computed(() =>
-    can(FeaturePermission.WorkbenchConsoleSave)
-    || can(FeaturePermission.WorkbenchConsoleSaveAs)
-    || (bookmarksEnabled.value && can(FeaturePermission.WorkbenchConsoleBookmark))
-    || can(FeaturePermission.WorkbenchConsoleViewModel)
-    || (sqlFormatEnabled.value && can(FeaturePermission.WorkbenchConsoleFormat))
-    || can(FeaturePermission.WorkbenchConsoleFullscreen),
-)
-
-/** B2-2: 标准版也露出 AI 入口，点开走 stub → Insight/AI 人话门禁，避免侧栏才是唯一路径 */
-const showToolbarAiGroup = computed(() =>
-    can(FeaturePermission.WorkbenchConsoleAi)
-    && (consoleAiEnabled.value || isStandardEdition),
-)
-const mountConsoleAiLayer = computed(() =>
-    editorReady.value && (anyAiFeatureEnabled.value || showToolbarAiGroup.value),
-)
-
-const productionApprovalTeams = computed(() => {
-  const pendingSql = approvalContextSql.value
-  if (!pendingSql) return []
-  return resolveProductionApprovalTeams({
-    env: connectionEnvironment.value,
-    sql: pendingSql,
-    connectionId: connectionId.value || props.tab.connectionId,
-    teams: teamStore.teams,
-  })
+const {
+  sqlFormatEnabled,
+  consoleAiEnabled,
+  indexSuggestEnabled,
+  aiSqlFixEnabled,
+  aiResultSummaryEnabled,
+  aiExplainEnabled,
+  dmlGenerateEnabled,
+  canAskAi,
+  explainPlanEnabled,
+  crossEnvCompareEnabled,
+  bookmarksEnabled,
+  teamCollabEnabled,
+  showToolbarRunGroup,
+  showToolbarSaveGroup,
+  showToolbarAiGroup,
+  mountConsoleAiLayer,
+} = useConsoleToolbarFeatures({
+  running,
+  editorReady,
+  getTab: () => props.tab,
 })
 
-const needsProductionApproval = computed(() => productionApprovalTeams.value.length > 0)
+const {
+  visualQueryBuilderOpen,
+  openVisualQueryBuilder,
+  applyVisualQuerySql,
+  applyAndRunVisualQuerySql,
+  onVisualQueryTextToSql,
+} = useConsoleVisualQueryBridge({
+  getConnectionId: () => connectionId.value || props.tab.connectionId,
+  getDatabase: () => databaseName.value,
+  getSql: () => sql.value,
+  setSql: setConsoleSql,
+  setStatus: (message) => workspace.setStatus(message),
+  needConnectionMessage: () => t('console.visualQuery.needConnection'),
+  executeSql: (text, options) => executeSql(text, options),
+  openAiInput: (prompt) => { void aiLayerRef.value?.openAiInput(prompt) },
+})
 
-const dangerousSqlSubmitTitle = computed(() =>
-    needsProductionApproval.value
-        ? t('console.productionApproval.submitForApproval')
-        : t('console.dangerousSql.submit'),
-)
+const {onEditorDragOver, onEditorDrop} = useConsoleEditorFileDrop({
+  insertTextAtCursor: (text) => { editorRef.value?.insertTextAtCursor(text) },
+})
 
 const canManageTransactions = computed(() =>
     canDmlConnection(connectionId.value || props.tab.connectionId, teamStore.teams),
@@ -601,713 +278,176 @@ const {
   canKill: canKillSession,
 })
 
-const runningElapsedMs = ref(0)
-let runningElapsedTimer: ReturnType<typeof setInterval> | null = null
+const {runningElapsedMs, runningElapsedLabel} = useConsoleRunningElapsed(running)
 
-watch(running, (isRunning) => {
-  if (runningElapsedTimer) {
-    clearInterval(runningElapsedTimer)
-    runningElapsedTimer = null
-  }
-  if (!isRunning) {
-    runningElapsedMs.value = 0
-    return
-  }
-  const startedAt = Date.now()
-  runningElapsedMs.value = 0
-  runningElapsedTimer = setInterval(() => {
-    runningElapsedMs.value = Date.now() - startedAt
-  }, 200)
-})
-
-onBeforeUnmount(() => {
-  if (runningElapsedTimer) {
-    clearInterval(runningElapsedTimer)
-    runningElapsedTimer = null
-  }
-})
-
-const runningElapsedLabel = computed(() =>
-    running.value ? formatDurationMs(runningElapsedMs.value) : '',
-)
-
-const {isFullscreen: isEditorFullscreen, toggle: toggleEditorFullscreen, exit: exitEditorFullscreen} =
-    useEditorFullscreen()
 /** PERF-18: keep results in store while hidden; remount grid when pane is active again. */
 const mountResultPane = computed(
     () => props.paneActive && !isEditorFullscreen.value && showResultPanel.value,
 )
 
-/** 全屏编辑时执行 SQL 需先退出全屏，才能看到结果区 */
-function resolveConsoleExecutable(executableOverride?: unknown, mode?: SqlExecuteMode) {
-  return resolveExecutableSql(
-      executableOverride,
-      () => editorRef.value?.getSelectedText() ?? '',
+const {
+  runWithMode,
+  onRunStatementFromGutter,
+  runExplainPlanFromToolbar,
+  saveStatementAsFileFromToolbar,
+  requestExplainPlan,
+  runTableShortcutFromSelection,
+} = useConsoleSqlRunActions({
+  sql,
+  editorRef,
+  tabId: () => props.tab.id,
+  dbDialect: dbDialect as unknown as import('vue').Ref<DbType | undefined>,
+  explainPlanEnabled,
+  sqlExplainCapable: () => connectionCaps.value.sqlExplain,
+  sqlExplainHint: () => capabilityHint('sqlExplain'),
+  guestReadOnly,
+  guestReadOnlyHint,
+  executeSql,
+})
+
+const {
+  consoleQuery,
+  openCrossEnvCompareFromResult,
+  onActiveViewChange,
+  onCloseResult,
+  onCloseOtherResults,
+  onCloseAllResults,
+  refreshActiveResult,
+  onRaiseMaxRows,
+  onInsertOrderByFromResult,
+  onInsertWhereFromResult,
+  onInsertWhereInFromResult,
+  onRewriteWhereFromResult,
+  onRewriteOrderByFromResult,
+  onLoadMoreResult,
+} = useConsoleQueryResultActions({
+  tabId: () => props.tab.id,
+  getSql: () => sql.value,
+  setSql: (value) => { sql.value = value },
+  editorRef,
+  cursorLoading,
+  running,
+  productionPerfActive,
+  getConnectionId: () => connectionId.value || props.tab.connectionId,
+  getDatabase: () => databaseName.value,
+  getConnectionLabel: () => source.value?.label,
+  getDbType: () => dbDialect.value,
+  executeSql,
+})
+
+const {sendSelectionToAi, onRequestAiAsk} = useConsoleAiAskBridge({
+  getConnectionId: () => connectionId.value || props.tab.connectionId,
+  getDatabase: () => databaseName.value,
+  getConnectionLabel: () => source.value?.label,
+  getDialect: () => (typeof dbDialect.value === 'string' ? dbDialect.value : undefined),
+  getActiveResultSql: () => {
+    const view = consoleQuery.value.activeView
+    if (view < 0) return undefined
+    return consoleQuery.value.results[view]?.sql
+  },
+})
+
+const {
+  editorMenuVisible,
+  editorMenuPos,
+  editorMenuItems,
+  closeEditorMenu,
+  onEditorMenuSelect,
+  onEditorContextMenu,
+  onOpenTableFromSql,
+  onRequestAiSummary,
+  onRequestAiExplain,
+} = useConsoleEditorMenuBridge({
+  editorRef,
+  aiLayerRef,
+  aiSelectionSql,
+  connectionId: () => connectionId.value || props.tab.connectionId,
+  databaseName: () => databaseName.value,
+  dbDialect,
+  connectionCaps,
+  capabilityHint,
+  explainPlanEnabled,
+  executeSql,
+  requestExplainPlan,
+  formatSelection,
+  sendSelectionToAi,
+  requestIndexDraft,
+  consoleQuery,
+})
+
+/**
+ * 选中浮层：只向模块级单例注册状态与动作闭包，不写本组件的任何响应式字段。
+ * 这样选中态变化只触发 AppShell 里的浮层渲染，绝不在 Tab 的 patch 窗口中改父级状态。
+ */
+function onEditorSelectionChange(payload: {selectedText: string; x: number; y: number} | null) {
+  // visibility 常驻壳下所有 Tab 都挂载着编辑器；只有当前激活 Tab 才允许抢占浮层。
+  if (workspace.activeTabId !== props.tab.id) return
+  if (!payload || !payload.selectedText.trim()) {
+    hideSqlSelectionToolbar(props.tab.id)
+    return
+  }
+  const selectedText = payload.selectedText
+  showSqlSelectionToolbar(
+      props.tab.id,
       {
-        mode,
-        fallbackToCurrentLineSql: () => editorRef.value?.getCurrentLineSql() ?? '',
-        getCurrentLineNumber: () => editorRef.value?.getCurrentLineNumber() ?? null,
-        fallbackToFullDocument: () => sql.value,
-        getSelectionStartLine: () => editorRef.value?.getSelectionStartLine() ?? null,
+        selectedText,
+        x: payload.x,
+        y: payload.y,
+        // EXPLAIN 可用性与右键菜单保持同一判定
+        explainSupported: explainPlanEnabled.value && (connectionCaps.value.sqlExplain ?? true),
+      },
+      {
+        run: () => executeSql(selectedText, {perfSource: 'context-menu'}),
+        explain: () => requestExplainPlan(selectedText),
+        format: () => formatSelection(),
       },
   )
 }
 
-function batchNeedsDangerousConfirmation(resolvedSql: string): boolean {
-  const statements = splitSqlStatements(resolvedSql)
-  const batch = statements.length > 1 ? statements : [statements[0] ?? resolvedSql]
-  return batch.some((statement) => requiresDangerousSqlConfirmation(statement.trim()))
+/** 右键打开菜单时收起选中浮层，两者不同时出现。 */
+function handleEditorContextMenu(payload: {x: number; y: number; selectedText: string}) {
+  hideSqlSelectionToolbar(props.tab.id)
+  onEditorContextMenu(payload)
 }
 
-async function loadSqlReviewFindings(resolvedSql: string) {
-  const generation = ++sqlReviewGeneration
-  sqlReviewFindings.value = []
-  sqlReviewBlocked.value = true
-  sqlReviewSuggestedSql.value = null
-  sqlReviewRewriteNote.value = null
-  const connId = connectionId.value || props.tab.connectionId
-  if (!connId) return
-  sqlReviewRewriteLoading.value = true
-  try {
-    const result = await reviewSql(
-        {
-          sql: resolvedSql,
-          connectionId: connId,
-          database: databaseName.value,
-          aiRewrite: true,
-        },
-        {silent: true},
-    )
-    if (generation !== sqlReviewGeneration) return
-    sqlReviewFindings.value = result.findings ?? []
-    sqlReviewBlocked.value = !result.allowed
-    sqlReviewSuggestedSql.value = result.suggestedSql?.trim() || null
-    sqlReviewRewriteNote.value = result.rewriteNote?.trim() || null
-  } catch {
-    if (generation !== sqlReviewGeneration) return
-    // Fail-closed: keep blocked on network/API errors.
-    sqlReviewFindings.value = []
-    sqlReviewBlocked.value = true
-    sqlReviewSuggestedSql.value = null
-    sqlReviewRewriteNote.value = null
-  } finally {
-    if (generation === sqlReviewGeneration) {
-      sqlReviewRewriteLoading.value = false
-    }
-  }
-}
-
-function applySqlReviewSuggestion() {
-  const suggested = sqlReviewSuggestedSql.value?.trim()
-  if (!suggested) return
-  sql.value = suggested
-  editorRef.value?.layout()
-  workspace.setStatus(t('platform.sqlReview.appliedRewrite'))
-  void loadSqlReviewFindings(suggested)
-}
-
-type DangerousSqlGate = 'blocked' | 'armed' | 'auto'
-
-async function armDangerousSqlWithReview(resolved: string): Promise<DangerousSqlGate> {
-  await loadSqlReviewFindings(resolved)
-  if (sqlReviewBlocked.value) return 'blocked'
-  const suggested = sqlReviewSuggestedSql.value?.trim()
-  if (suggested && suggested !== resolved.trim()) {
-    // Suggested rewrite must be explicitly applied; do not arm the original dangerous SQL.
-    return 'blocked'
-  }
-  // 预演结果决定是否打断：低风险直接放行（P3 治理预演）
-  return (await armDangerousSqlPending(resolved)) ? 'armed' : 'auto'
-}
-
-function executeSql(executableOverride?: unknown, runOptions?: SqlRunOptions) {
-  if (isEditorFullscreen.value) {
-    exitEditorFullscreen()
-  }
-  if (!runOptions?.skipDangerousCheck) {
-    const {sql: executable} = resolveConsoleExecutable(executableOverride, runOptions?.mode)
-    const trimmed = executable.trim()
-    if (trimmed) {
-      const resolved = applySqlParameters(trimmed, sqlParamValues.value)
-      if (batchNeedsDangerousConfirmation(resolved)) {
-        void armDangerousSqlWithReview(resolved).then((gate) => {
-          if (gate !== 'auto') return
-          const rows = dangerousSqlAutoApprovedRows.value
-          if (rows != null) {
-            workspace.setStatus(t('console.dangerousSql.autoApproved', {count: rows}))
-          }
-          // 低风险已预演：跳过确认直接执行
-          executeSql(executableOverride, {...runOptions, skipDangerousCheck: true})
-        })
-        return
-      }
-      // INSERT / ALTER / CREATE etc. skip the dangerous bar but still need prod approval.
-      const approvalTeams = resolveProductionApprovalTeams({
-        env: connectionEnvironment.value,
-        sql: resolved,
-        connectionId: connectionId.value || props.tab.connectionId,
-        teams: teamStore.teams,
-      })
-      if (approvalTeams.length > 0) {
-        promptProductionApproval(resolved)
-        return
-      }
-    }
-  }
-  sqlReviewFindings.value = []
-  sqlReviewBlocked.value = false
-  sqlReviewSuggestedSql.value = null
-  sqlReviewRewriteNote.value = null
-  runSql(executableOverride, runOptions)
-}
-
-function runWithMode(mode: SqlExecuteMode) {
-  executeSql(undefined, {perfSource: 'toolbar', mode})
-}
-
-function resolveToolbarStatementSql(): string {
-  const selected = editorRef.value?.getSelectedText?.()?.trim()
-  if (selected) return selected
-  return editorRef.value?.getCurrentLineSql?.()?.trim() || sql.value.trim()
-}
-
-function onRunStatementFromGutter(payload: { sql: string; anchorLine: number }) {
-  executeSql(payload.sql, {perfSource: 'gutter'})
-}
-
-function runExplainPlanFromToolbar(event?: MouseEvent) {
-  const targetSql = resolveToolbarStatementSql()
-  const trimmed = targetSql.trim()
-  if (!trimmed) return
-  if (!explainPlanEnabled.value) return
-  if (!connectionCaps.value.sqlExplain) {
-    workspace.setStatus(capabilityHint('sqlExplain'))
-    return
-  }
-
-  const analyze = Boolean(event?.shiftKey) && supportsExplainAnalyze(dbDialect.value)
-  const wrapped = wrapExplainSql(trimmed, dbDialect.value, analyze)
-  executeSql(wrapped, {skipDangerousCheck: true, perfSource: 'explain'})
-}
-
-async function saveStatementAsFileFromToolbar() {
-  if (guestReadOnly.value) {
-    workspace.setStatus(guestReadOnlyHint.value)
-    return
-  }
-  const statementSql = resolveToolbarStatementSql()
-  if (!statementSql) return
-  const ok = await workspace.saveConsoleStatementAsFile(props.tab.id, statementSql)
-  if (!ok) {
-    workspace.setStatus(t('console.saveFailed'))
-  }
-}
-
-function submitDangerousSql() {
-  if (!dangerousSqlPending.value || !dangerousSqlPendingSql.value) return
-  if (needsProductionApproval.value) {
-    productionApprovalError.value = ''
-    productionApprovalDialogOpen.value = true
-    return
-  }
-  const pending = dangerousSqlPendingSql.value
-  disarmDangerousSqlPending()
-  executeSql(pending, {skipDangerousCheck: true})
-}
-
-async function onSubmitProductionApproval(teamId: string) {
-  const pendingSql = approvalContextSql.value
-  const connId = connectionId.value || props.tab.connectionId
-  if (!pendingSql || !connId) return
-
-  productionApprovalSubmitting.value = true
-  productionApprovalError.value = ''
-  try {
-    await teamStore.submitProductionApproval(teamId, {
-      connectionId: connId,
-      connectionName: source.value?.label ?? explorer.findNode(connId)?.label,
-      database: databaseName.value || undefined,
-      sql: pendingSql,
-    })
-    clearProductionApprovalPrompt()
-    disarmDangerousSqlPending()
-    layout.notifyQuiet({
-      category: 'workspace',
-      titleKey: 'approvalDone',
-      bodyKey: 'approvalDone',
-      params: {detail: t('console.productionApproval.submitted')},
-    })
-  } catch (error) {
-    productionApprovalError.value =
-        resolveCaughtApiErrorMessage(error, t, 'console.productionApproval.submitFailed')
-  } finally {
-    productionApprovalSubmitting.value = false
-  }
-}
-
-function onProductionApprovalDialogOpen(open: boolean) {
-  productionApprovalDialogOpen.value = open
-  if (!open) {
-    productionApprovalSql.value = null
-    productionApprovalError.value = ''
-  }
-}
-
-function rollbackDangerousSql() {
-  disarmDangerousSqlPending()
-  clearProductionApprovalPrompt()
-}
-
-function requestExplainPlan(targetSql: string) {
-  const trimmed = targetSql.trim()
-  if (!trimmed) return
-  if (!explainPlanEnabled.value) return
-  if (!connectionCaps.value.sqlExplain) {
-    workspace.setStatus(capabilityHint('sqlExplain'))
-    return
-  }
-  const wrapped = wrapExplainSql(trimmed, dbDialect.value, false)
-  executeSql(wrapped, {skipDangerousCheck: true})
-}
-
-function openCrossEnvCompareFromResult(index: number) {
-  const result = consoleQuery.value.results[index]
-  const connId = connectionId.value || props.tab.connectionId
-  const database = databaseName.value
-  if (!connId || !database || !result?.sql?.trim()) return
-
-  const sqlError = validateCrossEnvCompareSql(result.sql)
-  if (sqlError) {
-    workspace.setStatus(t(`crossEnvCompare.errors.${sqlError}`))
-    return
-  }
-
-  const scope = buildCrossEnvCompareScope({
-    connectionId: connId,
-    connectionLabel: source.value?.label ?? explorer.findNode(connId)?.label ?? connId,
-    database,
-    dbType: dbDialect.value ?? 'mysql',
-  })
-  workspace.openCrossEnvCompare({left: scope, sql: result.sql})
-}
-
-const {
-  visible: editorMenuVisible,
-  position: editorMenuPos,
-  menuItems: editorMenuItems,
-  show: showEditorContextMenu,
-  close: closeEditorMenu,
-  selectMenuItem: onEditorMenuSelect,
-} = useEditorContextMenu({
-  editorRef: () => editorRef.value ?? null,
-  runSql: (sql) => executeSql(sql, {perfSource: 'context-menu'}),
-  requestExplainPlan,
-  formatSelection,
-  openAiInput: (prefill) => {
-    if (prefill?.includes('\n')) {
-      const lines = prefill.split('\n')
-      aiSelectionSql.value = lines.slice(1).join('\n').trim()
-    }
-    void aiLayerRef.value?.openAiInput(prefill)
-  },
-  askAiInWorkbench: (sql) => sendSelectionToAi(sql, 'ask'),
-  fixAiInWorkbench: (sql) => sendSelectionToAi(sql, 'fix'),
-  getDbType: () => dbDialect.value,
-  getCapabilities: () => connectionCaps.value,
-  getCapabilityHint: () => capabilityHint('sqlExplain'),
-  getExplainPlanEnabled: () => explainPlanEnabled.value,
-  getIndexSuggestEnabled: () => true,
-  getPreviewRowCount: () => DEFAULT_TABLE_SHORTCUT_ROWS,
-  onTableShortcutInvalid: () => {
-    layout.showWarningToast(t('console.tableShortcutInvalid'))
-  },
-  requestIndexSuggest: (targetSql) => {
-    requestIndexDraft({sql: targetSql})
-  },
-})
-
-function runTableShortcutFromSelection(kind: 'select-first' | 'count') {
-  const selected = editorRef.value?.getSelectedText?.()?.trim() ?? ''
-  if (!selected) {
-    layout.showWarningToast(t('console.tableShortcutNeedSelection'))
-    return
-  }
-  const sql = buildTableShortcutSql(kind, selected, dbDialect.value, DEFAULT_TABLE_SHORTCUT_ROWS)
-  if (!sql) {
-    layout.showWarningToast(t('console.tableShortcutInvalid'))
-    return
-  }
-  executeSql(sql, {perfSource: 'shortcut'})
-}
-
-function onEditorContextMenu(payload: { x: number; y: number; selectedText: string }) {
-  aiSelectionSql.value = payload.selectedText.trim()
-  showEditorContextMenu(payload)
-}
-
-function onOpenTableFromSql(payload: {tableName: string; tableId?: string; catalog?: string}) {
-  void openSqlTableFromPeek(payload, {
-    connectionId: connectionId.value || props.tab.connectionId,
-    database: databaseName.value,
-  })
-}
-
-function onRequestAiSummary() {
-  const view = consoleQuery.value.activeView
-  if (view < 0) return
-  const result = consoleQuery.value.results[view]
-  if (result) aiLayerRef.value?.onRequestAiSummary(result)
-}
-
-/**
- * T-AI-2：选区作为结构化数据附件发到 AI 工作台；同 binding 复用会话。
- */
-function resolveEditorAskBinding(): AiConversationBinding | undefined {
-  const connId = connectionId.value || props.tab.connectionId
-  if (!connId) return undefined
-  const node = explorer.findNode(connId)
-  return {
-    connectionId: connId,
-    connectionName: props.tab.connectionName || source.value?.label || undefined,
-    database: databaseName.value || undefined,
-    dialect: typeof dbDialect.value === 'string' ? dbDialect.value : undefined,
-    environment: normalizeConnectionEnvironment(node?.env, node?.envCustom).env || undefined,
-    source: 'editor_send',
-  }
-}
-
-function sendSelectionToAi(sql: string, intent: AiAskIntent) {
-  const connId = connectionId.value || props.tab.connectionId
-  const database = databaseName.value
-  const mode = intent === 'fix' ? 'agent' : 'ask'
-  layout.setModule('ai')
-  void requestAiAsk({
-    intent,
-    mode,
-    prompt: buildSelectionInstruction(intent),
-    selectionText: sql,
-    binding: resolveEditorAskBinding(),
-    focusInput: true,
-    scope:
-      connId && database
-        ? {
-          connectionId: connId,
-          database,
-          tables: extractTableNamesFromSql(sql),
-        }
-        : undefined,
-  })
-}
-
-/** 结果集提问：带结果提示词 + 选区附件 */
-function askAiWithPrompt(sql: string, prompt: string) {
-  const connId = connectionId.value || props.tab.connectionId
-  const database = databaseName.value
-  layout.setModule('ai')
-  void requestAiAsk({
-    prompt,
-    selectionText: sql,
-    intent: 'ask',
-    mode: 'ask',
-    binding: resolveEditorAskBinding(),
-    focusInput: true,
-    scope:
-      connId && database
-        ? {
-          connectionId: connId,
-          database,
-          tables: extractTableNamesFromSql(sql),
-        }
-        : undefined,
-  })
-}
-
-function onRequestAiAsk() {
-  const view = consoleQuery.value.activeView
-  if (view < 0) return
-  const sql = consoleQuery.value.results[view]?.sql?.trim()
-  if (!sql) return
-  askAiWithPrompt(sql, buildResultAskPrompt(sql))
-}
-
-function onRequestAiExplain() {
-  const view = consoleQuery.value.activeView
-  if (view < 0) return
-  const result = consoleQuery.value.results[view]
-  if (result) aiLayerRef.value?.onRequestAiExplain(result)
-}
-
-const consoleQuery = computed(() => {
-  const state = consoleQueryByTabId.value[props.tab.id]
-  return state ?? {results: [], activeView: -1}
-})
+// Tab 失活 / 关闭时清理浮层所有者，避免其它 Tab 误触发已销毁 Tab 的动作闭包。
+watch(
+    () => workspace.activeTabId,
+    (activeTabId) => {
+      if (activeTabId !== props.tab.id) hideSqlSelectionToolbar(props.tab.id)
+    },
+)
+onBeforeUnmount(() => hideSqlSelectionToolbar(props.tab.id))
 
 /** 有结果可回看时才显示底部收起条；从未查询过则编辑器占满 */
 const canReopenResultPanel = computed(
     () => consoleQuery.value.results.length > 0 || running.value,
 )
 
-watch(
-    () => props.tab.sql,
-    (value) => {
-      if (value !== undefined && value !== sql.value) {
-        syncingSqlFromStore = true
-        sql.value = value
-        void nextTick(() => {
-          syncingSqlFromStore = false
-        })
-      }
-    },
-)
-
-function onActiveViewChange(view: number) {
-  workspace.setConsoleActiveView(props.tab.id, view)
-}
-
-function onCloseResult(index: number) {
-  workspace.closeConsoleQueryResult(props.tab.id, index)
-}
-
-function onCloseOtherResults(index: number) {
-  workspace.closeOtherConsoleQueryResults(props.tab.id, index)
-}
-
-function onCloseAllResults() {
-  workspace.closeAllConsoleQueryResults(props.tab.id)
-}
-
-function refreshActiveResult(payload?: QueryResultRefreshRequest) {
-  if (!payload) return
-  executeSql(payload.sql, {refreshResultIndex: payload.resultIndex, skipDangerousCheck: true})
-}
-
-function onRaiseMaxRows(maxRows: number) {
-  const view = consoleQuery.value.activeView
-  if (view < 0) return
-  const result = consoleQuery.value.results[view]
-  if (!result?.sql?.trim()) return
-  executeSql(result.sql, {
-    refreshResultIndex: view,
-    skipDangerousCheck: true,
-    maxRowsOverride: maxRows,
-  })
-}
-
-const lastOrderFill = ref<{column: string; direction: 'asc' | 'desc'} | null>(null)
-
-function onInsertOrderByFromResult(payload: {column: string; direction: 'asc' | 'desc'}) {
-  const editor = editorRef.value
-  if (!editor) return
-  const direction = payload.direction === 'desc'
-      ? 'desc'
-      : nextOrderDirection(lastOrderFill.value, payload.column)
-  lastOrderFill.value = {column: payload.column, direction}
-  editor.insertTextAtCursor(buildOrderByFillInsert(payload.column, direction))
-}
-
-function onInsertWhereFromResult(payload: {column: string; value: unknown}) {
-  const editor = editorRef.value
-  if (!editor) return
-  const statement = editor.getCurrentLineSql?.()?.trim() || sql.value
-  editor.insertTextAtCursor(buildWhereFillInsert(statement, payload.column, payload.value))
-}
-
-function onInsertWhereInFromResult(payload: {column: string; clause: string}) {
-  const editor = editorRef.value
-  if (!editor) return
-  const statement = editor.getCurrentLineSql?.()?.trim() || sql.value
-  const text = buildWhereInFillInsert(statement, payload.clause)
-  if (!text) return
-  editor.insertTextAtCursor(text)
-}
-
-function resolveActiveResultSql(): string {
-  const view = consoleQuery.value.activeView
-  if (view < 0) return sql.value
-  const result = consoleQuery.value.results[view]
-  return result?.sql?.trim() || sql.value
-}
-
-function replaceEditorSql(nextSql: string) {
-  sql.value = nextSql
-  editorRef.value?.layout()
-}
-
-function onRewriteWhereFromResult(payload: {column: string; value: unknown}) {
-  const source = resolveActiveResultSql()
-  if (!source) return
-  const condition = buildWhereEqualsClause(payload.column, payload.value)
-  replaceEditorSql(applyWhereConditionToSql(source, condition))
-}
-
-function onRewriteOrderByFromResult(payload: {column: string; direction: 'asc' | 'desc'}) {
-  const source = resolveActiveResultSql()
-  if (!source) return
-  const direction = payload.direction === 'desc'
-      ? 'desc'
-      : nextOrderDirection(lastOrderFill.value, payload.column)
-  lastOrderFill.value = {column: payload.column, direction}
-  replaceEditorSql(applyOrderByToSql(source, payload.column, direction))
-}
-
-async function onLoadMoreResult(index: number) {
-  const result = consoleQuery.value.results[index]
-  if (!result?.cursorId || cursorLoading.value || running.value) return
-  const tabId = props.tab.id
-  const runGeneration = workspace.beginConsoleRun(tabId)
-  cursorLoading.value = true
-  try {
-    const page = await sqlApi.fetchCursorPage(
-        result.cursorId,
-        result.pageSize ?? resolveSqlPageSize(productionPerfActive.value),
-    )
-    if (!workspace.isConsoleRunCurrent(tabId, runGeneration)) return
-    const clientMax = resolveClientMaxResultRows(productionPerfActive.value)
-    workspace.appendConsoleQueryResultPage(
-        tabId,
-        index,
-        mergeCursorPageIntoQueryResult(result, page, {
-          maxRows: resolveCursorLoadedRowsMax(productionPerfActive.value),
-          hardCap: clientMax > 0,
-        }),
-    )
-  } catch (error) {
-    if (!workspace.isConsoleRunCurrent(tabId, runGeneration)) return
-    layout.showErrorToast(
-        resolveCaughtApiErrorMessage(error, t, 'console.loadMoreFailed'),
-    )
-  } finally {
-    workspace.endConsoleRun(tabId, runGeneration)
-    cursorLoading.value = false
-  }
-}
-
-watch(isEditorFullscreen, async () => {
-  await nextTick()
-  editorRef.value?.layout()
+const {clampEditorHeight: clampEditorHeightFromSync} = useSqlConsoleTabSync({
+  getTab: () => props.tab,
+  sql,
+  editorRef,
+  splitRef,
+  editorReady,
+  editorHeight,
+  isEditorFullscreen,
+  running,
+  resultCount: () => consoleQuery.value.results.length,
+  dangerousSqlPending,
+  disarmDangerousSqlPending,
+  expandResultPanel,
+  collapseResultPanel,
+  executeSql,
+  openAiInput: () => { void aiLayerRef.value?.openAiInput() },
+  hasAiInput: () => typeof aiLayerRef.value?.openAiInput === 'function',
+  connectionId,
+  instanceId,
+  activeInstanceLabel: () => activeInstance.value?.label,
+  markSyncingFromStore: (syncing) => { syncingSqlFromStore = syncing },
+  isSyncingFromStore: () => syncingSqlFromStore,
 })
-
-/** Sticky shell keeps this pane mounted while hidden; relayout Monaco when it becomes active again. */
-watch(
-    () => workspace.activeTabId === props.tab.id,
-    (active) => {
-      if (!active) return
-      void nextTick(() => {
-        editorRef.value?.layout()
-      })
-    },
-)
-
-watch(
-    () => workspace.tabActivateRefreshSeq[props.tab.id] ?? 0,
-    (seq, prev) => {
-      if (!seq || seq === prev) return
-      void nextTick(() => {
-        editorRef.value?.layout()
-      })
-    },
-)
-
-watch(sql, (value) => {
-  if (syncingSqlFromStore) return
-  if (value === props.tab.sql) return
-  workspace.updateTabSql(props.tab.id, value)
-  if (dangerousSqlPending.value) {
-    disarmDangerousSqlPending()
-  }
-})
-
-watch(running, (isRunning) => {
-  if (isRunning) expandResultPanel()
-})
-
-watch(
-    () => workspace.consoleAutoRunRequest,
-    (req) => {
-      if (!req || req.tabId !== props.tab.id) return
-      workspace.clearConsoleAutoRun()
-      void nextTick(() => {
-        executeSql(undefined, {perfSource: 'context-menu'})
-      })
-    },
-)
-
-watch(
-    () => workspace.consoleAiPromptRequest,
-    (req) => {
-      if (!req || req.tabId !== props.tab.id) return
-      workspace.clearConsoleAiPrompt()
-      void nextTick(() => {
-        if (typeof aiLayerRef.value?.openAiInput === 'function') {
-          void aiLayerRef.value.openAiInput()
-          return
-        }
-        // 无控制台 AI 层时回退到完整 Agent（分析模式）
-        if (!entitlement.guardAiNav()) return
-        layout.setModule('ai')
-      })
-    },
-)
-
-function onEditorDragOver(event: DragEvent) {
-  // Default: open file on drop. Hold Alt to insert path at cursor instead.
-  if (event.altKey && dataTransferHasType(event.dataTransfer, LOCAL_FILE_PATH_MIME)) {
-    event.preventDefault()
-    event.stopPropagation()
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
-    return
-  }
-  if (!dataTransferHasType(event.dataTransfer, LOCAL_FILE_ABS_PATH_MIME)) return
-  event.preventDefault()
-  event.stopPropagation()
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
-}
-
-function onEditorDrop(event: DragEvent) {
-  if (event.altKey) {
-    const insertPath = readLocalFilePathFromDataTransfer(event.dataTransfer)
-    if (!insertPath) return
-    event.preventDefault()
-    event.stopPropagation()
-    editorRef.value?.insertTextAtCursor(insertPath)
-    return
-  }
-  const path = readLocalAbsPathFromDataTransfer(event.dataTransfer)
-  if (!path) return
-  event.preventDefault()
-  event.stopPropagation()
-  void openLocalWorkspaceFile(path)
-}
-
-watch(
-    () => consoleQuery.value.results.length,
-    (count, prev) => {
-      if (count > 0 && count !== prev) {
-        expandResultPanel()
-        return
-      }
-      // 结果清空且未在执行 → 收到底部（叉掉结果 / 新开工作台）
-      if (count === 0 && !running.value) {
-        collapseResultPanel()
-      }
-    },
-)
-
-watch([connectionId, instanceId], ([conn, inst]) => {
-  const database = activeInstance.value?.label ?? props.tab.database
-  if (
-      conn === (props.tab.connectionId ?? '')
-      && (inst ?? null) === (props.tab.instanceId ?? null)
-      && database === props.tab.database
-  ) {
-    return
-  }
-  workspace.updateTabContext(props.tab.id, {
-    connectionId: conn,
-    instanceId: inst,
-    database,
-  })
-}, {flush: 'post'})
+clampEditorHeight = clampEditorHeightFromSync
 
 useSqlEditorShortcuts(props.tab.id, () => ({
   'workspace.runSql': () => executeSql(undefined, {perfSource: 'shortcut'}),
@@ -1319,232 +459,64 @@ useSqlEditorShortcuts(props.tab.id, () => ({
       : undefined,
 }))
 
-function clampEditorHeight(value: number) {
-  const splitEl = splitRef.value
-  const maxByPane = splitEl
-      ? Math.max(CONSOLE_EDITOR_HEIGHT_MIN, splitEl.clientHeight - CONSOLE_RESULT_MIN_HEIGHT - 4)
-      : CONSOLE_EDITOR_HEIGHT_MAX
-  const max = Math.min(CONSOLE_EDITOR_HEIGHT_MAX, maxByPane)
-  return Math.min(max, Math.max(CONSOLE_EDITOR_HEIGHT_MIN, value))
-}
-
-onMounted(async () => {
-  layout.setModule('database')
-  // 打开/切回工作台：仅当本 Tab 有结果或正在查询时展开
-  if (running.value || consoleQuery.value.results.length > 0) {
-    expandResultPanel()
-  } else {
-    collapseResultPanel()
-  }
-  await ensureSqlEditorPlugin()
-  if (!splitRef.value) {
-    requestAnimationFrame(() => {
-      editorReady.value = true
-    })
-    return
-  }
-  if (appConfig.consoleEditorHeight === CONSOLE_EDITOR_HEIGHT_DEFAULT) {
-    editorHeight.value = clampEditorHeight(
-        Math.round(splitRef.value.clientHeight * CONSOLE_EDITOR_HEIGHT_RATIO),
-    )
-  }
-  requestAnimationFrame(() => {
-    editorReady.value = true
-  })
-})
-
 </script>
 
 <template>
   <div class="console-tab dw-workbench-page" data-wb-recipe="wb-editor-results" :class="{ 'is-editor-fullscreen': isEditorFullscreen }">
-    <div class="dw-console-toolbar">
-      <div class="dw-console-actions dw-btn-group">
-        <ConsoleRunSplitButton
-            v-if="can(FeaturePermission.WorkbenchConsoleRun)"
-            :running="running"
-            :disabled="dangerousSqlPending"
-            :run-title="dangerousSqlPending
-              ? t('console.dangerousSql.pendingRunBlocked')
-              : shortcutTooltip(t('console.run'), 'workspace.runSql')"
-            :cancel-title="t('console.cancelExecution.cancelQueryHint')"
-            @run="executeSql(undefined, {perfSource: 'toolbar'})"
-            @cancel="cancelQueryNow()"
-            @run-with-mode="runWithMode"
-        />
-        <span
-            v-if="running && runningElapsedLabel"
-            class="console-run-elapsed"
-            :title="t('console.runningElapsed', {duration: runningElapsedLabel})"
-        >
-          {{ runningElapsedLabel }}
-        </span>
-        <IconButton
-            v-if="explainPlanEnabled && can(FeaturePermission.WorkbenchConsoleExplain)"
-            :disabled="!connectionCaps.sqlExplain"
-            :title="connectionCaps.sqlExplain
-              ? t('console.explainMode.toolbar')
-              : capabilityHint('sqlExplain')"
-            @click="runExplainPlanFromToolbar"
-        >
-          <ConsoleToolbarIcon name="explainPlan"/>
-        </IconButton>
-        <IconButton
-            v-if="can(FeaturePermission.WorkbenchConsoleDangerousSql)"
-            :disabled="!dangerousSqlPending"
-            :variant="dangerousSqlPending ? 'accent' : undefined"
-            :title="dangerousSqlSubmitTitle"
-            @click="submitDangerousSql"
-        >
-          <ConsoleToolbarIcon name="submit"/>
-        </IconButton>
-        <IconButton
-            v-if="can(FeaturePermission.WorkbenchConsoleDangerousSql)"
-            :disabled="!dangerousSqlPending"
-            :title="t('console.dangerousSql.rollback')"
-            @click="rollbackDangerousSql"
-        >
-          <ConsoleToolbarIcon name="rollback"/>
-        </IconButton>
-        <IconButton
-            v-if="running && can(FeaturePermission.WorkbenchConsoleRun)"
-            class="console-disconnect-btn"
-            :title="t('console.cancelExecution.cancelConnectionHint')"
-            @click="requestCancelConnection()"
-        >
-          <ConsoleToolbarIcon name="disconnect"/>
-        </IconButton>
-        <IconButton
-            v-if="jdbcTunnelSshEnabled"
-            :title="t('console.openJdbcSshTunnel')"
-            @click="openJdbcTunnelSshTerminal"
-        >
-          <ConsoleToolbarIcon name="terminal"/>
-        </IconButton>
-        <WriteUnlockToolbar
-            :connection-id="connectionId || props.tab.connectionId"
-            :write-guard="connectionWriteGuard"
-        />
-        <span
-            v-if="showToolbarRunGroup && showToolbarSaveGroup"
-            class="dw-console-divider"
-            aria-hidden="true"
-        />
-        <IconButton
-            v-if="can(FeaturePermission.WorkbenchConsoleSave)"
-            :disabled="guestReadOnly"
-            :title="guestReadOnly ? guestReadOnlyHint : shortcutTooltip(t('console.save'), 'workspace.saveConsole')"
-            @click="saveConsole"
-        >
-          <ConsoleToolbarIcon name="save"/>
-        </IconButton>
-        <IconButton
-            v-if="can(FeaturePermission.WorkbenchConsoleSaveAs)"
-            :disabled="guestReadOnly"
-            :title="guestReadOnly ? guestReadOnlyHint : t('console.saveAsFile')"
-            @click="saveStatementAsFileFromToolbar"
-        >
-          <ConsoleToolbarIcon name="saveAs"/>
-        </IconButton>
-        <IconButton
-            v-if="bookmarksEnabled && can(FeaturePermission.WorkbenchConsoleBookmark)"
-            :title="t('console.saveBookmark')"
-            @click="openSaveBookmarkDialog"
-        >
-          <ConsoleToolbarIcon name="bookmark"/>
-        </IconButton>
-        <IconButton
-            v-if="can(FeaturePermission.WorkbenchConsoleViewModel)"
-            :disabled="guestReadOnly"
-            :title="t('console.saveViewModel')"
-            @click="openSaveViewModelDialog"
-        >
-          <ConsoleToolbarIcon name="viewModel"/>
-        </IconButton>
-        <IconButton
-            v-if="sqlFormatEnabled && can(FeaturePermission.WorkbenchConsoleFormat)"
-            :title="t('console.format')"
-            @click="formatSql"
-        >
-          <ConsoleToolbarIcon name="format"/>
-        </IconButton>
-        <IconButton
-            :title="t('console.foldAll')"
-            :aria-label="t('console.foldAll')"
-            @click="editorRef?.foldAll()"
-        >
-          <ConsoleToolbarIcon name="foldAll"/>
-        </IconButton>
-        <IconButton
-            :title="t('console.unfoldAll')"
-            :aria-label="t('console.unfoldAll')"
-            @click="editorRef?.unfoldAll()"
-        >
-          <ConsoleToolbarIcon name="unfoldAll"/>
-        </IconButton>
-        <IconButton
-            :title="t('console.sqlEditorSettingsHint')"
-            :aria-label="t('console.sqlEditorSettings')"
-            @click="editorRef?.openSettings?.()"
-        >
-          <ConsoleToolbarIcon name="sqlEditorSettings"/>
-        </IconButton>
-        <IconButton
-            v-if="can(FeaturePermission.WorkbenchConsoleRun) && connectionCaps.visualQueryBuilder"
-            :title="t('console.visualQuery.toolbar')"
-            @click="openVisualQueryBuilder"
-        >
-          <ConsoleToolbarIcon name="visualQuery"/>
-        </IconButton>
-        <EditorFullscreenButton
-            v-if="can(FeaturePermission.WorkbenchConsoleFullscreen)"
-            variant="toolbar"
-            :active="isEditorFullscreen"
-            @click="toggleEditorFullscreen"
-        />
-        <span
-            v-if="showToolbarSaveGroup && showToolbarAiGroup"
-            class="dw-console-divider"
-            aria-hidden="true"
-        />
-        <div v-if="showToolbarAiGroup" class="ai-btn-wrap">
-          <IconButton
-              class="console-ai-btn"
-              :title="shortcutTooltip(t('console.ai'), 'workspace.aiPrompt')"
-              :active="aiLayerRef?.showAiInput"
-              @click="aiLayerRef?.toggleAiInput()"
-          >
-            <ConsoleToolbarIcon name="ai"/>
-          </IconButton>
-        </div>
-      </div>
-
-      <div class="dw-console-toolbar__context">
-        <div class="dw-console-toolbar__controls">
-          <SqlExecutionLimitHint/>
-          <ConsoleTransactionBar
-              v-if="can(FeaturePermission.WorkbenchConsoleTransaction)"
-              ref="transactionBarRef"
-              :tab-id="tab.id"
-              :connection-id="connectionId || tab.connectionId"
-              :database="databaseName"
-              :can-manage="canManageTransactions"
-          />
-        </div>
-        <span class="dw-console-divider" aria-hidden="true"/>
-        <div class="dw-console-toolbar__info">
-          <ConsoleCtxBar
-              class="dw-console-toolbar__ctx"
-              v-model:connection-id="connectionId"
-              v-model:instance-id="instanceId"
-              :data-sources="dataSources"
-              :bound-database-label="tab.database"
-              :context-locked="workspaceBound"
-              :bound-connection-label="source?.label ?? explorer.findNode(tab.connectionId ?? '')?.label"
-              :bound-connection-db-type="dbDialect"
-          />
-        </div>
-      </div>
-    </div>
+    <SqlConsoleToolbar
+        ref="toolbarRef"
+        :running="running"
+        :running-elapsed-label="runningElapsedLabel"
+        :dangerous-sql-pending="dangerousSqlPending"
+        :dangerous-sql-submit-title="dangerousSqlSubmitTitle"
+        :explain-plan-enabled="explainPlanEnabled"
+        :sql-explain-capable="connectionCaps.sqlExplain"
+        :sql-explain-hint="capabilityHint('sqlExplain')"
+        :visual-query-builder-capable="connectionCaps.visualQueryBuilder"
+        :jdbc-tunnel-ssh-enabled="jdbcTunnelSshEnabled"
+        :connection-id="connectionId"
+        :tab-connection-id="tab.connectionId"
+        :tab-id="tab.id"
+        :tab-database="tab.database"
+        :connection-write-guard="connectionWriteGuard"
+        :show-toolbar-run-group="showToolbarRunGroup"
+        :show-toolbar-save-group="showToolbarSaveGroup"
+        :show-toolbar-ai-group="showToolbarAiGroup"
+        :guest-read-only="guestReadOnly"
+        :guest-read-only-hint="guestReadOnlyHint"
+        :bookmarks-enabled="bookmarksEnabled"
+        :sql-format-enabled="sqlFormatEnabled"
+        :is-editor-fullscreen="isEditorFullscreen"
+        :ai-input-active="Boolean(aiLayerRef?.showAiInput)"
+        :database-name="databaseName"
+        :can-manage-transactions="canManageTransactions"
+        :data-sources="dataSources"
+        :workspace-bound="workspaceBound"
+        :bound-connection-label="source?.label"
+        :db-dialect="dbDialect"
+        :instance-id="instanceId"
+        @run="executeSql(undefined, {perfSource: 'toolbar'})"
+        @cancel="cancelQueryNow()"
+        @run-with-mode="runWithMode"
+        @explain="runExplainPlanFromToolbar"
+        @submit-dangerous="submitDangerousSql"
+        @rollback-dangerous="rollbackDangerousSql"
+        @cancel-connection="requestCancelConnection()"
+        @open-jdbc-ssh="openJdbcTunnelSshTerminal"
+        @save="saveConsole"
+        @save-as="saveStatementAsFileFromToolbar"
+        @bookmark="openSaveBookmarkDialog"
+        @view-model="openSaveViewModelDialog"
+        @format="formatSql"
+        @fold-all="editorRef?.foldAll()"
+        @unfold-all="editorRef?.unfoldAll()"
+        @open-settings="editorRef?.openSettings?.()"
+        @visual-query="openVisualQueryBuilder"
+        @toggle-fullscreen="toggleEditorFullscreen"
+        @toggle-ai="aiLayerRef?.toggleAiInput()"
+        @update:connection-id="connectionId = $event"
+        @update:instance-id="instanceId = $event"
+    />
 
     <DangerousSqlPendingBar
         v-if="dangerousSqlPending"
@@ -1583,126 +555,74 @@ onMounted(async () => {
         }"
           :style="!isEditorFullscreen && showResultPanel ? { height: `${editorHeight}px` } : undefined"
       >
-        <SqlConsoleAiLayer
-            v-if="mountConsoleAiLayer"
-            ref="aiLayerRef"
-            v-model:selection-sql="aiSelectionSql"
+        <SqlConsoleEditorSection
             :tab="tab"
-            :get-sql="getConsoleSql"
-            :set-sql="setConsoleSql"
+            :sql="sql"
+            @update:sql="sql = $event"
+            :editor-ready="editorReady"
+            :editor-refs="editorRefs"
+            :parameter-names="parameterNames"
+            :sql-param-values="sqlParamValues"
+            @update:sql-param-values="sqlParamValues = $event"
+            :ai-selection-sql="aiSelectionSql"
+            @update:ai-selection-sql="aiSelectionSql = $event"
             :connection-id="connectionId || tab.connectionId || ''"
-            :database-name="databaseName ?? ''"
+            :database-name="databaseName"
             :db-dialect="dbDialect"
             :source-label="source?.label ?? ''"
             :active-instance-label="activeInstance?.label ?? null"
+            :schema-provider="schemaProvider"
+            :mount-console-ai-layer="mountConsoleAiLayer"
             :console-ai-enabled="consoleAiEnabled"
             :ai-sql-fix-enabled="aiSqlFixEnabled"
             :index-suggest-enabled="indexSuggestEnabled"
             :ai-result-summary-enabled="aiResultSummaryEnabled"
             :ai-explain-enabled="aiExplainEnabled"
+            :get-sql="getConsoleSql"
+            :set-sql="setConsoleSql"
             :get-editor="getSqlEditor"
-        />
-        <SqlParameterPanel
-            :parameter-names="parameterNames"
-            :values="sqlParamValues"
-            @update:values="sqlParamValues = $event"
-        />
-        <div
-            class="editor-surface"
-            @dragover.capture="onEditorDragOver"
-            @drop.capture="onEditorDrop"
-        >
-          <SqlEditor
-              v-if="editorReady"
-              ref="editorRef"
-              v-model="sql"
-              :connection-id="connectionId || tab.connectionId"
-              :database-name="databaseName"
-              :schema-provider="schemaProvider"
-              :dialect="dbDialect"
-              @contextmenu="onEditorContextMenu"
-              @run-statement="onRunStatementFromGutter"
-              @open-table="onOpenTableFromSql"
-          />
-          <DwPanelState
-              v-else
-              class="editor-surface__loading"
-              status="loading"
-              fill
-              compact
-              :message="t('common.editorLoading')"
-          />
-          <div
-              v-if="showEmptyEditorHint"
-              class="editor-empty"
-              aria-live="polite"
-          >
-            <p class="editor-empty__title">{{ t('console.emptyEditorTitle') }}</p>
-            <p class="editor-empty__hint">
-              {{
-                (connectionId || tab.connectionId)
-                  ? t('console.emptyEditorHint')
-                  : t('console.emptyEditorNeedConnection')
-              }}
-            </p>
-            <DwButton
-                v-if="connectionId || tab.connectionId"
-                size="sm"
-                variant="secondary"
-                class="editor-empty__action"
-                @click="insertSampleSql"
-            >
-              {{ t('console.emptyEditorInsertSample') }}
-            </DwButton>
-          </div>
-        </div>
-      </div>
-      <div
-          v-if="!isEditorFullscreen && showResultPanel"
-          class="split__gap"
-          aria-hidden="true"
-      >
-        <ResizeHandle
-            v-model="editorHeight"
-            direction="horizontal"
-            variant="ghost"
-            :min="CONSOLE_EDITOR_HEIGHT_MIN"
-            :max="CONSOLE_EDITOR_HEIGHT_MAX"
+            :on-editor-drag-over="onEditorDragOver"
+            :on-editor-drop="onEditorDrop"
+            @contextmenu="handleEditorContextMenu"
+            @selection-change="onEditorSelectionChange"
+            @run-statement="onRunStatementFromGutter"
+            @open-table="onOpenTableFromSql"
         />
       </div>
-      <QueryResultPane
-          v-if="mountResultPane"
-          class="result-pane"
-          collapsible
+      <SqlConsoleResultSection
+          :show-result-panel="showResultPanel"
+          :is-editor-fullscreen="isEditorFullscreen"
+          :mount-result-pane="mountResultPane"
+          :can-reopen-result-panel="canReopenResultPanel"
+          :editor-height="editorHeight"
+          @update:editor-height="editorHeight = $event"
           :results="consoleQuery.results"
           :active-view="consoleQuery.activeView"
-          always-show-overview
           :running="running"
           :running-elapsed-ms="runningElapsedMs"
-          closable-results
-          :enable-dml-generate="dmlGenerateEnabled"
+          :dml-generate-enabled="dmlGenerateEnabled"
           :dml-connection-id="connectionId || tab.connectionId"
           :dml-connection-name="source?.label"
           :dml-database="databaseName"
-          :enable-ai-fix="aiSqlFixEnabled"
+          :ai-sql-fix-enabled="aiSqlFixEnabled"
           :ai-fix-loading="aiLayerRef?.aiFixLoading ?? false"
-          :enable-ai-summary="aiResultSummaryEnabled"
-          :show-ai-ask="canAskAi"
+          :ai-result-summary-enabled="aiResultSummaryEnabled"
+          :can-ask-ai="canAskAi"
           :ai-summary-loading="aiLayerRef?.aiSummaryLoading ?? false"
           :ai-summary-open="aiLayerRef?.aiSummaryOpen ?? false"
           :ai-summary-text="aiLayerRef?.aiSummaryText ?? ''"
-          :enable-ai-index-suggest="indexSuggestEnabled"
+          :index-suggest-enabled="indexSuggestEnabled"
           :ai-index-suggest-loading="aiLayerRef?.aiIndexSuggestLoading ?? false"
-          :enable-ai-explain="aiExplainEnabled"
+          :ai-explain-enabled="aiExplainEnabled"
           :ai-explain-loading="aiLayerRef?.aiExplainLoading ?? false"
           :ai-explain-open="aiLayerRef?.aiExplainOpen ?? false"
           :ai-explain-text="aiLayerRef?.aiExplainText ?? ''"
-          :enable-cross-env-compare="crossEnvCompareEnabled && Boolean((connectionId || tab.connectionId) && databaseName)"
+          :cross-env-compare-enabled="crossEnvCompareEnabled && Boolean((connectionId || tab.connectionId) && databaseName)"
           :db-type="dbDialect"
           :export-suggest-mask="connectionEnvironment === 'prod'"
           :production-perf-active="productionPerfActive"
           :cursor-loading="cursorLoading"
-          enable-sql-fill
+          @expand="expandResultPanel"
           @collapse="collapseResultPanel"
           @update:active-view="onActiveViewChange"
           @close-result="onCloseResult"
@@ -1727,359 +647,49 @@ onMounted(async () => {
           @rewrite-where="onRewriteWhereFromResult"
           @rewrite-order-by="onRewriteOrderByFromResult"
       />
-      <button
-          v-if="!isEditorFullscreen && !showResultPanel && canReopenResultPanel"
-          type="button"
-          class="result-collapsed-bar"
-          :title="t('queryResult.expandPanel')"
-          @click="expandResultPanel"
-      >
-        <span class="result-collapsed-bar__label">{{ t('queryResult.panelTitle') }}</span>
-      </button>
     </div>
 
-    <ContextMenuHost
-        :visible="editorMenuVisible"
-        :items="editorMenuItems"
-        :x="editorMenuPos.x"
-        :y="editorMenuPos.y"
-        @select="onEditorMenuSelect"
-        @close="closeEditorMenu"
-    />
-
-    <IndexSuggestDialog
-        v-model:open="indexDraftDialogOpen"
-        :query-sql="indexDraftQuery"
-        :suggested-sql="indexDraftSql"
-        @apply="applyIndexDraft"
-    />
-
-    <SaveBookmarkDialog
-        v-if="bookmarksEnabled"
-        v-model:open="bookmarkDialogOpen"
-        :default-name="bookmarkDefaults.name"
-        :default-connection-name="bookmarkDefaults.connectionName"
-        :default-sql="bookmarkDefaults.sql"
-        :saving="bookmarkSaving"
-        @save="onSaveBookmark"
-    />
-
-    <SubmitProductionApprovalDialog
-        :open="productionApprovalDialogOpen"
-        :saving="productionApprovalSubmitting"
-        :error="productionApprovalError"
-        :sql="approvalContextSql"
-        :connection-name="source?.label ?? ''"
-        :database="databaseName"
-        :teams="productionApprovalTeams"
-        @update:open="onProductionApprovalDialogOpen"
-        @submit="onSubmitProductionApproval"
-    />
-
-    <VisualQueryBuilderDialog
-        v-model:open="visualQueryBuilderOpen"
+    <SqlConsoleDialogs
+        :editor-menu-visible="editorMenuVisible"
+        :editor-menu-items="editorMenuItems"
+        :editor-menu-x="editorMenuPos.x"
+        :editor-menu-y="editorMenuPos.y"
+        :index-draft-dialog-open="indexDraftDialogOpen"
+        :index-draft-query="indexDraftQuery"
+        :index-draft-sql="indexDraftSql"
+        :bookmarks-enabled="bookmarksEnabled"
+        :bookmark-dialog-open="bookmarkDialogOpen"
+        :bookmark-defaults="bookmarkDefaults"
+        :bookmark-saving="bookmarkSaving"
+        :production-approval-dialog-open="productionApprovalDialogOpen"
+        :production-approval-submitting="productionApprovalSubmitting"
+        :production-approval-error="productionApprovalError"
+        :approval-context-sql="approvalContextSql"
+        :connection-label="source?.label ?? ''"
+        :database-name="databaseName"
+        :production-approval-teams="productionApprovalTeams"
+        :visual-query-builder-open="visualQueryBuilderOpen"
         :connection-id="connectionId || tab.connectionId"
-        :database="databaseName"
-        @apply="applyVisualQuerySql"
-        @apply-and-run="applyAndRunVisualQuerySql"
-        @text-to-sql="onVisualQueryTextToSql"
-    />
-
-    <ConsoleSqlCancelDialog
-        :open="cancelConfirmOpen"
-        :mode="cancelPendingMode"
-        :loading="cancelInProgress"
-        :error="cancelError"
-        @confirm="confirmCancel()"
-        @cancel="closeCancelConfirm()"
+        :cancel-confirm-open="cancelConfirmOpen"
+        :cancel-pending-mode="cancelPendingMode"
+        :cancel-in-progress="cancelInProgress"
+        :cancel-error="cancelError"
+        @editor-menu-select="onEditorMenuSelect"
+        @editor-menu-close="closeEditorMenu"
+        @update:index-draft-dialog-open="indexDraftDialogOpen = $event"
+        @apply-index-draft="applyIndexDraft"
+        @update:bookmark-dialog-open="bookmarkDialogOpen = $event"
+        @save-bookmark="onSaveBookmark"
+        @update:production-approval-open="onProductionApprovalDialogOpen"
+        @submit-production-approval="onSubmitProductionApproval"
+        @update:visual-query-builder-open="visualQueryBuilderOpen = $event"
+        @apply-visual-query="applyVisualQuerySql"
+        @apply-and-run-visual-query="applyAndRunVisualQuerySql"
+        @visual-query-text-to-sql="onVisualQueryTextToSql"
+        @confirm-cancel="confirmCancel()"
+        @close-cancel="closeCancelConfirm()"
     />
   </div>
 </template>
 
-<style scoped>
-.console-run-elapsed {
-  margin-left: var(--dw-space-2);
-  font-family: var(--dw-mono);
-  font-size: var(--dw-text-xs);
-  color: var(--dw-text-secondary);
-  min-width: 3.5em;
-}
-
-.console-disconnect-btn {
-  color: var(--dw-danger);
-}
-
-.console-disconnect-btn:hover {
-  background: color-mix(in srgb, var(--dw-danger) 10%, var(--dw-bg-muted));
-}
-
-.ai-btn-wrap {
-  display: inline-flex;
-}
-
-.dw-console-toolbar__context {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--dw-gap-xs);
-  min-width: 0;
-}
-
-.dw-console-toolbar__controls {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--dw-gap-xs);
-  flex-shrink: 0;
-}
-
-.dw-console-toolbar__info {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  min-width: 0;
-}
-
-.dw-console-toolbar__ctx {
-  min-width: 0;
-}
-
-.split {
-  /* classic：有缝+圆角；ide：panel-radius=0 / panel-gap≈半缝 → 直角 */
-  --dw-console-split-gap: var(--dw-panel-gap, 0px);
-  --dw-console-split-radius: var(--dw-panel-radius, 0px);
-  --dw-console-split-hit: var(--dw-splitter-size, 4px);
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.editor-pane {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  min-height: 120px;
-  border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
-  /* 顶贴 Tab；底随 --dw-console-split-radius（classic 有值，ide=0） */
-  border-radius: 0 0 var(--dw-console-split-radius, 0) var(--dw-console-split-radius, 0);
-  overflow: hidden;
-  background: var(--dw-bg-editor);
-}
-
-/* 间隙条：露出 chrome；拖动手柄铺满命中区 */
-.split__gap {
-  position: relative;
-  z-index: 2;
-  flex: 0 0 var(--dw-console-split-gap);
-  height: var(--dw-console-split-gap);
-  min-height: var(--dw-console-split-gap);
-  margin: 0;
-  background: transparent;
-}
-
-.split__gap :deep(.resize-handle) {
-  position: absolute;
-  inset: 0;
-  width: 100% !important;
-  height: 100% !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  background: transparent;
-  cursor: row-resize;
-}
-
-.split__gap :deep(.resize-handle:hover),
-.split__gap :deep(.resize-handle.dragging) {
-  background: color-mix(in srgb, var(--dw-primary) 22%, transparent);
-}
-
-.editor-surface {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.editor-surface__loading {
-  flex: 1;
-  min-height: 0;
-}
-
-.editor-empty {
-  pointer-events: none;
-  position: absolute;
-  inset: var(--dw-control-h-sm, 1.75rem) 0 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: var(--dw-space-2);
-  padding: clamp(1.5rem, 4cqh, 2.75rem) clamp(1.25rem, 3cqi, 2.5rem);
-  max-width: 28rem;
-  color: var(--dw-text-muted);
-}
-
-.editor-empty__title {
-  margin: 0;
-  font-size: var(--dw-text-sm);
-  font-weight: 600;
-  color: var(--dw-text-secondary);
-  line-height: 1.4;
-}
-
-.editor-empty__hint {
-  margin: 0;
-  font-size: var(--dw-text-xs);
-  line-height: 1.45;
-}
-
-.editor-empty__action {
-  pointer-events: auto;
-  margin-top: var(--dw-space-1);
-}
-
-.editor-surface :deep(.sql-editor-hint-bar) {
-  height: var(--dw-control-h-sm);
-  min-height: var(--dw-control-h-sm);
-  max-height: var(--dw-control-h-sm);
-  padding: 0 var(--dw-console-chrome-inset);
-  gap: var(--dw-gap-sm);
-  font-size: var(--dw-text-xs);
-  line-height: var(--dw-tab-title-line);
-  background: var(--dw-bg-editor);
-  border-bottom: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
-}
-
-.editor-surface :deep(.sql-editor-hint-bar .hint-text) {
-  line-height: var(--dw-tab-title-line);
-  padding-bottom: 1px;
-}
-
-.editor-surface :deep(.sql-editor-hint-bar .hint-leading) {
-  width: 172px;
-  min-width: 172px;
-  gap: var(--dw-gap-xs);
-}
-
-.editor-surface :deep(.sql-editor-hint-bar .hint-badge) {
-  height: var(--dw-icon-size-lg);
-  padding: 0 var(--dw-space-2);
-  font-size: var(--dw-text-2xs);
-  line-height: var(--dw-tab-title-line);
-}
-
-.editor-surface :deep(.sql-editor-hint-bar .hint-statement) {
-  width: 50px;
-  min-width: 50px;
-}
-
-.editor-surface :deep(.sql-editor-hint-bar .hint-slot) {
-  width: 64px;
-  min-width: 64px;
-}
-
-.editor-surface :deep(.sql-editor-hint-bar .hint-dialect-slot) {
-  width: 46px;
-  min-width: 46px;
-}
-
-.editor-surface :deep(.sql-editor-hint-bar .hint-dialect) {
-  width: 46px;
-  min-width: 46px;
-  height: var(--dw-icon-size-md);
-  font-size: var(--dw-text-2xs);
-  line-height: var(--dw-tab-title-line);
-}
-
-.editor-surface :deep(.sql-editor-hint-bar .hint-chip) {
-  min-width: 24px;
-  height: var(--dw-icon-size-lg);
-  padding: 0 var(--dw-space-2);
-  font-size: var(--dw-text-2xs);
-  line-height: var(--dw-tab-title-line);
-}
-
-.editor-surface :deep(.sql-editor-hint-bar .hint-quick-label) {
-  font-size: var(--dw-text-2xs);
-}
-
-.editor-surface :deep(.sql-editor) {
-  height: 100%;
-}
-
-.editor-pane--fullscreen {
-  flex: 1;
-  min-height: 0;
-  border-radius: 0;
-}
-
-.editor-pane--expanded {
-  flex: 1;
-  min-height: 0;
-}
-
-.result-collapsed-bar {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  width: 100%;
-  height: var(--dw-tab-height);
-  margin-top: var(--dw-console-split-gap, 0px);
-  padding: 0 var(--dw-space-5);
-  border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
-  border-radius: var(--dw-console-split-radius, 0);
-  background: var(--dw-bg-muted);
-  color: var(--dw-text-secondary);
-  font-size: var(--dw-tab-title-size);
-  cursor: pointer;
-}
-
-.result-collapsed-bar:hover {
-  color: var(--dw-text);
-  background: var(--dw-bg-hover);
-}
-
-.result-collapsed-bar__label {
-  font-weight: 500;
-}
-
-.console-tab.is-editor-fullscreen .split {
-  min-height: 0;
-}
-
-.result-pane,
-.split > :deep(.result-pane) {
-  flex: 1;
-  min-height: 140px;
-  border: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
-  border-radius: var(--dw-console-split-radius, 0) !important;
-  overflow: hidden;
-  background: var(--dw-bg-muted);
-}
-
-.console-tab {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  /* 编辑 / 结果卡之间的间隙露出 chrome（盖过皮肤把 console-tab 刷成 editor 底） */
-  background: var(--dw-bg-chrome) !important;
-}
-
-/* 与上方 Tab 条贴合：不要圆角；底边把工具条从编辑井拆开。
- * 勿 overflow:hidden —— Auto / 连接上下文菜单是 absolute 下拉，会被裁掉。 */
-.dw-console-toolbar {
-  border: none;
-  border-bottom: 1px solid var(--dw-panel-outline, var(--dw-panel-border));
-  border-radius: 0;
-  overflow: visible;
-  background: var(--dw-bg-editor);
-  flex-shrink: 0;
-}
-</style>
+<style scoped src="../../styles/sql-console-tab.css"></style>

@@ -5,8 +5,16 @@
 //! is a fixed allowlist — arbitrary keys from the renderer are dropped.
 
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 
 use serde_json::{json, Map, Value};
+
+/// Serializes preference RMW so concurrent `local/preferences/set` calls (dock
+/// open + width + mode) cannot race on the same `.json.tmp` or lose updates.
+fn prefs_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
 
 const STORAGE_VERSION: u64 = 1;
 const FILE_NAME: &str = "preferences.json";
@@ -182,7 +190,55 @@ pub fn load_preferences(data_dir: &Path) -> Value {
     {
         prefs.insert("copilotReplyLanguage".to_string(), Value::String(lang.to_string()));
     }
+    if let Some(redact) = map.get("copilotRedactOutput").and_then(Value::as_bool) {
+        prefs.insert("copilotRedactOutput".to_string(), Value::Bool(redact));
+    }
+    // Workbench layout habits (plugin-local; Motty-style remember last open/closed).
+    if let Some(open) = map.get("sftpPaneDefaultOpen").and_then(Value::as_bool) {
+        prefs.insert("sftpPaneDefaultOpen".to_string(), Value::Bool(open));
+    }
+    if let Some(open) = map.get("rightRailOpen").and_then(Value::as_bool) {
+        prefs.insert("rightRailOpen".to_string(), Value::Bool(open));
+    }
+    if let Some(enabled) = map.get("resourceStripEnabled").and_then(Value::as_bool) {
+        prefs.insert("resourceStripEnabled".to_string(), Value::Bool(enabled));
+    }
+    if let Some(follow) = map.get("followDirectoryDefault").and_then(Value::as_bool) {
+        prefs.insert("followDirectoryDefault".to_string(), Value::Bool(follow));
+    }
+    if let Some(columns) = map
+        .get("visibleColumns")
+        .and_then(sanitize_visible_columns)
+    {
+        prefs.insert("visibleColumns".to_string(), columns);
+    }
     Value::Object(prefs)
+}
+
+/// SFTP list column allowlist (matches frontend `SftpColumn`).
+fn sanitize_visible_columns(value: &Value) -> Option<Value> {
+    let arr = value.as_array()?;
+    let mut out = Vec::new();
+    for item in arr {
+        let Some(name) = item.as_str() else {
+            continue;
+        };
+        match name {
+            "size" | "modified" | "owner" | "group" | "permissions" => {
+                if !out.iter().any(|existing| existing == name) {
+                    out.push(name.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    if out.is_empty() {
+        None
+    } else {
+        Some(Value::Array(
+            out.into_iter().map(Value::String).collect(),
+        ))
+    }
 }
 
 fn sanitize_copilot_chat_mode(raw: &str) -> Option<&'static str> {
@@ -256,8 +312,11 @@ fn coerce_u64(value: &Value) -> Option<u64> {
 }
 
 /// Merges the allowlisted keys present in `params` into the store and persists
-/// atomically (tmp + rename). Returns the stored preferences.
+/// atomically (unique tmp + rename). Returns the stored preferences.
 pub fn save_preferences(data_dir: &Path, params: &Value) -> Result<Value, String> {
+    let _guard = prefs_lock()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let mut map = load_map(data_dir);
     if let Some(value) = params.get("downloadDir") {
         let dir = sanitize_download_dir(value)
@@ -370,20 +429,75 @@ pub fn save_preferences(data_dir: &Path, params: &Value) -> Result<Value, String
             })?;
         map.insert("copilotReplyLanguage".to_string(), Value::String(lang.to_string()));
     }
+    if let Some(value) = params.get("copilotRedactOutput") {
+        let redact = value
+            .as_bool()
+            .ok_or_else(|| "copilotRedactOutput must be a boolean".to_string())?;
+        map.insert("copilotRedactOutput".to_string(), Value::Bool(redact));
+    }
+    if let Some(value) = params.get("sftpPaneDefaultOpen") {
+        let open = value
+            .as_bool()
+            .ok_or_else(|| "sftpPaneDefaultOpen must be a boolean".to_string())?;
+        map.insert("sftpPaneDefaultOpen".to_string(), Value::Bool(open));
+    }
+    if let Some(value) = params.get("rightRailOpen") {
+        let open = value
+            .as_bool()
+            .ok_or_else(|| "rightRailOpen must be a boolean".to_string())?;
+        map.insert("rightRailOpen".to_string(), Value::Bool(open));
+    }
+    if let Some(value) = params.get("resourceStripEnabled") {
+        let enabled = value
+            .as_bool()
+            .ok_or_else(|| "resourceStripEnabled must be a boolean".to_string())?;
+        map.insert("resourceStripEnabled".to_string(), Value::Bool(enabled));
+    }
+    if let Some(value) = params.get("followDirectoryDefault") {
+        let follow = value
+            .as_bool()
+            .ok_or_else(|| "followDirectoryDefault must be a boolean".to_string())?;
+        map.insert("followDirectoryDefault".to_string(), Value::Bool(follow));
+    }
+    if let Some(value) = params.get("visibleColumns") {
+        let columns = sanitize_visible_columns(value)
+            .ok_or_else(|| {
+                "visibleColumns must be a non-empty array of size|modified|owner|group|permissions"
+                    .to_string()
+            })?;
+        map.insert("visibleColumns".to_string(), columns);
+    }
     let path = store_path(data_dir);
     if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+        std::fs::create_dir_all(parent).map_err(|error| {
+            format!("Failed to create preferences directory {}: {error}", parent.display())
+        })?;
     }
     let text = serde_json::to_string_pretty(&json!({
         "version": STORAGE_VERSION,
         "prefs": Value::Object(map),
     }))
     .map_err(|error| format!("Failed to encode preferences: {error}"))?;
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, text)
+    // Unique tmp avoids Windows ERROR_FILE_NOT_FOUND when two writers race on
+    // the same preferences.json.tmp (first rename deletes the shared name).
+    let tmp = path.with_file_name(format!(
+        "preferences.{}.json.tmp",
+        uuid::Uuid::new_v4()
+    ));
+    std::fs::write(&tmp, &text)
         .map_err(|error| format!("Failed to write {}: {error}", tmp.display()))?;
-    std::fs::rename(&tmp, &path)
-        .map_err(|error| format!("Failed to write {}: {error}", path.display()))?;
+    if let Err(error) = std::fs::rename(&tmp, &path) {
+        // Windows: if rename still fails (e.g. dest locked), fall back to
+        // overwrite in place so the preference change is not lost.
+        let fallback = std::fs::write(&path, &text);
+        let _ = std::fs::remove_file(&tmp);
+        fallback.map_err(|fallback_error| {
+            format!(
+                "Failed to write {}: rename {error}; overwrite {fallback_error}",
+                path.display()
+            )
+        })?;
+    }
     Ok(load_preferences(data_dir))
 }
 
@@ -476,6 +590,19 @@ mod tests {
     }
 
     #[test]
+    fn copilot_redact_output_boolean() {
+        let data_dir = tempfile::tempdir().expect("tempdir");
+        let stored =
+            save_preferences(data_dir.path(), &json!({ "copilotRedactOutput": false }))
+                .expect("save false");
+        assert_eq!(stored["copilotRedactOutput"].as_bool(), Some(false));
+        let again = save_preferences(data_dir.path(), &json!({ "copilotRedactOutput": true }))
+            .expect("save true");
+        assert_eq!(again["copilotRedactOutput"].as_bool(), Some(true));
+        assert!(save_preferences(data_dir.path(), &json!({ "copilotRedactOutput": "yes" })).is_err());
+    }
+
+    #[test]
     fn copilot_model_preference_auto_plugin_host() {
         let data_dir = tempfile::tempdir().expect("tempdir");
         let stored =
@@ -495,5 +622,61 @@ mod tests {
             save_preferences(data_dir.path(), &json!({ "copilotModelPreference": "remote" }))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn layout_habits_roundtrip() {
+        let data_dir = tempfile::tempdir().expect("tempdir");
+        let stored = save_preferences(
+            data_dir.path(),
+            &json!({
+                "sftpPaneDefaultOpen": false,
+                "rightRailOpen": false,
+                "resourceStripEnabled": true,
+                "followDirectoryDefault": true,
+                "visibleColumns": ["size", "modified", "evil", "owner"],
+            }),
+        )
+        .expect("save layout");
+        assert_eq!(stored["sftpPaneDefaultOpen"].as_bool(), Some(false));
+        assert_eq!(stored["rightRailOpen"].as_bool(), Some(false));
+        assert_eq!(stored["resourceStripEnabled"].as_bool(), Some(true));
+        assert_eq!(stored["followDirectoryDefault"].as_bool(), Some(true));
+        assert_eq!(
+            stored["visibleColumns"],
+            json!(["size", "modified", "owner"])
+        );
+        assert!(
+            save_preferences(data_dir.path(), &json!({ "sftpPaneDefaultOpen": "no" })).is_err()
+        );
+        assert!(
+            save_preferences(data_dir.path(), &json!({ "visibleColumns": [] })).is_err()
+        );
+    }
+
+    #[test]
+    fn concurrent_saves_do_not_error() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let data_dir = Arc::new(tempfile::tempdir().expect("tempdir"));
+        let path = data_dir.path().to_path_buf();
+        let mut handles = Vec::new();
+        for i in 0..8 {
+            let path = path.clone();
+            handles.push(thread::spawn(move || {
+                save_preferences(
+                    &path,
+                    &json!({ "copilotDockOpen": i % 2 == 0, "copilotDockWidth": 300 + i }),
+                )
+                .expect("concurrent save");
+            }));
+        }
+        for handle in handles {
+            handle.join().expect("join");
+        }
+        let prefs = load_preferences(path.as_path());
+        assert!(prefs.get("copilotDockOpen").is_some());
+        assert!(prefs.get("copilotDockWidth").is_some());
     }
 }

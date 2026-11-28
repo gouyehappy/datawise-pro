@@ -52,9 +52,32 @@ class AiSqlSafetyCheckerTest {
     }
 
     @Test
+    void allowsReplaceFunctionAndLiteralKeywords() {
+        String sql = AiSqlSafetyChecker.requireReadOnlySelect(
+                "SELECT REPLACE(name, 'delete', 'x') AS call, exec AS exec_col FROM t WHERE note = 'please update'"
+        );
+        assertTrue(sql.toUpperCase().contains("REPLACE"));
+    }
+
+    @Test
+    void allowsSelectWithCallColumnName() {
+        String sql = AiSqlSafetyChecker.requireReadOnlySelect("SELECT call, exec FROM procedures");
+        assertTrue(sql.toLowerCase().contains("call"));
+    }
+
+    @Test
     void rejectsDestructiveSql() {
         assertThrows(IllegalArgumentException.class, () ->
                 AiSqlSafetyChecker.requireReadOnlySelect("DELETE FROM user")
+        );
+    }
+
+    @Test
+    void rejectsWithCteFollowedByDelete() {
+        assertThrows(IllegalArgumentException.class, () ->
+                AiSqlSafetyChecker.requireReadOnlySelect(
+                        "WITH doomed AS (SELECT 1 AS id) DELETE FROM user WHERE id IN (SELECT id FROM doomed)"
+                )
         );
     }
 
@@ -73,10 +96,26 @@ class AiSqlSafetyCheckerTest {
     }
 
     @Test
+    void rejectsReplaceInto() {
+        assertThrows(IllegalArgumentException.class, () ->
+                AiSqlSafetyChecker.requireReadOnlySelect("REPLACE INTO t (id) VALUES (1)")
+        );
+    }
+
+    @Test
     void rejectsCommentOnlyReply() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
                 AiSqlSafetyChecker.requireReadOnlySelect("-- AI: cannot fix\n-- schema missing")
         );
         assertTrue(ex.getMessage().contains("empty"));
+    }
+
+    @Test
+    void stripStringLiteralsRemovesQuotedKeywords() {
+        String scanned = AiSqlSafetyChecker.stripStringLiterals(
+                "SELECT * FROM t WHERE msg = 'DELETE FROM x' AND note = \"UPDATE\""
+        );
+        assertFalse(scanned.contains("DELETE FROM x"));
+        assertTrue(scanned.contains("''"));
     }
 }

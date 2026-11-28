@@ -1,8 +1,9 @@
 /**
- * Terminal interaction preferences (select-to-copy / right-click-to-paste /
- * click-to-move-cursor). Toggles are pure-frontend (no sidecar), persisted in
- * localStorage; "false" disables, every other value (including a missing entry)
- * keeps the historical default of enabled.
+ * Terminal interaction preferences (select-to-copy / click-to-move-cursor).
+ * Right-click always opens the Motty-style menu (paste via menu / Ctrl+V).
+ * Toggles are pure-frontend (no sidecar), persisted in localStorage; "false"
+ * disables, every other value (including a missing entry) keeps the historical
+ * default of enabled.
  */
 
 export type TerminalRightClickAction = "paste" | "menu";
@@ -18,20 +19,17 @@ export function sanitizeClickCursorEnabled(raw: string | null): boolean {
 }
 
 /**
- * Right-click routing (Xshell-oriented):
- * - Shift+right-click always opens the full menu.
- * - With a selection, always open the menu (Copy / Paste Selection / Open URL).
- * - Copy-on-select mode: empty-area right-click still quick-pastes (SecureCRT-style shortcut).
- * - Mode off: always menu.
+ * Right-click routing (Motty-aligned): always open the context menu.
+ * Paste lives on the menu item / Ctrl+V — not on bare right-click.
+ * `selectCopy` / `shiftKey` / `hasSelection` are kept for call-site stability
+ * and no longer change the action.
  */
-export function resolveTerminalRightClickAction(options: {
+export function resolveTerminalRightClickAction(_options: {
   selectCopy: boolean;
   shiftKey: boolean;
   hasSelection?: boolean;
 }): TerminalRightClickAction {
-  if (options.shiftKey || !options.selectCopy) return "menu";
-  if (options.hasSelection) return "menu";
-  return "paste";
+  return "menu";
 }
 
 export type TerminalKeyAction = "copy" | "paste" | "none";
@@ -47,6 +45,70 @@ export function resolveTerminalKeyAction(options: { mod: boolean; shiftKey: bool
   if (options.mod && key === "v") return "paste";
   if (options.mod && key === "c" && options.hasSelection) return "copy";
   return "none";
+}
+
+/**
+ * Motty context-menu chords that were previously display-only in DW:
+ * clear screen, split right/down. History is handled separately
+ * (`isHistoryOverlayShortcut` → Ctrl/Cmd+Shift+H).
+ *
+ * Platform defaults mirror Motty:
+ * - Win/Linux: Ctrl+K, Ctrl+Shift+D (right), Ctrl+Shift+E (down)
+ * - macOS: ⌘K, ⌘D (right), ⌘⇧D (down)
+ */
+export type TerminalMottyMenuShortcut = "clear" | "split-right" | "split-down" | "none";
+
+export function resolveTerminalMottyMenuShortcut(options: {
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  key: string;
+  applePlatform: boolean;
+}): TerminalMottyMenuShortcut {
+  if (options.altKey) return "none";
+  const key = options.key.toLowerCase();
+  if (options.applePlatform) {
+    if (!options.metaKey) return "none";
+    if (!options.shiftKey && key === "k") return "clear";
+    if (!options.shiftKey && key === "d") return "split-right";
+    if (options.shiftKey && key === "d") return "split-down";
+    return "none";
+  }
+  if (!options.ctrlKey) return "none";
+  if (!options.shiftKey && key === "k") return "clear";
+  if (options.shiftKey && key === "d") return "split-right";
+  if (options.shiftKey && key === "e") return "split-down";
+  return "none";
+}
+
+/** Right-side labels for Motty menu chords (space-separated Motty style). */
+export function terminalMottyShortcutLabels(applePlatform: boolean): {
+  copy: string;
+  paste: string;
+  clear: string;
+  splitRight: string;
+  splitDown: string;
+  history: string;
+} {
+  if (applePlatform) {
+    return {
+      copy: "⌘ C",
+      paste: "⌘ V",
+      clear: "⌘ K",
+      splitRight: "⌘ D",
+      splitDown: "⌘ Shift D",
+      history: "⌘ Shift H",
+    };
+  }
+  return {
+    copy: "Ctrl C",
+    paste: "Ctrl V",
+    clear: "Ctrl K",
+    splitRight: "Ctrl Shift D",
+    splitDown: "Ctrl Shift E",
+    history: "Ctrl Shift H",
+  };
 }
 
 /** Whether the browser runs on Apple hardware（Cmd 是主修饰键，electerm 同判定）。 */

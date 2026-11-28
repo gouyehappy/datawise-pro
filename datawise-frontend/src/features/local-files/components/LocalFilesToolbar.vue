@@ -425,7 +425,7 @@ async function startNewFolder() {
   height: 28px;
   padding: 0 7px 0 8px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   background: color-mix(in srgb, var(--dw-bg-editor, var(--dw-bg)) 55%, var(--dw-bg-muted));
   color: var(--dw-text-muted);
   transition:
@@ -486,7 +486,7 @@ async function startNewFolder() {
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   background: transparent;
   color: var(--dw-text-muted);
   cursor: pointer;
@@ -512,7 +512,7 @@ async function startNewFolder() {
   margin: 0;
   padding: 0 8px 0 10px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   background: color-mix(in srgb, var(--dw-bg-muted) 70%, transparent);
   color: var(--dw-text-secondary);
   font: inherit;

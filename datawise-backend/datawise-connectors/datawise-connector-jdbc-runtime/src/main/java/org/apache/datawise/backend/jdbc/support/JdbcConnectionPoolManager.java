@@ -208,12 +208,16 @@ public class JdbcConnectionPoolManager {
                         driver.driverClass());
                 Connection connection = loaded.driver().connect(url, properties);
                 if (connection == null) {
-                    throw new SQLException("Driver rejected URL: " + url);
+                    throw new SQLException(driverRejectedMessage(entity, url));
                 }
                 return connection;
             } catch (IOException ex) {
                 SQLException sqlEx = new SQLException("Failed to load JDBC driver: " + ex.getMessage(), ex);
-                ExceptionLogging.error(log, "JDBC direct open failed for " + entity.getDbType(), sqlEx);
+                ExceptionLogging.error(
+                        log,
+                        "JDBC direct open failed connectionId=" + safeId(entity)
+                                + " dbType=" + entity.getDbType(),
+                        sqlEx);
                 throw sqlEx;
             }
         }
@@ -223,9 +227,27 @@ public class JdbcConnectionPoolManager {
             }
             return java.sql.DriverManager.getConnection(url);
         } catch (SQLException ex) {
-            ExceptionLogging.error(log, "JDBC DriverManager open failed url=" + url, ex);
+            ExceptionLogging.error(
+                    log,
+                    "JDBC DriverManager open failed connectionId=" + safeId(entity)
+                            + " dbType=" + entity.getDbType()
+                            + " url=" + JdbcUrlRedactor.redactJdbcUrl(url),
+                    ex);
             throw ex;
         }
+    }
+
+    private static String driverRejectedMessage(ConnectionEntity entity, String url) {
+        return "Driver rejected URL connectionId=" + safeId(entity)
+                + " dbType=" + (entity.getDbType() != null ? entity.getDbType() : "")
+                + " url=" + JdbcUrlRedactor.redactJdbcUrl(url);
+    }
+
+    private static String safeId(ConnectionEntity entity) {
+        if (entity == null || entity.getId() == null || entity.getId().isBlank()) {
+            return "(none)";
+        }
+        return entity.getId();
     }
 
     private static SQLException unwrapSqlException(RuntimeException ex) {

@@ -20,14 +20,12 @@ export function isNodeChildrenLoaded(node: TreeNode, dbType?: DbType): boolean {
 }
 
 /**
- * 箭头切换：已展开且子级已加载时折叠。
- * 已展开但没有任何子节点时也折叠——避免「箭头朝开、下面却是空的」卡死
- * （空 lazy folder 在 BUG-004 下仍 needsLazyLoad=true，否则永远无法收起）。
+ * 箭头切换：已展开则一律折叠（纯 UI toggle）。
+ * 勿用 needsLazyLoad 挡住折叠——Mongo/Kudu 实例在 tables 空骨架下会一直 needsLoad，
+ * 否则每次点三角都变成 expandAndLoad（像刷新、收不起来）。未加载完可在下次展开时再拉。
  */
-export function shouldCollapseOnToggle(node: TreeNode, dbType?: DbType): boolean {
-    if (!node.expanded) return false
-    if (!node.children?.length) return true
-    return isNodeChildrenLoaded(node, dbType)
+export function shouldCollapseOnToggle(node: TreeNode, _dbType?: DbType): boolean {
+    return Boolean(node.expanded)
 }
 
 /** Twistie 视觉态：仅在确实有可见子节点（或正在加载）时显示为展开 */

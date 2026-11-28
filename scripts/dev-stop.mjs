@@ -1,9 +1,10 @@
 /**
- * 停止本地 dev 前后端：JCEF/Vite + Spring Boot（18421）。
+ * 停止本地 dev 前后端：JCEF/Vite + Spring Boot（及残留的 dw/npm 树）。
  * Usage: node scripts/dev-stop.mjs
- *        npm run stop:dev   (from datawise-frontend)
+ *        npm run stop          (仓库根目录)
+ *        npm run stop:dev      (from datawise-frontend)
  */
-import {execSync} from 'node:child_process'
+import {execSync, spawnSync} from 'node:child_process'
 import {existsSync, readFileSync, rmSync} from 'node:fs'
 import {dirname, join} from 'node:path'
 import {fileURLToPath} from 'node:url'
@@ -12,6 +13,7 @@ import {stopDesktopProcesses} from '../datawise-frontend/scripts/desktop/lib.mjs
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const frontendRoot = join(repoRoot, 'datawise-frontend')
 const pidFile = join(frontendRoot, '.dev', 'backend.pid')
+const isWin = process.platform === 'win32'
 
 const ports = JSON.parse(
     readFileSync(join(frontendRoot, 'runtime-ports.json'), 'utf8'),
@@ -31,7 +33,7 @@ function killTask(cmd) {
 
 function killPidTree(pid) {
     if (!pid || Number.isNaN(pid)) return
-    if (process.platform === 'win32') {
+    if (isWin) {
         killTask(`taskkill /F /PID ${pid} /T`)
         return
     }
@@ -47,7 +49,7 @@ function killPidTree(pid) {
 }
 
 function findListeningPids(port) {
-    if (process.platform === 'win32') {
+    if (isWin) {
         try {
             const raw = execSync(`netstat -ano | findstr ":${port}"`, {
                 encoding: 'utf8',
@@ -97,11 +99,128 @@ function stopFrontendDevServer() {
     }
 }
 
+/**
+ * Vite / dw / npm run dev 常以 detached 启动，Ctrl+C 杀不到父窗口。
+ * 按命令行再扫一遍本仓库相关 node/java。
+ */
+function stopRepoDevProcesses() {
+    const markers = [
+        'scripts\\dw.mjs',
+        'scripts/dw.mjs',
+        'scripts\\dev-start.mjs',
+        'scripts/dev-start.mjs',
+        'scripts\\dev-stop.mjs',
+        'datawise-frontend\\node_modules\\vite',
+        'datawise-frontend/node_modules/vite',
+        'datawise-desktop\\scripts\\ensure-and-run',
+        'datawise-desktop/scripts/ensure-and-run',
+        'npm run dev:all',
+        'npm-cli.js" run dev:all',
+        'npm-cli.js run dev:all',
+        'npm run dev:jcef',
+        'npm-cli.js" run dev:jcef',
+        'npm-cli.js run dev:jcef',
+        'npm run dev:standard',
+        'DatawiseDesktopApp',
+        'DatawiseBackendApplication',
+        'jbr_jcef',
+        'datawise-server',
+    ]
+
+    if (isWin) {
+        const rootAlt = repoRoot.replace(/\\/g, '/')
+        const ps = `
+$ErrorActionPreference = 'SilentlyContinue'
+$markers = @(${markers.map((m) => `'${m.replace(/'/g, "''")}'`).join(',')})
+$rootA = '${repoRoot.replace(/'/g, "''")}'
+$rootB = '${rootAlt.replace(/'/g, "''")}'
+$self = ${process.pid}
+Get-CimInstance Win32_Process | ForEach-Object {
+  $cmd = $_.CommandLine
+  if (-not $cmd) { return }
+  if ($_.ProcessId -eq $self) { return }
+  if ($cmd -match 'dev-stop\\.mjs') { return }
+  $inRepo = ($cmd -like ('*' + $rootA + '*')) -or ($cmd -like ('*' + $rootB + '*'))
+  $hit = $false
+  foreach ($m in $markers) { if ($cmd -like ('*' + $m + '*')) { $hit = $true; break } }
+  if (-not $hit) { return }
+  # 全局名（npm script）也要求命令行里能看到本仓库路径，避免误杀别的项目
+  if (-not $inRepo -and ($cmd -notmatch 'jbr_jcef|DatawiseDesktopApp|DatawiseBackendApplication|datawise-server')) { return }
+  Write-Host ('  - kill PID ' + $_.ProcessId)
+  try { taskkill /F /PID $_.ProcessId /T 2>$null | Out-Null } catch {}
+  Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+}
+`
+        const r = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps], {
+            encoding: 'utf8',
+            windowsHide: true,
+        })
+        const out = (r.stdout || '').trim()
+        if (out) console.log(out)
+        return
+    }
+
+    // POSIX: pkill by pattern (best effort)
+    for (const pat of [
+        'dw\\.mjs',
+        'dev-start\\.mjs',
+        'vite.*datawise-frontend',
+        'ensure-and-run\\.mjs',
+        'DatawiseDesktopApp',
+        'DatawiseBackendApplication',
+    ]) {
+        try {
+            execSync(`pkill -f "${pat}"`, {stdio: 'ignore'})
+        } catch {
+            // none
+        }
+    }
+}
+
+function portsStillBusy() {
+    const busy = []
+    for (const [name, port] of [
+        ['backend', ports.dev.backend],
+        ['frontend', ports.dev.frontend],
+    ]) {
+        const pids = findListeningPids(port)
+        if (pids.length) busy.push(`${name}:${port}→${pids.join(',')}`)
+    }
+    return busy
+}
+
 function main() {
-    stopDesktopProcesses()
+    log('dev-stop', 'stopping local DataWise dev…')
+    // 1) 桌面/安装包残留
+    try {
+        stopDesktopProcesses()
+    } catch (e) {
+        log('dev-stop', `desktop cleanup warn: ${e instanceof Error ? e.message : e}`)
+    }
+    // 2) 端口监听者（Vite / Spring）
     stopFrontendDevServer()
     stopBackend()
-    log('dev-stop', 'dev frontend/backend stopped (if any were running)')
+    // 3) detached 残留的 node/java 树
+    stopRepoDevProcesses()
+    // 4) 再清一次端口（防竞态）
+    stopFrontendDevServer()
+    stopBackend()
+
+    const busy = portsStillBusy()
+    if (busy.length) {
+        log('dev-stop', `still busy: ${busy.join(' ; ')} — retrying kill`)
+        for (const item of busy) {
+            const port = Number(item.split(':')[1]?.split('→')[0])
+            for (const pid of findListeningPids(port)) killPidTree(pid)
+        }
+    }
+    const left = portsStillBusy()
+    if (left.length) {
+        log('dev-stop', `FAILED to free: ${left.join(' ; ')}`)
+        process.exitCode = 1
+        return
+    }
+    log('dev-stop', `ok — ports :${ports.dev.backend} / :${ports.dev.frontend} free`)
 }
 
 main()

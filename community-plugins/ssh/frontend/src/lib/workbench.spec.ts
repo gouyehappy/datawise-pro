@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import appVueSource from "../App.vue?raw";
+// vite 的 CSS 插件会拦截 `?raw`，只能直接读磁盘。tsconfig 仅装 vite/client，
+// 但 vitest 跑在 node 环境，这两个内置模块运行时可用，故局部压掉类型缺失。
+// @ts-ignore -- node:fs
+import { readFileSync } from "node:fs";
+// @ts-ignore -- node:url
+import { fileURLToPath } from "node:url";
 import { Osc7DirectoryParser, parseOsc7Path } from "./terminalDirectoryTracking";
 import { describeReconnectCountdown, describeReconnectRestoredNotice, isConnectionInactiveError, isSessionGoneError, shouldReattachTerminal, terminalReconnectDelay } from "./terminalReconnect";
 import { advanceBatchProgress, batchProgressPercent, createBatchProgress } from "./sftpBatchProgress";
@@ -9,7 +15,18 @@ import { clampFontSize } from "./terminalZoom";
 import { pushPathHistory, sanitizePathHistories } from "./sftpPathHistory";
 import { formatBytes, formatRate } from "./format";
 import { expandSelection, filterSftpEntries } from "./sftpFileFilters";
-import { getSshWorkbenchSplitLayout, resolveSftpPaneOpen, sanitizeSftpPaneDefaultOpen } from "./workbenchLayout";
+import {
+  clampSftpWidthPx,
+  getSshWorkbenchSplitLayout,
+  isSftpDrawerLayout,
+  resolvePaneOrder,
+  resolveSftpPaneOpen,
+  resolveSftpWidthPx,
+  sanitizeSftpPaneDefaultOpen,
+  SFTP_WIDTH_DEFAULT_PX,
+  SFTP_WIDTH_MAX_PX,
+  SFTP_WIDTH_MIN_PX,
+} from "./workbenchLayout";
 import { commandMarkerTooltip, formatCommandDuration, getOsc633ParserState, parseOsc633StreamChunk, runningCommandElapsedMs } from "./terminalCommandMarkers";
 import { describeWorkbenchSessionStatus, isUsableSshSession, normalizeSshSessionStatus } from "./sessionStatus";
 import { sanitizeCommandOutput, stripCommandEcho, stripHiddenCommandEchoes, stripTerminalControlSequences } from "./terminalOutputText";
@@ -17,6 +34,7 @@ import { browseCommandHistory, isPersistableCommand, pushCommandHistory, sanitiz
 import { formatAuthMethodLabel, formatLatency } from "./connectionInfo";
 import { normalizeQuickCommands, QUICK_COMMANDS_LIMIT, removeQuickCommand, upsertQuickCommand, type QuickCommand } from "./quickCommands";
 import { resolveWorkbenchLocale, workbenchMessage, workbenchMessageTable, type WorkbenchLocale } from "./i18n";
+import { commandHintAllowed } from "./commandHintVisibility";
 
 describe("SSH workbench protocol helpers", () => {
   it("parses OSC 7 markers split across terminal frames", () => {
@@ -120,12 +138,31 @@ describe("SSH workbench protocol helpers", () => {
   });
 
   it("parses the persisted SFTP default-open preference defensively", () => {
-    // Global default is OFF: only the explicit opt-in opens new workbenches
-    // with the SFTP pane visible.
-    expect(sanitizeSftpPaneDefaultOpen(null)).toBe(false);
+    // Motty-like default is ON: only explicit "false" keeps new workbenches terminal-only.
+    expect(sanitizeSftpPaneDefaultOpen(null)).toBe(true);
     expect(sanitizeSftpPaneDefaultOpen("true")).toBe(true);
-    expect(sanitizeSftpPaneDefaultOpen("garbage")).toBe(false);
+    expect(sanitizeSftpPaneDefaultOpen("garbage")).toBe(true);
     expect(sanitizeSftpPaneDefaultOpen("false")).toBe(false);
+  });
+
+  it("defaults pane order to SFTP on the left", () => {
+    expect(resolvePaneOrder(undefined)).toBe("sftp-left");
+    expect(resolvePaneOrder("sftp-left")).toBe("sftp-left");
+    expect(resolvePaneOrder("terminal-left")).toBe("terminal-left");
+    expect(resolvePaneOrder("nope")).toBe("sftp-left");
+  });
+
+  it("clamps and migrates SFTP dock width from legacy splitRatio", () => {
+    expect(clampSftpWidthPx(340)).toBe(340);
+    expect(clampSftpWidthPx(100)).toBe(SFTP_WIDTH_MIN_PX);
+    expect(clampSftpWidthPx(999)).toBe(SFTP_WIDTH_MAX_PX);
+    expect(clampSftpWidthPx("x")).toBe(SFTP_WIDTH_DEFAULT_PX);
+    expect(resolveSftpWidthPx({ sftpWidthPx: 360 })).toBe(360);
+    // Legacy terminal 58% → SFTP ~42% of 1000px ≈ 420.
+    expect(resolveSftpWidthPx({ splitRatio: 58 }, 1000)).toBe(420);
+    expect(resolveSftpWidthPx({})).toBe(SFTP_WIDTH_DEFAULT_PX);
+    expect(isSftpDrawerLayout(899)).toBe(true);
+    expect(isSftpDrawerLayout(900)).toBe(false);
   });
 });
 
@@ -156,6 +193,7 @@ describe("workbench localization", () => {
       "sftpCopy.copy",
       "sftpPaste.action",
       "connectionInactive",
+      "sftpPane.title",
       "sftpPane.open",
       "sftpPane.close",
       "sftpPane.defaultOpen",
@@ -685,6 +723,10 @@ describe("connection info auth method label", () => {
 const appStyleIndex = appVueSource.indexOf("<style");
 const appTemplate = appVueSource.slice(appVueSource.indexOf("<template>"), appVueSource.lastIndexOf("</template>", appStyleIndex));
 const appScript = appVueSource.slice(appVueSource.indexOf("<script"), appVueSource.indexOf("</script>"));
+const styleCssSource: string = readFileSync(fileURLToPath(new URL("../style.css", import.meta.url)), "utf8");
+const settingsDialogSource: string = readFileSync(fileURLToPath(new URL("../components/SettingsDialog.vue", import.meta.url)), "utf8");
+const interactionPrefsSource: string = readFileSync(fileURLToPath(new URL("./interactionPrefs.ts", import.meta.url)), "utf8");
+const i18nSource: string = readFileSync(fileURLToPath(new URL("./i18n.ts", import.meta.url)), "utf8");
 
 /** 模板中 class 含 marker 且由 v-if 守卫的元素 → 守卫表达式的状态 ref 基名。
  *  reka Popover 面板（Phase 5）无 v-if：内容 portal、由包裹的 <Popover :open="ref">
@@ -737,13 +779,18 @@ describe("App.vue popover/modal wiring structural guard", () => {
   const focusTableRefs = scriptBlockRefs("const modalOpenStates = computed(() => [", "]);");
   const escChainRefs = scriptBlockRefs("function onDocumentKeydown(event: KeyboardEvent)", "\nfunction ");
   const familyRefs = scriptBlockRefs("function closeToolbarPopovers()", "\nfunction ");
+  // 模板中所有受控 Popover 根（兼容多行属性写法），用于反查提取逻辑是否漏项。
+  const declaredPopoverRoots = [...appTemplate.matchAll(/<Popover\b[^>]*?:open="!*([A-Za-z_$][\w$]*)"/g)].map((match) => match[1]);
 
   it("extracts a non-empty template inventory (guards against vacuous regex passes)", () => {
-    // 提取逻辑本身失效（模板改写导致 regex 不再匹配）时先在这里暴露，
-    // 避免后续断言因空集合而静默通过。
-    for (const ref of ["quickMenuOpen", "connectionInfoOpen", "agentModeOpen", "highlightMenuOpen", "bookmarkSaveOpen", "columnsOpen", "transferPanelOpen", "batchTargetsOpen", "pathHistoryOpen"]) {
+    // 清单按当前真实架构维护：quick-commands / agent-mode / highlight-rules /
+    // columns 早已从 App.vue 抽到独立组件或移除，仍硬编码进 App 模板清单会让
+    // 守卫长期红灯，反而掩盖真实回归（本轮修复的基线问题）。
+    expect(popoverRefs.length, "popover 提取结果为空，regex 可能已失效").toBeGreaterThanOrEqual(5);
+    for (const ref of ["connectionInfoOpen", "transferPanelOpen", "bookmarkSaveOpen", "pathHistoryOpen"]) {
       expect(popoverRefs, `popover 提取丢失 ${ref}`).toContain(ref);
     }
+    expect(declaredPopoverRoots.length, "受控 Popover 根提取为空").toBeGreaterThanOrEqual(5);
     // settingsDialog 抽出独立组件后，settingsOpen/profilesOpen 的 Dialog 模板
     // 不在 App.vue 里，modal 清单只剩 App 内联弹窗；两个 open ref 仍在
     // modalOpenStates（Esc 链）里覆盖。
@@ -758,6 +805,16 @@ describe("App.vue popover/modal wiring structural guard", () => {
     expect(missing, `状态 ref 未接入任何收口机制（modalOpenStates / Esc 链 / closeToolbarPopovers）: ${missing.join(", ")}`).toEqual([]);
   });
 
+  it("keeps every controlled Popover root covered by a close mechanism", () => {
+    // 泛化防线：不依赖手写清单。新增 <Popover :open="x"> 却忘了接入
+    // closeToolbarPopovers / Esc 链 / modalOpenStates 时，这里立即失败。
+    // uploadFilesOpen 曾长期漏接，表现为「上传文件列表浮层打开后，点开别的
+    // 工具栏面板仍叠在上层、Esc 也收不掉」。
+    const covered = (ref: string) => focusTableRefs.has(ref) || escChainRefs.has(ref) || familyRefs.has(ref);
+    const missing = [...new Set(declaredPopoverRoots)].filter((ref) => !covered(ref));
+    expect(missing, `受控 Popover 未接入任何收口机制: ${missing.join(", ")}`).toEqual([]);
+  });
+
   it("keeps every Dialog modal ref inside modalOpenStates (focus trap table)", () => {
     // modalOpenStates 驱动弹层焦点进入 / Tab 陷阱 / 触发元素归还（R3-P1-2）；
     // alertTriage 曾因不在表内导致打开不聚焦、Esc 关不掉（round1 P1-1）。
@@ -766,11 +823,258 @@ describe("App.vue popover/modal wiring structural guard", () => {
   });
 
   it("routes every toolbar popover toggle through closeToolbarPopovers", () => {
-    for (const name of ["toggleQuickMenu", "toggleConnectionInfo", "toggleAgentModeMenu", "toggleHighlightMenu", "toggleBookmarkSave", "toggleColumnsMenu", "toggleTransferPanel", "togglePathHistoryMenu"]) {
+    // 与模板中真实存在的互斥族 toggle 对齐；已抽离/移除的 quick-menu /
+    // agent-mode / highlight / columns 不再列在这里。
+    for (const name of ["toggleBookmarkSave", "toggleConnectionInfo", "toggleTransferPanel", "togglePathHistoryMenu"]) {
       const start = appScript.indexOf(`function ${name}(`);
       expect(start, `缺少 toggle 函数 ${name}()`).toBeGreaterThanOrEqual(0);
       const body = appScript.slice(start, appScript.indexOf("\n}", start));
       expect(body, `${name}() 未走 closeToolbarPopovers 统一收口`).toContain("closeToolbarPopovers()");
+    }
+  });
+
+  it("keeps SFTP virtual-scroll spacers out of the v-else chain (issue #151)", () => {
+    const forIdx = appTemplate.indexOf('v-for="entry in windowedEntries"');
+    const padTopIdx = appTemplate.indexOf("virtualFileWindow.padTop");
+    const padBottomIdx = appTemplate.indexOf("virtualFileWindow.padBottom");
+    expect(forIdx, "文件行未使用窗口化切片").toBeGreaterThanOrEqual(0);
+    expect(padTopIdx, "缺少上方 spacer").toBeGreaterThanOrEqual(0);
+    expect(padTopIdx).toBeLessThan(forIdx);
+    expect(padBottomIdx, "缺少下方 spacer").toBeGreaterThan(forIdx);
+    // 行列表绝不能带 v-else：它会绑定到紧邻的 padTop spacer，滚动过前几行后
+    // 整个行列表不再渲染，大目录表现为「滚动失效、列表展示不全」。
+    const rowTag = appTemplate.slice(appTemplate.lastIndexOf("<button", forIdx), forIdx + 60);
+    expect(rowTag).not.toContain("v-else");
+    // beta.42：加载态改绝对定位浮层，行列表始终渲染，不再被 v-if/v-else
+    // 整块替换（否则换目录闪空、滚动位置丢失、虚拟窗口被重置）。
+    expect(appTemplate).toContain('v-if="loadingFiles" class="file-loading-overlay"');
+    expect(appTemplate).not.toContain('<div v-if="loadingFiles" class="empty"');
+    expect(appTemplate.slice(Math.max(0, padTopIdx - 200), padTopIdx)).not.toContain("<template v-else>");
+  });
+
+  it("keeps SFTP search debounced and the scroll container wired", () => {
+    // 大目录里每个按键触发 O(n) 过滤 + 全量行 diff 会明显掉帧；输入必须绑
+    // draft，由 150ms 防抖写入真正的过滤条件。
+    expect(appTemplate).toContain('v-model="sftpSearchDraft"');
+    expect(appTemplate).not.toContain('v-model="sftpSearch"');
+    expect(appTemplate).toContain('@click.prevent="clearSftpSearch()"');
+    expect(appTemplate).toContain('ref="fileRowsEl"');
+    expect(appTemplate).toContain('@scroll="onFileRowsScroll"');
+    expect(appScript).toContain("const windowedEntries = computed(() => visibleEntries.value.slice(virtualFileWindow.value.start, virtualFileWindow.value.end))");
+  });
+
+  it("beta.43: 2000 行 DOM 上界 / 历史过滤 / 远端 help 安全门", () => {
+    // 模板不得退回全量 visibleEntries 渲染，否则 2000 行滚动夹具的前提不成立。
+    expect(appTemplate).not.toContain('v-for="entry in visibleEntries"');
+    expect(appTemplate).toContain('v-for="entry in windowedEntries"');
+    // 历史 host / 失败过滤条挂在面板头之后、列表之前。
+    expect(appTemplate).toContain('class="history-filter-bar"');
+    expect(appTemplate).toContain("historyHostOptions");
+    expect(appTemplate).toContain("onHistoryHostChange");
+    expect(appTemplate).toContain("toggleHistoryFailedOnly");
+    // 远端 --help 只由显式按钮触发，不注册按键、不自动发 IPC。
+    expect(appTemplate).toContain('class="command-arg-hint command-arg-hint-remote"');
+    expect(appTemplate).toContain('@click.stop="loadRemoteHelp"');
+    expect(appScript).toContain("helpSpecCommand(command)");
+    expect(appScript).toContain("sudo: false");
+    expect(appScript).toContain("timeoutSecs: HELP_SPEC_TIMEOUT_SECS");
+    // 仲裁器第 9 浮层同时覆盖体检 / 静态 hint / 远端 help（Esc 单一 owner）。
+    // beta.48：乘上同一个显示门，隐藏时 Esc 不被看不见的提示条吞掉。
+    expect(appScript).toContain("argumentHintVisible: commandHintsAllowed.value");
+    expect(appScript).toContain("&& (argHintVisible.value || remoteHelpVisible.value || lintHintVisible.value)");
+  });
+
+  it("beta.44: 输入体检槽位 / 历史分组 / help 持久化", () => {
+    // 左下角单一提示槽：体检优先，参数提示与远端 help 退为 v-else-if。
+    expect(appTemplate).toContain('v-if="lintHintVisible" class="command-lint-hint"');
+    expect(appTemplate).toContain('v-else-if="argHintVisible && liveArgumentHint"');
+    expect(appTemplate).toContain('v-else-if="remoteHelpVisible"');
+    expect(appTemplate).toContain("liveLintIssues");
+    expect(appScript).toContain("lintShellLine(liveRiskLine.value");
+    // 历史分组头只在 template v-for 内插入，扁平导航索引不变。
+    expect(appTemplate).toContain('<template v-for="(item, index) in filteredHistory"');
+    expect(appTemplate).toContain('v-if="historyGroupHead(index)" class="history-group-head"');
+    expect(appTemplate).toContain('@change="onHistorySortChange"');
+    expect(appScript).toContain("sortHistoryView(filtered, historySortMode.value)");
+    // help spec 持久化：只存解析结构，remount 恢复，scope 切换保留。
+    expect(appScript).toContain("HELP_SPEC_CACHE_KEY");
+    expect(appScript).toContain("restoreHelpSpecCache(uiStorage.getItem(HELP_SPEC_CACHE_KEY))");
+    expect(appScript).toContain("serializeHelpSpecCache(helpScheduler.snapshot())");
+    expect(appScript).toContain("restoreHelpSpecs();");
+    expect(appScript).toContain("persistHelpSpecs();");
+    expect(appScript).toContain("helpScheduler.seed(helpSpecCacheSeed)");
+  });
+
+  it("beta.45/47: 四条提示统一收进悬浮容器，主规则不覆盖输入行", () => {
+    expect(appTemplate).toContain('class="command-hint-dock"');
+    expect(appTemplate).toContain('ref="commandHintDockEl"');
+    expect(appTemplate).toContain(':style="commandHintDockStyle"');
+    expect(appTemplate).toContain("'command-hint-open': anyCommandHintVisible");
+    expect(appScript).toContain(
+      "riskHintVisible.value || lintHintVisible.value || argHintVisible.value || remoteHelpVisible.value",
+    );
+    expect(styleCssSource).toContain(".command-hint-dock {");
+    // 提示条本体绝不能再退回 absolute + bottom:8px 压在 xterm 画布上。
+    for (const cls of [".command-risk-hint", ".command-lint-hint", ".command-arg-hint"]) {
+      const rule = styleCssSource.split("\n").find((line) => line.startsWith(`${cls} {`));
+      expect(rule).toBeTruthy();
+      expect(rule).not.toContain("position: absolute");
+      expect(rule).not.toContain("bottom: 8px");
+    }
+    expect(styleCssSource).not.toContain("batch-bar-open .command-arg-hint { bottom: 56px; }");
+  });
+
+  it("beta.47: 提示浮层锚定到 xterm 光标行（焦点上方）且不参与布局", () => {
+    const start = styleCssSource.indexOf(".command-hint-dock {");
+    const end = styleCssSource.indexOf(".command-risk-hint {", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const block = styleCssSource.slice(start, end);
+    // absolute 浮层：不占 flex 高度，出现/消失不改变 terminal-shells 尺寸，
+    // ResizeObserver 不触发 FitAddon.fit()，终端行数恒定 → 零页面跳动。
+    expect(block).toContain("position: absolute");
+    expect(block).not.toContain("flex: 0 0 auto");
+    expect(block).not.toContain("margin-bottom");
+    expect(block).toContain("pointer-events: none");
+    // 静态经验值已删除：位置改由实测光标坐标决定，batch / 字号 / 行数自动吸收。
+    expect(styleCssSource).not.toContain("--ssh-hint-lift");
+    expect(styleCssSource).not.toContain("--ssh-batch-reserve");
+    expect(styleCssSource).toContain(".terminal-pane.command-hint-open .command-hint-dock { max-width: calc(100% - 16px); }");
+    expect(styleCssSource).toContain(
+      ".command-hint-dock > .command-risk-hint, .command-hint-dock > .command-lint-hint, .command-hint-dock > .command-arg-hint { pointer-events: auto; }",
+    );
+    // 关键防线：不得再出现 beta.45 那两条改终端尺寸的布局覆盖规则。
+    expect(styleCssSource).not.toContain(".terminal-pane.command-hint-open .terminal-shells { margin-bottom: 0; }");
+    expect(styleCssSource).not.toContain(".terminal-pane.command-hint-open.batch-bar-open .terminal-host { inset: auto; }");
+    // 光标锚定：复用 overlayPlacement 纯函数 + 实测 cell 尺寸；
+    // 提示出现（watch）/ 光标移动 / 重绘时刷新，值不变不写 ref。
+    expect(appScript).toContain("function updateCommandHintAnchor()");
+    expect(appScript).toContain("function scheduleCommandHintAnchor()");
+    expect(appScript).toContain("flippedOverlayBottom(cursorTop, paneRect.height)");
+    expect(appScript).toContain("overlayLeft(cursorLeft, cellW)");
+    expect(appScript).toContain('overlayMaxHeight("above", cursorTop, cellH, paneRect.height)');
+    expect(appScript).toContain("readXtermCssCellSize(terminal)");
+    expect(appScript).toContain("maxWidth: `calc(100% - ${a.left}px - 8px)`");
+    expect(appScript).toContain("watch(anyCommandHintVisible");
+    expect(appScript).toContain("if (anyCommandHintVisible.value) scheduleCommandHintAnchor();");
+    expect(appScript).toContain("&& anyCommandHintVisible.value) scheduleCommandHintAnchor();");
+  });
+
+  it("beta.48: 参数提示有设置开关，且与历史/命令选择浮层相斥", () => {
+    // ① 设置项模型：默认开（不回归），显式 false 才关，坏值不误关。
+    expect(interactionPrefsSource).toContain("commandHintsEnabled: boolean;");
+    expect(interactionPrefsSource).toContain("commandHintsEnabled: true,");
+    expect(interactionPrefsSource).toContain("commandHintsEnabled: o.commandHintsEnabled !== false");
+    // ② 设置面板：「历史与补全」卡片里有开关，emit 走既有 interactionPrefs 通道。
+    expect(settingsDialogSource).toContain('data-settings-anchor="command-hints"');
+    expect(settingsDialogSource).toContain(":model-value=\"interactionPrefs.commandHintsEnabled\"");
+    expect(settingsDialogSource).toContain("emit('update:interactionPrefs', { commandHintsEnabled: value === true })");
+    // 设置搜索能找到这个新开关。
+    expect(settingsDialogSource).toContain('labelKey: "interactionPrefs.commandHints"');
+    // ③ 中英文案齐全（含「互斥」说明）。
+    expect(i18nSource).toContain('"interactionPrefs.commandHints":');
+    expect(i18nSource).toContain('"interactionPrefs.commandHintsHint":');
+    expect(i18nSource).toContain("Auto-hides while a history or completion picker is open");
+    expect(i18nSource).toContain("历史或补全候选框打开时自动隐藏");
+    // ④ App.vue 接线：纯函数显示门 + 五个选择浮层喂状态。
+    expect(appScript).toContain('from "./lib/commandHintVisibility"');
+    expect(appScript).toContain("const commandHintsAllowed = computed(() => commandHintAllowed({");
+    expect(appScript).toContain("enabled: interactionPrefs.value.commandHintsEnabled");
+    expect(appScript).toContain("suggestionListVisible: commandSuggestListVisible.value");
+    expect(appScript).toContain("completionVisible: completionOpen.value");
+    expect(appScript).toContain("historyPanelVisible: historyPanelOpen.value");
+    expect(appScript).toContain("quickPaletteVisible: quickPaletteOpen.value");
+    expect(appScript).toContain("commandPaletteVisible: commandPaletteOpen.value");
+    // ⑤ 显示门同时管 dock 渲染与 Esc 仲裁（隐藏时不吞 Esc）。
+    expect(appScript).toContain("commandHintsAllowed.value\n  && (riskHintVisible.value");
+    expect(appScript).toContain("argumentHintVisible: commandHintsAllowed.value");
+    // ⑥ 行为钉死：开关关 / 任一选择浮层开 → 一律不显示，关掉自动回来。
+    const idle = {
+      enabled: true,
+      suggestionListVisible: false,
+      completionVisible: false,
+      historyPanelVisible: false,
+      quickPaletteVisible: false,
+      commandPaletteVisible: false,
+    };
+    expect(commandHintAllowed(idle)).toBe(true);
+    expect(commandHintAllowed({ ...idle, enabled: false })).toBe(false);
+    expect(commandHintAllowed({ ...idle, suggestionListVisible: true })).toBe(false);
+    expect(commandHintAllowed({ ...idle, historyPanelVisible: true })).toBe(false);
+    expect(commandHintAllowed({ ...idle, completionVisible: true, quickPaletteVisible: true })).toBe(false);
+    expect(commandHintAllowed(idle)).toBe(true);
+  });
+
+  it("beta.49: connected 声明早于所有 setup 期间会求值它的位置（杜绝 TDZ）", () => {
+    // 根因：watch(anyCommandHintVisible) 在 setup 期间同步求值 computed 链，
+    // 链上 riskHintVisible / argHintBaseVisible 会读 connected；若 connected 用
+    // const 声明在这些位置之后，运行时抛 `Cannot access 'X' before
+    // initialization`，Vue errorHandler 吞掉错误、UI 看似可用但提示全失效。
+    const decl = appScript.indexOf("const connected = computed(");
+    expect(decl).toBeGreaterThan(-1);
+    // 必须紧随 terminalState / session（它的依赖），且早于所有引用点。
+    const terminalStateDecl = appScript.indexOf('const terminalState = ref<"connecting"');
+    const sessionDecl = appScript.indexOf("const session = ref<SessionInfo>();");
+    expect(terminalStateDecl).toBeGreaterThan(-1);
+    expect(sessionDecl).toBeGreaterThan(terminalStateDecl);
+    expect(decl).toBeGreaterThan(sessionDecl);
+    // 所有会在 setup 期间或渲染期读 connected.value 的位置都必须在声明之后。
+    // 用完整调用签名做锚点，避免注释里的同名字符串提前命中。
+    for (const use of [
+      "if (!connected.value || historyPanelOpen.value",
+      "if (!assessment || !connected.value) return false;",
+      "if (!connected.value) return false;",
+      "watch(anyCommandHintVisible, (visible) => {",
+    ]) {
+      const at = appScript.indexOf(use);
+      expect(at).toBeGreaterThan(-1);
+      expect(decl).toBeLessThan(at);
+    }
+    // 只允许一处声明（避免搬移时留旧定义造成重复 const）。
+    expect(appScript.split("const connected = computed(").length - 1).toBe(1);
+  });
+
+  it("beta.49: prefsReady 声明早于 immediate watch 触发的 reloadSettings（杜绝 TDZ）", () => {
+    // 根因：watch(() => props.open, ..., { immediate: true }) 在 setup 期间
+    // 立即调用 reloadSettings()，其第一行写 prefsReady.value；声明晚于此会
+    // 抛 `Uncaught (in promise) ReferenceError: Cannot access 'X' before
+    // initialization`，设置面板状态半初始化。
+    const decl = settingsDialogSource.indexOf("const prefsReady = ref(false);");
+    expect(decl).toBeGreaterThan(-1);
+    const reloadSettings = settingsDialogSource.indexOf("async function reloadSettings()");
+    expect(reloadSettings).toBeGreaterThan(-1);
+    expect(decl).toBeLessThan(reloadSettings);
+    const immediateWatch = settingsDialogSource.indexOf("}, { immediate: true });", reloadSettings);
+    expect(immediateWatch).toBeGreaterThan(reloadSettings);
+    expect(decl).toBeLessThan(immediateWatch);
+    expect(settingsDialogSource.split("const prefsReady = ref(false);").length - 1).toBe(1);
+  });
+
+  it("beta.49: 命令提示 computed 链上的状态声明全部早于 watch 求值时点", () => {
+    // 通用防线：anyCommandHintVisible 的依赖闭包里若还有别的晚声明 const，
+    // setup 期间的 watch 初始化仍会 TDZ。逐个钉死「声明 < watch」。
+    const watchAt = appScript.indexOf("watch(anyCommandHintVisible, (visible) => {");
+    expect(watchAt).toBeGreaterThan(-1);
+    const names = [
+      "const interactionPrefs = ref<InteractionPrefs>",
+      "const commandSuggestListVisible = computed(",
+      "const completionOpen = ref(false);",
+      "const historyPanelOpen = ref(false);",
+      "const quickPaletteOpen = ref(false);",
+      "const commandPaletteOpen = ref(false);",
+      "const liveRiskLine = ref(",
+      "const liveCommandRisk = ref<",
+      "const liveLintIssues = computed<",
+      "const argHintBaseVisible = computed(",
+      "const riskHintVisible = computed(",
+      "const commandHintsAllowed = computed(",
+      "const anyCommandHintVisible = computed(",
+      "const connected = computed(",
+    ];
+    for (const name of names) {
+      const at = appScript.indexOf(name);
+      expect(at, name).toBeGreaterThan(-1);
+      expect(at, name).toBeLessThan(watchAt);
     }
   });
 });

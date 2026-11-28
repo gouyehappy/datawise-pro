@@ -66,6 +66,10 @@ export default {
             title: '发现新版本',
             body: '可更新到 {version}，打开「关于」查看详情。',
         },
+        updateAvailableIncremental: {
+            title: '发现新版本（增量）',
+            body: '可更新到 {version}，增量约 {size}（可少下约 {saved}）。打开「关于」查看详情。',
+        },
         importDone: {
             title: '导入完成',
             body: '{detail}',

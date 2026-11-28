@@ -11,7 +11,7 @@
  * 设置页「导入/导出配置」亦经此 Store。
  */
 import {defineStore} from 'pinia'
-import {computed, ref, toRaw, watch} from 'vue'
+import {computed, readonly, ref, toRaw, watch} from 'vue'
 import type {SettingsSection, ShortcutPanel} from '@/core/types'
 import {currentLocale, hydrateLocaleFromEnvelope, setLocale, type AppLocale} from '@/i18n'
 import {hydrateThemePreferencesFromEnvelope} from '@/shared/config/theme-preferences-storage'
@@ -122,6 +122,7 @@ import {useUpdateSettingsStore} from '@/features/settings/stores/update-settings
 import {setupDesktopWindowSync} from '@/features/layout/composables/useDesktopWindowSync'
 import {toWindowStatePayload} from '@/features/layout/services/desktop-window-state.service'
 import {isDesktopApp} from '@/features/layout/services/desktop-chrome'
+import {setVisibleProjectFileRoots} from '@/features/project/services/project-file-root-visibility'
 import {useDockPlacementStore} from '@/features/dock/stores/dock-placement-store'
 import {ensureShortcutFloatContent} from '@/features/dock/services/ensure-shortcut-float-content'
 import {
@@ -143,6 +144,10 @@ export const useAppConfigStore = defineStore('app-config', () => {
     const sqlEditorShortcuts = useSqlEditorShortcutsStore()
 
     const config = ref<AppConfigFile>(readAppConfig())
+    setVisibleProjectFileRoots({
+        docs: config.value.layout.showProjectDocsRoot,
+        scripts: config.value.layout.showProjectScriptsRoot,
+    })
     /** 结果面板展开状态仅会话内有效；配置加载时重置为收起 */
     const showConsoleResultPanel = ref(false)
     let syncing = false
@@ -617,6 +622,10 @@ export const useAppConfigStore = defineStore('app-config', () => {
         }
         const session = await fetchWorkspaceSessionFromServer()
         if (session?.tabs?.length) {
+            const {prepareCommunityWorkbenchSnapshotsForRestore} = await import(
+                '@/features/community-plugin/lib/connectCommunityPluginWorkbench'
+            )
+            await prepareCommunityWorkbenchSnapshotsForRestore(session.tabs)
             workspace.restoreSession(session.tabs, session.activeTabIndex, session.tabGroups ?? [])
         } else {
             workspace.closeAllClosable()
@@ -642,6 +651,10 @@ export const useAppConfigStore = defineStore('app-config', () => {
 
     function applyLayoutEffects(next: LayoutPreferences) {
         config.value = {...config.value, layout: next}
+        setVisibleProjectFileRoots({
+            docs: next.showProjectDocsRoot,
+            scripts: next.showProjectScriptsRoot,
+        })
         syncOpenHttpLinksIn(next.openHttpLinksIn)
         installOpenUrlClickDelegation()
         explorer.width = next.explorerWidth
@@ -1047,6 +1060,17 @@ export const useAppConfigStore = defineStore('app-config', () => {
         applyLayoutState(next)
     }
 
+    /** 设置页开关：显示 / 隐藏 Explorer 顶部的两个项目文件根节点。 */
+    function setProjectFileRootVisible(root: 'docs' | 'scripts', visible: boolean) {
+        const next = snapshotLayout()
+        if (root === 'docs') {
+            next.showProjectDocsRoot = visible
+        } else {
+            next.showProjectScriptsRoot = visible
+        }
+        applyLayoutState(next)
+    }
+
     function setDockPlacement(next: DockPlacement) {
         const dock = useDockPlacementStore()
         dock.applyPlacement(next)
@@ -1221,14 +1245,14 @@ export const useAppConfigStore = defineStore('app-config', () => {
     }
 
     return {
-        config,
-        preferences,
-        aiPreferences,
-        connectionHealthPreferences,
+        config: readonly(config),
+        preferences: readonly(preferences),
+        aiPreferences: readonly(aiPreferences),
+        connectionHealthPreferences: readonly(connectionHealthPreferences),
         patchConnectionHealth,
-        dangerousSqlPreferences,
+        dangerousSqlPreferences: readonly(dangerousSqlPreferences),
         patchDangerousSql,
-        dashboardPreferences,
+        dashboardPreferences: readonly(dashboardPreferences),
         patchDashboardPreferences,
         resetDashboardPreferences,
         defaultLlmProfile,
@@ -1245,7 +1269,7 @@ export const useAppConfigStore = defineStore('app-config', () => {
         shortcutPanelWidth,
         shortcutPanelMaxHeight,
         consoleEditorHeight,
-        showConsoleResultPanel,
+        showConsoleResultPanel: readonly(showConsoleResultPanel),
         sideRailItems,
         shortcutRailItems,
         isSideRailVisible,
@@ -1256,6 +1280,7 @@ export const useAppConfigStore = defineStore('app-config', () => {
         setShortcutVisible,
         setShowExplorerPanel,
         setOpenHttpLinksIn,
+        setProjectFileRootVisible,
         setDockPlacement,
         persistDockLayout,
         resetDockPlacement,

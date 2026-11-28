@@ -120,19 +120,58 @@ function startBackendDual() {
     return child.pid
 }
 
+/** @type {import('node:child_process').ChildProcess | null} */
+let viteChild = null
+
 function startViteDevServer() {
     const edition = process.env.VITE_DATAWISE_EDITION === 'standard' ? 'standard' : 'full'
     const script = edition === 'standard' ? 'dev:standard' : 'dev'
     log('dev-start', `starting Vite (npm run ${script}, edition=${edition})…`)
+    // 不再 detached：否则父窗口 Ctrl+C 杀不到 Vite，只能靠 npm run stop
     const child = spawn('npm', ['run', script], {
         cwd: frontendRoot,
-        detached: true,
+        detached: false,
         stdio: 'ignore',
         shell: process.platform === 'win32',
         env: process.env,
+        windowsHide: true,
     })
-    child.unref()
+    viteChild = child
     return child.pid
+}
+
+function stopViteChild() {
+    if (!viteChild || viteChild.killed) return
+    const pid = viteChild.pid
+    try {
+        if (process.platform === 'win32' && pid) {
+            spawnSync('taskkill', ['/F', '/PID', String(pid), '/T'], {
+                stdio: 'ignore',
+                windowsHide: true,
+            })
+        } else if (pid) {
+            viteChild.kill('SIGTERM')
+        }
+    } catch {
+        // ignore
+    }
+    viteChild = null
+}
+
+function installDevCleanup() {
+    const run = () => {
+        stopViteChild()
+    }
+    process.once('SIGINT', () => {
+        log('dev-start', 'SIGINT — stopping Vite…')
+        run()
+        process.exit(130)
+    })
+    process.once('SIGTERM', () => {
+        run()
+        process.exit(143)
+    })
+    process.once('exit', run)
 }
 
 async function ensureVite() {
@@ -168,6 +207,7 @@ function startDesktop(dual) {
 
 async function main() {
     pruneStalePluginStaging()
+    installDevCleanup()
     const dual = process.argv.includes('--dual')
     const forceCompile = process.argv.includes('--compile')
     const healthUrl = `http://127.0.0.1:${ports.dev.backend}/api/health`

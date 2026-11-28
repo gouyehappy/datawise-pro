@@ -403,12 +403,12 @@ onBeforeUnmount(() => {
 }
 
 .workspace-tab-pane.is-float.is-minimized {
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   box-shadow: var(--dw-panel-shadow);
 }
 
 .workspace-tab-pane.is-float.is-minimized.is-focused {
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
 }
 
 @keyframes dw-tab-float-in {
@@ -447,7 +447,7 @@ onBeforeUnmount(() => {
   top: 8px;
   bottom: 8px;
   width: 3px;
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   background: transparent;
   transition: background 0.14s var(--dw-ease);
 }

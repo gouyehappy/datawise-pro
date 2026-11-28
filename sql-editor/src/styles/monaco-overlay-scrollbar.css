@@ -31,7 +31,7 @@
 .sql-monaco-host .monaco-scrollable-element > .scrollbar > .slider,
 .sql-monaco-host .monaco-editor .editor-scrollable > .scrollbar > .slider,
 .monaco-host .monaco-scrollable-element > .scrollbar > .slider {
-    border-radius: 999px !important;
+    border-radius: var(--dw-radius-pill, 999px) !important;
     background: var(--sql-scrollbar-thumb, var(--dw-scrollbar-thumb)) !important;
     transition: background 0.18s ease;
     margin: 0 !important;

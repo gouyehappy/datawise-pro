@@ -53,16 +53,41 @@ export function isSpecializedSurface(dbType: string | DbType | undefined): boole
 }
 
 /**
+ * Whether the connection form should offer the owner "allow engine writes" toggle.
+ * Only JDBC-shaped engines that ship query-only (e.g. Trino) — not specialized
+ * plugin/ops/SSH surfaces where the Trino-style DDL gate does not apply.
+ */
+export function needsEngineWriteOverrideOption(dbType: string | DbType | undefined): boolean {
+    const profile = getConnectionCapabilityProfile(dbType)
+    if (profile.specializedSurface || profile.formKind !== 'jdbc') {
+        return false
+    }
+    return !profile.features.tableDataEdit || !profile.features.tableStructureEdit
+}
+
+/**
  * 产品功能是否对应该引擎开放。
  * catalog 优先收窄 SPI 重叠项（queryExecution / tableDataEdit / sqlExplain / tableImport）。
+ * Owner {@code allowEngineWrites} may widen tableDataEdit / tableStructureEdit only.
  */
 export function supportsConnectionFeature(
-    input: {dbType?: string | DbType | null; connectionId?: string},
+    input: {
+        dbType?: string | DbType | null
+        connectionId?: string
+        allowEngineWrites?: boolean
+    },
     feature: ConnectionProductFeature,
     catalog?: readonly DatasourceDefinition[],
 ): boolean {
     const dbType = input.dbType == null ? undefined : (String(input.dbType) as DbType)
     if (!dbType) return false
+
+    if (
+        input.allowEngineWrites
+        && (feature === 'tableDataEdit' || feature === 'tableStructureEdit')
+    ) {
+        return true
+    }
 
     const profile = getConnectionCapabilityProfile(dbType)
     if (!profile.features[feature]) return false

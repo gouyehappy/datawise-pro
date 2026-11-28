@@ -2,7 +2,6 @@ package org.apache.datawise.backend.ai.web;
 
 import org.apache.datawise.backend.ai.service.AgentWriteGrantService;
 import org.apache.datawise.backend.common.ApiResponse;
-import org.apache.datawise.backend.security.UserContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,7 +27,8 @@ public class AgentWriteGrantController {
                     body.connectionId(),
                     body.database(),
                     body.schema(),
-                    body.confirmedSql())));
+                    body.confirmedSql(),
+                    body.threadId())));
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
         }
@@ -39,6 +39,7 @@ public class AgentWriteGrantController {
             String connectionId,
             String database,
             String schema,
-            String confirmedSql) {
+            String confirmedSql,
+            String threadId) {
     }
 }

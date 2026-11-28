@@ -1,4 +1,4 @@
-import type {DbType, NavModule, ShortcutPanel, WorkspaceTabType} from '@/core/types'
+import type {DbType, NavModule, ShortcutPanel, WorkspaceTabParams, WorkspaceTabType} from '@/core/types'
 import type {DockFloatRect, DockPlacement} from '@/shared/layout/dock.types'
 import type {AppLocale} from '@/i18n'
 import type {EditorSettings} from '@/shared/config/editor-presets'
@@ -47,6 +47,10 @@ export interface LayoutPreferences {
      * or the OS default browser.
      */
     openHttpLinksIn?: OpenHttpLinksIn
+    /** 是否在 Explorer 树顶部显示「项目文档」私有根节点。 */
+    showProjectDocsRoot?: boolean
+    /** 是否在 Explorer 树顶部显示「项目脚本」私有根节点。 */
+    showProjectScriptsRoot?: boolean
     /** Panel dock placement; null/undefined = classic (explorer left, terminal bottom). */
     dockPlacement?: DockPlacement | null
     /** Floating terminal rect; null/undefined = default float geometry. */
@@ -94,6 +98,17 @@ export interface WorkspaceTabSnapshot {
         queryId: string
         title?: string
     }
+    /** Community plugin workbench */
+    pluginId?: string
+    pluginContributionId?: string
+    pluginFilesystemProviderId?: string
+    pluginFilesystemRootUri?: string
+    /** Sanitized host context (ids only; no secrets). */
+    pluginHostContext?: Record<string, unknown>
+    /** Platform extras (k8s namespace / pod, etc.). */
+    params?: WorkspaceTabParams
+    /** SSH multi-session index within a connection. */
+    sshTerminalIndex?: number
 }
 
 /** Summary prefs in app.xml (no open-tab bodies). */

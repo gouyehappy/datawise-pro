@@ -20,6 +20,7 @@ import {
     toAiDatabaseTargetPayload,
     toAiLlmProfilePayload,
 } from '@/shared/api/internal/ai'
+import type {AiPreferences} from '@/shared/config/app-config.types'
 import {
     drainThinkTags,
     mergeThinking,
@@ -87,7 +88,7 @@ export function useAiChatSend(options: {
         sessionId: string,
         analysisContext?: AiAnalysisContextPayload,
     ) {
-        const profile = resolveWorkbenchAiLlmProfile(appConfig.aiPreferences)
+        const profile = resolveWorkbenchAiLlmProfile(appConfig.aiPreferences as AiPreferences)
         logAiChatRequest(text, targets.length)
         const started = performance.now()
 
@@ -214,77 +215,88 @@ export function useAiChatSend(options: {
         const rawText = (textOverride ?? options.getInput()).trim()
         if (!session || !rawText || aiChat.isSending(session.id) || pipeline.sqlConfirmPending.value) return
 
+        const sessionId = session.id
+        // Acquire send lock synchronously before any await (FE-05 race).
+        aiChat.setSending(sessionId, true)
+
         // UI bubble keeps the user-facing text; API payload may include workbench focus / file body.
         const displayText = rawText
         let apiText = rawText
-        if (options.buildPrompt) {
-            apiText = (await options.buildPrompt(rawText)).trim()
-            if (!apiText) return
-        }
-
-        const sessionId = session.id
-        const targets = options.allTargets.value.filter((target) =>
-            session.selectedTargetIds.includes(target.id),
-        )
-
-        const databases = targets.map((target) => ({
-            id: target.id,
-            connectionLabel: target.connectionLabel,
-            databaseLabel: target.databaseLabel,
-            tableLabel: target.tableLabel,
-            level: target.level,
-            dbType: target.dbType,
-        }))
-
-        const priorContext = buildAnalysisContextFromMessages(session.messages)
-        // Ask mode: never enter analysis/SQL-execute pipeline (T-AI-1 hard gate).
-        const askMode = (session.mode ?? 'agent') === 'ask'
-        const useStream = !askMode && isAnalysisPrompt(apiText, targets.length > 0, priorContext)
-
-        aiChat.appendMessage(createUserMessage(displayText, databases.length ? databases : undefined), sessionId)
-        options.clearInput()
-        pipeline.resetPipeline()
-        pipeline.analysisStreaming.value = useStream
-        aiChat.setSending(sessionId, true)
-        await options.scrollToBottom()
-
+        let streamStarted = false
         try {
-            if (useStream) {
-                await pipeline.streamAnalysis(apiText, targets, sessionId, priorContext)
-            } else {
-                await sendChatStream(apiText, targets, sessionId, priorContext)
+            if (options.buildPrompt) {
+                apiText = (await options.buildPrompt(rawText)).trim()
+                if (!apiText) return
             }
-            useEntitlementStore().noteAiCallConsumed()
-        } catch (error) {
-            if (isAbortError(error)) {
-                // stop already finalized cancelled / partial reply
-            } else {
-                logAiChatError(error, 0)
-                const detail = formatAiErrorMessage(error)
-                toast.error(detail)
-                const session = aiChat.sessions.find((item) => item.id === sessionId)
-                const last = session?.messages[session.messages.length - 1]
-                if (last?.role === 'assistant' && (last.streaming || useStream)) {
-                    // Reuse the stream placeholder — avoid a second error bubble.
-                    aiChat.patchMessage(
-                        last.id,
-                        {
-                            content: detail,
-                            streaming: false,
-                            analysis: undefined,
-                            references: undefined,
-                        },
-                        sessionId,
-                    )
+
+            const targets = options.allTargets.value.filter((target) =>
+                session.selectedTargetIds.includes(target.id),
+            )
+
+            const databases = targets.map((target) => ({
+                id: target.id,
+                connectionLabel: target.connectionLabel,
+                databaseLabel: target.databaseLabel,
+                tableLabel: target.tableLabel,
+                level: target.level,
+                dbType: target.dbType,
+            }))
+
+            const priorContext = buildAnalysisContextFromMessages(session.messages)
+            // Ask mode: never enter analysis/SQL-execute pipeline (T-AI-1 hard gate).
+            const askMode = (session.mode ?? 'agent') === 'ask'
+            const useStream = !askMode && isAnalysisPrompt(apiText, targets.length > 0, priorContext)
+
+            aiChat.appendMessage(createUserMessage(displayText, databases.length ? databases : undefined), sessionId)
+            options.clearInput()
+            pipeline.resetPipeline()
+            pipeline.analysisStreaming.value = useStream
+            await options.scrollToBottom()
+
+            streamStarted = true
+            try {
+                if (useStream) {
+                    await pipeline.streamAnalysis(apiText, targets, sessionId, priorContext)
                 } else {
-                    aiChat.appendMessage(createAssistantMessage(detail), sessionId)
+                    await sendChatStream(apiText, targets, sessionId, priorContext)
                 }
-                options.restoreInput(displayText)
+                useEntitlementStore().noteAiCallConsumed()
+            } catch (error) {
+                if (isAbortError(error)) {
+                    // stop already finalized cancelled / partial reply
+                } else {
+                    logAiChatError(error, 0)
+                    const detail = formatAiErrorMessage(error)
+                    toast.error(detail)
+                    const active = aiChat.sessions.find((item) => item.id === sessionId)
+                    const last = active?.messages[active.messages.length - 1]
+                    if (last?.role === 'assistant' && (last.streaming || useStream)) {
+                        // Reuse the stream placeholder — avoid a second error bubble.
+                        aiChat.patchMessage(
+                            last.id,
+                            {
+                                content: detail,
+                                streaming: false,
+                                analysis: undefined,
+                                references: undefined,
+                            },
+                            sessionId,
+                        )
+                    } else {
+                        aiChat.appendMessage(createAssistantMessage(detail), sessionId)
+                    }
+                    options.restoreInput(displayText)
+                }
+            } finally {
+                pipeline.finishStreaming(sessionId)
+                chatStreaming.value = false
+                if (aiChat.activeSessionId === sessionId) await options.scrollToBottom()
             }
         } finally {
-            pipeline.finishStreaming(sessionId)
-            chatStreaming.value = false
-            if (aiChat.activeSessionId === sessionId) await options.scrollToBottom()
+            // Roll back lock on early exit / failure so sending never sticks true.
+            if (!streamStarted && aiChat.isSending(sessionId)) {
+                aiChat.setSending(sessionId, false)
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, ref, watch} from 'vue'
-import {DwSplitPane} from '@/core/components'
+import {DwSplitPane} from '@datawise/chrome'
 import {
   type SqlEditorShortcutsController,
 } from '@sql-editor/composables/useSqlEditorShortcutsController'

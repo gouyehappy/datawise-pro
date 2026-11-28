@@ -29,6 +29,7 @@ defineProps<{
   hasMore: boolean
   canRaiseMaxRows: boolean
   cursorLoading: boolean
+  columnPanelOpen?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -40,6 +41,7 @@ const emit = defineEmits<{
   export: []
   'raise-max-rows': []
   'load-more': []
+  'toggle-column-panel': []
 }>()
 </script>
 
@@ -106,17 +108,29 @@ const emit = defineEmits<{
     <DwIcon class="grid-glyph" name="help" fit :stroke-width="1.5"/>
   </span>
   <div
-      v-if="showDmlActions || $slots['toolbar-extra'] || (exportEnabled && showExport) || $slots['toolbar-tail']"
       class="grid-toolbar-group"
       role="group"
       :aria-label="$t('dataGrid.toolsGroup')"
   >
     <slot name="toolbar-extra"/>
     <button
+        type="button"
+        class="grid-label-btn"
+        :class="{ 'is-open': columnPanelOpen }"
+        :aria-label="$t('dataGrid.columnPanel.open')"
+        :aria-expanded="Boolean(columnPanelOpen)"
+        :aria-haspopup="true"
+        data-testid="grid-column-panel-trigger"
+        @click="emit('toggle-column-panel')"
+    >
+      <DwIcon class="grid-glyph" name="list-checks" fit :stroke-width="1.75"/>
+      <span>{{ $t('dataGrid.columnPanel.open') }}</span>
+    </button>
+    <button
         v-if="showDmlActions"
         type="button"
         class="grid-label-btn"
-        :title="$t('dataGrid.generateDmlSelectedHint')"
+        :aria-label="$t('dataGrid.generateDml')"
         @click="emit('generate-dml')"
     >
       <DwIcon class="grid-glyph" name="ddl" fit :stroke-width="1.75"/>
@@ -126,6 +140,7 @@ const emit = defineEmits<{
         v-if="exportEnabled && showExport"
         type="button"
         class="grid-label-btn"
+        :aria-label="$t('dataGrid.export')"
         @click="emit('export')"
     >
       <DwIcon class="grid-glyph" name="export" fit :stroke-width="1.75"/>
@@ -143,6 +158,7 @@ const emit = defineEmits<{
         v-if="truncatedAtCap && canRaiseMaxRows"
         type="button"
         class="grid-label-btn"
+        :aria-label="$t('dataGrid.raiseMaxRows')"
         @click="emit('raise-max-rows')"
     >
       <DwIcon class="grid-glyph" name="arrow-up-down" fit :stroke-width="1.5"/>
@@ -152,6 +168,7 @@ const emit = defineEmits<{
         v-if="hasMore && !truncatedAtCap"
         type="button"
         class="grid-label-btn"
+        :aria-label="cursorLoading ? $t('dataGrid.loadingMore') : $t('dataGrid.loadMore')"
         :disabled="cursorLoading"
         @click="emit('load-more')"
     >

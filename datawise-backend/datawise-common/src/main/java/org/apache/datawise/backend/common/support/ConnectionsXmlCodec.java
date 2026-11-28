@@ -216,6 +216,10 @@ public final class ConnectionsXmlCodec {
         writeGuard.setTextContent(String.valueOf(connection.isWriteGuard()));
         connectionElement.appendChild(writeGuard);
 
+        Element allowEngineWrites = document.createElement("allow-engine-writes");
+        allowEngineWrites.setTextContent(String.valueOf(connection.isAllowEngineWrites()));
+        connectionElement.appendChild(allowEngineWrites);
+
         if (connection.getAdvancedConfig() != null && !connection.getAdvancedConfig().isBlank()) {
             XmlConfigSupport.appendCdataElement(document, connectionElement, "advanced-config", connection.getAdvancedConfig());
         }
@@ -245,6 +249,15 @@ public final class ConnectionsXmlCodec {
         String projectId = element.getAttribute("project-id");
         if (!projectId.isBlank()) {
             group.setProjectId(projectId.trim());
+        }
+        // Nested groups are written as child <group> elements; parentId is structural, not an attribute.
+        // Restore it on read so subgroups do not flatten to root after persist/reload.
+        if (element.getParentNode() instanceof Element parentElement
+                && "group".equals(parentElement.getTagName())) {
+            String parentId = parentElement.getAttribute("id");
+            if (parentId != null && !parentId.isBlank()) {
+                group.setParentId(parentId);
+            }
         }
         return group;
     }
@@ -298,6 +311,7 @@ public final class ConnectionsXmlCodec {
         connection.setJumpPassphrase(childText(element, "jump-passphrase"));
         connection.setSshEnabled(parseBoolean(childText(element, "ssh-enabled"), false));
         connection.setWriteGuard(parseBoolean(childText(element, "write-guard"), false));
+        connection.setAllowEngineWrites(parseBoolean(childText(element, "allow-engine-writes"), false));
         connection.setAdvancedConfig(childText(element, "advanced-config"));
         connection.setPluginSecrets(childText(element, "plugin-secrets"));
         connection.setPluginId(childText(element, "plugin-id"));

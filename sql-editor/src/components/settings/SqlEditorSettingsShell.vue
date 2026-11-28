@@ -442,7 +442,7 @@ function cancelAddSnippetForm() {
   position: relative;
   display: flex;
   flex-direction: column;
-  border-radius: 8px;
+  border-radius: var(--dw-surface-radius, 8px);
   border: 1px solid var(--se-border);
   background: var(--se-bg);
   color: var(--se-text);
@@ -528,7 +528,7 @@ function cancelAddSnippetForm() {
   min-height: 44px;
   padding: 4px 2px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--dw-surface-radius, 7px);
   background: transparent;
   color: var(--se-text-muted);
   cursor: pointer;
@@ -606,7 +606,7 @@ function cancelAddSnippetForm() {
 
 .config-badge {
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   font-size: 9px;
   font-weight: 600;
   color: var(--se-text-muted);
@@ -626,7 +626,7 @@ function cancelAddSnippetForm() {
   height: 22px;
   padding: 0;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--dw-surface-radius, 5px);
   background: transparent;
   color: var(--se-text-muted);
   font-size: 16px;
@@ -657,7 +657,7 @@ function cancelAddSnippetForm() {
 }
 
 .panel-body::-webkit-scrollbar-thumb {
-  border-radius: 999px;
+  border-radius: var(--dw-radius-pill, 999px);
   background: color-mix(in srgb, var(--se-text-muted) 32%, transparent);
 }
 
@@ -675,7 +675,7 @@ function cancelAddSnippetForm() {
   width: 100%;
   padding: 5px 8px;
   border: 1px solid color-mix(in srgb, var(--se-danger) 28%, transparent);
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   background: color-mix(in srgb, var(--se-danger) 6%, var(--se-bg));
   color: color-mix(in srgb, var(--se-danger) 82%, var(--se-text));
   font-size: 10px;
@@ -733,7 +733,7 @@ function cancelAddSnippetForm() {
   flex: 1;
   min-height: 26px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   font-size: 10px;
   font-weight: 600;
   cursor: pointer;

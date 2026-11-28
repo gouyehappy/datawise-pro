@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {DwButton} from '@/core/components'
+import {DwButton, SettingsRow} from '@/core/components'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
-import SettingsSectionCard from '@/features/settings/components/SettingsSectionCard.vue'
+import SettingsGroup from '@/features/settings/components/SettingsGroup.vue'
 import {settingsApi} from '@/api'
 import {resolveDisplayApiErrorMessage} from '@/shared/api/http/api-error-message'
 import type {SecretsStatus} from '@/shared/api/http/system'
@@ -20,6 +20,15 @@ const sourceLabel = computed(() => {
   const label = t(key)
   return label === key ? source : label
 })
+
+const refExamples = computed(() => [
+  {code: 'dwsecret:env:DB_PASSWORD', desc: t('settings.secrets.refEnv')},
+  {code: 'dwsecret:file:secrets/db-password.txt', desc: t('settings.secrets.refFile')},
+  {code: 'dwsecret:json-file:secrets/bundle.json#dbPassword', desc: t('settings.secrets.refJsonFile')},
+  {code: 'dwsecret:properties:secrets/bundle.properties#db.password', desc: t('settings.secrets.refProperties')},
+  {code: 'dwsecret:dotenv:secrets/.env#DB_PASSWORD', desc: t('settings.secrets.refDotenv')},
+  {code: 'dwsecret:vault:secret/data/myapp/db#password', desc: t('settings.secrets.refVault')},
+])
 
 async function loadStatus() {
   loading.value = true
@@ -44,105 +53,137 @@ onMounted(() => {
       :title="t('settings.secrets.title')"
       :subtitle="t('settings.secrets.subtitle')"
   >
-    <SettingsSectionCard :title="t('settings.secrets.masterKeyTitle')">
-      <p class="settings-secrets__lead">{{ t('settings.secrets.masterKeyHint') }}</p>
-      <dl v-if="status" class="settings-secrets__meta">
-        <div>
-          <dt>{{ t('settings.secrets.masterKeySource') }}</dt>
-          <dd>{{ sourceLabel }}</dd>
-        </div>
-        <div>
-          <dt>{{ t('settings.secrets.envPreferred') }}</dt>
-          <dd>{{ status.masterKeyFromEnvironment ? t('common.yes') : t('common.no') }}</dd>
-        </div>
-      </dl>
-      <p v-else-if="loading" class="settings-secrets__muted">{{ t('settings.secrets.loading') }}</p>
-      <p v-else-if="error" class="settings-secrets__error">{{ error }}</p>
-      <div class="settings-secrets__actions">
-        <DwButton variant="secondary" size="sm" type="button" :disabled="loading" @click="loadStatus">
-          {{ t('settings.secrets.refresh') }}
-        </DwButton>
-      </div>
-    </SettingsSectionCard>
+    <div class="settings-groups">
+      <SettingsGroup
+          :title="t('settings.secrets.masterKeyTitle')"
+          :hint="t('settings.secrets.masterKeyHint')"
+      >
+        <template v-if="status">
+          <SettingsRow :label="t('settings.secrets.masterKeySource')">
+            <code class="settings-secrets__value">{{ sourceLabel }}</code>
+          </SettingsRow>
+          <SettingsRow :label="t('settings.secrets.envPreferred')">
+            <span class="settings-secrets__plain">
+              {{ status.masterKeyFromEnvironment ? t('common.yes') : t('common.no') }}
+            </span>
+          </SettingsRow>
+        </template>
+        <p v-else-if="loading" class="settings-secrets__status">{{ t('settings.secrets.loading') }}</p>
+        <p v-else-if="error" class="settings-secrets__error">{{ error }}</p>
+        <SettingsRow :label="t('settings.secrets.refresh')">
+          <DwButton
+              variant="secondary"
+              size="sm"
+              type="button"
+              :disabled="loading"
+              @click="loadStatus"
+          >
+            {{ t('settings.secrets.refresh') }}
+          </DwButton>
+        </SettingsRow>
+      </SettingsGroup>
 
-    <SettingsSectionCard :title="t('settings.secrets.refsTitle')">
-      <p class="settings-secrets__lead">{{ t('settings.secrets.refsHint') }}</p>
-      <ul class="settings-secrets__list">
-        <li><code>dwsecret:env:DB_PASSWORD</code> — {{ t('settings.secrets.refEnv') }}</li>
-        <li><code>dwsecret:file:secrets/db-password.txt</code> — {{ t('settings.secrets.refFile') }}</li>
-        <li><code>dwsecret:json-file:secrets/bundle.json#dbPassword</code> — {{ t('settings.secrets.refJsonFile') }}</li>
-        <li><code>dwsecret:properties:secrets/bundle.properties#db.password</code> — {{ t('settings.secrets.refProperties') }}</li>
-        <li><code>dwsecret:dotenv:secrets/.env#DB_PASSWORD</code> — {{ t('settings.secrets.refDotenv') }}</li>
-        <li><code>dwsecret:vault:secret/data/myapp/db#password</code> — {{ t('settings.secrets.refVault') }}</li>
-      </ul>
-      <p class="settings-secrets__muted">{{ t('settings.secrets.refsNote') }}</p>
-      <p v-if="status?.secretRefHint" class="settings-secrets__muted">{{ status.secretRefHint }}</p>
-    </SettingsSectionCard>
+      <SettingsGroup
+          :title="t('settings.secrets.refsTitle')"
+          :hint="t('settings.secrets.refsHint')"
+      >
+        <ul class="settings-secrets__list">
+          <li v-for="item in refExamples" :key="item.code">
+            <code>{{ item.code }}</code>
+            <span>{{ item.desc }}</span>
+          </li>
+        </ul>
+        <p class="settings-secrets__note">{{ t('settings.secrets.refsNote') }}</p>
+        <p v-if="status?.secretRefHint" class="settings-secrets__note settings-secrets__note--follow">
+          {{ status.secretRefHint }}
+        </p>
+      </SettingsGroup>
+    </div>
   </SettingsPageShell>
 </template>
 
 <style scoped>
-.settings-secrets__lead {
-  margin: 0 0 var(--dw-space-4);
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text-secondary);
+.settings-secrets__value {
+  display: inline-block;
+  max-width: min(36ch, 42vw);
+  padding: var(--dw-space-2) var(--dw-space-3);
+  border-radius: var(--dw-control-radius-sm);
+  background: var(--dw-bg-muted);
+  font-family: var(--dw-mono);
+  font-size: var(--dw-text-xs);
+  color: var(--dw-text);
+  word-break: break-all;
   line-height: var(--dw-leading);
 }
 
-.settings-secrets__meta {
-  display: grid;
-  gap: var(--dw-space-3);
-  margin: 0 0 var(--dw-space-4);
+.settings-secrets__plain {
+  font-size: var(--dw-text-sm);
+  font-weight: 500;
+  color: var(--dw-text);
 }
 
-.settings-secrets__meta div {
-  display: flex;
-  flex-direction: column;
-  gap: var(--dw-space-1);
+.settings-secrets__status,
+.settings-secrets__error {
+  margin: var(--dw-space-3) 0;
+  font-size: var(--dw-text-sm);
+  line-height: var(--dw-leading-relaxed);
 }
 
-.settings-secrets__meta dt {
-  font-size: var(--dw-text-xs);
+.settings-secrets__status {
   color: var(--dw-text-muted);
 }
 
-.settings-secrets__meta dd {
-  margin: 0;
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text);
-  font-family: var(--dw-mono);
+.settings-secrets__error {
+  color: var(--dw-danger);
 }
 
 .settings-secrets__list {
-  margin: 0 0 var(--dw-space-4);
-  padding-left: var(--dw-space-5);
+  list-style: none;
+  margin: var(--dw-space-2) 0 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--dw-space-2);
-  font-size: var(--dw-text-sm);
-  color: var(--dw-text-secondary);
+}
+
+.settings-secrets__list li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-space-1);
+  padding: var(--dw-space-4) 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--dw-text) 7%, transparent);
+}
+
+.settings-secrets__list li:last-child {
+  border-bottom: 0;
 }
 
 .settings-secrets__list code {
   font-family: var(--dw-mono);
   font-size: var(--dw-text-xs);
+  font-weight: 500;
   color: var(--dw-text);
-}
-
-.settings-secrets__muted {
-  margin: 0;
-  font-size: var(--dw-text-xs);
-  color: var(--dw-text-muted);
+  word-break: break-all;
   line-height: var(--dw-leading);
 }
 
-.settings-secrets__error {
-  margin: 0 0 var(--dw-space-3);
-  font-size: var(--dw-text-sm);
-  color: var(--dw-danger);
+.settings-secrets__list span {
+  font-size: var(--dw-text-xs);
+  color: var(--dw-text-muted);
+  line-height: var(--dw-leading-relaxed);
 }
 
-.settings-secrets__actions {
-  margin-top: var(--dw-space-3);
+.settings-secrets__note {
+  margin: 0 0 var(--dw-space-2);
+  padding-top: var(--dw-space-3);
+  border-top: 1px solid color-mix(in srgb, var(--dw-text) 7%, transparent);
+  font-size: var(--dw-text-xs);
+  color: var(--dw-text-muted);
+  line-height: var(--dw-leading-relaxed);
+}
+
+.settings-secrets__note--follow {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 </style>

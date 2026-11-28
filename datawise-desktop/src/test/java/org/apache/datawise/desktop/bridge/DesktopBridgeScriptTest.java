@@ -22,6 +22,7 @@ class DesktopBridgeScriptTest {
         assertTrue(script.contains("writeBinaryFile"));
         assertTrue(script.contains("openInTerminal"));
         assertTrue(script.contains("registerRoot"));
+        assertTrue(script.contains("pickJreHome"));
         assertTrue(script.contains("theme:"));
         assertTrue(script.contains("datawise:file:open"));
         assertTrue(script.contains("_ackSessionFlush"));

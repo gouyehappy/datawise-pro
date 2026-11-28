@@ -18,8 +18,11 @@ public final class QueryOperationBudget {
         this.deadlineEpochMs = deadlineEpochMs;
     }
 
+    /** Process default when {@code datawise.query.timeout-seconds} is unset (DB-06). */
+    public static final int DEFAULT_QUERY_TIMEOUT_SECONDS = 60;
+
     /**
-     * @param queryTimeoutSeconds JDBC statement timeout; 0 = unlimited (legacy)
+     * @param queryTimeoutSeconds JDBC statement timeout; 0 = unlimited (explicit opt-out only)
      * @param overallDeadlineMs   wall-clock budget from request start; 0 = no wall deadline
      */
     public static QueryOperationBudget of(int queryTimeoutSeconds, long overallDeadlineMs) {
@@ -29,8 +32,13 @@ public final class QueryOperationBudget {
         return new QueryOperationBudget(queryTimeoutSeconds, deadline);
     }
 
+    /** Prefer {@link #of(int, long)} with a non-zero timeout for interactive SQL. */
     public static QueryOperationBudget unlimited() {
         return of(0, 0);
+    }
+
+    public static QueryOperationBudget interactiveDefault() {
+        return of(DEFAULT_QUERY_TIMEOUT_SECONDS, DEFAULT_QUERY_TIMEOUT_SECONDS * 1000L);
     }
 
     public int queryTimeoutSeconds() {

@@ -3,7 +3,7 @@ import {computed, ref, watch} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {useLayoutStore} from '@/features/layout/stores/layout'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
-import SettingsSegmentTabs from '@/features/settings/components/SettingsSegmentTabs.vue'
+import SettingsTabStrip from '@/features/settings/components/SettingsTabStrip.vue'
 import DataAgentSettingsPanel from '@/features/settings/components/DataAgentSettingsPanel.vue'
 import AiKnowledgeSettingsPanel from '@/features/settings/components/AiKnowledgeSettingsPanel.vue'
 
@@ -40,15 +40,12 @@ function selectTab(tab: HubTab) {
       :title="t('settings.dataAgent.hubTitle')"
       :subtitle="t('settings.dataAgent.hubSubtitle')"
   >
-    <div class="settings-tab-strip">
-      <SettingsSegmentTabs
-          :model-value="activeTab"
-          :tabs="tabs"
-          stretch
-          :aria-label="t('settings.dataAgent.hubTitle')"
-          @update:model-value="selectTab($event as HubTab)"
-      />
-    </div>
+    <SettingsTabStrip
+        :model-value="activeTab"
+        :tabs="tabs"
+        :aria-label="t('settings.dataAgent.hubTitle')"
+        @update:model-value="selectTab($event as HubTab)"
+    />
 
     <div class="data-agent-hub__body">
       <DataAgentSettingsPanel v-if="activeTab === 'pipeline'" embedded/>

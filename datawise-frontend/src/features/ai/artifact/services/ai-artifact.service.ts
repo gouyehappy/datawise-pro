@@ -12,6 +12,8 @@ import {
     addDashboardChartWidget,
     createDashboardChartWidget,
 } from '@/features/dashboard/services/dashboard-chart-widget.service'
+import {asDashboardPreferences} from '@/features/dashboard/services/dashboard-widget.service'
+import type {DashboardPreferences} from '@/features/dashboard/services/dashboard-widget.service'
 import type {AiChatMessage} from '@/features/ai/types'
 import type {AiAnalysisResult} from '@/features/ai/types/analysis'
 import type {AiDatabaseTarget} from '@/features/ai/shared/utils/database-targets'
@@ -155,7 +157,10 @@ export function pinConclusionToDashboard(
     }
     const appConfig = useAppConfigStore()
     appConfig.patchDashboardPreferences(
-        addDashboardChartWidget(appConfig.dashboardPreferences, withSource),
+        addDashboardChartWidget(
+            asDashboardPreferences(appConfig.dashboardPreferences as DashboardPreferences),
+            withSource,
+        ),
     )
     return withSource
 }

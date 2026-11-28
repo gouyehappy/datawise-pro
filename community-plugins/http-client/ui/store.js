@@ -19,9 +19,22 @@
     activeTabId: "",
     collections: [],
     environments: [],
+    /** Global variables are available in every environment; env values win. */
+    globals: [],
     history: [],
+    cookieJar: [],
     activeEnvironmentId: "",
-    settings: { sidebarWidth: 260, sidebarCollapsed: false, requestPercent: 45, historyLimit: DEFAULT_HISTORY_LIMIT },
+    settings: {
+      sidebarWidth: 260,
+      sidebarCollapsed: false,
+      requestPercent: 45,
+      workflowWidth: 560,
+      /** Last collection/folder used for quick “new request”. */
+      focusCollectionId: "",
+      focusFolderId: "",
+      historyLimit: DEFAULT_HISTORY_LIMIT,
+      sendCookieJar: true
+    },
     storePath: "",
     storeDir: "",
     dirConfigured: false,
@@ -57,9 +70,14 @@
       params: [],
       pathParams: [],
       cookies: [],
+      examples: [],
       body: { mode: "none", raw: "", contentType: "application/json", fields: [] },
       auth: { type: "none", username: "", password: "", token: "", key: "", value: "", in: "header" },
       scripts: { pre: "", post: "" },
+      runPolicy: "each",
+      /** Saved parameter sets ("cases") for one interface. */
+      cases: [],
+      activeCaseId: "",
       graphql: { query: "", variables: "{}" },
       stream: { sessionId: "", connected: false, log: [], draft: "" },
       options: {
@@ -70,7 +88,11 @@
         proxyMode: "environment",
         proxyUrl: "",
         maxBodyBytes: 33554432,
-        progressEvents: true
+        progressEvents: true,
+        retryCount: 0,
+        retryBackoffMs: 300,
+        retryStatuses: [429, 500, 502, 503, 504],
+        retryOnNetwork: false
       }
     };
   }
@@ -84,6 +106,8 @@
     const tab = Object.assign(emptyRequest(), typed, { section: (typed && typed.section) || "headers" }, incoming, { clientType });
     if (!Array.isArray(tab.pathParams)) tab.pathParams = [];
     if (!Array.isArray(tab.cookies)) tab.cookies = [];
+    if (!Array.isArray(tab.examples)) tab.examples = [];
+    if (!Array.isArray(tab.cases)) tab.cases = [];
     if (!tab.stream) tab.stream = { sessionId: "", connected: false, log: [], draft: "" };
     tab.response = null;
     tab.sending = false;
@@ -157,17 +181,118 @@
 
   function duplicateTab(id) {
     const source = state.tabs.find((tab) => tab.id === id);
-    if (!source) return;
+    if (!source) return null;
     const clone = JSON.parse(JSON.stringify(source));
     clone.id = util.uid("req");
     clone.name = t("tab.copySuffix", { name: source.name || t("tab.untitled") });
+    // Detach from saved identity — this is an untitled working copy.
+    clone.savedRequestId = "";
+    clone.collectionId = "";
+    clone.folderId = "";
     clone.response = null;
+    clone.fullBody = null;
+    clone.scriptResults = null;
+    clone.stream = null;
+    clone.progress = null;
+    clone.requestId = "";
     clone.sending = false;
     clone.dirty = true;
     state.tabs.push(clone);
     state.activeTabId = clone.id;
     persist();
     emit("tabs");
+    return clone;
+  }
+
+  function retargetTreeIds(node) {
+    if (!node) return;
+    if (node.kind === "folder") {
+      node.id = util.uid("folder");
+      (node.items || []).forEach(retargetTreeIds);
+      return;
+    }
+    node.id = util.uid("saved");
+  }
+
+  /** Tree selection: collection / folder / request. Third arg clears request when "". */
+  function setTreeFocus(collectionId, folderId, requestId) {
+    state.settings.focusCollectionId = collectionId || "";
+    state.settings.focusFolderId = folderId || "";
+    if (arguments.length >= 3) state.settings.focusRequestId = requestId || "";
+    else state.settings.focusRequestId = "";
+    schedulePersist();
+  }
+
+  function treeFocus() {
+    let collectionId = state.settings.focusCollectionId || "";
+    let folderId = state.settings.focusFolderId || "";
+    let requestId = state.settings.focusRequestId || "";
+    if (requestId) {
+      const located = locate(requestId);
+      if (!located || located.item.kind !== "request") requestId = "";
+      else {
+        collectionId = located.collection.id;
+        folderId = located.parent ? located.parent.id : "";
+      }
+    }
+    if (collectionId && !state.collections.some((item) => item.id === collectionId)) {
+      collectionId = "";
+      folderId = "";
+      requestId = "";
+    }
+    if (folderId) {
+      const located = locate(folderId);
+      if (!located || located.item.kind !== "folder") folderId = "";
+      else collectionId = located.collection.id;
+    }
+    if (!collectionId && state.collections[0]) collectionId = state.collections[0].id;
+    return { collectionId, folderId, requestId };
+  }
+
+  function syncTreeFocusFromTab(tab) {
+    if (!tab) return;
+    if (tab.savedRequestId) {
+      const located = locate(tab.savedRequestId);
+      if (located) {
+        setTreeFocus(
+          located.collection.id,
+          located.parent ? located.parent.id : "",
+          tab.savedRequestId
+        );
+        return;
+      }
+    }
+    if (tab.collectionId) {
+      setTreeFocus(tab.collectionId, tab.folderId || "", "");
+    }
+  }
+
+  function cloneSavedRequest(requestId) {
+    const located = locate(requestId);
+    if (!located || located.item.kind !== "request") return null;
+    const clone = JSON.parse(JSON.stringify(located.item));
+    clone.id = util.uid("saved");
+    clone.name = t("tab.copySuffix", { name: located.item.name || t("tab.untitled") });
+    located.list.splice(located.index + 1, 0, clone);
+    setTreeFocus(located.collection.id, located.parent ? located.parent.id : "");
+    persist();
+    emit("sidebar");
+    openSavedRequest(located.collection.id, clone.id);
+    return clone;
+  }
+
+  /** Clone a folder (and nested items) as the next sibling. */
+  function cloneFolder(folderId) {
+    const located = locate(folderId);
+    if (!located || located.item.kind !== "folder") return null;
+    const clone = JSON.parse(JSON.stringify(located.item));
+    retargetTreeIds(clone);
+    clone.name = t("tab.copySuffix", { name: located.item.name || t("misc.untitledFolder") });
+    clone.collapsed = false;
+    located.list.splice(located.index + 1, 0, clone);
+    persist();
+    emit("sidebar");
+    return clone;
   }
 
   function markDirty(tab) {
@@ -195,6 +320,10 @@
       collapsed: !!collection.collapsed,
       source: collection.source || "",
       projectKey: collection.projectKey || "",
+      auth: Object.assign({ type: "none" }, collection.auth || {}),
+      headers: Array.isArray(collection.headers) ? collection.headers : [],
+      params: Array.isArray(collection.params) ? collection.params : [],
+      cookies: Array.isArray(collection.cookies) ? collection.cookies : [],
       items: []
     };
     if (Array.isArray(collection.items)) {
@@ -228,6 +357,10 @@
         id: node.id || util.uid("folder"),
         name: node.name || t("misc.untitledFolder"),
         collapsed: !!node.collapsed,
+        auth: Object.assign({ type: "none" }, node.auth || {}),
+        headers: Array.isArray(node.headers) ? node.headers : [],
+        params: Array.isArray(node.params) ? node.params : [],
+        cookies: Array.isArray(node.cookies) ? node.cookies : [],
         items: []
       };
       if (Array.isArray(node.items)) {
@@ -257,9 +390,11 @@
       params: node.params || [],
       pathParams: node.pathParams || [],
       cookies: node.cookies || [],
+      examples: node.examples || [],
       body: node.body || { mode: "none", raw: "", fields: [] },
       auth: node.auth || { type: "none" },
       scripts: Object.assign({ pre: "", post: "" }, node.scripts || {}),
+      runPolicy: node.runPolicy === "once" ? "once" : "each",
       options: node.options || {}
     };
   }
@@ -379,6 +514,10 @@
       id: util.uid("col"),
       name: name || t("misc.untitledCollection"),
       collapsed: false,
+      auth: { type: "none", username: "", password: "", token: "", key: "", value: "", in: "header" },
+      headers: [],
+      params: [],
+      cookies: [],
       items: []
     };
     state.collections.push(collection);
@@ -397,6 +536,10 @@
       id: util.uid("folder"),
       name: name || t("misc.untitledFolder"),
       collapsed: false,
+      auth: { type: "none", username: "", password: "", token: "", key: "", value: "", in: "header" },
+      headers: [],
+      params: [],
+      cookies: [],
       items: []
     };
     items.push(folder);
@@ -477,12 +620,166 @@
       params: JSON.parse(JSON.stringify(tab.params || [])),
       pathParams: JSON.parse(JSON.stringify(tab.pathParams || [])),
       cookies: JSON.parse(JSON.stringify(tab.cookies || [])),
+      examples: JSON.parse(JSON.stringify(tab.examples || [])),
       body: JSON.parse(JSON.stringify(tab.body || {})),
       auth: JSON.parse(JSON.stringify(tab.auth || {})),
       scripts: JSON.parse(JSON.stringify(tab.scripts || { pre: "", post: "" })),
+      runPolicy: tab.runPolicy === "once" ? "once" : "each",
       options: JSON.parse(JSON.stringify(tab.options || {})),
       graphql: JSON.parse(JSON.stringify(tab.graphql || { query: "", variables: "{}" }))
     };
+  }
+
+  function saveResponseExample(tab, result, bodyText) {
+    if (!tab || !result) return null;
+    if (!Array.isArray(tab.examples)) tab.examples = [];
+    const example = {
+      id: util.uid("ex"),
+      name: t("examples.defaultName", { status: result.status || 0 }),
+      status: result.status || 0,
+      statusText: result.statusText || "",
+      contentType: result.contentType || "",
+      body: String(bodyText || "").slice(0, 200000),
+      headers: (result.headers || []).slice(0, 40).map((row) => ({
+        key: row.key, value: row.value
+      })),
+      at: Date.now()
+    };
+    tab.examples.unshift(example);
+    if (tab.examples.length > 10) tab.examples.length = 10;
+    tab.dirty = true;
+    if (tab.savedRequestId) {
+      saveRequestTo(tab.collectionId, tab, requestTitle(tab), tab.folderId || "");
+    } else {
+      persist();
+      emit("tabs");
+    }
+    return example;
+  }
+
+  function parseSetCookie(raw, requestUrl) {
+    const text = String(raw || "").trim();
+    if (!text) return null;
+    const parts = text.split(";").map((part) => part.trim()).filter(Boolean);
+    if (!parts.length) return null;
+    const [nameValue, ...attrs] = parts;
+    const eq = nameValue.indexOf("=");
+    if (eq <= 0) return null;
+    const name = nameValue.slice(0, eq).trim();
+    const value = nameValue.slice(eq + 1).trim();
+    let domain = "";
+    let path = "/";
+    let expires = "";
+    attrs.forEach((attr) => {
+      const lower = attr.toLowerCase();
+      if (lower.startsWith("domain=")) domain = attr.slice(7).trim();
+      else if (lower.startsWith("path=")) path = attr.slice(5).trim() || "/";
+      else if (lower.startsWith("expires=")) expires = attr.slice(8).trim();
+      else if (lower.startsWith("max-age=")) {
+        const seconds = Number(attr.slice(8).trim());
+        if (Number.isFinite(seconds)) expires = new Date(Date.now() + seconds * 1000).toISOString();
+      }
+    });
+    if (!domain) {
+      try { domain = new URL(requestUrl).hostname; } catch (error) { domain = ""; }
+    }
+    domain = String(domain || "").replace(/^\./, "").toLowerCase();
+    return {
+      id: util.uid("ck"),
+      domain,
+      path: path || "/",
+      name,
+      value,
+      expires,
+      enabled: true,
+      raw: text
+    };
+  }
+
+  function hostMatchesCookie(hostname, domain) {
+    const host = String(hostname || "").toLowerCase();
+    const dom = String(domain || "").toLowerCase().replace(/^\./, "");
+    if (!host || !dom) return false;
+    return host === dom || host.endsWith(`.${dom}`);
+  }
+
+  function ingestSetCookies(requestUrl, setCookies) {
+    (setCookies || []).forEach((raw) => {
+      const cookie = parseSetCookie(raw, requestUrl);
+      if (!cookie) return;
+      const existing = state.cookieJar.find((row) => (
+        row.domain === cookie.domain
+        && row.path === cookie.path
+        && row.name === cookie.name
+      ));
+      if (existing) Object.assign(existing, cookie, { id: existing.id });
+      else state.cookieJar.push(cookie);
+    });
+    if (state.cookieJar.length > 300) state.cookieJar = state.cookieJar.slice(-300);
+    persist();
+    emit("cookies");
+  }
+
+  function cookiesForUrl(requestUrl) {
+    let hostname = "";
+    let pathname = "/";
+    try {
+      const parsed = new URL(requestUrl);
+      hostname = parsed.hostname;
+      pathname = parsed.pathname || "/";
+    } catch (error) {
+      return [];
+    }
+    const now = Date.now();
+    return state.cookieJar.filter((row) => {
+      if (!row || row.enabled === false) return false;
+      if (!hostMatchesCookie(hostname, row.domain)) return false;
+      const path = row.path || "/";
+      if (!(pathname === path || pathname.startsWith(path.endsWith("/") ? path : `${path}/`) || path === "/")) {
+        if (!pathname.startsWith(path)) return false;
+      }
+      if (row.expires) {
+        const at = Date.parse(row.expires);
+        if (Number.isFinite(at) && at < now) return false;
+      }
+      return true;
+    });
+  }
+
+  function clearCookieJar(domain) {
+    if (!domain) state.cookieJar = [];
+    else {
+      const needle = String(domain).toLowerCase().replace(/^\./, "");
+      state.cookieJar = state.cookieJar.filter((row) => row.domain !== needle);
+    }
+    persist();
+    emit("cookies");
+  }
+
+  function deleteCookie(id) {
+    state.cookieJar = state.cookieJar.filter((row) => row.id !== id);
+    persist();
+    emit("cookies");
+  }
+
+  /** Insert or update a jar entry from the Cookie manager dialog. */
+  function upsertCookie(row) {
+    if (!row || !String(row.name || "").trim()) return null;
+    const entry = {
+      id: row.id || util.uid("ck"),
+      domain: String(row.domain || "").replace(/^\./, "").toLowerCase(),
+      path: String(row.path || "/") || "/",
+      name: String(row.name).trim(),
+      value: String(row.value == null ? "" : row.value),
+      expires: String(row.expires || ""),
+      enabled: row.enabled !== false
+    };
+    const existing = state.cookieJar.find((item) => item.id === entry.id);
+    if (existing) Object.assign(existing, entry);
+    else state.cookieJar.push(entry);
+    persist();
+    emit("cookies");
+    return entry;
   }
 
   function openSavedRequest(collectionId, requestId) {
@@ -514,9 +811,11 @@
       params: JSON.parse(JSON.stringify(saved.params || [])),
       pathParams: JSON.parse(JSON.stringify(saved.pathParams || [])),
       cookies: JSON.parse(JSON.stringify(saved.cookies || [])),
+      examples: JSON.parse(JSON.stringify(saved.examples || [])),
       body: Object.assign({ mode: "none", raw: "", fields: [] }, JSON.parse(JSON.stringify(saved.body || {}))),
       auth: Object.assign({ type: "none" }, JSON.parse(JSON.stringify(saved.auth || {}))),
       scripts: Object.assign({ pre: "", post: "" }, JSON.parse(JSON.stringify(saved.scripts || {}))),
+      runPolicy: saved.runPolicy === "once" ? "once" : "each",
       options: Object.assign(emptyRequest().options, saved.options || {}),
       graphql: Object.assign({ query: "", variables: "{}" }, JSON.parse(JSON.stringify(saved.graphql || {}))),
       collectionId: located.collection.id,
@@ -814,6 +1113,11 @@
 
   function variableMap() {
     const map = {};
+    // Globals first so the active environment can override any shared key.
+    (state.globals || []).forEach((row) => {
+      if (!row || row.enabled === false || !row.key) return;
+      map[row.key] = row.value;
+    });
     const environment = activeEnvironment();
     if (environment) {
       (environment.variables || []).forEach((row) => {
@@ -958,6 +1262,77 @@
     return (rows || []).filter((row) => row && row.enabled !== false && String(row.key || "").trim() !== "");
   }
 
+  function folderPath(collection, folderId) {
+    if (!collection || !folderId) return [];
+    const path = [];
+    const walk = (items, trail) => {
+      const list = items || [];
+      for (let i = 0; i < list.length; i += 1) {
+        const item = list[i];
+        if (!item || item.kind !== "folder") continue;
+        const next = trail.concat(item);
+        if (item.id === folderId) {
+          path.push(...next);
+          return true;
+        }
+        if (walk(item.items, next)) return true;
+      }
+      return false;
+    };
+    walk(collection.items, []);
+    return path;
+  }
+
+  /** Collection → nested folders. Request-level values override inherited ones. */
+  function resolveInherited(tab) {
+    const collection = state.collections.find((item) => item.id === (tab && tab.collectionId));
+    const chain = [];
+    if (collection) {
+      chain.push(collection);
+      folderPath(collection, tab && tab.folderId).forEach((folder) => chain.push(folder));
+    }
+    const mergeRows = (map, rows) => {
+      (rows || []).forEach((row) => {
+        if (!row || row.enabled === false || !String(row.key || "").trim()) return;
+        map.set(String(row.key).toLowerCase(), {
+          key: row.key,
+          value: row.value || "",
+          enabled: true,
+          description: row.description || ""
+        });
+      });
+    };
+    const headerMap = new Map();
+    const paramMap = new Map();
+    const cookieMap = new Map();
+    let auth = { type: "none", username: "", password: "", token: "", key: "", value: "", in: "header" };
+    chain.forEach((node) => {
+      mergeRows(headerMap, node.headers);
+      mergeRows(paramMap, node.params);
+      mergeRows(cookieMap, node.cookies);
+      if (node.auth && node.auth.type && node.auth.type !== "none") {
+        auth = Object.assign({
+          type: "none", username: "", password: "", token: "", key: "", value: "", in: "header"
+        }, node.auth);
+      }
+    });
+    mergeRows(headerMap, tab && tab.headers);
+    mergeRows(paramMap, tab && tab.params);
+    mergeRows(cookieMap, tab && tab.cookies);
+    const tabAuth = tab && tab.auth;
+    if (tabAuth && tabAuth.type && tabAuth.type !== "none" && tabAuth.type !== "inherit") {
+      auth = Object.assign({}, tabAuth);
+    }
+    return {
+      auth,
+      headers: Array.from(headerMap.values()),
+      params: Array.from(paramMap.values()),
+      cookies: Array.from(cookieMap.values()),
+      inheritedAuth: !(tabAuth && tabAuth.type && tabAuth.type !== "none" && tabAuth.type !== "inherit")
+        && auth.type !== "none"
+    };
+  }
+
   /* Builds the RPC payload for the sidecar with every variable resolved. */
   function buildSpec(tab, requestId, varsOverride) {
     if (tab && tab.clientType === "graphql" && HC.clients) HC.clients.syncGraphqlBody(tab);
@@ -973,14 +1348,55 @@
       if (url.indexOf(colon) >= 0) url = url.split(colon).join(encodeURIComponent(value));
       else if (url.indexOf(brace) >= 0) url = url.split(brace).join(encodeURIComponent(value));
     });
-    const headers = activeRows(tab.headers).map((row) => ({
+    const inherited = resolveInherited(tab);
+    // Folder/collection-level query params are appended only when the key is
+    // not already in the URL. tab.params are synced into tab.url by
+    // view-request before send, so this never duplicates them; workflow steps
+    // (which skip that sync) still get their params.
+    if (inherited.params.length) {
+      const hashAt = url.indexOf("#");
+      const beforeHash = hashAt >= 0 ? url.slice(0, hashAt) : url;
+      const hashPart = hashAt >= 0 ? url.slice(hashAt) : "";
+      const qAt = beforeHash.indexOf("?");
+      const present = new Set();
+      if (qAt >= 0) {
+        beforeHash.slice(qAt + 1).split("&").forEach((part) => {
+          const raw = part.split("=")[0];
+          if (!raw) return;
+          try { present.add(decodeURIComponent(raw).toLowerCase()); }
+          catch (error) { present.add(raw.toLowerCase()); }
+        });
+      }
+      const extra = [];
+      activeRows(inherited.params).forEach((row) => {
+        const key = resolveText(row.key);
+        if (!key || present.has(key.toLowerCase())) return;
+        present.add(key.toLowerCase());
+        extra.push(`${encodeURIComponent(key)}=${encodeURIComponent(resolveText(row.value || ""))}`);
+      });
+      if (extra.length) url = beforeHash + (qAt >= 0 ? "&" : "?") + extra.join("&") + hashPart;
+    }
+    const headers = activeRows(inherited.headers).map((row) => ({
       key: resolveText(row.key),
       value: resolveText(row.value),
       enabled: true
     }));
-    const cookieParts = activeRows(tab.cookies).map((row) => (
-      `${resolveText(row.key)}=${resolveText(row.value)}`
-    )).filter((part) => part && part !== "=");
+    const cookieMap = new Map();
+    const addCookies = (rows) => activeRows(rows).forEach((row) => {
+      const key = resolveText(row.key);
+      if (key) cookieMap.set(key, resolveText(row.value == null ? "" : String(row.value)));
+    });
+    addCookies(inherited.cookies);
+    addCookies(tab.cookies);
+    const cookieParts = Array.from(cookieMap.entries())
+      .map(([key, value]) => `${key}=${value}`)
+      .filter((part) => part && part !== "=");
+    if (state.settings.sendCookieJar !== false) {
+      cookiesForUrl(url).forEach((row) => {
+        if (!row.name) return;
+        cookieParts.push(`${row.name}=${row.value || ""}`);
+      });
+    }
     if (cookieParts.length) {
       const existing = headers.find((row) => String(row.key).toLowerCase() === "cookie");
       const joined = cookieParts.join("; ");
@@ -990,6 +1406,7 @@
         headers.push({ key: "Cookie", value: joined, enabled: true });
       }
     }
+    const auth = inherited.auth || tab.auth || { type: "none" };
     const spec = {
       requestId,
       method: tab.method,
@@ -997,13 +1414,13 @@
       headers,
       body: { mode: tab.body.mode, raw: "", contentType: "", fields: [] },
       auth: {
-        type: tab.auth.type,
-        username: resolveText(tab.auth.username),
-        password: resolveText(tab.auth.password),
-        token: resolveText(tab.auth.token),
-        key: resolveText(tab.auth.key),
-        value: resolveText(tab.auth.value),
-        in: tab.auth.in
+        type: auth.type === "inherit" ? "none" : auth.type,
+        username: resolveText(auth.username),
+        password: resolveText(auth.password),
+        token: resolveText(auth.token),
+        key: resolveText(auth.key),
+        value: resolveText(auth.value),
+        in: auth.in
       },
       options: {
         timeoutMs: Number(tab.options.timeoutMs) || 30000,
@@ -1017,8 +1434,14 @@
       }
     };
     if (tab.body.mode === "raw") {
-      spec.body.raw = resolveText(tab.body.raw);
-      spec.body.contentType = tab.body.contentType || "";
+      let raw = resolveText(tab.body.raw);
+      const contentType = tab.body.contentType || "";
+      // JSONC: keep // and /* */ in the editor; strip before wire so APIs get strict JSON.
+      if (util.isJsonContentType(contentType) && raw) {
+        raw = util.stripJsonComments(raw);
+      }
+      spec.body.raw = raw;
+      spec.body.contentType = contentType;
     } else if (tab.body.mode === "urlencoded" || tab.body.mode === "formdata") {
       spec.body.fields = activeRows(tab.body.fields).map((row) => ({
         key: resolveText(row.key),
@@ -1058,13 +1481,52 @@
 
   /* ----------------------------------------------------------- persistence -- */
 
+  const SENSITIVE_KEY = /(token|secret|password|passwd|api[_-]?key|authorization|cookie|credential)/i;
+
+  /** Deep copy with credentials masked, for export/share dialogs. */
+  function redactForExport(data) {
+    const out = JSON.parse(JSON.stringify(data || {}));
+    const redactAuth = (auth) => {
+      if (!auth || typeof auth !== "object") return;
+      ["password", "token", "value"].forEach((key) => {
+        if (auth[key]) auth[key] = "{{REDACTED}}";
+      });
+    };
+    const redactHeaders = (headers) => {
+      (headers || []).forEach((header) => {
+        if (header && SENSITIVE_KEY.test(header.key || "") && header.value) {
+          header.value = "{{REDACTED}}";
+        }
+      });
+    };
+    const walk = (items) => {
+      (items || []).forEach((item) => {
+        redactAuth(item.auth);
+        redactHeaders(item.headers);
+        if (item.body && item.body.fields) redactHeaders(item.body.fields);
+        if (item.items) walk(item.items);
+      });
+    };
+    (out.collections || []).forEach((collection) => walk(collection.items));
+    const redactRows = (rows) => (rows || []).forEach((row) => {
+      if (row && (row.secret || SENSITIVE_KEY.test(row.key || "")) && row.value) row.value = "{{REDACTED}}";
+    });
+    (out.environments || []).forEach((environment) => redactRows(environment.variables));
+    redactRows(out.globals);
+    (out.tabs || []).forEach((tab) => { redactAuth(tab.auth); redactHeaders(tab.headers); });
+    out.cookieJar = [];
+    return out;
+  }
+
   function serializable() {
     return {
       version: 2,
       collections: state.collections,
       environments: state.environments,
+      globals: state.globals,
       activeEnvironmentId: state.activeEnvironmentId,
       history: state.history,
+      cookieJar: state.cookieJar,
       settings: state.settings,
       tabs: state.tabs.map((tab) => ({
         name: tab.name,
@@ -1075,10 +1537,13 @@
         params: tab.params,
         pathParams: tab.pathParams || [],
         cookies: tab.cookies || [],
+        examples: tab.examples || [],
         body: tab.body,
         auth: tab.auth,
         scripts: tab.scripts || { pre: "", post: "" },
         options: tab.options,
+        cases: tab.cases || [],
+        activeCaseId: tab.activeCaseId || "",
         graphql: tab.graphql || { query: "", variables: "{}" },
         collectionId: tab.collectionId,
         folderId: tab.folderId || "",
@@ -1092,10 +1557,12 @@
     if (!document || typeof document !== "object") return;
     if (Array.isArray(document.collections)) state.collections = migrateCollections(document.collections);
     if (Array.isArray(document.environments)) state.environments = document.environments;
+    if (Array.isArray(document.globals)) state.globals = document.globals;
     if (Array.isArray(document.history)) {
       state.history = document.history;
       trimHistory();
     }
+    if (Array.isArray(document.cookieJar)) state.cookieJar = document.cookieJar;
     if (document.activeEnvironmentId) state.activeEnvironmentId = document.activeEnvironmentId;
     if (document.settings) {
       Object.assign(state.settings, document.settings);
@@ -1148,24 +1615,34 @@
     persistTimer = setTimeout(persist, 700);
   }
 
+  let memoryNoticeActive = false;
+  function setMemoryOnly(active, reason) {
+    if (state.memoryOnly !== active || (active && !memoryNoticeActive)) {
+      state.memoryOnly = active;
+      memoryNoticeActive = active;
+      emit(active ? "memory-only" : "memory-ok", active ? reason : "");
+    }
+  }
+
   async function persist() {
     clearTimeout(persistTimer);
     const document = serializable();
     writeLocalCache();
     if (!HC.bridge.backendReady) {
-      state.memoryOnly = true;
+      setMemoryOnly(true, "backend");
       return;
     }
     try {
       // The sidecar owns the authoritative store path; sending the configured
       // directory along lets a change made elsewhere stick on the next save.
       const result = await HC.bridge.saveStore(document, state.storeDir && state.dirConfigured ? state.storeDir : "");
-      state.memoryOnly = false;
+      setMemoryOnly(false);
       state.storePath = result.path || state.storePath;
       if (result.dir) state.storeDir = result.dir;
       if (result.configured !== undefined) state.dirConfigured = !!result.configured;
     } catch (error) {
-      state.memoryOnly = true;
+      // Silent failure here used to leave users editing without persistence.
+      setMemoryOnly(true, (error && error.message) || "save failed");
     }
   }
 
@@ -1258,9 +1735,11 @@
     state, METHODS, subscribe, emit, init, persist, schedulePersist, setStoreDir,
     createTab, createClientTab, activeTab, setActiveTab, closeTab, closeTabs, closeTabsToSide, duplicateTab, markDirty,
     emptyRequest, snapshotRequest, requestTitle,
+    resolveInherited, syncTreeFocusFromTab,
     createCollection, renameCollection, deleteCollection,
     createFolder, renameFolder, deleteFolder, toggleCollapsed,
-    saveRequestTo, openSavedRequest, deleteSavedRequest,
+    saveRequestTo, openSavedRequest, deleteSavedRequest, cloneSavedRequest, cloneFolder,
+    setTreeFocus, treeFocus,
     moveItem, listFolders, countRequests, countTree, locate, folderContains,
     importCollection, removeCollectionsByProject, migrateCollection,
     DEFAULT_HISTORY_LIMIT, MIN_HISTORY_LIMIT, MAX_HISTORY_LIMIT,
@@ -1268,7 +1747,8 @@
     createEnvironment, deleteEnvironment, moveEnvironmentBy, reorderEnvironment,
     activeEnvironment, setActiveEnvironment,
     variableMap, resolve, unresolvedVariables, collectMissingVariables, buildSpec,
+    saveResponseExample, ingestSetCookies, cookiesForUrl, clearCookieJar, deleteCookie, upsertCookie, parseSetCookie,
     DYNAMIC_VARIABLES, listDynamicVariables, isDynamicVariable, dynamicVariable,
-    serializable, hydrate
+    serializable, redactForExport, hydrate
   };
 })();

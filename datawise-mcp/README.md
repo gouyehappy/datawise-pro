@@ -18,7 +18,8 @@
 
 | 变量 | 说明 |
 |------|------|
-| `DATAWISE_API_URL` | 后端根地址，默认 `http://localhost:18421` |
+| `DATAWISE_API_URL` | 后端根地址，默认 `http://localhost:18421`（仅回环 http(s)，或 HTTPS 且主机在 allowlist） |
+| `DATAWISE_API_HOST_ALLOWLIST` | 逗号分隔的 HTTPS 主机白名单（非回环地址必填） |
 | `DATAWISE_SESSION_ID` | 浏览器会话 ID（请求头 `X-DW-Session-Id`） |
 | `DATAWISE_API_TOKEN` | API Token（请求头 `X-DW-Api-Token`，可替代会话） |
 

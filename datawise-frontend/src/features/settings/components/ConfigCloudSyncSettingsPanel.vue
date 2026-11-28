@@ -1,9 +1,18 @@
 <script setup lang="ts">
 import {computed, onMounted, reactive, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
-import {DwButton, DwCheckbox, DwInput} from '@/core/components'
+import {
+  AppModal,
+  DwButton,
+  DwInlineAlert,
+  DwInput,
+  FormField,
+  ModalActions,
+} from '@/core/components'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
-import SettingsSectionCard from '@/features/settings/components/SettingsSectionCard.vue'
+import SettingsActions from '@/features/settings/components/SettingsActions.vue'
+import ConfigHubCard from '@/features/settings/components/ConfigHubCard.vue'
+import ProfileDomainPicker from '@/features/settings/components/ProfileDomainPicker.vue'
 import {useAppToast} from '@/features/layout/composables/useAppToast'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import {useResourceWriteGuard} from '@/features/auth/composables/useResourceWriteGuard'
@@ -30,6 +39,11 @@ import {
   type CloudSyncWebDavSettings,
 } from '@/features/settings/services/config-cloud-sync.service'
 
+withDefaults(defineProps<{
+  /** 嵌在「配置迁移」页内时不渲染独立 SettingsPageShell */
+  embedded?: boolean
+}>(), {embedded: false})
+
 const {t} = useI18n()
 const toast = useAppToast()
 const appConfig = useAppConfigStore()
@@ -45,20 +59,57 @@ const webdav = reactive<CloudSyncWebDavSettings>({
   hasPassword: false,
   remotePath: 'datawise/profile-sync.dwprofile',
 })
+const webdavDraft = reactive<CloudSyncWebDavSettings>({
+  baseUrl: '',
+  username: '',
+  password: '',
+  hasPassword: false,
+  remotePath: 'datawise/profile-sync.dwprofile',
+})
+
+const exportOpen = ref(false)
+const importOpen = ref(false)
+const webdavOpen = ref(false)
+const exportError = ref('')
+const importError = ref('')
+const webdavError = ref('')
+
 const importFile = ref<File | null>(null)
 const preflight = ref<ProfilePreflightResult | null>(null)
 const busy = ref(false)
 const fileInputRef = ref<HTMLInputElement>()
 
-const canPackage = computed(
-    () => !readOnly.value
-        && (syncDomains.connections || syncDomains.app || syncDomains.snippets
-            || syncDomains.aiWorkspace || syncDomains.projects
-            || syncDomains.savedConsoles || syncDomains.sqlHistory),
-)
+const hasDomain = (domains: ProfileDomainOptions) =>
+    domains.connections || domains.app || domains.snippets
+        || domains.aiWorkspace || domains.projects
+        || domains.savedConsoles || domains.sqlHistory
+
+const canPackage = computed(() => !readOnly.value && hasDomain(syncDomains))
 
 const canWebDav = computed(
     () => canPackage.value && webdav.baseUrl.trim().length > 0,
+)
+
+const webdavConfigured = computed(() => webdav.baseUrl.trim().length > 0)
+
+const webdavCardMeta = computed(() => {
+  if (!webdavConfigured.value) return t('settings.configCloudSync.webdavNotConfigured')
+  return webdav.baseUrl.trim()
+})
+
+const webdavConnectionHint = computed(() => {
+  if (!webdavConfigured.value) return t('settings.configCloudSync.webdavNotConfigured')
+  const user = webdav.username.trim() || '—'
+  const path = webdav.remotePath.trim() || '—'
+  return t('settings.configCloudSync.webdavConfiguredHint', {user, path})
+})
+
+const canApply = computed(
+    () => !readOnly.value
+        && !!importFile.value
+        && hasDomain(syncDomains)
+        && !!preflight.value?.schemaCompatible
+        && (preflight.value.passphraseOk || preflight.value.manifest?.secretMode === 'omitted'),
 )
 
 onMounted(async () => {
@@ -74,8 +125,48 @@ onMounted(async () => {
   }
 })
 
+function openExport() {
+  if (denyIfReadOnly()) return
+  exportError.value = ''
+  exportOpen.value = true
+}
+
+function closeExport() {
+  exportOpen.value = false
+  exportError.value = ''
+}
+
+function openImport() {
+  if (denyIfReadOnly()) return
+  importError.value = ''
+  importOpen.value = true
+}
+
+function closeImport() {
+  importOpen.value = false
+  importError.value = ''
+}
+
+function openWebDav() {
+  if (denyIfReadOnly()) return
+  webdavDraft.baseUrl = webdav.baseUrl
+  webdavDraft.username = webdav.username
+  webdavDraft.password = ''
+  webdavDraft.hasPassword = webdav.hasPassword
+  webdavDraft.remotePath = webdav.remotePath
+  webdavError.value = ''
+  webdavOpen.value = true
+}
+
+function closeWebDav() {
+  webdavOpen.value = false
+  webdavError.value = ''
+  webdavDraft.password = ''
+}
+
 async function onDownloadPackage() {
   if (denyIfReadOnly() || !canPackage.value) return
+  exportError.value = ''
   busy.value = true
   try {
     const {blob, fileName} = await exportProfilePackage({
@@ -83,6 +174,7 @@ async function onDownloadPackage() {
       includeSecrets: false,
     })
     downloadBlob(blob, fileName.startsWith('datawise-') ? fileName.replace('profile', 'sync') : fileName)
+    closeExport()
     toast.notify({
       category: 'export',
       titleKey: 'exportDone',
@@ -90,10 +182,8 @@ async function onDownloadPackage() {
       params: {name: t('settings.configCloudSync.packageDownloaded')},
     })
   } catch (err) {
-    toast.error(
-        resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
-        || t('settings.configCloudSync.packageFailed'),
-    )
+    exportError.value = resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
+        || t('settings.configCloudSync.packageFailed')
   } finally {
     busy.value = false
   }
@@ -107,29 +197,27 @@ function onFileChosen(event: Event) {
   const input = event.target as HTMLInputElement
   importFile.value = input.files?.[0] ?? null
   preflight.value = null
+  importError.value = ''
   input.value = ''
 }
 
 async function onPreflight() {
   if (denyIfReadOnly() || !importFile.value) return
+  importError.value = ''
   busy.value = true
   try {
     const result = await preflightProfilePackage(importFile.value, '')
     preflight.value = result
     if (!result.schemaCompatible) {
-      toast.error(t('settings.configPortability.schemaUnsupported'))
+      importError.value = t('settings.configPortability.schemaUnsupported')
       return
     }
     if (!result.passphraseOk && result.manifest?.secretMode !== 'omitted') {
-      toast.error(t('settings.configPortability.passphraseIncorrect'))
-      return
+      importError.value = t('settings.configPortability.passphraseIncorrect')
     }
-    toast.success(t('settings.configPortability.preflightOk'))
   } catch (err) {
-    toast.error(
-        resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
-        || t('settings.configPortability.preflightFailed'),
-    )
+    importError.value = resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
+        || t('settings.configPortability.preflightFailed')
   } finally {
     busy.value = false
   }
@@ -145,22 +233,28 @@ async function refreshAfterImport() {
 }
 
 async function onApply() {
-  if (denyIfReadOnly() || !importFile.value || !preflight.value?.schemaCompatible) return
+  if (denyIfReadOnly() || !canApply.value || !importFile.value) return
+  importError.value = ''
   busy.value = true
   try {
     const result = await importProfilePackage(importFile.value, '', {...syncDomains})
     await refreshAfterImport()
-    toast.success(t('settings.configCloudSync.applySuccess'))
+    closeImport()
+    closeWebDav()
+    toast.notify({
+      category: 'workspace',
+      titleKey: 'importDone',
+      bodyKey: 'importDone',
+      params: {name: t('settings.configCloudSync.applySuccess')},
+    })
     if (result.restartRecommended) {
       toast.warning(t('settings.configPortability.restartRecommended'))
     }
     importFile.value = null
     preflight.value = null
   } catch (err) {
-    toast.error(
-        resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
-        || t('settings.configCloudSync.applyFailed'),
-    )
+    importError.value = resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
+        || t('settings.configCloudSync.applyFailed')
   } finally {
     busy.value = false
   }
@@ -168,39 +262,44 @@ async function onApply() {
 
 async function onSaveWebDav() {
   if (denyIfReadOnly()) return
+  webdavError.value = ''
+  if (!webdavDraft.baseUrl.trim()) {
+    webdavError.value = t('settings.configCloudSync.webdavUrlRequired')
+    return
+  }
   busy.value = true
   try {
-    const saved = await saveCloudSyncSettings({...webdav})
+    const saved = await saveCloudSyncSettings({...webdavDraft})
+    webdav.baseUrl = saved.baseUrl
+    webdav.username = saved.username
     webdav.hasPassword = saved.hasPassword
+    webdav.remotePath = saved.remotePath
     webdav.password = ''
-    toast.success(t('settings.configCloudSync.webdavSaved'))
+    webdavDraft.hasPassword = saved.hasPassword
+    webdavDraft.password = ''
   } catch (err) {
-    toast.error(
-        resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
-        || t('settings.configCloudSync.webdavSaveFailed'),
-    )
+    webdavError.value = resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
+        || t('settings.configCloudSync.webdavSaveFailed')
   } finally {
     busy.value = false
   }
 }
 
 async function onTestWebDav() {
-  if (denyIfReadOnly() || !webdav.baseUrl.trim()) return
+  if (denyIfReadOnly() || !webdavDraft.baseUrl.trim()) return
+  webdavError.value = ''
   busy.value = true
   try {
     await testCloudSyncWebDav({
-      baseUrl: webdav.baseUrl,
-      username: webdav.username,
-      password: webdav.password,
-      remotePath: webdav.remotePath,
-      hasPassword: webdav.hasPassword,
+      baseUrl: webdavDraft.baseUrl,
+      username: webdavDraft.username,
+      password: webdavDraft.password,
+      remotePath: webdavDraft.remotePath,
+      hasPassword: webdavDraft.hasPassword || webdav.hasPassword,
     })
-    toast.success(t('settings.configCloudSync.webdavTestOk'))
   } catch (err) {
-    toast.error(
-        resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
-        || t('settings.configCloudSync.webdavTestFailed'),
-    )
+    webdavError.value = resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
+        || t('settings.configCloudSync.webdavTestFailed')
   } finally {
     busy.value = false
   }
@@ -208,21 +307,19 @@ async function onTestWebDav() {
 
 async function onUploadWebDav() {
   if (denyIfReadOnly() || !canWebDav.value) return
+  webdavError.value = ''
   busy.value = true
   try {
     await uploadCloudSyncWebDav({...syncDomains}, {
       baseUrl: webdav.baseUrl,
       username: webdav.username,
-      password: webdav.password,
+      password: webdavDraft.password || webdav.password,
       remotePath: webdav.remotePath,
       hasPassword: webdav.hasPassword,
     }, false)
-    toast.success(t('settings.configCloudSync.webdavUploadOk'))
   } catch (err) {
-    toast.error(
-        resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
-        || t('settings.configCloudSync.webdavUploadFailed'),
-    )
+    webdavError.value = resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
+        || t('settings.configCloudSync.webdavUploadFailed')
   } finally {
     busy.value = false
   }
@@ -230,24 +327,31 @@ async function onUploadWebDav() {
 
 async function onDownloadWebDav() {
   if (denyIfReadOnly() || !webdav.baseUrl.trim()) return
+  webdavError.value = ''
+  importError.value = ''
   busy.value = true
   try {
     const {blob, fileName} = await downloadCloudSyncWebDav({
       baseUrl: webdav.baseUrl,
       username: webdav.username,
-      password: webdav.password,
+      password: webdavDraft.password || webdav.password,
       remotePath: webdav.remotePath,
       hasPassword: webdav.hasPassword,
     })
     const file = new File([blob], fileName, {type: 'application/octet-stream'})
     importFile.value = file
-    preflight.value = await preflightProfilePackage(file, '')
-    toast.success(t('settings.configCloudSync.webdavDownloadOk'))
+    const result = await preflightProfilePackage(file, '')
+    preflight.value = result
+    if (!result.schemaCompatible) {
+      webdavError.value = t('settings.configPortability.schemaUnsupported')
+      return
+    }
+    if (!result.passphraseOk && result.manifest?.secretMode !== 'omitted') {
+      webdavError.value = t('settings.configPortability.passphraseIncorrect')
+    }
   } catch (err) {
-    toast.error(
-        resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
-        || t('settings.configCloudSync.webdavDownloadFailed'),
-    )
+    webdavError.value = resolveDisplayApiErrorMessage(err, (key) => String(t(key)))
+        || t('settings.configCloudSync.webdavDownloadFailed')
   } finally {
     busy.value = false
   }
@@ -255,61 +359,132 @@ async function onDownloadWebDav() {
 </script>
 
 <template>
-  <SettingsPageShell
-      id="settings-config-cloud-sync"
-      :title="t('settings.configCloudSync.title')"
-      :subtitle="t('settings.configCloudSync.subtitle')"
+  <component
+      :is="embedded ? 'div' : SettingsPageShell"
+      v-bind="embedded
+        ? {class: 'config-hub-embed'}
+        : {
+          id: 'settings-config-cloud-sync',
+          title: t('settings.configCloudSync.title'),
+          subtitle: t('settings.configCloudSync.subtitle'),
+        }"
   >
-    <SettingsSectionCard
-        :title="t('settings.configCloudSync.domainsTitle')"
-        :hint="t('settings.configCloudSync.domainsHint')"
-        icon="layers"
-        tone="panel"
-    >
-      <div class="sync-domains">
-        <DwCheckbox v-model="syncDomains.connections" :label="t('settings.configPortability.domain.connections')"/>
-        <DwCheckbox v-model="syncDomains.app" :label="t('settings.configPortability.domain.app')"/>
-        <DwCheckbox v-model="syncDomains.snippets" :label="t('settings.configPortability.domain.snippets')"/>
-        <DwCheckbox v-model="syncDomains.savedConsoles" :label="t('settings.configPortability.domain.savedConsoles')"/>
-        <DwCheckbox v-model="syncDomains.aiWorkspace" :label="t('settings.configPortability.domain.aiWorkspace')"/>
-        <DwCheckbox v-model="syncDomains.projects" :label="t('settings.configPortability.domain.projects')"/>
-        <DwCheckbox v-model="syncDomains.sqlHistory" :label="t('settings.configPortability.domain.sqlHistory')"/>
+    <section class="config-hub-group">
+      <header v-if="embedded" class="config-hub-group__head">
+        <h3 class="config-hub-group__title">{{ t('settings.configCloudSync.hubGroupTitle') }}</h3>
+        <p class="config-hub-group__hint">{{ t('settings.configCloudSync.hubGroupHint') }}</p>
+      </header>
+      <div class="config-hub">
+        <ConfigHubCard
+            :title="t('settings.configCloudSync.exportPackage')"
+            :hint="t('settings.configCloudSync.exportPackageHint')"
+            icon="export"
+            :action-label="t('settings.configCloudSync.hubOpen')"
+            :disabled="readOnly"
+            @click="openExport"
+        />
+        <ConfigHubCard
+            :title="t('settings.configCloudSync.importPackage')"
+            :hint="t('settings.configCloudSync.importPackageHint')"
+            icon="import"
+            :action-label="t('settings.configCloudSync.hubOpen')"
+            :disabled="readOnly"
+            @click="openImport"
+        />
+        <ConfigHubCard
+            :title="t('settings.configCloudSync.webdavTitle')"
+            :hint="t('settings.configCloudSync.webdavHint')"
+            :meta="webdavCardMeta"
+            icon="link"
+            :action-label="webdavConfigured
+              ? t('settings.configCloudSync.hubManage')
+              : t('settings.configCloudSync.configureWebdav')"
+            :disabled="readOnly"
+            @click="openWebDav"
+        />
       </div>
-      <p class="sync-muted">{{ t('settings.configCloudSync.credentialsDefault') }}</p>
-    </SettingsSectionCard>
+    </section>
+  </component>
 
-    <SettingsSectionCard
-        :title="t('settings.configCloudSync.packageTitle')"
-        :hint="t('settings.configCloudSync.packageHint')"
-        icon="export"
-        tone="panel"
-    >
-      <DwButton
-          variant="primary"
-          size="sm"
-          :loading="busy"
-          :disabled="!canPackage || busy"
-          @click="onDownloadPackage"
+  <input
+      ref="fileInputRef"
+      class="config-file-input"
+      type="file"
+      accept=".dwprofile,application/zip"
+      @change="onFileChosen"
+  >
+
+  <AppModal
+      :open="exportOpen"
+      :title="t('settings.configCloudSync.exportModalTitle')"
+      :subtitle="t('settings.configCloudSync.exportModalSubtitle')"
+      width="560px"
+      @close="closeExport"
+  >
+    <form class="modal-form modal-form--compact" @submit.prevent="onDownloadPackage">
+      <div class="config-modal-section">
+        <p class="config-modal-label">{{ t('settings.configCloudSync.domainsTitle') }}</p>
+        <ProfileDomainPicker
+            v-model="syncDomains"
+            :aria-label="t('settings.configCloudSync.domainsTitle')"
+            :disabled="readOnly"
+        />
+        <p class="config-modal-hint">{{ t('settings.configCloudSync.credentialsDefault') }}</p>
+      </div>
+      <DwInlineAlert v-if="exportError" :message="exportError" density="banner"/>
+    </form>
+    <template #footer>
+      <ModalActions
+          :confirm-label="t('settings.configCloudSync.downloadPackage')"
+          :confirm-disabled="!canPackage || busy"
+          :confirm-loading="busy"
+          @cancel="closeExport"
+          @confirm="onDownloadPackage"
+      />
+    </template>
+  </AppModal>
+
+  <AppModal
+      :open="importOpen"
+      :title="t('settings.configCloudSync.importModalTitle')"
+      :subtitle="t('settings.configCloudSync.importModalSubtitle')"
+      width="560px"
+      @close="closeImport"
+  >
+    <form class="modal-form modal-form--compact" @submit.prevent="onApply">
+      <FormField
+          :label="t('settings.configPortability.chooseFile')"
+          :hint="importFile?.name || t('settings.configPortability.noFile')"
       >
-        {{ t('settings.configCloudSync.downloadPackage') }}
-      </DwButton>
-      <input
-          ref="fileInputRef"
-          class="sync-file-input"
-          type="file"
-          accept=".dwprofile,application/zip"
-          @change="onFileChosen"
-      >
-      <div class="sync-file-row">
         <DwButton variant="secondary" size="sm" :disabled="busy || readOnly" @click="pickImportFile">
           {{ t('settings.configPortability.chooseFile') }}
         </DwButton>
-        <span class="sync-muted">{{ importFile?.name || t('settings.configPortability.noFile') }}</span>
+      </FormField>
+      <div class="config-modal-section">
+        <p class="config-modal-label">{{ t('settings.configCloudSync.domainsTitle') }}</p>
+        <ProfileDomainPicker
+            v-model="syncDomains"
+            :aria-label="t('settings.configCloudSync.domainsTitle')"
+            :disabled="readOnly"
+        />
+        <p class="config-modal-hint">{{ t('settings.configCloudSync.domainsHint') }}</p>
       </div>
-      <div class="sync-actions">
+      <div v-if="preflight" class="config-preflight">
+        <p>{{ t('settings.configCloudSync.preflightSummary', {
+          secretMode: preflight.manifest?.secretMode || '—',
+          connections: Number(preflight.counts?.connections ?? 0),
+        }) }}</p>
+      </div>
+      <DwInlineAlert v-if="importError" :message="importError" density="banner"/>
+    </form>
+    <template #footer>
+      <SettingsActions>
+        <DwButton variant="ghost" type="button" @click="closeImport">
+          {{ t('common.cancel') }}
+        </DwButton>
         <DwButton
             variant="secondary"
-            size="sm"
+            type="button"
             :loading="busy"
             :disabled="busy || readOnly || !importFile"
             @click="onPreflight"
@@ -318,123 +493,231 @@ async function onDownloadWebDav() {
         </DwButton>
         <DwButton
             variant="primary"
-            size="sm"
+            type="button"
             :loading="busy"
-            :disabled="busy || readOnly || !preflight?.schemaCompatible"
+            :disabled="!canApply || busy"
             @click="onApply"
         >
           {{ t('settings.configCloudSync.applyPackage') }}
         </DwButton>
+      </SettingsActions>
+    </template>
+  </AppModal>
+
+  <AppModal
+      :open="webdavOpen"
+      :title="t('settings.configCloudSync.webdavEditorTitle')"
+      :subtitle="t('settings.configCloudSync.webdavEditorSubtitle')"
+      width="600px"
+      @close="closeWebDav"
+  >
+    <form class="modal-form modal-form--compact" @submit.prevent="onSaveWebDav">
+      <div class="config-modal-section">
+        <p class="config-modal-label">{{ t('settings.configCloudSync.webdavConnection') }}</p>
+        <p v-if="webdavConfigured" class="config-modal-hint config-modal-hint--mono">
+          {{ webdavConnectionHint }}
+        </p>
+        <FormField :label="t('settings.configCloudSync.baseUrl')">
+          <DwInput
+              v-model="webdavDraft.baseUrl"
+              autocomplete="off"
+              placeholder="https://nas.example/webdav"
+          />
+        </FormField>
+        <div class="modal-form-grid">
+          <FormField :label="t('settings.configCloudSync.username')">
+            <DwInput v-model="webdavDraft.username" autocomplete="username"/>
+          </FormField>
+          <FormField
+              :label="t('settings.configCloudSync.password')"
+              :hint="webdavDraft.hasPassword ? t('settings.configCloudSync.passwordKept') : undefined"
+          >
+            <DwInput
+                v-model="webdavDraft.password"
+                type="password"
+                autocomplete="current-password"
+                :placeholder="webdavDraft.hasPassword ? t('settings.configCloudSync.passwordKept') : ''"
+            />
+          </FormField>
+        </div>
+        <FormField :label="t('settings.configCloudSync.remotePath')">
+          <DwInput v-model="webdavDraft.remotePath" variant="mono" autocomplete="off"/>
+        </FormField>
+        <SettingsActions>
+          <DwButton
+              variant="primary"
+              size="sm"
+              type="button"
+              :loading="busy"
+              :disabled="busy || readOnly"
+              @click="onSaveWebDav"
+          >
+            {{ t('settings.configCloudSync.saveWebdav') }}
+          </DwButton>
+          <DwButton
+              variant="secondary"
+              size="sm"
+              type="button"
+              :loading="busy"
+              :disabled="busy || readOnly || !webdavDraft.baseUrl.trim()"
+              @click="onTestWebDav"
+          >
+            {{ t('settings.configCloudSync.testWebdav') }}
+          </DwButton>
+        </SettingsActions>
       </div>
-      <p v-if="preflight" class="sync-muted">
-        {{ t('settings.configCloudSync.preflightSummary', {
+
+      <div class="config-modal-section">
+        <p class="config-modal-label">{{ t('settings.configCloudSync.domainsTitle') }}</p>
+        <ProfileDomainPicker
+            v-model="syncDomains"
+            :aria-label="t('settings.configCloudSync.domainsTitle')"
+            :disabled="readOnly"
+        />
+        <p class="config-modal-hint">{{ t('settings.configCloudSync.webdavActionsHint') }}</p>
+        <SettingsActions>
+          <DwButton
+              variant="secondary"
+              size="sm"
+              type="button"
+              :loading="busy"
+              :disabled="!canWebDav || busy"
+              @click="onUploadWebDav"
+          >
+            {{ t('settings.configCloudSync.uploadWebdav') }}
+          </DwButton>
+          <DwButton
+              variant="secondary"
+              size="sm"
+              type="button"
+              :loading="busy"
+              :disabled="busy || readOnly || !webdavConfigured"
+              @click="onDownloadWebDav"
+          >
+            {{ t('settings.configCloudSync.downloadWebdav') }}
+          </DwButton>
+        </SettingsActions>
+      </div>
+
+      <div v-if="preflight && importFile" class="config-preflight">
+        <p>{{ t('settings.configCloudSync.preflightSummary', {
           secretMode: preflight.manifest?.secretMode || '—',
           connections: Number(preflight.counts?.connections ?? 0),
-        }) }}
-      </p>
-    </SettingsSectionCard>
+        }) }}</p>
+        <p class="config-modal-hint">{{ importFile.name }}</p>
+      </div>
 
-    <SettingsSectionCard
-        :title="t('settings.configCloudSync.webdavTitle')"
-        :hint="t('settings.configCloudSync.webdavHint')"
-        icon="link"
-        tone="panel"
-    >
-      <div class="sync-fields">
-        <label>
-          <span>{{ t('settings.configCloudSync.baseUrl') }}</span>
-          <DwInput v-model="webdav.baseUrl" autocomplete="off"/>
-        </label>
-        <label>
-          <span>{{ t('settings.configCloudSync.username') }}</span>
-          <DwInput v-model="webdav.username" autocomplete="username"/>
-        </label>
-        <label>
-          <span>{{ t('settings.configCloudSync.password') }}</span>
-          <DwInput
-              v-model="webdav.password"
-              type="password"
-              autocomplete="current-password"
-              :placeholder="webdav.hasPassword ? t('settings.configCloudSync.passwordKept') : ''"
-          />
-        </label>
-        <label>
-          <span>{{ t('settings.configCloudSync.remotePath') }}</span>
-          <DwInput v-model="webdav.remotePath" autocomplete="off"/>
-        </label>
-      </div>
-      <div class="sync-actions">
-        <DwButton variant="secondary" size="sm" :loading="busy" :disabled="busy || readOnly" @click="onSaveWebDav">
-          {{ t('settings.configCloudSync.saveWebdav') }}
+      <DwInlineAlert v-if="webdavError" :message="webdavError" density="banner"/>
+    </form>
+
+    <template #footer>
+      <SettingsActions>
+        <DwButton variant="ghost" type="button" @click="closeWebDav">
+          {{ t('common.cancel') }}
         </DwButton>
         <DwButton
-            variant="secondary"
-            size="sm"
-            :loading="busy"
-            :disabled="busy || readOnly || !webdav.baseUrl.trim()"
-            @click="onTestWebDav"
-        >
-          {{ t('settings.configCloudSync.testWebdav') }}
-        </DwButton>
-        <DwButton
+            v-if="preflight && importFile"
             variant="primary"
-            size="sm"
+            type="button"
             :loading="busy"
-            :disabled="!canWebDav || busy"
-            @click="onUploadWebDav"
+            :disabled="!canApply || busy"
+            @click="onApply"
         >
-          {{ t('settings.configCloudSync.uploadWebdav') }}
+          {{ t('settings.configCloudSync.applyPackage') }}
         </DwButton>
-        <DwButton
-            variant="secondary"
-            size="sm"
-            :loading="busy"
-            :disabled="busy || readOnly || !webdav.baseUrl.trim()"
-            @click="onDownloadWebDav"
-        >
-          {{ t('settings.configCloudSync.downloadWebdav') }}
-        </DwButton>
-      </div>
-    </SettingsSectionCard>
-  </SettingsPageShell>
+      </SettingsActions>
+    </template>
+  </AppModal>
 </template>
 
 <style scoped>
-.sync-domains {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  margin-bottom: 8px;
-}
-
-.sync-fields {
+.config-hub-embed,
+.config-hub-group {
   display: grid;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: var(--dw-space-3);
+  max-width: 48rem;
 }
 
-.sync-fields label {
+.config-hub-group__head {
   display: grid;
-  gap: 4px;
-  font-size: 12px;
+  gap: var(--dw-space-1);
 }
 
-.sync-file-input {
+.config-hub-group__title {
+  margin: 0;
+  font-size: var(--dw-text-md);
+  font-weight: 650;
+  color: var(--dw-text);
+  line-height: var(--dw-leading-snug);
+}
+
+.config-hub-group__hint {
+  margin: 0;
+  font-size: var(--dw-text-xs);
+  color: var(--dw-text-muted);
+  line-height: var(--dw-leading-relaxed);
+}
+
+.config-hub {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--dw-space-3);
+  max-width: 48rem;
+}
+
+.config-hub > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.config-file-input {
   display: none;
 }
 
-.sync-file-row,
-.sync-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  margin-top: 10px;
+.config-modal-section {
+  display: grid;
+  gap: var(--dw-space-3);
 }
 
-.sync-muted {
-  margin: 8px 0 0;
-  color: var(--dw-text-muted, #6b7280);
-  font-size: 12px;
+.config-modal-label {
+  margin: 0;
+  font-size: var(--dw-text-xs);
+  font-weight: 600;
+  color: var(--dw-text-secondary);
+}
+
+.config-modal-hint {
+  margin: 0;
+  font-size: var(--dw-text-xs);
+  color: var(--dw-text-muted);
+  line-height: var(--dw-leading-relaxed);
+}
+
+.config-modal-hint--mono {
+  font-family: var(--dw-mono);
+}
+
+.config-preflight {
+  display: grid;
+  gap: var(--dw-space-2);
+  padding: var(--dw-space-3) var(--dw-space-4);
+  border: 1px solid var(--dw-border);
+  border-radius: var(--dw-control-radius);
+  background: color-mix(in srgb, var(--dw-text) 4%, transparent);
+  font-size: var(--dw-text-sm);
+  color: var(--dw-text-secondary);
+}
+
+.config-preflight p {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .config-hub {
+    grid-template-columns: 1fr;
+  }
+
+  .config-hub > :last-child:nth-child(odd) {
+    grid-column: auto;
+  }
 }
 </style>

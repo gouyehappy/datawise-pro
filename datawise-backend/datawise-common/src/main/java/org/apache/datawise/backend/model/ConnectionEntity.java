@@ -61,6 +61,12 @@ public class ConnectionEntity {
      */
     private boolean writeGuard = false;
 
+    /**
+     * Owner-only override: allow {@code tableDataEdit} / {@code tableStructureEdit} even when the
+     * product capability matrix marks the engine query-only (e.g. Trino). Default false.
+     */
+    private boolean allowEngineWrites = false;
+
     private String sshHost;
 
     private String sshPort;
@@ -298,6 +304,14 @@ public class ConnectionEntity {
         this.writeGuard = writeGuard;
     }
 
+    public boolean isAllowEngineWrites() {
+        return allowEngineWrites;
+    }
+
+    public void setAllowEngineWrites(boolean allowEngineWrites) {
+        this.allowEngineWrites = allowEngineWrites;
+    }
+
     public String getSshHost() {
         return sshHost;
     }
@@ -450,6 +464,7 @@ public class ConnectionEntity {
         copy.databaseName = source.databaseName;
         copy.sshEnabled = source.sshEnabled;
         copy.writeGuard = source.writeGuard;
+        copy.allowEngineWrites = source.allowEngineWrites;
         copy.sshHost = source.sshHost;
         copy.sshPort = source.sshPort;
         copy.sshUser = source.sshUser;

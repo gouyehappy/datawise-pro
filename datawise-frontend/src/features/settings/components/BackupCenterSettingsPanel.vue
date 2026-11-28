@@ -11,14 +11,18 @@ import {
     type RestoreJob,
 } from '@/api/modules/backup'
 import {
+    AppModal,
     ConfirmDialog,
     DwButton,
-    DwCheckbox,
     DwInlineAlert,
     DwInput,
-    DwSelect,
+    DwRadioGroup,
     FormField,
+    ModalActions,
+    SettingsSelect,
+    SettingsSwitch,
     StatusPill,
+    type RadioOption,
 } from '@/core/components'
 import {useConfirmDialog} from '@/core/composables/useConfirmDialog'
 import {DwIcon} from '@/core/icons'
@@ -65,6 +69,7 @@ const activeTab = ref<PanelTab>('overview')
 const policyFilter = ref<PolicyFilter>('all')
 const editorOpen = ref(false)
 const editingId = ref<string | null>(null)
+const policyEditorError = ref('')
 
 const emptyPolicy = (): BackupPolicy => ({
     name: '',
@@ -139,9 +144,17 @@ const contentModeOptions = computed(() => [
     {value: 'structureOnly', label: t('backupCenter.policies.contentStructureOnly')},
 ])
 
-const restoreModeOptions = computed(() => [
-    {value: 'connectionsOnly', label: t('backupCenter.restore.connectionsOnly')},
-    {value: 'full', label: t('backupCenter.restore.full')},
+const restoreModeOptions = computed<RadioOption[]>(() => [
+    {
+        value: 'connectionsOnly',
+        label: t('backupCenter.restore.connectionsOnly'),
+        hint: t('backupCenter.restore.connectionsOnlyHint'),
+    },
+    {
+        value: 'full',
+        label: t('backupCenter.restore.full'),
+        hint: t('backupCenter.restore.fullHint'),
+    },
 ])
 
 const artifactOptions = computed(() =>
@@ -257,6 +270,7 @@ function openCreatePolicy(type: BackupType = 'database') {
     if (!entitlement.guardPack('pack.backup', 'backup.schedule')) return
     editingId.value = null
     policyDraft.value = {...emptyPolicy(), type}
+    policyEditorError.value = ''
     editorOpen.value = true
     activeTab.value = 'policies'
     policyFilter.value = type
@@ -278,6 +292,7 @@ function openEditPolicy(policy: BackupPolicy) {
         destinationRoot: policy.destinationRoot ?? '',
         cronExpression: policy.cronExpression ?? '',
     }
+    policyEditorError.value = ''
     editorOpen.value = true
     if (policy.type === 'database' || policy.type === 'workbench') {
         policyFilter.value = policy.type
@@ -287,6 +302,7 @@ function openEditPolicy(policy: BackupPolicy) {
 function closeEditor() {
     editorOpen.value = false
     editingId.value = null
+    policyEditorError.value = ''
     policyDraft.value = emptyPolicy()
 }
 
@@ -355,13 +371,14 @@ async function backupWorkbenchNow() {
 
 async function savePolicy() {
     if (!entitlement.guardPack('pack.backup', 'backup.schedule')) return
+    policyEditorError.value = ''
     if (!policyDraft.value.name.trim()) {
-        toast.error(t('backupCenter.policyNameRequired'))
+        policyEditorError.value = t('backupCenter.policyNameRequired')
         return
     }
     if (policyDraft.value.type === 'database') {
         if (!policyDraft.value.connectionId?.trim() || !policyDraft.value.database?.trim()) {
-            toast.error(t('backupCenter.databaseScopeRequired'))
+            policyEditorError.value = t('backupCenter.databaseScopeRequired')
             return
         }
     }
@@ -387,7 +404,7 @@ async function savePolicy() {
         closeEditor()
         await refresh()
     } catch (error) {
-        toast.error(resolveCaughtApiErrorMessage(error, t, 'backupCenter.policySaveFailed'))
+        policyEditorError.value = resolveCaughtApiErrorMessage(error, t, 'backupCenter.policySaveFailed')
     } finally {
         busyId.value = null
     }
@@ -729,94 +746,6 @@ onUnmounted(() => {
       <!-- Policies -->
       <div v-else-if="activeTab === 'policies'" class="settings-groups">
         <SettingsSectionCard
-            v-if="editorOpen"
-            :title="editorTitle"
-            :hint="t('backupCenter.policies.editorHint')"
-            icon="plus"
-            tone="primary"
-        >
-          <div class="backup-form">
-            <div class="backup-form__grid">
-              <FormField :label="t('backupCenter.policies.name')">
-                <DwInput v-model="policyDraft.name" :placeholder="t('backupCenter.policies.namePlaceholder')"/>
-              </FormField>
-              <FormField :label="t('backupCenter.policies.type')">
-                <DwSelect v-model="policyDraft.type" :options="typeOptions" :disabled="!!editingId"/>
-              </FormField>
-              <FormField :label="t('backupCenter.policies.cron')">
-                <DwInput
-                    v-model="cronExpressionModel"
-                    variant="mono"
-                    placeholder="0 0 2 * * ?"
-                />
-              </FormField>
-              <FormField :label="t('backupCenter.policies.retentionCount')">
-                <DwInput
-                    v-model.number="policyDraft.retention!.maxCount!"
-                    type="number"
-                    :min="1"
-                />
-              </FormField>
-            </div>
-
-            <div v-if="policyDraft.type === 'database'" class="backup-form__grid">
-              <FormField :label="t('backupCenter.policies.connectionId')">
-                <DwSelect
-                    v-if="connectionOptions.length"
-                    v-model="policyDraft.connectionId!"
-                    :options="connectionOptions"
-                    :placeholder="t('backupCenter.policies.pickConnection')"
-                />
-                <DwInput
-                    v-else
-                    v-model="policyDraft.connectionId!"
-                    variant="mono"
-                    :placeholder="t('backupCenter.policies.connectionId')"
-                />
-              </FormField>
-              <FormField :label="t('backupCenter.policies.database')">
-                <DwInput v-model="policyDraft.database!" :placeholder="t('backupCenter.policies.databasePlaceholder')"/>
-              </FormField>
-              <FormField :label="t('backupCenter.policies.contentMode')">
-                <DwSelect v-model="policyDraft.contentMode!" :options="contentModeOptions"/>
-              </FormField>
-            </div>
-
-            <FormField :label="t('backupCenter.policies.destinationRoot')">
-              <DwInput
-                  v-model="policyDraft.destinationRoot!"
-                  variant="mono"
-                  :placeholder="t('backupCenter.policies.destinationDefault')"
-              />
-            </FormField>
-
-            <div class="backup-form__checks">
-              <DwCheckbox v-model="policyEnabledModel">
-                {{ t('backupCenter.policies.enabled') }}
-              </DwCheckbox>
-              <DwCheckbox v-model="notifyOnFailureModel">
-                {{ t('backupCenter.policies.notifyOnFailure') }}
-              </DwCheckbox>
-            </div>
-
-            <div class="backup-actions">
-              <DwButton
-                  variant="primary"
-                  size="sm"
-                  :disabled="!!busyId"
-                  :loading="busyId === 'save-policy'"
-                  @click="savePolicy"
-              >
-                {{ editingId ? t('backupCenter.actions.updatePolicy') : t('backupCenter.actions.savePolicy') }}
-              </DwButton>
-              <DwButton size="sm" variant="ghost" @click="closeEditor">
-                {{ t('backupCenter.actions.cancelEdit') }}
-              </DwButton>
-            </div>
-          </div>
-        </SettingsSectionCard>
-
-        <SettingsSectionCard
             :title="t('backupCenter.policies.title')"
             :hint="t('backupCenter.policies.multiHint')"
             icon="database"
@@ -1036,9 +965,10 @@ onUnmounted(() => {
         >
           <div class="backup-form">
             <FormField :label="t('backupCenter.restore.artifactId')">
-              <DwSelect
+              <SettingsSelect
                   v-if="artifactOptions.length"
                   v-model="restoreArtifactId"
+                  searchable
                   :options="artifactOptions"
                   :placeholder="t('backupCenter.restore.pickArtifact')"
               />
@@ -1050,18 +980,26 @@ onUnmounted(() => {
               <span class="backup-muted backup-path">{{ selectedRestoreArtifact.path }}</span>
             </div>
 
-            <FormField
+            <div
                 v-if="!selectedRestoreArtifact || selectedRestoreArtifact.type === 'workbench'"
-                :label="t('backupCenter.restore.mode')"
+                class="settings-section__block"
             >
-              <DwSelect v-model="restoreMode" :options="restoreModeOptions"/>
-            </FormField>
+              <div class="settings-section__block-label">{{ t('backupCenter.restore.mode') }}</div>
+              <p class="settings-section__block-hint">{{ t('backupCenter.restore.modeHint') }}</p>
+              <DwRadioGroup
+                  v-model="restoreMode"
+                  layout="list"
+                  name="backup-restore-mode"
+                  :options="restoreModeOptions"
+              />
+            </div>
 
             <div v-if="selectedRestoreArtifact?.type === 'database'" class="backup-form__grid">
               <FormField :label="t('backupCenter.restore.targetConnectionId')">
-                <DwSelect
+                <SettingsSelect
                     v-if="connectionOptions.length"
                     v-model="restoreConnectionId"
+                    searchable
                     :options="connectionOptions"
                     :placeholder="t('backupCenter.policies.pickConnection')"
                 />
@@ -1072,9 +1010,12 @@ onUnmounted(() => {
               </FormField>
             </div>
 
-            <DwCheckbox v-model="productionAck">
-              {{ t('backupCenter.restore.productionAck') }}
-            </DwCheckbox>
+            <div class="settings-section__card">
+              <SettingsSwitch
+                  v-model="productionAck"
+                  :label="t('backupCenter.restore.productionAck')"
+              />
+            </div>
 
             <div class="backup-actions">
               <DwButton
@@ -1100,6 +1041,99 @@ onUnmounted(() => {
       </div>
     </div>
   </SettingsPageShell>
+
+  <AppModal
+      :open="editorOpen"
+      :title="editorTitle"
+      :subtitle="t('backupCenter.policies.editorHint')"
+      width="640px"
+      @close="closeEditor"
+  >
+    <form class="modal-form modal-form--compact" @submit.prevent="savePolicy">
+      <div class="modal-form-grid">
+        <FormField :label="t('backupCenter.policies.name')">
+          <DwInput v-model="policyDraft.name" :placeholder="t('backupCenter.policies.namePlaceholder')"/>
+        </FormField>
+        <FormField :label="t('backupCenter.policies.type')">
+          <SettingsSelect v-model="policyDraft.type" :options="typeOptions" :disabled="!!editingId"/>
+        </FormField>
+        <FormField :label="t('backupCenter.policies.cron')">
+          <DwInput
+              v-model="cronExpressionModel"
+              variant="mono"
+              placeholder="0 0 2 * * ?"
+          />
+        </FormField>
+        <FormField :label="t('backupCenter.policies.retentionCount')">
+          <DwInput
+              v-model.number="policyDraft.retention!.maxCount!"
+              type="number"
+              :min="1"
+          />
+        </FormField>
+      </div>
+
+      <div v-if="policyDraft.type === 'database'" class="modal-form-grid">
+        <FormField :label="t('backupCenter.policies.connectionId')">
+          <SettingsSelect
+              v-if="connectionOptions.length"
+              v-model="policyDraft.connectionId!"
+              searchable
+              :options="connectionOptions"
+              :placeholder="t('backupCenter.policies.pickConnection')"
+          />
+          <DwInput
+              v-else
+              v-model="policyDraft.connectionId!"
+              variant="mono"
+              :placeholder="t('backupCenter.policies.connectionId')"
+          />
+        </FormField>
+        <FormField :label="t('backupCenter.policies.database')">
+          <DwInput v-model="policyDraft.database!" :placeholder="t('backupCenter.policies.databasePlaceholder')"/>
+        </FormField>
+        <FormField :label="t('backupCenter.policies.contentMode')">
+          <SettingsSelect v-model="policyDraft.contentMode!" :options="contentModeOptions"/>
+        </FormField>
+      </div>
+
+      <FormField :label="t('backupCenter.policies.destinationRoot')">
+        <DwInput
+            v-model="policyDraft.destinationRoot!"
+            variant="mono"
+            :placeholder="t('backupCenter.policies.destinationDefault')"
+        />
+      </FormField>
+
+      <div class="settings-section__card backup-form__checks">
+        <SettingsSwitch
+            v-model="policyEnabledModel"
+            :label="t('backupCenter.policies.enabled')"
+        />
+        <SettingsSwitch
+            v-model="notifyOnFailureModel"
+            :label="t('backupCenter.policies.notifyOnFailure')"
+        />
+      </div>
+
+      <DwInlineAlert
+          v-if="policyEditorError"
+          :message="policyEditorError"
+          density="banner"
+      />
+    </form>
+
+    <template #footer>
+      <ModalActions
+          :confirm-label="editingId ? t('backupCenter.actions.updatePolicy') : t('backupCenter.actions.savePolicy')"
+          :cancel-label="t('backupCenter.actions.cancelEdit')"
+          :confirm-disabled="!!busyId"
+          :confirm-loading="busyId === 'save-policy'"
+          @cancel="closeEditor"
+          @confirm="savePolicy"
+      />
+    </template>
+  </AppModal>
 
   <ConfirmDialog
       :open="confirmOpen"

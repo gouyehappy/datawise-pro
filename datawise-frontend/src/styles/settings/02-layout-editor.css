@@ -7,11 +7,11 @@
 
 .module-shell__main .setting-card,
 .module-shell__main .shortcut-card {
-    padding: var(--dw-space-7);
-    border: 1px solid var(--dw-panel-border);
+    padding: var(--dw-space-6) var(--dw-space-7);
+    border: 1px solid color-mix(in srgb, var(--dw-panel-border) 55%, transparent);
     border-radius: var(--dw-panel-radius);
-    background: var(--dw-bg-editor);
-    box-shadow: var(--dw-panel-shadow);
+    background: color-mix(in srgb, var(--dw-bg-editor) 55%, transparent);
+    box-shadow: none;
 }
 
 .module-shell__main .setting-card--panel {

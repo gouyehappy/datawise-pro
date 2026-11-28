@@ -187,6 +187,9 @@
       el.id = id;
       (document.head || document.documentElement).appendChild(el);
     }
+    // Square-corner skins share the widget-level rules below. Classic / atelier
+    // never match, so plugin-local rounded corners stay untouched.
+    var sq = ':is(html[data-ui-skin="ide"],html[data-ui-skin="ledger"])';
     el.textContent = [
       '/* Injected by workbench-bridge-bootstrap — IDE chrome gaps */',
       'html[data-ui-skin="ide"] body {',
@@ -222,6 +225,60 @@
       '  --radius-md: 0;',
       '  --radius-sm: 0;',
       '  --radius-lg: 0;',
+      '}',
+      /* ---- widget-level square corners (badge / chip / pill / switch / popover ...) ----
+       * Plugins ship prebuilt, inlined CSS with hardcoded 999px / 8~20px radii and
+       * their own private --radius aliases. Rebuilding every .dwp is not required:
+       * these host-injected rules run inside the iframe (appended last + !important),
+       * so they win over plugin styles. Attribute selectors cover all plugins at once;
+       * :not() keeps genuine circular glyphs (dots / avatars / spinners / color picker)
+       * round — flattening those would be a visible bug. */
+      sq + ' {',
+      '  --radius: 0; --r: 0;',
+      '  --radius-sm: 0; --radius-md: 0; --radius-lg: 0;',
+      '  --hc-radius: 0; --hc-radius-sm: 0; --hc-radius-lg: 0;',
+      '  --color-radius: 0;',
+      '  --dw-radius-pill: 0; --dw-chip-radius: 0; --dw-surface-radius: 0;',
+      '}',
+      sq + ' :is(',
+      '  [class*="badge"],[class*="chip"],[class*="pill"],[class*="tag"],',
+      '  [class*="count"],[class*="status"],[class*="label"],[class*="flag"],',
+      '  [class*="btn"],[class*="button"],[class*="tab"],[class*="seg"],',
+      '  [class*="switch"],[class*="toggle"],[class*="track"],[class*="thumb"],',
+      '  [class*="bar"],[class*="progress"],[class*="kpi"],[class*="card"],',
+      '  [class*="panel"],[class*="pane"],[class*="menu"],[class*="popover"],',
+      '  [class*="dialog"],[class*="modal"],[class*="popup"],[class*="input"],',
+      '  [class*="field"],[class*="select"],[class*="search"],[class*="step"],',
+      '  [class*="level"],[class*="host"],[class*="crumb"],[class*="filter"],',
+      '  [class*="toolbar"],[class*="rail"],[class*="group"],[class*="item"],',
+      '  [class*="row"],[class*="cell"],[class*="hint"],[class*="meta"],',
+      '  [class*="stat"],[class*="scroll"],[class*="slider"],[class*="dock"],',
+      '  [class*="toast"],[class*="hero"],[class*="grid"],[class*="node"],',
+      '  [class*="ctx"],[class*="combo"],[class*="pick"],[class*="dlg"],',
+      '  [class*="pop"],[class*="log"],[class*="key"],[class*="value"]',
+      /* NOTE: the :not() chain MUST stay a single string. Joining array items with
+       * '\n' would insert whitespace between :not()s, turning them into a
+       * descendant combinator (":not(a) :not(b)") and silently breaking the rule. */
+      '):not([class*="dot"]):not([class*="circle"]):not([class*="round"])' +
+      ':not([class*="avatar"]):not([class*="spinner"]):not([class*="spin"])' +
+      ':not([class*="saturation"]):not([class*="colorpicker"]):not([class*="glyph"])' +
+      ':not([class*="twistie"]):not([class*="chev"]):not([class*="pulse"])' +
+      ':not([class*="indicator"]):not([class*="swatch"]):not([class*="knob"])' +
+      ':not([class*="grip"]):not([class*="icon"]):not([class*="ico"])' +
+      ':not([class*="mark"]):not([class*="clear"]):not([class*="drag-image"])' +
+      ':not([class*="gauge"]):not([class*="ai-thinking"]) {',
+      '  border-radius: 0 !important;',
+      '}',
+      /* Switch knobs / progress fills are frequently ::before / ::after pseudo
+       * elements; flatten those too, but only on switch/progress hosts. */
+      sq + ' :is([class*="switch"],[class*="track"],[class*="thumb"],[class*="toggle"],[class*="progress"])::before,',
+      sq + ' :is([class*="switch"],[class*="track"],[class*="thumb"],[class*="toggle"],[class*="progress"])::after {',
+      '  border-radius: 0 !important;',
+      '}',
+      sq + ' ::-webkit-scrollbar,',
+      sq + ' ::-webkit-scrollbar-thumb,',
+      sq + ' ::-webkit-scrollbar-track {',
+      '  border-radius: 0 !important;',
       '}'
     ].join('\n');
   }

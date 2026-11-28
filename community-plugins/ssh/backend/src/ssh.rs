@@ -791,6 +791,9 @@ enum TerminalCommand {
     Input(Vec<u8>),
     Resize { cols: u32, rows: u32 },
     DirectoryTracking { enabled: bool },
+    /// Motty-style output backpressure: when true, stop polling channel.wait so
+    /// the SSH window fills and the remote writer slows (frontend strained).
+    SetOutputPaused { paused: bool },
     Close,
 }
 
@@ -1598,6 +1601,20 @@ impl SshRuntime {
         })
     }
 
+    /// Live authenticated handle for a connection (monitor collectors share it).
+    pub async fn live_handle_for_connection(
+        &self,
+        connection_id: &str,
+    ) -> Option<Arc<Handle<SshClient>>> {
+        let sessions = self.sessions.read().await;
+        sessions
+            .values()
+            .find(|entry| {
+                entry.connection_id == connection_id && entry.connected.load(Ordering::Acquire)
+            })
+            .map(|entry| Arc::clone(&entry.handle))
+    }
+
     pub async fn local_target(
         &self,
         _connection_id: &str,
@@ -1668,7 +1685,9 @@ impl SshRuntime {
             .map(|command| spawn_exec_payload(&command));
         let connection_id = request.connection_id.as_str();
         let workbench_id = request.workbench_id.as_str();
-        let reuse_authenticated_transport = request.reuse_authenticated_transport;
+        let additional_shell = request.additional_shell;
+        let reuse_authenticated_transport =
+            request.reuse_authenticated_transport || additional_shell;
         let cols = request.cols;
         let rows = request.rows;
         let connection = self
@@ -1680,7 +1699,10 @@ impl SshRuntime {
             .ok_or("Connection is not active; reopen it from DataWise")?;
         // Remount / reconnect with the same workbench id must not leave the
         // previous PTY in the inventory (batch-send would list ghost targets).
-        let _ = self.close_workbench(workbench_id).await;
+        // In-pane split keeps the primary shell and opens another channel.
+        if !additional_shell {
+            let _ = self.close_workbench(workbench_id).await;
+        }
         // A copied workbench gets its own PTY channel, replay buffer and
         // terminal task, but deliberately shares the already authenticated
         // SSH transport. This avoids replaying an MFA challenge without ever
@@ -1958,6 +1980,8 @@ impl SshRuntime {
             coalesce_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             // Consume the immediate first tick so we don't flush an empty buffer.
             coalesce_tick.tick().await;
+            // Frontend strained → pause channel.wait (SSH window backpressure).
+            let mut output_paused = false;
             loop {
                 tokio::select! {
                     _ = coalesce_tick.tick() => {
@@ -2030,12 +2054,16 @@ impl SshRuntime {
                             let script = directory_tracking_script(enabled, &directory_marker_id, remote_shell);
                             if channel.data(script.as_bytes()).await.is_err() { break; }
                         }
+                        Some(TerminalCommand::SetOutputPaused { paused }) => {
+                            output_paused = paused;
+                        }
                         Some(TerminalCommand::Close) | None => {
                             let _ = channel.close().await;
                             break;
                         }
                     },
-                    message = channel.wait() => {
+                    // When paused, skip draining so the SSH channel window backs up.
+                    message = channel.wait(), if !output_paused => {
                         let (data, stream) = match message {
                             Some(ChannelMsg::Data { data }) => (data.to_vec(), TerminalStream::Stdout),
                             Some(ChannelMsg::ExtendedData { data, .. }) => (data.to_vec(), TerminalStream::Stderr),
@@ -2994,6 +3022,20 @@ impl SshRuntime {
             .map_err(|_| "SSH terminal session is closed".to_string())
     }
 
+    /// Pause or resume draining PTY stdout/stderr (frontend flood backpressure).
+    pub async fn set_terminal_output_paused(
+        &self,
+        session_id: &str,
+        paused: bool,
+    ) -> Result<(), String> {
+        self.session(session_id)
+            .await?
+            .terminal_tx
+            .send(TerminalCommand::SetOutputPaused { paused })
+            .await
+            .map_err(|_| "SSH terminal is closed".to_string())
+    }
+
     pub fn write_terminal(&self, session_id: &str, data: Vec<u8>) -> Result<(), String> {
         // Do not hold the session-map read guard while applying backpressure:
         // closing a dead session needs the write lock to drop the receiver so
@@ -3063,6 +3105,23 @@ impl SshRuntime {
         }
     }
 
+    /// Read-only guard for the UI batch-broadcast path. Tool-driven exec /
+    /// terminal_input are already refused by the MCP inspection-only gate
+    /// (`mcp.rs`), and SFTP writes by `ensure_writable`; this closes the last
+    /// explicit write-command path that could bypass both.
+    ///
+    /// Single-key terminal input is intentionally NOT gated here: a read-only
+    /// connection still needs `ls` / `top` / `systemctl status` for inspection,
+    /// and the PTY is a byte stream the backend cannot reliably classify.
+    /// Inline risk hints (frontend `commandRisk`) cover that case instead.
+    fn batch_input_read_only_error(read_only: bool) -> Option<&'static str> {
+        if read_only {
+            Some("Batch terminal input is disabled by the read-only connection setting")
+        } else {
+            None
+        }
+    }
+
     /// Writes the same command into several open sessions' interactive shells
     /// (tiny-rdm batch send): per-target outcomes only, the command's output
     /// echoes in each session's own terminal. Unknown ids and full/closed
@@ -3081,10 +3140,13 @@ impl SshRuntime {
         let mut failed = 0u64;
         for session_id in &targets {
             let outcome = match sessions.get(session_id.as_str()) {
-                Some(session) => session
-                    .terminal_tx
-                    .try_send(TerminalCommand::Input(payload.clone()))
-                    .map_err(|error| format!("SSH input queue is full or closed: {error}")),
+                Some(session) => match Self::batch_input_read_only_error(session.read_only) {
+                    Some(error) => Err(error.to_string()),
+                    None => session
+                        .terminal_tx
+                        .try_send(TerminalCommand::Input(payload.clone()))
+                        .map_err(|error| format!("SSH input queue is full or closed: {error}")),
+                },
                 None => Err("SSH session was not found".to_string()),
             };
             match outcome {
@@ -10105,6 +10167,19 @@ matrix-ed25519";
         let bad = SshRuntime::batch_input_row("s2", Some("SSH session was not found"));
         assert_eq!(bad["success"], json!(false));
         assert_eq!(bad["error"], json!("SSH session was not found"));
+    }
+
+    #[test]
+    fn batch_input_read_only_guard_refuses_write_broadcast() {
+        assert!(SshRuntime::batch_input_read_only_error(false).is_none());
+        let error = SshRuntime::batch_input_read_only_error(true)
+            .expect("read-only sessions must be refused");
+        assert!(error.contains("read-only"), "unexpected: {error}");
+        // The refusal flows into the same per-target row the frontend summarizes,
+        // so a read-only target is counted as failed, never as sent.
+        let row = SshRuntime::batch_input_row("conn-ro", Some(error));
+        assert_eq!(row["success"], json!(false));
+        assert_eq!(row["error"], json!(error));
     }
 
     #[tokio::test]

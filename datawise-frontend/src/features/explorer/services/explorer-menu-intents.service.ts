@@ -346,12 +346,15 @@ export function resolveShortcutEditIntent(
     return null
 }
 
-export type ShortcutOpenIntent = 'connection-form' | 'open-node'
+/**
+ * Global open shortcut ≡ tree double-click / Enter (`onOpen`).
+ * Connection edit stays on F4 / {@link resolveShortcutEditIntent} — never on open.
+ */
+export type ShortcutOpenIntent = 'open-node'
 
 export function resolveShortcutOpenIntent(
-    node: Pick<TreeNode, 'type' | 'dbType'>,
+    _node: Pick<TreeNode, 'type' | 'dbType'>,
 ): ShortcutOpenIntent {
-    if (node.type === 'connection' && node.dbType) return 'connection-form'
     return 'open-node'
 }
 

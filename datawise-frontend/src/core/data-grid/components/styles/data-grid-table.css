@@ -27,7 +27,7 @@
   border-right: 1px solid var(--dw-grid-line);
   text-align: left;
   white-space: nowrap;
-  font-size: var(--dw-text-sm);
+  font-size: var(--dw-grid-font-size, var(--dw-text-sm));
   vertical-align: middle;
   overflow: hidden;
 }.dw-data-grid-table td{
@@ -73,7 +73,7 @@
   background: linear-gradient(180deg, var(--dw-grid-chrome-top) 0%, var(--dw-grid-chrome) 100%);
   color: var(--dw-text-secondary);
   font-weight: 500;
-  font-size: var(--dw-text-sm);
+  font-size: var(--dw-grid-font-size, var(--dw-text-sm));
   padding: var(--dw-space-2) var(--dw-space-4) var(--dw-space-2) var(--dw-space-3);
   border-bottom: 1px solid var(--dw-panel-outline, var(--dw-grid-line));
   box-shadow:
@@ -141,7 +141,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--dw-text);
-  font-size: var(--dw-text-sm);
+  font-size: var(--dw-grid-font-size, var(--dw-text-sm));
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: 0.01em;

@@ -45,7 +45,7 @@ const {t} = useSqlEditorI18n()
   height: 20px;
   padding: 0 6px;
   border: 1px solid var(--dw-border-light, rgba(0, 0, 0, 0.08));
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   font-family: ui-monospace, monospace;
   font-size: 10px;
   font-weight: 600;

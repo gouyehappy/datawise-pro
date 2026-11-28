@@ -14,7 +14,7 @@ import {useWorkspaceStore} from '@/features/workspace/stores/workspace'
 import {buildDegradedSqlErrorHint} from '@/features/workspace/services/console-ai-degraded.service'
 import type {AiPreferences} from '@/shared/config/app-config.types'
 import {sqlApi} from '@/api'
-import {replaceConsoleSqlStatement} from '@/features/workspace/services/console-sql-replace.service'
+import {appendConsoleSqlFixAfterStatement} from '@/features/workspace/services/console-sql-replace.service'
 
 export interface AiSqlFixPayload {
     sql: string
@@ -98,15 +98,17 @@ export function useAiSqlFix(options: UseAiSqlFixOptions) {
     }
 
     async function applyFix() {
-        const {text, focusLine} = replaceConsoleSqlStatement(
+        const {text, focusLine} = appendConsoleSqlFixAfterStatement(
             options.getSql(),
             fixOriginal.value,
             fixSuggested.value,
+            {commentLabel: t('queryResult.aiFixAppendComment')},
         )
         options.setSql(text)
         fixDialogOpen.value = false
         await nextTick()
         options.focusEditorLine?.(focusLine)
+        toast.show(t('queryResult.aiFixApplied'), {variant: 'success'})
     }
 
     return {

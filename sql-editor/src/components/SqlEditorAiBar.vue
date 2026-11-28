@@ -243,7 +243,7 @@ defineExpose({focus: focusInput, prepare})
   gap: 6px;
   height: 26px;
   padding: 0 6px 0 4px;
-  border-radius: 6px;
+  border-radius: var(--dw-surface-radius, 6px);
   border: 1px solid color-mix(in srgb, #7c3aed 16%, var(--dw-border-light, rgba(0, 0, 0, 0.08)));
   background: var(--dw-bg-elevated, #fff);
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
@@ -271,7 +271,7 @@ defineExpose({focus: focusInput, prepare})
   flex-shrink: 0;
   width: 18px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   color: #7c3aed;
   background: color-mix(in srgb, #7c3aed 10%, transparent);
 }
@@ -282,7 +282,7 @@ defineExpose({focus: focusInput, prepare})
   height: 20px;
   padding: 0 4px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   background: color-mix(in srgb, #7c3aed 6%, transparent);
   color: #6d28d9;
   font-size: 10px;
@@ -326,7 +326,7 @@ defineExpose({focus: focusInput, prepare})
   flex-shrink: 0;
   max-width: 42%;
   padding: 0 5px;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   font-size: 10px;
   line-height: 18px;
   white-space: nowrap;
@@ -392,7 +392,7 @@ defineExpose({focus: focusInput, prepare})
   height: 20px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--dw-surface-radius, 4px);
   cursor: pointer;
   transition: background 0.12s, opacity 0.12s;
 }

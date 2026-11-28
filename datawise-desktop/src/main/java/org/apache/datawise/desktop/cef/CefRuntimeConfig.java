@@ -32,7 +32,7 @@ public final class CefRuntimeConfig {
         settings.persist_session_cookies = true;
         settings.cache_path = DesktopPaths.userDataDir().resolve("cef-cache").toString();
         settings.log_file = DesktopPaths.userDataDir().resolve("logs").resolve("cef.log").toString();
-        settings.user_agent_product = "DataWiseCLI/5.0.0";
+        settings.user_agent_product = "DataWiseCLI/5.0.1";
         Color chrome = SplashTheme.awtChromeBackground();
         // ColorType(alpha, red, green, blue) — alpha must be >0 to enable (JCEF docs).
         // Previous bug passed (r,g,b,a) so Chromium kept the default white background.

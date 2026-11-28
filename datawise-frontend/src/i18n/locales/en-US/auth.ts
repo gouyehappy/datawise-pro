@@ -67,6 +67,8 @@ export default {
     unauthorized: 'Not signed in or session expired. Please sign in again.',
     serviceUnavailable: 'Sign in to use this feature',
     permissionDenied: 'Your account does not have permission for this action',
+    guestFeatureLocked: 'You are in guest mode. Sign in to unlock this feature; querying and browsing still work.',
+    guestHintLoginAction: 'Sign in',
     guestNotAllowed: 'Guests cannot perform this action. Sign in with an account.',
     adminRequired: 'Administrator permission is required',
     platformAdminRequired: 'Platform administrator permission is required',
@@ -93,6 +95,9 @@ export default {
         DATASOURCE_TYPE_REQUIRED: 'Please choose a data source type',
         CONNECTION_ACCESS_DENIED:
             'You do not have permission for this connection. Use a connection you own, or ask an admin.',
+        CONNECTION_SHARE_NOT_FOUND: 'That connection was not found. Refresh and try again.',
+        CONNECTION_SHARE_FORBIDDEN:
+            'You can only share connections you own (not someone else’s private or unowned connections).',
         API_TOKEN_FORBIDDEN: 'This API token lacks the required scope. Check the token configuration.',
         HTTP_NOT_READY: 'Cannot reach the backend. Make sure DataWise is running, then try again.',
         HTTP_STATUS: 'The request failed. Please try again later.',

@@ -70,8 +70,8 @@ export async function streamAiChat(
                     sawResult = true
                     handlers.onResult?.(data)
                 } catch {
-                    streamError = 'AI chat stream returned invalid result'
-                    handlers.onError?.(streamError)
+                    // Skip a single bad frame; stream may still deliver a valid result.
+                    console.warn('[ai-chat-stream] Skipping malformed result frame')
                 }
                 return
             }
@@ -89,7 +89,8 @@ export async function streamAiChat(
                         message = (parsedJson as {message: string}).message
                     }
                 } catch {
-                    // plain text error payload
+                    // plain text error payload — keep raw data; do not fail the parse path
+                    console.warn('[ai-chat-stream] Error frame was not JSON; using plain text')
                 }
                 streamError = message || 'AI chat stream failed'
                 handlers.onError?.(streamError)

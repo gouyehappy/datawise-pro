@@ -12,7 +12,10 @@ import {
     createDashboardChartWidget,
     type DashboardChartWidgetColumn,
 } from '@/features/dashboard/services/dashboard-chart-widget.service'
-import {asDashboardPreferences} from '@/features/dashboard/services/dashboard-widget.service'
+import {
+  asDashboardPreferences,
+  type DashboardPreferences,
+} from '@/features/dashboard/services/dashboard-widget.service'
 import {useAppConfigStore} from '@/features/layout/stores/app-config-store'
 import {
     pivotQueryResultRows,
@@ -85,7 +88,10 @@ function save() {
     rows: props.rows,
   })
   appConfig.patchDashboardPreferences(
-      addDashboardChartWidget(asDashboardPreferences(appConfig.dashboardPreferences), widget),
+      addDashboardChartWidget(
+          asDashboardPreferences(appConfig.dashboardPreferences as DashboardPreferences),
+          widget,
+      ),
   )
   close()
   emit('saved', trimmed)

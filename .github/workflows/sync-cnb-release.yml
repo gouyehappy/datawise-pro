@@ -1,0 +1,53 @@
+# 手工把某个 GitHub Release 镜像到 CNB（国内下载）。
+# 用法：Actions → Mirror release to CNB → Run workflow → 填 tag（如 v5.0.0）
+name: Mirror release to CNB
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to mirror, e.g. v5.0.0
+        required: true
+      full:
+        description: Sync all assets (not only incremental packs)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cnb-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Copy the release to CNB
+    if: github.repository == 'gouyehappy/datawise-pro' || github.repository == 'gouyehappy/datawise-cli'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Mirror to CNB
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+          CNB_REPOSITORY: ${{ vars.CNB_REPOSITORY || 'gouyehappy/datawise-pro' }}
+          DATAWISE_GITHUB_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          FULL: ${{ inputs.full }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CNB_TOKEN:-}" ]; then
+            echo "::error::CNB_TOKEN is not set. Add a repository secret CNB_TOKEN."
+            exit 1
+          fi
+          EXTRA=()
+          if [ "$FULL" = "true" ]; then
+            EXTRA+=(--full)
+          fi
+          node scripts/desktop/mirror-to-cnb.mjs --tag "$TAG" --cnb "$CNB_REPOSITORY" --github "$DATAWISE_GITHUB_REPO" "${EXTRA[@]}"

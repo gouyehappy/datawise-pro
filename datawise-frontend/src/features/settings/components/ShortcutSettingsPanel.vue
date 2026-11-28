@@ -11,7 +11,7 @@ import type {ShortcutCategory, ShortcutDefinition} from '@/core/shortcuts/types'
 import {isLocalShortcutDefinition} from '@/core/shortcuts/scope'
 import ShortcutKeyInput from '@/features/settings/components/ShortcutKeyInput.vue'
 import SettingsPageShell from '@/features/settings/components/SettingsPageShell.vue'
-import SettingsSectionCard from '@/features/settings/components/SettingsSectionCard.vue'
+import SettingsGroup from '@/features/settings/components/SettingsGroup.vue'
 import SettingsTipsCard from '@/features/settings/components/SettingsTipsCard.vue'
 import {useShortcutSettingsStore} from '@/features/settings/stores/shortcut-settings-store'
 import {canExecuteShortcutAction} from '@/features/auth/services/feature-permission.service'
@@ -92,17 +92,14 @@ function resetAll() {
     </template>
 
     <div class="settings-groups">
-      <SettingsSectionCard
+      <SettingsGroup
           v-for="category in categories"
           v-show="visibleDefinitions(category).length > 0"
           :key="category"
           :title="t(`shortcuts.categories.${category}`)"
-          :hint="t(categoryMeta[category].hintKey)"
-          :icon="categoryIcon[category]"
-          :tone="categoryMeta[category].tone"
-          :badge="`${assignedCount[category]}/${visibleDefinitions(category).length}`"
+          :hint="`${t(categoryMeta[category].hintKey)} · ${assignedCount[category]}/${visibleDefinitions(category).length}`"
       >
-        <div v-if="visibleDefinitions(category).length" class="shortcut-table">
+        <div v-if="visibleDefinitions(category).length" class="settings-section__block shortcut-table">
           <div class="shortcut-table__header">
             <span>{{ t('shortcuts.columnAction') }}</span>
             <span>{{ t('shortcuts.columnBinding') }}</span>
@@ -122,7 +119,7 @@ function resetAll() {
             <ShortcutKeyInput :action-id="def.id"/>
           </div>
         </div>
-      </SettingsSectionCard>
+      </SettingsGroup>
     </div>
   </SettingsPageShell>
 </template>

@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "io.datawise.community.docker",
   "name": "Docker",
-  "version": "0.1.0",
+  "version": "0.1.7",
   "publisher": "datawise-community",
   "description": "Connect to Docker Engine and manage containers, images, volumes, and networks from DataWise. Ported from Ezreal-byte/dbx-docker-plugin.",
   "license": "Apache-2.0",
@@ -50,14 +50,17 @@
         },
         {
           "key": "protocol",
-          "label": "Protocol",
+          "label": "Connection method",
+          "description": "Start with Local for Docker Desktop / engine on this machine. Only switch to HTTP, Named Pipe, Unix socket, or SSH when you know you need a non-default endpoint.",
           "type": "select",
           "binding": "config",
-          "default": "http",
+          "default": "local",
           "options": [
+            { "label": "Local (recommended)", "value": "local" },
             { "label": "HTTP (TCP)", "value": "http" },
             { "label": "HTTPS (TCP + TLS)", "value": "https" },
-            { "label": "Unix socket (local)", "value": "unix" },
+            { "label": "Unix socket (custom path)", "value": "unix" },
+            { "label": "Windows Named Pipe (custom path)", "value": "npipe" },
             { "label": "Unix socket over SSH (nc)", "value": "unix-over-nc" },
             { "label": "Unix socket over SSH (sudo nc)", "value": "unix-over-nc-sudo" }
           ]
@@ -67,6 +70,7 @@
           "label": "Host",
           "type": "text",
           "binding": "host",
+          "default": "127.0.0.1",
           "placeholder": "127.0.0.1 (required for HTTP/HTTPS)",
           "visible_when": { "field": "protocol", "one_of": ["http", "https"] }
         },
@@ -75,6 +79,7 @@
           "label": "Port",
           "type": "number",
           "binding": "port",
+          "default": 2375,
           "placeholder": "2375 / 2376",
           "visible_when": { "field": "protocol", "one_of": ["http", "https"] }
         },
@@ -85,6 +90,15 @@
           "binding": "config",
           "default": "/var/run/docker.sock",
           "visible_when": { "field": "protocol", "one_of": ["unix", "unix-over-nc", "unix-over-nc-sudo"] }
+        },
+        {
+          "key": "pipe_path",
+          "label": "Named Pipe path",
+          "type": "text",
+          "binding": "config",
+          "default": "//./pipe/docker_engine",
+          "description": "Windows only. Accepts //./pipe/<name> or \\\\.\\pipe\\<name>; no TCP port is required. Docker Desktop may use //./pipe/dockerDesktopLinuxEngine.",
+          "visible_when": { "field": "protocol", "one_of": ["npipe"] }
         },
         {
           "key": "api_version",
@@ -161,7 +175,7 @@
           "label": "SSH private key path",
           "type": "text",
           "binding": "config",
-          "placeholder": "C:/Users/you/.ssh/id_rsa",
+          "placeholder": "Leave empty to use password; e.g. C:/Users/<you>/.ssh/id_rsa",
           "visible_when": { "field": "protocol", "one_of": ["unix-over-nc", "unix-over-nc-sudo"] }
         },
         {
@@ -206,11 +220,13 @@
           "fields": {
             "display_name": { "label": "连接名称" },
             "protocol": {
-              "label": "协议",
+              "label": "连接方式",
               "options": {
+                "local": "本机（推荐）",
                 "http": "HTTP (TCP)",
                 "https": "HTTPS (TCP + TLS)",
-                "unix": "Unix Socket（本机）",
+                "unix": "Unix Socket（自定义路径）",
+                "npipe": "Windows 命名管道（自定义路径）",
                 "unix-over-nc": "Unix Socket over SSH (nc)",
                 "unix-over-nc-sudo": "Unix Socket over SSH (sudo nc)"
               }
@@ -218,6 +234,7 @@
             "host": { "label": "主机", "placeholder": "127.0.0.1（HTTP/HTTPS 必填）" },
             "port": { "label": "端口", "placeholder": "2375 / 2376" },
             "socket_path": { "label": "Socket 路径" },
+            "pipe_path": { "label": "命名管道路径", "placeholder": "//./pipe/docker_engine" },
             "api_version": { "label": "API 版本", "placeholder": "auto 或 1.44" },
             "allow_insecure_remote_http": { "label": "允许不安全的远程 HTTP" },
             "ca_cert_path": { "label": "CA 证书路径 (HTTPS)" },
